@@ -583,7 +583,6 @@
       "edit": "Edit",
       "errors_one": "error",
       "errors_other": "errors",
-      "failingSince": "failing since {{at}}",
       "failingTitle": "It isn't answering",
       "keyRejectedTitle": "The key was rejected",
       "keyRejectedBody": "Every call is rejected with 401 Unauthorized. The API key looks revoked, so {{who}} can't call {{tools}} until it is replaced.",
@@ -597,8 +596,6 @@
         "off": "Off"
       },
       "last24h": "Last 24 hours",
-      "lastErrorAt": "Last error at {{at}}",
-      "lastSuccess": "Last successful call {{at}}, {{tool}}.",
       "launcherTitle": "{{runner}} isn't found on this machine",
       "listed": "Listed",
       "listedDirectly": "Listed directly",
@@ -626,7 +623,6 @@
       "offTitle": "Off — no agent can use it",
       "reason": {
         "failing": "Failing",
-        "failingSince": "{{error}} · since {{since}}",
         "launcher": "{{runner}} isn't found on this machine",
         "secret": "Secret missing · {{secret}}"
       },
@@ -1970,6 +1966,7 @@
     "MASTER_KEY_MISSING": "The master key is missing — Coffer can't decrypt stored secrets. Import it in Settings › Security.",
     "MCP_ENTRY_NOT_FOUND": "MCP entry not found",
     "MCP_ENTRY_PROTECTED": "This MCP entry is protected and can't be changed",
+    "MCP_SSE_NOT_SUPPORTED": "This entry uses the old SSE transport, which Coffer doesn't support. Keep it in the agent, or switch it to the server's Streamable HTTP URL.",
     "MCP_ENTRY_SOURCE_AMBIGUOUS": "The MCP entry's source is ambiguous — specify which one",
     "MCP_INSTALL_UNSUPPORTED": "This agent does not support installing Coffer's MCP entry",
     "MEMORY_DELIVERY_CONFIG_INVALID": "That agent's settings file isn't something Coffer can edit",
@@ -2017,10 +2014,6 @@
     "CUSTOM_TOOL_NOT_FOUND": "No custom tool or group by that name",
     "NOT_A_CUSTOM_TOOL_GROUP": "That MCP server isn't a custom-tool group",
     "CUSTOM_TOOL_EXISTS": "A tool with that name already exists in this group",
-    "OPENAPI_UNREADABLE": "The OpenAPI spec couldn't be read",
-    "OPENAPI_UNREACHABLE": "Couldn't reach the spec's URL from this machine",
-    "NOT_IMPORTED_FROM_OPENAPI": "This group wasn't imported from an OpenAPI spec, so there is nothing to re-import",
-    "OPENAPI_FILE_NEEDED": "This group was imported from a file: choose the file again to re-import",
     "SKILL_STAGING_NOT_FOUND": "That staged source is gone — it was added, cancelled or expired. Start again.",
     "SKILL_SOURCE_UNREACHABLE": "Git could not reach the skill's repository.",
     "SKILL_UPDATE_NOT_PENDING": "That commit is not the update waiting for this skill. Open the update again.",
@@ -2398,6 +2391,8 @@
       "duplicateOfLead": "Duplicate of",
       "duplicateOfTail": "in Coffer",
       "adopt": "Adopt",
+      "sseNote": "Old SSE transport",
+      "sseCannotAdopt": "Coffer doesn't support the old SSE transport: keep this entry in the agent, or switch it to the server's Streamable HTTP URL.",
       "remove": "Remove",
       "removeDuplicate": "Remove duplicate",
       "menu": {
@@ -5197,7 +5192,6 @@
       "title": "Add custom tool",
       "subtitle": "Turn an HTTP API call into a tool your agents can call. Agents see it as <group>__<tool>; the secret never reaches them.",
       "newGroup": "New group",
-      "waysLabel": "How to add it",
       "continue": "Continue",
       "back": "Back",
       "nameInvalid": "Use lowercase letters, digits and -, starting with a letter or digit; up to 24 characters.",
@@ -5205,33 +5199,20 @@
       "putItIn": "Put it in",
       "newGroupSub": "Its own name, base URL and secret",
       "noGroupMatches": "No group matches",
-      "startNew": "Start the new group",
-      "existingNote": "A request added to {{group}} runs in its environments, each with its own base URL and secret. Import an OpenAPI spec only when you create a new group.",
+      "existingNote": "A request added to {{group}} runs in its environments, each with its own base URL and secret.",
       "change": "Change",
       "handSummary": "Base URL and auth come from the group's environments",
-      "importSummary": "Each operation you pick becomes one tool in the new group",
       "addTo": "Add to {{group}}",
       "into": "into {{group}}",
       "newGroupTag": "new group"
     },
     "ways": {
-      "importTitle": "Import an OpenAPI spec",
-      "importBody": "A URL or a file. You pick the operations; each becomes a tool.",
-      "importPoint1": "Base URL and auth come from the spec",
-      "importPoint2": "Re-import later to pick up changes",
-      "handTitle": "Add one request by hand",
-      "handBody": "Method, URL template, headers, body template and inputs.",
-      "handPoint1": "You set the base URL and auth",
-      "handPoint2": "Test it before you add it"
+      "handTitle": "Add one request by hand"
     },
     "fields": {
       "group": "Group",
       "groupName": "Group name",
       "groupNameHelp": "Agents see {{prefix}}. Lowercase, digits and -; up to 24 characters; fixed later.",
-      "spec": "Spec",
-      "specSource": "Where the spec comes from",
-      "specUrl": "URL",
-      "specFile": "File",
       "baseUrl": "Base URL",
       "baseUrlHelp": "Each request's path is added to it.",
       "availableTo": "Available to",
@@ -5239,68 +5220,12 @@
       "headers": "Headers",
       "headersHelp": "Coffer adds these to every call; secret values stay in Coffer's keychain and agents never see them. A secret header holds only the key; its auth scheme (Bearer or Token) is added in front when Coffer sends the call."
     },
-    "import": {
-      "title": "Import an OpenAPI spec",
-      "step1": "Step 1 of 2 · spec and operations.",
-      "step2": "Step 2 of 2 · review. Only these {{count}} operations become tools; nothing is saved until you create the group.",
-      "load": "Load",
-      "loading": "Loading…",
-      "reload": "Reload",
-      "loaded_one": "Loaded · {{count}} operation",
-      "loaded_other": "Loaded · {{count}} operations",
-      "readFailed": "Couldn't read the spec: {{reason}}. Coffer reads OpenAPI 3.0 and 3.1, as JSON or YAML. Fix it, or switch to File and choose a local copy.",
-      "urlHelp": "A URL to an OpenAPI 3.0 or 3.1 document, JSON or YAML.",
-      "browse": "Browse…",
-      "fileHelp": "JSON or YAML, up to 5 MB.",
-      "tooLarge": "That file is larger than 5 MB.",
-      "review": "Review tools",
-      "create_one": "Create group with {{count}} tool",
-      "create_other": "Create group with {{count}} tools",
-      "groupNameHelp": "Agents see {{prefix}}. Fixed later.",
-      "fetching": "Fetching the spec…",
-      "operationsTitle": "Operations",
-      "picked": "{{count}} of {{total}} picked",
-      "filterOps": "Filter operations",
-      "readsOnly": "Reads only",
-      "section": "{{section}} · {{count}} of {{total}}",
-      "pickNote": "Each operation you pick becomes one tool. Reads start picked; operations that change data start unpicked.",
-      "baseUrlMissing": "The spec names no server; each request's path is added to this URL.",
-      "availableToHelp": "Every tool in the group is available to these agents.",
-      "try": "Try an operation",
-      "tryNone": "Pick an operation first.",
-      "tryPick": "Operation to try",
-      "reviewCount_one": "Review {{count}} tool",
-      "reviewCount_other": "Review {{count}} tools",
-      "groupTitle": "Group",
-      "name": "Name",
-      "skipped": "Skipped · {{count}}",
-      "moreSkipped": "and {{count}} more you didn't pick",
-      "headersHelpSpec": "Filled from the spec's security scheme. Secret values stay in Coffer's keychain; agents never see them.",
-      "none": "None",
-      "noHeaders": "No headers",
-      "line": "line {{line}}",
-      "unreachable": "Couldn't reach {{host}}: {{reason}}. Check the URL, your network, VPN or proxy.",
-      "reason": {
-        "dns": "the host name couldn't be resolved",
-        "refused": "connection refused",
-        "timeout": "the request timed out",
-        "unreachable": "the host couldn't be reached"
-      },
-      "noArguments": "no inputs",
-      "arguments_one": "{{count}} input, {{names}}",
-      "arguments_other": "{{count}} inputs, {{names}}",
-      "changes": "changes data",
-      "reads": "reads data",
-      "noSource": "This operation has no text to show from the spec."
-    },
     "newGroup": {
       "title": "New group",
       "subtitle": "A group holds its environments — each with a base URL and headers, a secret among them — and who can use its tools. It starts with one environment.",
       "create": "Create group"
     },
     "group": {
-      "imported": "Imported from OpenAPI",
-      "byHand": "Requests added by hand",
       "noCalls": "no calls in 24 h",
       "noCallsOff": "no calls while off",
       "callsLine": "{{calls}}, {{errors}} in 24 h",
@@ -5351,12 +5276,8 @@
       "agentsSee": "Agents see",
       "timeout": "Timeout",
       "timeoutValue": "{{seconds}} s per call",
-      "spec": "Spec",
-      "fetched": "fetched {{date}}",
-      "diagnosticHeaders": "Diagnostic headers",
       "responseRules": "Response rules",
-      "statusOnly": "HTTP status only",
-      "none": "None"
+      "statusOnly": "HTTP status only"
     },
     "tools": {
       "switch": "On",
@@ -5491,7 +5412,6 @@
         "rejected": "The API rejected {{secret}}. If it has expired, change its value; every tool in {{group}} uses the same secret.",
         "httpError": "The API answered with an error; its response is below. Check the path and the input values, then run again. Nothing was saved.",
         "rejectedEnv": "The API rejected {{secret}}. If it has expired, change its value; every tool of this group uses it in {{environment}}.",
-        "timeoutEnv": "Coffer stopped waiting after {{environment}}'s own {{seconds}} s timeout. If the API is only slow, raise it under Environments; if it should answer quickly, hand it to an agent to find out why. Nothing was saved.",
         "ruleFailed": "The API answered, but the answer broke one of the response rules. Check the rules under Response, or the request, then run again. Nothing was saved."
       },
       "cutShort": "Cut short at {{size}}.",
@@ -5535,49 +5455,14 @@
       "descriptionHelp": "Agents read it when they search for a tool, so say what this API is for.",
       "descriptionPlaceholder": "e.g. Invoices and payments in the billing system",
       "environmentsNote": "Base URLs, headers, secrets and variables belong to the environments; edit them on the Environments tab.",
-      "diagnosticHeaders": "Diagnostic headers",
-      "diagnosticHeadersHelp": "Comma-separated response header names. Reported in tests and agent results beside the request and trace ids. Credentials and cookies can't be named.",
-      "diagnosticProblem": {
-        "refused": "A header that carries credentials or cookies can't be named.",
-        "invalid": "Use plain header names, separated by commas.",
-        "many": "At most 20 headers."
-      },
       "responseRules": "Response rules",
       "responseRulesHelp": "Every rule must hold for a call to succeed. With none, a call fails only on HTTP 400 and above.",
       "basics": "Basics",
       "judging": "Judging the response"
     },
-    "reimport": {
-      "action": "Re-import",
-      "title": "Re-import {{name}}",
-      "subtitle": "From {{location}}, fetched just now.",
-      "file": "The spec file",
-      "fileHelp": "This group was imported from a file: choose it again.",
-      "reading": "Reading the spec…",
-      "noChange": "The spec has no operations to add and no tools to remove.",
-      "subtitleFile": "Choose {{location}} again.",
-      "gone": "Gone from the spec — agents lose it",
-      "apply_one": "Apply {{count}} change",
-      "apply_other": "Apply {{count}} changes",
-      "kept_one": "{{count}} tool is unchanged and keeps its switch and reach.",
-      "kept_other": "{{count}} tools are unchanged and keep their switch and reach.",
-      "summary_one": "{{count}} change in {{name}}",
-      "summary_other": "{{count}} changes in {{name}}",
-      "willAddRead": "<b>{{name}}</b> becomes a tool, on.",
-      "willAddWrite": "<b>{{name}}</b> changes data, so it isn't added unless you tick it.",
-      "willRequire_one": "<b>{{name}}</b> gets a new required input, {{names}}.",
-      "willRequire_other": "<b>{{name}}</b> gets new required inputs, {{names}}.",
-      "willChange": "<b>{{name}}</b>'s request changed.",
-      "willRemove": "<b>{{name}}</b> is gone from the spec; agents lose it.",
-      "add": "Add {{name}}",
-      "afterApply": "After you apply, agents must pass {{names}}; calls that leave it out get a 400 from the API.",
-      "noOldText": "The spec text from before isn't kept for this import, so there is no diff."
-    },
     "firstRun": {
       "title": "No custom tools yet",
       "body": "A custom tool is one HTTP request Coffer makes for your agents — no MCP server to run. Tools live in groups; a group holds its environments (each with its own base URL, headers and secret) and who can use its tools.",
-      "importBody": "Pick operations from a URL or a file; the import becomes a group.",
-      "importPoint": "Re-import later to pick up changes.",
       "handBody": "Method, URL template, headers, body and inputs.",
       "handPoint": "Starts a new group; test it before you add it."
     },
@@ -5593,9 +5478,6 @@
       "secretStays_other": "The secrets {{secret}} stay on the Secrets page; call history stays in Activity.",
       "historyStays": "Call history stays in Activity.",
       "undo": "This can't be undone. To stop it for a while, turn the group off instead."
-    },
-    "viewer": {
-      "wrap": "Wrap lines"
     },
     "environments": {
       "title": "Environments",
@@ -5613,7 +5495,6 @@
       "variableValue": "Value of {{name}}",
       "removeVariable": "Remove {{name}}",
       "addVariable": "Add variable",
-      "timeoutHelp": "Leave empty to use the group's {{seconds}} s.",
       "switch": "Environment {{name}} on",
       "edit": "Edit {{name}}",
       "delete": "Delete {{name}}",
@@ -5632,11 +5513,7 @@
       "lastOne": "A group keeps at least one environment.",
       "headersOf": "Headers of {{name}}",
       "variablesOf": "Variables of {{name}}",
-      "noVariables": "No variables.",
-      "timeout": {
-        "environment": "{{seconds}} s per call (this environment's own)",
-        "group": "{{seconds}} s per call (the group's)"
-      }
+      "noVariables": "No variables."
     },
     "preview": {
       "secretState": {
@@ -5649,7 +5526,6 @@
       "variables": "Variables:",
       "missingVariables": "{{environment}} defines no {{names}}, so the request cannot be built there.",
       "timeout": {
-        "environment": "Timeout {{seconds}} s ({{environment}}'s own)",
         "group": "Timeout {{seconds}} s (the group's)"
       }
     },

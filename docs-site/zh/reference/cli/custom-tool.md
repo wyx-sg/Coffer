@@ -27,11 +27,6 @@ coffer custom-tool [OPTIONS] COMMAND [ARGS]...
 | [`custom-tool group enable`](#custom-tool-group-enable) | Switch a group on: its tools reach the agents in its reach again. |
 | [`custom-tool group disable`](#custom-tool-group-disable) | Switch a group off: no agent sees or calls its tools. |
 | [`custom-tool group reach`](#custom-tool-group-reach) | Choose which agents see the group's tools: ``--agent`` (repeat) or ``--all``. |
-| [`custom-tool import`](#custom-tool-import) | Read an OpenAPI document into draft tools. |
-| [`custom-tool import read`](#custom-tool-import-read) | Read an OpenAPI document into draft tools; saves nothing. |
-| [`custom-tool reimport`](#custom-tool-reimport) | Preview and apply a re-import of a group's OpenAPI document. |
-| [`custom-tool reimport preview`](#custom-tool-reimport-preview) | What a re-import would add, remove, keep and change; changes nothing. |
-| [`custom-tool reimport apply`](#custom-tool-reimport-apply) | Apply a re-import: removed tools go, chosen additions arrive switched on, kept tools keep their switch, and every environment is kept as it is. |
 | [`custom-tool tool`](#custom-tool-tool) | One custom tool: add, show, change, switch, test, delete. |
 | [`custom-tool tool list`](#custom-tool-tool-list) | A group's tools with their request, switch and 24-hour calls. |
 | [`custom-tool tool show`](#custom-tool-tool-show) | One tool's definition: request template, headers, body and argument schema. |
@@ -124,9 +119,7 @@ coffer custom-tool group create [OPTIONS] NAME
 | `--description` <span class="cli-chip">选项</span> | text |  | What the API is for |
 | `--timeout` <span class="cli-chip">选项</span> | integer |  | Seconds per request (1-300) |
 | `--agent` <span class="cli-chip">选项</span> | text（可重复） |  | Reach only this agent (name or uid); repeat. Default: every agent |
-| `--from-openapi` <span class="cli-chip">选项</span> | text |  | An OpenAPI file or URL to draft the tools from |
-| `--operation` <span class="cli-chip">选项</span> | text（可重复） |  | With --from-openapi: an operation key to import; repeat |
-| `--response` <span class="cli-chip">选项</span> | text |  | Response settings as JSON {"diagnostic_headers": [...], "rules": [...]}: text, @file or - |
+| `--response` <span class="cli-chip">选项</span> | text |  | Response settings as JSON {"rules": [...]}: text, @file or - |
 | `--data, -d` <span class="cli-chip">选项</span> | text |  | The whole group as JSON (text, @file or -) |
 | `--set` <span class="cli-chip">选项</span> | text（可重复） |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
 | `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
@@ -148,7 +141,7 @@ coffer custom-tool group update [OPTIONS] NAME
 | `NAME` <span class="cli-chip">参数</span> | text | 必填 | The group's name |
 | `--description` <span class="cli-chip">选项</span> | text |  |  |
 | `--timeout` <span class="cli-chip">选项</span> | integer |  | The group's seconds per request |
-| `--response` <span class="cli-chip">选项</span> | text |  | Response settings as JSON {"diagnostic_headers": [...], "rules": [...]}: text, @file or - |
+| `--response` <span class="cli-chip">选项</span> | text |  | Response settings as JSON {"rules": [...]}: text, @file or - |
 | `--data, -d` <span class="cli-chip">选项</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
 | `--set` <span class="cli-chip">选项</span> | text（可重复） |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
 | `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
@@ -221,85 +214,6 @@ coffer custom-tool group reach [OPTIONS] NAME
 | `NAME` <span class="cli-chip">参数</span> | text | 必填 |  |
 | `--agent` <span class="cli-chip">选项</span> | text（可重复） |  | An agent (name or uid); repeat |
 | `--all` <span class="cli-chip">选项</span> | 开关 |  | Reach every agent |
-| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
-
-## custom-tool import
-
-Read an OpenAPI document into draft tools.
-
-<p class="cli-label">概要</p>
-
-```sh
-coffer custom-tool import [OPTIONS] COMMAND [ARGS]...
-```
-
-子命令：`read`。
-
-## custom-tool import read
-
-Read an OpenAPI document into draft tools; saves nothing.
-
-<p class="cli-label">概要</p>
-
-```sh
-coffer custom-tool import read [OPTIONS]
-```
-
-<p class="cli-label">参数与选项</p>
-
-| 名称 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- |
-| `--url` <span class="cli-chip">选项</span> | text |  | The document's URL |
-| `--file` <span class="cli-chip">选项</span> | text |  | The document's path |
-| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
-
-## custom-tool reimport
-
-Preview and apply a re-import of a group's OpenAPI document.
-
-<p class="cli-label">概要</p>
-
-```sh
-coffer custom-tool reimport [OPTIONS] COMMAND [ARGS]...
-```
-
-子命令：`preview`, `apply`。
-
-## custom-tool reimport preview
-
-What a re-import would add, remove, keep and change; changes nothing.
-
-<p class="cli-label">概要</p>
-
-```sh
-coffer custom-tool reimport preview [OPTIONS] NAME
-```
-
-<p class="cli-label">参数与选项</p>
-
-| 名称 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- |
-| `NAME` <span class="cli-chip">参数</span> | text | 必填 |  |
-| `--file` <span class="cli-chip">选项</span> | text |  | The document again (a file-imported group) |
-| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
-
-## custom-tool reimport apply
-
-Apply a re-import: removed tools go, chosen additions arrive switched on, kept tools keep their switch, and every environment is kept as it is.
-
-<p class="cli-label">概要</p>
-
-```sh
-coffer custom-tool reimport apply [OPTIONS] NAME
-```
-
-<p class="cli-label">参数与选项</p>
-
-| 名称 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- |
-| `NAME` <span class="cli-chip">参数</span> | text | 必填 |  |
-| `--file` <span class="cli-chip">选项</span> | text |  |  |
-| `--add` <span class="cli-chip">选项</span> | text（可重复） |  | An added operation's key to import; repeat |
 | `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
 
 ## custom-tool tool
@@ -581,7 +495,6 @@ coffer custom-tool env add [OPTIONS] NAME ENV
 | `--header` <span class="cli-chip">选项</span> | text（可重复） |  | Name=value (plain); repeat |
 | `--secret-header` <span class="cli-chip">选项</span> | text（可重复） |  | Name=secret[:Scheme]: a stored secret's name; repeat |
 | `--var` <span class="cli-chip">选项</span> | text（可重复） |  | NAME=value for {env:NAME}; repeat |
-| `--timeout` <span class="cli-chip">选项</span> | integer |  | Seconds per request (default: the group's) |
 | `--description` <span class="cli-chip">选项</span> | text | `""` |  |
 | `--disabled` <span class="cli-chip">选项</span> | 开关 |  | Add it switched off |
 | `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
@@ -604,8 +517,6 @@ coffer custom-tool env update [OPTIONS] NAME ENV
 | `ENV` <span class="cli-chip">参数</span> | text | 必填 |  |
 | `--base-url` <span class="cli-chip">选项</span> | text |  |  |
 | `--rename` <span class="cli-chip">选项</span> | text |  | A new name (its approvals are kept) |
-| `--timeout` <span class="cli-chip">选项</span> | integer |  | Its own seconds per request |
-| `--group-timeout` <span class="cli-chip">选项</span> | 开关 |  | Use the group's timeout |
 | `--description` <span class="cli-chip">选项</span> | text |  |  |
 | `--data, -d` <span class="cli-chip">选项</span> | text |  | Fields to change as JSON (text, @file or -) |
 | `--set` <span class="cli-chip">选项</span> | text（可重复） |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |

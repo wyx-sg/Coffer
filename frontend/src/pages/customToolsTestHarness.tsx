@@ -59,14 +59,6 @@ const grafana = makeGroup({
 const deploy = makeGroup({ name: "deploy-api", health: "failing" });
 export const billing = makeGroup({
   name: "billing",
-  source: {
-    kind: "url",
-    location: "https://billing.internal.example/openapi.json",
-    title: "Billing API",
-    version: "2.3.0",
-    fetched_at: "2026-09-27T10:12:00Z",
-    skipped: [],
-  },
   tools: [
     makeTool({ name: "get_invoice", calls_24h: 31, failures_24h: 1 }),
     makeTool({

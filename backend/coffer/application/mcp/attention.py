@@ -63,9 +63,14 @@ class McpHandoffPort(Protocol):
     """The hand-off prompts, with the host facts (machine, ``PATH``, log tail)
     the composition root reads."""
 
-    def launcher(self, server: Resource, runner: str) -> str: ...
+    async def last_error(self, server_uid: str) -> str | None:
+        """The newest error of the server's current run of failed calls."""
+        ...
 
-    def diagnose(self, server: Resource) -> str: ...
+    def server(self, server: Resource, *, error: str | None, runner: str | None) -> str:
+        """The server's one hand-off (spec mcp-gateway "Hand a failing MCP
+        server's diagnosis to an agent")."""
+        ...
 
 
 def _test_action(uid: str) -> AttentionAction:
@@ -115,11 +120,7 @@ class McpAttentionSource:
                     reason=f"Its launcher {runner} isn't found on this machine.",
                     severity=Severity.ERROR,
                     action=_test_action(server.uid),
-                    handoff=(
-                        await asyncio.to_thread(self._handoffs.launcher, server, runner)
-                        if self._handoffs
-                        else None
-                    ),
+                    handoff=await self._handoff(server, runner),
                 )
             ]
         health = await self._health.get(server.uid)
@@ -137,11 +138,7 @@ class McpAttentionSource:
                 severity=Severity.ERROR,
                 action=_test_action(server.uid),
                 since=health[1],
-                handoff=(
-                    await asyncio.to_thread(self._handoffs.diagnose, server)
-                    if self._handoffs
-                    else None
-                ),
+                handoff=await self._handoff(server, None),
             )
         ]
 
@@ -161,10 +158,15 @@ class McpAttentionSource:
                 verb="replace_key", method="GET", path=f"/api/v1/resources/mcp_server/{server.uid}"
             ),
             since=since,
-            handoff=(
-                await asyncio.to_thread(self._handoffs.diagnose, server) if self._handoffs else None
-            ),
+            handoff=await self._handoff(server, None),
         )
+
+    async def _handoff(self, server: Resource, runner: str | None) -> str | None:
+        """The server's one hand-off, carrying its newest real error."""
+        if self._handoffs is None:
+            return None
+        error = await self._handoffs.last_error(server.uid)
+        return await asyncio.to_thread(self._handoffs.server, server, error=error, runner=runner)
 
     async def _secret_items(self, enabled: dict[str, Resource]) -> list[AttentionItem]:
         out: list[AttentionItem] = []

@@ -108,8 +108,20 @@ class GuardedAsyncClient(httpx2.AsyncClient):
     def __init__(self, *, guard: PushStreamGuard, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self.push_stream_guard = guard
+        #: The newest network failure of a request to the upstream. The SDK
+        #: reports one only as a closed connection; this keeps its kind.
+        self.last_network_error: httpx2.HTTPError | None = None
 
     async def send(self, request: httpx2.Request, **kwargs: Any) -> httpx2.Response:
+        try:
+            return await self._send(request, **kwargs)
+        except PushStreamDisabled:
+            raise
+        except httpx2.HTTPError as exc:
+            self.last_network_error = exc
+            raise
+
+    async def _send(self, request: httpx2.Request, **kwargs: Any) -> httpx2.Response:
         if not is_push_stream_request(request):
             return await super().send(request, **kwargs)
         guard = self.push_stream_guard

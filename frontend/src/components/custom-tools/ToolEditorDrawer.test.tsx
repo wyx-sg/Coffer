@@ -53,7 +53,6 @@ function env(overrides: Partial<CustomToolEnvironment>): CustomToolEnvironment {
     base_url: "https://test.example/api",
     headers: [],
     variables: {},
-    timeout_seconds: null,
     secret_state: "none",
     pending_approvals: [],
     pending_secrets: [],
@@ -85,7 +84,6 @@ const LIVE = env({
     { name: "X-Tenant", value: "tenant-live", scheme: null, secret: null, secret_state: "none" },
   ],
   variables: { region: "us-1" },
-  timeout_seconds: 7,
 });
 
 function groupWith(environments: CustomToolEnvironment[]): CustomToolGroup {
@@ -174,7 +172,7 @@ describe("ToolEditorDrawer environment", () => {
       within(preview()).getByText("https://live.example/api/v1/us-1/items/{id}"),
     ).toBeVisible();
     expect(headerRow("X-Tenant")).toContain("tenant-live");
-    expect(within(preview()).getByText("Timeout 7 s (live's own)")).toBeVisible();
+    expect(within(preview()).getByText("Timeout 30 s (the group's)")).toBeVisible();
     // live has no secret header: no other environment's secret shows anywhere in the form.
     expect(screen.queryByText("test-key")).toBeNull();
     expect(screen.queryByText("Authorization")).toBeNull();

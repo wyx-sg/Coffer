@@ -39,8 +39,6 @@ class CustomToolResponseRule(BaseModel):
 class CustomToolResponse(BaseModel):
     """A group's response settings."""
 
-    #: Response headers reported beside the built-in request and trace ids.
-    diagnostic_headers: list[str] = Field(default_factory=list)
     #: The rules every tool's answer is judged by (a tool may set its own).
     rules: list[CustomToolResponseRule] = Field(default_factory=list)
 

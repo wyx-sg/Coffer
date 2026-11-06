@@ -176,7 +176,7 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 | `logs/daemon.log`、`daemon.log.1`…`.3` | 守护进程日志，每行一个 JSON 对象，达到 10 MB 时轮转，保留三份备份。桌面应用和登录服务也把自己的记录写进同一个文件。显示在**活动**页面，可用 `coffer log daemon` 读取、用 `coffer path logs` 定位。 | 守护进程、桌面应用 | 否 | 轮转出来的文件可以删。守护进程运行时别动当前文件。 |
 | `logs/proxy.log` | 模型代理的标准错误输出：只有元数据，从不包含请求体、提示词或密钥。 | 守护进程（监管者）、模型代理 | 否 | 可以。 |
 | `logs/shim-<pid>-<epoch>.log` | 每个 MCP shim 进程一个文件，只在 shim 有东西要记录时才创建。7 天后清理。 | shim | 否 | 可以。 |
-| `logs/upstream/<server>.log`、`.log.1` | 每个 stdio 上游 MCP 服务器的标准错误输出。达到 2 MB 时挪到一边；`.1` 副本 7 天后清理。 | 守护进程 | 否 | 可以。 |
+| `logs/upstream/<server>.log`、`.log.1` | 每个 stdio 上游 MCP 服务器的标准错误输出。达到 2 MB 时挪到一边；`.1` 副本 7 天后清理，服务器删除后两个文件都会清理。 | 守护进程 | 否 | 可以。 |
 
 `COFFER_LOG_DIR` 会把守护进程、代理、上游和 shim 的日志一起挪走。见[可观测性](/zh/architecture/observability)。
 

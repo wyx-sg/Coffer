@@ -2,7 +2,7 @@
 //
 // Tool writes answer with the whole group, which is written straight into the
 // group's cache entry and then refreshed with the list. The writes a form
-// sends (create, edit, a tool's save, the test run, the OpenAPI reading)
+// sends (create, edit, a tool's save, the test run)
 // render their failure inline where the user acted, so they carry no error
 // toast; the one-click writes (a tool's switch, All on / All off) toast theirs.
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
@@ -18,7 +18,6 @@ import {
   type CustomToolGroupPatch,
   type CustomToolIn,
   type CustomToolUnsavedTestIn,
-  type OpenApiReadIn,
 } from "@/lib/api/customTools";
 import { translateApiError } from "@/lib/api/errors";
 import { resourcesApi } from "@/lib/api/resources";
@@ -252,27 +251,5 @@ export function useTestCustomTool(group: string) {
 export function useTestUnsavedCustomTool() {
   return useMutation({
     mutationFn: (body: CustomToolUnsavedTestIn) => customToolsApi.testUnsaved(body),
-  });
-}
-
-/** Read a spec; the import step renders the failure under the Spec field. */
-export function useReadOpenApi() {
-  return useMutation({ mutationFn: (body: OpenApiReadIn) => customToolsApi.readOpenApi(body) });
-}
-
-/** Re-import's preview; the dialog renders the failure. */
-export function usePreviewReimport(group: string) {
-  return useMutation({
-    mutationFn: (document?: string) => customToolsApi.previewReimport(group, document),
-  });
-}
-
-export function useApplyReimport(group: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ add, document }: { add: string[]; document?: string }) =>
-      customToolsApi.applyReimport(group, add, document),
-    meta: { secretDestination: (next: unknown) => (next as CustomToolGroup).uid },
-    onSuccess: (next) => settle(qc, next),
   });
 }

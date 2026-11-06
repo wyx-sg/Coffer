@@ -15,16 +15,15 @@ from collections.abc import Sequence
 from functools import cache
 from typing import Any
 
-from coffer.application.mcp.handoff import (
-    STDERR_LINES,
-    call_failure_handoff,
-    diagnose_handoff,
-    launcher_handoff,
-)
+from coffer.application.mcp.handoff import STDERR_LINES, server_handoff
 from coffer.application.mcp.runner_detect import missing_runner_of
+from coffer.application.mcp.server_status import failure_run
 from coffer.domain.resource import Resource
 from coffer.infrastructure.logging.upstream_tail import read_upstream_tail
 from coffer.infrastructure.platform.host import machine_label
+
+#: How many of a server's newest calls are read for its current failure run.
+_ERROR_LOOKBACK = 20
 
 #: The OS and architecture do not change while the daemon runs.
 _machine = cache(machine_label)
@@ -50,78 +49,44 @@ def _log_tail(resource: Resource) -> tuple[list[str], str | None]:
     )
 
 
-def launcher_prompt(resource: Resource, runner: str) -> str:
-    return launcher_handoff(
-        name=resource.name,
-        config=resource.config,
-        runner=runner,
-        machine=_machine(),
-        path=_launch_path(resource.config),
-    )
-
-
-def diagnose_prompt(
-    resource: Resource, *, error: str | None, stderr: Sequence[str] | None = None
+def server_prompt(
+    resource: Resource,
+    *,
+    error: str | None,
+    runner: str | None = None,
+    stderr: Sequence[str] | None = None,
 ) -> str:
-    """The diagnosis prompt. ``stderr`` is what a test just captured; without
-    it the server's own log file is quoted."""
+    """The server's one hand-off. ``runner`` is its launcher when it is not
+    found here; ``stderr`` is what a test just captured, without it the
+    server's own log file is quoted."""
     lines, log_path = _log_tail(resource)
-    return diagnose_handoff(
+    return server_handoff(
         name=resource.name,
         config=resource.config,
         error=error,
         stderr=list(stderr) if stderr else lines,
         machine=_machine(),
         log_path=log_path,
-    )
-
-
-def call_failure_prompt(
-    *,
-    server: str,
-    tool: str,
-    error: str | None,
-    status: str,
-    failures_24h: int,
-    session_id: str | None,
-    call_id: int,
-) -> str:
-    """The prompt for one call its server never answered (the Activity drawer)."""
-    return call_failure_handoff(
-        server=server,
-        tool=tool,
-        error=error,
-        status=status,
-        failures_24h=failures_24h,
-        session_id=session_id,
-        call_id=call_id,
-        machine=_machine(),
+        runner=runner,
+        path=_launch_path(resource.config) if runner else "",
     )
 
 
 def unsaved_test_prompt(
     *, name: str, config: dict[str, Any], error: str | None, stderr: Sequence[str]
 ) -> str:
-    """The prompt for a failed test of a config that is not saved (Add / Edit
-    dialogs): the launcher to install when it is not found here, else the cause
-    to find from the error and stderr. ``config`` carries no secret value."""
+    """The hand-off for a failed test of a config that is not saved (Add / Edit
+    dialogs). ``config`` carries no secret value."""
     runner = missing_runner_of(config)
-    if runner is not None:
-        return launcher_handoff(
-            name=name,
-            config=config,
-            runner=runner,
-            machine=_machine(),
-            path=_launch_path(config),
-            saved=False,
-        )
-    return diagnose_handoff(
+    return server_handoff(
         name=name,
         config=config,
         error=error,
         stderr=list(stderr),
         machine=_machine(),
         saved=False,
+        runner=runner,
+        path=_launch_path(config) if runner else "",
     )
 
 
@@ -133,17 +98,24 @@ def host_machine() -> str:
 class McpHandoffs:
     """:class:`~coffer.application.mcp.attention.McpHandoffPort` over this module."""
 
-    def launcher(self, server: Resource, runner: str) -> str:
-        return launcher_prompt(server, runner)
+    async def last_error(self, server_uid: str) -> str | None:
+        # Imported here: the invocation repo is set once the gateway is built,
+        # after this module is imported.
+        from coffer.surfaces.http.mcp.dependencies import get_invocation_repo_optional
 
-    def diagnose(self, server: Resource) -> str:
-        return diagnose_prompt(server, error=None)
+        repo = get_invocation_repo_optional()
+        if repo is None:
+            return None
+        run = failure_run(await repo.query(resource_uid=server_uid, limit=_ERROR_LOOKBACK))
+        return run.last_error if run else None
+
+    def server(self, server: Resource, *, error: str | None, runner: str | None) -> str:
+        return server_prompt(server, error=error, runner=runner)
 
 
 __all__ = [
     "McpHandoffs",
-    "diagnose_prompt",
     "host_machine",
-    "launcher_prompt",
+    "server_prompt",
     "unsaved_test_prompt",
 ]

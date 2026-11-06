@@ -1,9 +1,9 @@
-"""Server-initiated request bookkeeping for MCPGatewaySession (sampling and roots).
+"""Server-initiated request bookkeeping for MCPGatewaySession (sampling, roots, elicitation).
 
 Extracted from gateway.py to keep that module under 400 LOC.
 
-When an upstream MCP server sends a sampling/createMessage or roots/list
-request to coffer (acting as the MCP client), coffer must:
+When an upstream MCP server sends a sampling/createMessage, roots/list or
+elicitation/create request to coffer (acting as the MCP client), coffer must:
   1. Forward the request to the downstream client over the SSE channel.
   2. Wait for the downstream client to POST its response back.
   3. Return the response to the SDK so it can relay it to the upstream.
@@ -12,8 +12,9 @@ This module contains:
 - _PendingRegistry  — manages the asyncio.Future dict and id counter
 - build_sampling_callback  — factory for an SDK-compatible SamplingFnT
 - build_list_roots_callback — factory for an SDK-compatible ListRootsFnT
-- build_session_callbacks — bundles the two factories above so the session's
-  __init__ wires both in one call
+- build_elicitation_callback — factory for an SDK-compatible ElicitationFnT
+- build_session_callbacks — bundles the factories above so the session's
+  __init__ wires them in one call
 - handle_response_from_downstream — shared matching logic
 """
 
@@ -30,6 +31,10 @@ from mcp.client.session import ClientRequestContext
 from coffer.domain.errors import UpstreamUnavailable
 
 _logger = logging.getLogger(__name__)
+
+#: How long an elicitation waits for its answer: a person reads the question
+#: and fills a form, so far longer than sampling's 30 s.
+ELICITATION_TIMEOUT_SECONDS = 600.0
 
 # Type for the downstream SSE sink (same as NotificationSink in gateway.py)
 DownstreamSink = Callable[[dict[str, Any]], Awaitable[None]]
@@ -198,12 +203,62 @@ def build_list_roots_callback(
     return _list_roots_callback
 
 
+def build_elicitation_callback(
+    registry: ServerRequestRegistry,
+    get_sink: Callable[[], DownstreamSink | None],
+    get_capabilities: Callable[[], dict[str, Any]],
+    session_id: str,
+) -> Any:  # returns ElicitationFnT-compatible coroutine function
+    """Build an async callable that the mcp SDK will invoke for elicitation/create.
+
+    The question goes to the session's own client, which asks the person; the
+    answer (accept with content, decline or cancel) goes back unchanged.
+    """
+
+    async def _elicitation_callback(
+        context: ClientRequestContext,
+        params: mcp_types.ElicitRequestParams,
+    ) -> mcp_types.ElicitResult | mcp_types.ErrorData:
+        if "elicitation" not in get_capabilities():
+            return mcp_types.ErrorData(
+                code=mcp_types.METHOD_NOT_FOUND,
+                message="downstream client does not support elicitation",
+            )
+        raw_params: dict[str, Any] = (
+            params.model_dump(exclude_none=True, mode="json", by_alias=True)
+            if hasattr(params, "model_dump")
+            else (params if isinstance(params, dict) else {})
+        )
+        _logger.debug("mcp.gateway.elicitation.forward", extra={"session": session_id})
+        try:
+            result = await registry.send_request(
+                "elicitation/create", raw_params, get_sink(), timeout=ELICITATION_TIMEOUT_SECONDS
+            )
+        except UpstreamUnavailable as e:
+            return mcp_types.ErrorData(code=mcp_types.METHOD_NOT_FOUND, message=str(e))
+        except TimeoutError:
+            return mcp_types.ElicitResult(action="cancel")
+        except Exception as e:
+            return mcp_types.ErrorData(code=-32603, message=f"elicitation failed: {e}")
+        if isinstance(result, dict):
+            try:
+                return mcp_types.ElicitResult.model_validate(result)
+            except Exception:
+                pass
+        return mcp_types.ErrorData(
+            code=-32603, message="invalid elicitation response from downstream"
+        )
+
+    return _elicitation_callback
+
+
 class SessionCallbacks(NamedTuple):
-    """The pair of SDK-compatible callbacks a session registers on each
-    upstream connection (sampling + roots)."""
+    """The SDK-compatible callbacks a session registers on each upstream
+    connection (sampling, roots, elicitation)."""
 
     sampling: Any
     list_roots: Any
+    elicitation: Any = None
 
 
 def build_session_callbacks(
@@ -212,11 +267,12 @@ def build_session_callbacks(
     get_capabilities: Callable[[], dict[str, Any]],
     session_id: str,
 ) -> SessionCallbacks:
-    """Bundle both callback factories so a session's __init__ wires them in
-    one call instead of repeating the registry/sink/session_id args twice."""
+    """Bundle the callback factories so a session's __init__ wires them in
+    one call instead of repeating the registry/sink/session_id args."""
     return SessionCallbacks(
         sampling=build_sampling_callback(registry, get_sink, get_capabilities, session_id),
         list_roots=build_list_roots_callback(registry, get_sink, session_id, get_capabilities),
+        elicitation=build_elicitation_callback(registry, get_sink, get_capabilities, session_id),
     )
 
 
@@ -232,7 +288,7 @@ def wire_connection(
     constructed, and declares upstream only the capabilities it was given one
     for, so a callback set after the handshake is never called (spec
     mcp-gateway "Relay an upstream's sampling and roots requests to the
-    client"). Each is offered only when the session's own client declared it
+    client"). Each — elicitation too — is offered only when the session's own client declared it
     at ``initialize``, which always precedes the session's first spawn.
     """
     conn.on_notification(on_notification)
@@ -240,3 +296,5 @@ def wire_connection(
         conn.on_sampling_request(callbacks.sampling)
     if "roots" in client_capabilities:
         conn.on_roots_request(callbacks.list_roots)
+    if "elicitation" in client_capabilities and callbacks.elicitation is not None:
+        conn.on_elicitation_request(callbacks.elicitation)

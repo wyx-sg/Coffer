@@ -1,4 +1,6 @@
 # backend/tests/unit/domain/mcp/test_tool_search.py
+import pytest
+
 from coffer.domain.mcp.tool_search import ScoredTool, rank_tools
 
 
@@ -157,3 +159,19 @@ def test_schema_text_collects_names_descriptions_and_enums_at_any_depth():
     ]
     assert schema_text(None) == ""
     assert schema_text({"type": "object"}) == ""
+
+
+@pytest.mark.acceptance(
+    spec="mcp-gateway", scenario="a query that is a tool's name returns that tool first"
+)
+def test_a_query_that_is_a_tool_name_puts_that_tool_first():
+    catalogue = [
+        ("jira get_issue_history", "Get an issue's history: every get of an issue, issue by issue"),
+        ("jira get_issue", "Fetch one"),
+        ("confluence get_page", "Get a page"),
+    ]
+    # By score alone (words, not a name) the wordier tool wins.
+    assert rank_tools("get issue", catalogue, top_k=3)[0].index == 0
+    for query in ("jira__get_issue", "get_issue", "JIRA__GET_ISSUE"):
+        assert rank_tools(query, catalogue, top_k=3)[0].index == 1, query
+    assert rank_tools("get_page", catalogue, top_k=1)[0].index == 2

@@ -13,7 +13,6 @@ import { AlertCircle, AlertTriangle, ShieldCheck } from "lucide-react";
 import { Section } from "@/components/Section";
 
 import { AgentBadge } from "@/components/agent/AgentBadge";
-import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { daemonContinuation, describeDaemonRecord } from "@/lib/activity/activityText";
 import {
   callServerLabel,
@@ -165,11 +164,6 @@ export function CallBody({
             <span className="text-sm font-label text-text">{callProblemTitle(t, call)}</span>
             {outcome ? (
               <span className="text-xs leading-[1.45] text-text-muted">{outcome}</span>
-            ) : null}
-            {call.handoff ? (
-              <span className="mt-2">
-                <AgentHandoff prompt={call.handoff.prompt} size="sm" />
-              </span>
             ) : null}
           </div>
         </div>

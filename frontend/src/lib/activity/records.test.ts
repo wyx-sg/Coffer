@@ -47,7 +47,6 @@ function call(overrides: Partial<Invocation> = {}): Invocation {
     session_id: "s-1",
     agent_uid: "a-cc",
     trace_id: null,
-    handoff: null,
     ...overrides,
   };
 }

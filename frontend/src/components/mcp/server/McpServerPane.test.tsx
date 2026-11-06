@@ -220,16 +220,13 @@ describe("McpServerPane", () => {
       api.status = {
         status: "failing",
         last_error: "Connection refused by mcp.sentry.dev",
-        last_error_at: new Date().toISOString(),
-        failing_since: new Date().toISOString(),
         last_ok_at: new Date().toISOString(),
-        last_ok_capability: "list_issues",
       };
       renderPane();
       const callout = await screen.findByTestId("mcp-callout-failing");
       expect(within(callout).getByText("Connection refused by mcp.sentry.dev")).toBeInTheDocument();
-      expect(callout).toHaveTextContent(/failing since/);
-      expect(callout).toHaveTextContent(/Last successful call .*list_issues/);
+      expect(callout).not.toHaveTextContent(/failing since/);
+      expect(callout).toHaveTextContent(/Last successful call/);
       expect(callout).toHaveTextContent(/Claude Code and Codex can't call its 5 tools/);
       expect(screen.getByText("Failing")).toBeInTheDocument();
       // The header never changes with the state: Test, not Test again.

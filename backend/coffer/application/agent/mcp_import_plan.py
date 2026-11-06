@@ -72,6 +72,7 @@ from coffer.domain.reconcile import (
     Subject,
 )
 from coffer.domain.resource import Resource
+from coffer.domain.workspace_errors import McpSseNotSupported
 
 
 class _Resources(Protocol):
@@ -125,6 +126,12 @@ class McpImportPlanner:
             return PlannedEntry(
                 agent.uid, agent.name, choice.name, choice.source, None, "unavailable",
                 error_code=e.code, error=str(e),
+            ), None  # fmt: skip
+        if parsed.legacy_sse:
+            refused = McpSseNotSupported(parsed.name)
+            return PlannedEntry(
+                agent.uid, agent.name, parsed.name, spec.key, str(spec.path), "unavailable",
+                error_code=refused.code, error=str(refused),
             ), None  # fmt: skip
         keys = tuple(secret_env_keys({**parsed.env, **parsed.headers}))
         refs = {k: f"mcp/{agent.name}/{parsed.name}/{k}" for k in keys}

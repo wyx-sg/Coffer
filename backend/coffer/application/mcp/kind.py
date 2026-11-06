@@ -10,6 +10,7 @@ from coffer.application.mcp.supervisor import (
     restore_server,
     retire_server,
 )
+from coffer.domain.errors import ConfigValidationError
 from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Kind, Resource
 
@@ -17,6 +18,23 @@ from coffer.domain.resource import Kind, Resource
 # headers, raw environment overlays). secret_refs (keychain ref strings
 # only) survive audit; the raw maps are stripped.
 _AUDIT_STRIP_TRANSPORT_KEYS: frozenset[str] = frozenset({"env", "headers"})
+
+
+def _refuse_empty_headers(config: dict[str, Any]) -> None:
+    """An HTTP server's static header with no value is refused when saved.
+
+    Sent as ``Name:`` with nothing after it, which a server reads as a bad
+    credential or ignores; it is almost always a value the person meant to
+    fill in (two of a real server's headers were saved empty and the server
+    never answered). Checked on register and edit only, never on load, so a
+    server saved before this check still loads and can be fixed.
+    """
+    transport = config.get("transport") or {}
+    if transport.get("type") != "http":
+        return
+    empty = sorted(name for name, value in (transport.get("headers") or {}).items() if not value)
+    if empty:
+        raise ValueError(f"header {', '.join(repr(n) for n in empty)} has no value")
 
 
 def _mcp_audit_redactor(config: dict[str, Any]) -> dict[str, Any]:
@@ -147,7 +165,7 @@ def make_mcp_kind(supervisor_for: dict[str, SubprocessSupervisor]) -> Kind:
         if not resource.enabled:
             await _evict_everywhere(resource.name)
 
-    async def on_update_config(before: Resource, _proposed: dict[str, Any]) -> None:
+    async def on_update_config(before: Resource, proposed: dict[str, Any]) -> None:
         """Drop every live connection so the next call spawns with the new config.
 
         A supervisor caches a healthy connection and never re-reads the row, so
@@ -162,6 +180,10 @@ def make_mcp_kind(supervisor_for: dict[str, SubprocessSupervisor]) -> Kind:
         the window is one database write wide and the next edit, disable,
         crash or session end clears it.
         """
+        try:
+            _refuse_empty_headers(proposed)
+        except ValueError as e:
+            raise ConfigValidationError(str(e)) from e
         restore_server(before.uid)
         await _evict_everywhere(before.name)
 
@@ -172,6 +194,7 @@ def make_mcp_kind(supervisor_for: dict[str, SubprocessSupervisor]) -> Kind:
         on_delete=on_delete,
         on_enabled_changed=on_enabled_changed,
         on_update_config=on_update_config,
+        validate_config=_refuse_empty_headers,
         validate_name=_validate_mcp_name,
         # The name prefixes every tool name an agent sees
         # (``mcp__coffer__<server>__<tool>``), and agents' permission rules and

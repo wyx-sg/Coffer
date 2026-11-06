@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from coffer.application.mcp.handoff import diagnose_handoff, launcher_handoff
+from coffer.application.mcp.handoff import server_handoff
 from coffer.domain.handoff import STANDING_RULES
 from coffer.domain.mcp.config_summary import redacted_url, scrub
 
@@ -30,7 +30,7 @@ STDIO = {
     spec="mcp-gateway", scenario="the diagnosis prompt never carries a secret value"
 )
 def test_the_diagnosis_prompt_names_keys_and_never_a_value() -> None:
-    prompt = diagnose_handoff(
+    prompt = server_handoff(
         name="acme",
         config=STDIO,
         error=f"exited: api_key={ARG_TOKEN} rejected",
@@ -51,7 +51,7 @@ def test_the_diagnosis_prompt_names_keys_and_never_a_value() -> None:
 
 
 def test_an_http_server_is_summarised_by_its_redacted_url_and_header_names() -> None:
-    prompt = diagnose_handoff(
+    prompt = server_handoff(
         name="web",
         config={
             "transport": {
@@ -73,19 +73,26 @@ def test_an_http_server_is_summarised_by_its_redacted_url_and_header_names() -> 
 
 def test_only_the_newest_twenty_stderr_lines_are_quoted() -> None:
     lines = [f"line {i:02d}" for i in range(30)]
-    prompt = diagnose_handoff(name="s", config=STDIO, error="boom", stderr=lines, machine="m")
+    prompt = server_handoff(name="s", config=STDIO, error="boom", stderr=lines, machine="m")
     assert "line 29" in prompt and "line 10" in prompt and "line 09" not in prompt
 
 
 def test_the_launcher_prompt_names_launcher_server_command_and_path_but_no_installer() -> None:
-    prompt = launcher_handoff(
-        name="acme", config=STDIO, runner="npx", machine="macOS 15.6, arm64", path="/usr/bin:/bin"
+    prompt = server_handoff(
+        name="acme",
+        config=STDIO,
+        error="upstream init failed: FileNotFoundError",
+        stderr=[],
+        runner="npx",
+        machine="macOS 15.6, arm64",
+        path="/usr/bin:/bin",
     )
     assert prompt.startswith("Please install `npx` on this machine")
     assert "MCP server acme" in prompt
     assert "`npx -y @acme/mcp --api-key '<secret>' '--github=<secret>'`" in prompt
     assert "/usr/bin:/bin" in prompt and "macOS 15.6, arm64" in prompt
     assert "started from the GUI" in prompt
+    assert "The last error: upstream init failed: FileNotFoundError" in prompt
     assert "coffer mcp test acme" in prompt
     for word in ("brew", "apt", "winget"):
         assert word not in prompt

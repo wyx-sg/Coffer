@@ -1,5 +1,5 @@
 // src/components/custom-tools/EnvironmentDialog.tsx — Add environment / Edit environment (4.2.28, 760): its name,
-// base URL, headers (a plain value, or a secret from Coffer behind an optional scheme), variables and timeout. The group's
+// base URL, headers (a plain value, or a secret from Coffer behind an optional scheme), variables. The group's
 // tools are not copied: an environment is only where the same tools are sent (spec mcp-gateway "Keep a custom-tool
 // group's environments in the group"). A new base URL, or a secret bound to a header, waits for approval before any
 // request carries the secret, and only for this environment.
@@ -42,7 +42,6 @@ export function EnvironmentDialog({ group, environment, open, onOpenChange }: Pr
   const [baseUrl, setBaseUrl] = useState("");
   const [rows, setRows] = useState<KeyValueSecretRow[]>([]);
   const [variables, setVariables] = useState<VariableRow[]>([]);
-  const [timeout, setTimeoutSeconds] = useState("");
   const [saving, setSaving] = useState(false);
   const [failure, setFailure] = useState<unknown>(null);
 
@@ -54,16 +53,12 @@ export function EnvironmentDialog({ group, environment, open, onOpenChange }: Pr
     setVariables(
       Object.entries(environment?.variables ?? {}).map(([key, value]) => ({ key, value })),
     );
-    setTimeoutSeconds(environment?.timeout_seconds ? String(environment.timeout_seconds) : "");
     setFailure(null);
     save.reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only on opening
   }, [open]);
 
-  const seconds = timeout.trim() === "" ? null : Number(timeout.replace(/\s*s$/, ""));
-  const timeoutOk =
-    seconds === null || (Number.isInteger(seconds) && seconds >= 1 && seconds <= 300);
-  const ready = name.trim() !== "" && baseUrl.trim() !== "" && timeoutOk;
+  const ready = name.trim() !== "" && baseUrl.trim() !== "";
   const error = failure ?? save.error;
 
   const onSave = async () => {
@@ -85,7 +80,6 @@ export function EnvironmentDialog({ group, environment, open, onOpenChange }: Pr
           base_url: baseUrl.trim(),
           headers: headersIn(rows),
           variables: variablesIn(variables),
-          timeout_seconds: seconds,
         },
       },
       { onSuccess: () => onOpenChange(false), onSettled: () => setSaving(false) },
@@ -155,26 +149,6 @@ export function EnvironmentDialog({ group, environment, open, onOpenChange }: Pr
           >
             {variables.length > 0 ? <ColumnHeads /> : null}
             <VariableRows rows={variables} onChange={setVariables} />
-          </FormField>
-          <FormField
-            label={t("customTools.editGroup.timeout")}
-            htmlFor={`${id}-timeout`}
-            help={t("customTools.environments.timeoutHelp", { seconds: group.timeout_seconds })}
-            error={timeoutOk ? undefined : t("customTools.editGroup.timeoutInvalid")}
-          >
-            <div className="relative w-32">
-              <Input
-                id={`${id}-timeout`}
-                inputMode="numeric"
-                className="pr-7 font-mono"
-                placeholder={String(group.timeout_seconds)}
-                value={timeout}
-                onChange={(e) => setTimeoutSeconds(e.target.value)}
-              />
-              <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 font-mono text-xs text-text-muted">
-                s
-              </span>
-            </div>
           </FormField>
           {error ? (
             <div role="alert" className="flex items-start gap-2 text-sm text-danger">

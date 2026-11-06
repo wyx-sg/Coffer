@@ -87,6 +87,9 @@ export function AgentOwnMcpRows({
                       {t("agents.mcpTab.secretsInEnv", { count: entry.secret_keys.length })}
                     </span>
                   ) : null}
+                  {entry.legacy_sse ? (
+                    <span className="shrink-0 text-text-subtle">{t("agents.mcpTab.sseNote")}</span>
+                  ) : null}
                 </span>
               ),
               <TruncatedText key="file" mono text={whereLabel(entry.source)} />,
@@ -109,7 +112,8 @@ export function AgentOwnMcpRows({
                     <Button
                       variant="outline"
                       size="sm"
-                      disabled={readOnly}
+                      disabled={readOnly || entry.legacy_sse === true}
+                      title={entry.legacy_sse ? t("agents.mcpTab.sseCannotAdopt") : undefined}
                       aria-label={`${t("agents.mcpTab.adopt")}: ${row.name}`}
                       onClick={() => onAdopt(row)}
                     >

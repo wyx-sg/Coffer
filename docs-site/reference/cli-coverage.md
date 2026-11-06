@@ -129,9 +129,8 @@ Every management operation a person does on a Coffer page or in the desktop app 
 | Custom tools · Environments · set a variable | `PATCH /custom-tools/{name}/environments/{environment}` | `coffer custom-tool env set-var` | `test_custom_tool_cli.py` |
 | Custom tools · Environments · remove a header | `PATCH /custom-tools/{name}/environments/{environment}` | `coffer custom-tool env unset-header` | `test_custom_tool_cli.py` |
 | Custom tools · Environments · remove a variable | `PATCH /custom-tools/{name}/environments/{environment}` | `coffer custom-tool env unset-var` | `test_custom_tool_cli.py` |
-| Custom tools · Environments · edit (URL, name, timeout, description) | `PATCH /custom-tools/{name}/environments/{environment}` | `coffer custom-tool env update` | `test_custom_tool_cli.py` |
-| Custom tools · add a group (by hand or from an OpenAPI document) | `POST /custom-tools` | `coffer custom-tool group create` | `test_custom_tool_cli.py` |
-| Custom tools · add a group (by hand or from an OpenAPI document) | `POST /custom-tools/openapi` | `coffer custom-tool group create` | `test_custom_tool_cli.py` |
+| Custom tools · Environments · edit (URL, name, description) | `PATCH /custom-tools/{name}/environments/{environment}` | `coffer custom-tool env update` | `test_custom_tool_cli.py` |
+| Custom tools · add a group | `POST /custom-tools` | `coffer custom-tool group create` | `test_custom_tool_cli.py` |
 | Custom tools · delete a group | `DELETE /custom-tools/{name}` | `coffer custom-tool group delete` | `test_custom_tool_cli.py` |
 | Custom tools · switch a group off | `POST /resources/{uid}/disable` | `coffer custom-tool group disable` | `test_custom_tool_cli.py` |
 | Custom tools · switch a group on | `POST /resources/{uid}/enable` | `coffer custom-tool group enable` | `test_custom_tool_cli.py` |
@@ -139,9 +138,6 @@ Every management operation a person does on a Coffer page or in the desktop app 
 | Custom tools · set a group's reach | `PUT /resources/{uid}/scope` | `coffer custom-tool group reach` | `test_custom_tool_cli.py` |
 | Custom tools · open a group | `GET /custom-tools/{name}` | `coffer custom-tool group show` | `test_custom_tool_cli.py` |
 | Custom tools · edit a group | `PATCH /custom-tools/{name}` | `coffer custom-tool group update` | `test_custom_tool_cli.py` |
-| Custom tools · read an OpenAPI document | `POST /custom-tools/openapi` | `coffer custom-tool import read` | `test_custom_tool_cli.py` |
-| Custom tools · apply a re-import | `POST /custom-tools/{name}/reimport` | `coffer custom-tool reimport apply` | `test_custom_tool_cli.py` |
-| Custom tools · preview a re-import | `POST /custom-tools/{name}/reimport/preview` | `coffer custom-tool reimport preview` | `test_custom_tool_cli.py` |
 | Custom tools · add a tool | `POST /custom-tools/{name}/tools` | `coffer custom-tool tool add` | `test_custom_tool_cli.py` |
 | Custom tools · delete a tool | `DELETE /custom-tools/{name}/tools/{tool}` | `coffer custom-tool tool delete` | `test_custom_tool_cli.py` |
 | Custom tools · switch a tool off | `PATCH /custom-tools/{name}/tools/{tool}` | `coffer custom-tool tool disable` | `test_custom_tool_cli.py` |

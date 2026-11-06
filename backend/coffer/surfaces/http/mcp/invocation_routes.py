@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import UTC, datetime, timedelta
+from datetime import datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
 
-from coffer.application.mcp.invocation_outcome import is_upstream_answered
 from coffer.application.resource_service import ResourceService
 from coffer.domain.mcp.capability import MCPInvocation
 from coffer.domain.mcp.invocation_errors import InvocationNotFound
@@ -16,7 +15,6 @@ from coffer.domain.pagination import Page, decode_cursor, paginate, position_of,
 from coffer.infrastructure.mcp.persistence import MCPInvocationRepo
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_resource_service
-from coffer.surfaces.http.handoff_schemas import handoff_out
 from coffer.surfaces.http.log_schemas import (
     InvocationContentOut,
     InvocationDetailOut,
@@ -24,7 +22,6 @@ from coffer.surfaces.http.log_schemas import (
     InvocationOut,
 )
 from coffer.surfaces.http.mcp.dependencies import get_invocation_repo, require_mcp_server
-from coffer.surfaces.http.mcp.handoff_views import call_failure_prompt
 
 router = APIRouter(
     prefix="/api/v1/resources/mcp_server",
@@ -133,20 +130,6 @@ async def _page(
     return page, total
 
 
-def _unanswered(r: MCPInvocation) -> bool:
-    """A call the server never answered — refused, timed out, would not start —
-    as opposed to one it answered with its own error or one Coffer denied."""
-    return r.status == "timeout" or (r.status == "error" and not is_upstream_answered(r))
-
-
-async def _failures_24h(repo: MCPInvocationRepo, uid: str) -> int:
-    """How many calls to one server failed (error or timeout) in the last 24 hours."""
-    since = datetime.now(tz=UTC) - timedelta(hours=24)
-    return sum(
-        [await repo.count(resource_uid=uid, status=s, since=since) for s in ("error", "timeout")]
-    )
-
-
 async def _project(
     page: Page[MCPInvocation],
     total: int,
@@ -180,26 +163,6 @@ async def _project(
     if not rows:
         return InvocationListOut(invocations=[], next_cursor=None, total=total)
     names_by_uid = {r.uid: r.name for r in await resources.list(kind="mcp_server")}
-    # A hand-off quotes how often the server failed today: one count per
-    # server with an unanswered call on this page, not one per row.
-    failures = {
-        uid: await _failures_24h(repo, uid)
-        for uid in {r.resource_uid for r in rows if _unanswered(r)}
-    }
-
-    def handoff_for(r: MCPInvocation) -> str | None:
-        if not _unanswered(r):
-            return None
-        return call_failure_prompt(
-            server=names_by_uid.get(r.resource_uid) or r.resource_uid,
-            tool=r.capability_key,
-            error=r.error_message,
-            status=r.status,
-            failures_24h=failures[r.resource_uid],
-            session_id=r.session_id,
-            call_id=r.id or 0,
-        )
-
     return InvocationListOut(
         invocations=[
             InvocationOut(
@@ -217,7 +180,6 @@ async def _project(
                 trace_id=r.trace_id,
                 agent_uid=r.agent_uid,
                 environment=r.environment,
-                handoff=handoff_out(handoff_for(r)),
             )
             for r in rows
         ],

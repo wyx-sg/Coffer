@@ -1,5 +1,6 @@
 """An MCP server whose tools ask the CLIENT something: ``sample`` sends
-``sampling/createMessage`` and ``roots`` sends ``roots/list``; each tool returns
+``sampling/createMessage``, ``roots`` sends ``roots/list`` and ``ask`` sends
+``elicitation/create`` (a form asking for a name); each tool returns
 what the client answered, so a test sees the round trip end to end.
 
 ``--transport stdio`` (default) or ``--transport http --ready <file>``: the HTTP
@@ -30,6 +31,7 @@ async def _list(
         tools=[
             mcp_types.Tool(name="sample", description="ask the client's model", inputSchema=schema),
             mcp_types.Tool(name="roots", description="ask the client's roots", inputSchema=schema),
+            mcp_types.Tool(name="ask", description="ask the person a question", inputSchema=schema),
         ]
     )
 
@@ -55,6 +57,12 @@ async def _call(
             )
             content = result.content
             return _text("sampled:" + getattr(content, "text", ""))
+        if params.name == "ask":
+            answer = await ctx.session.elicit_form(
+                "Which name?",
+                {"type": "object", "properties": {"name": {"type": "string"}}},
+            )
+            return _text(f"asked:{answer.action}:{(answer.content or {}).get('name', '')}")
         roots = await ctx.session.list_roots()
         return _text("roots:" + ",".join(str(r.uri) for r in roots.roots))
     except Exception as e:  # the client refused: say so in-band

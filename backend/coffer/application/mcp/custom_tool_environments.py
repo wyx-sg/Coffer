@@ -36,7 +36,6 @@ _CHANGEABLE = (
     "base_url",
     "headers",
     "variables",
-    "timeout_seconds",
 )
 
 

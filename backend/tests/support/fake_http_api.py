@@ -12,7 +12,6 @@ Routes answer by path:
   challenge, an unknown header and :attr:`FakeHttpApi.echo_secret` in a trace id
 * ``/slow``      — sleeps 3 s, then answers like any other path
 * ``/redirect``  — 302 to :attr:`FakeHttpApi.redirect_to`
-* ``/openapi.json`` — :attr:`FakeHttpApi.openapi` as JSON
 * anything else  — 200 JSON ``{"ok": true, "path": …}``
 """
 
@@ -51,7 +50,6 @@ class FakeHttpApi:
     seen: list[Seen] = field(default_factory=list)
     echo_secret: str = ""
     redirect_to: str = "http://127.0.0.1:9/elsewhere"
-    openapi: dict[str, Any] = field(default_factory=dict)
     #: ``{path: Answer}`` (the path without its query), checked first.
     answers: dict[str, Answer] = field(default_factory=dict)
 
@@ -117,8 +115,6 @@ def _handler(api: FakeHttpApi) -> type[BaseHTTPRequestHandler]:
                 self.send_header("Location", api.redirect_to)
                 self.send_header("Content-Length", "0")
                 self.end_headers()
-            elif path.endswith("/openapi.json"):
-                self._send(200, json.dumps(api.openapi).encode(), "application/json")
             else:
                 reply = {
                     "ok": True,

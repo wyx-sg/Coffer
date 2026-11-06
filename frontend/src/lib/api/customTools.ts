@@ -25,9 +25,6 @@ export type CustomToolEnvironment = Schemas["CustomToolEnvironmentOut"];
 export type CustomToolEnvironmentIn = Schemas["CustomToolEnvironmentIn"];
 export type CustomToolEnvironmentPatch = Schemas["CustomToolEnvironmentPatch"];
 export type CustomToolUnsavedTestIn = Schemas["CustomToolUnsavedTestIn"];
-export type OpenApiReadIn = Schemas["OpenApiReadIn"];
-export type OpenApiReading = Schemas["OpenApiReadOut"];
-export type ReimportPreview = Schemas["CustomToolReimportPreviewOut"];
 export type HttpMethod = CustomTool["method"];
 export type GroupHealth = CustomToolGroup["health"];
 
@@ -153,32 +150,6 @@ export const customToolsApi = {
     const { data, error } = await getApiClient().POST("/custom-tools/test", { body });
     if (error) throwApiError(error, "INTERNAL_ERROR", "test failed");
     return must(data, "test");
-  },
-  /** Read an OpenAPI document (by URL, or its text) into draft tools. */
-  readOpenApi: async (body: OpenApiReadIn): Promise<OpenApiReading> => {
-    const { data, error } = await getApiClient().POST("/custom-tools/openapi", { body });
-    if (error) throwApiError(error, "OPENAPI_UNREADABLE", "the spec could not be read");
-    return must(data, "openapi");
-  },
-  previewReimport: async (name: string, document?: string): Promise<ReimportPreview> => {
-    const { data, error } = await getApiClient().POST("/custom-tools/{name}/reimport/preview", {
-      ...group(name),
-      body: document === undefined ? {} : { document },
-    });
-    if (error) throwApiError(error, "OPENAPI_UNREADABLE", "the spec could not be read");
-    return must(data, "preview");
-  },
-  applyReimport: async (
-    name: string,
-    add: string[],
-    document?: string,
-  ): Promise<CustomToolGroup> => {
-    const { data, error } = await getApiClient().POST("/custom-tools/{name}/reimport", {
-      ...group(name),
-      body: document === undefined ? { add } : { add, document },
-    });
-    if (error) throwApiError(error, "INTERNAL_ERROR", "re-import failed");
-    return must(data, "re-import");
   },
 };
 export type ResponseRule = Schemas["CustomToolResponseRule"];

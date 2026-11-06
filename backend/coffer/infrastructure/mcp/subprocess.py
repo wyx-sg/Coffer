@@ -14,8 +14,9 @@ from contextlib import AsyncExitStack, suppress
 from pathlib import Path
 from typing import Any, TextIO
 
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.session import ListRootsFnT, SamplingFnT
+from mcp import ClientSession, MCPError, StdioServerParameters
+from mcp import types as mcp_types
+from mcp.client.session import ElicitationFnT, ListRootsFnT, SamplingFnT
 from mcp.client.stdio import get_default_environment
 from mcp.types import ServerNotification
 
@@ -25,6 +26,7 @@ from coffer.domain.mcp.server_config import StdioTransport
 from coffer.infrastructure.daemon.orphan_sweep import reap_pidfile
 from coffer.infrastructure.logging.files import LineSink, write_coffer_line
 from coffer.infrastructure.mcp.dispatch import dispatch_method
+from coffer.infrastructure.mcp.failure_detail import exited_detail
 from coffer.infrastructure.mcp.process_group import kill_process_group
 from coffer.infrastructure.mcp.stdio_spawn import leaf_exception, open_child
 
@@ -32,6 +34,11 @@ NotificationCallback = Callable[[Any], Awaitable[None]]
 
 # How long close() waits for the lifetime task to unwind before cancelling it.
 _TEARDOWN_SECONDS = 12.0
+
+
+def _closed(exc: BaseException) -> bool:
+    """The SDK's "connection closed": the child's stdio ended under a request."""
+    return isinstance(exc, MCPError) and exc.code == mcp_types.CONNECTION_CLOSED
 
 
 class StdioUpstreamConnection:
@@ -84,6 +91,7 @@ class StdioUpstreamConnection:
         # Server-initiated request callbacks (sampling and roots)
         self._sampling_callback: SamplingFnT | None = None
         self._list_roots_callback: ListRootsFnT | None = None
+        self._elicitation_callback: ElicitationFnT | None = None
         # PID-file paths written by record_spawn; cleared on close.
         self._pid_files: list[Path] = []
 
@@ -98,6 +106,10 @@ class StdioUpstreamConnection:
     def on_roots_request(self, cb: ListRootsFnT) -> None:
         """Register a callback that handles roots/list requests from the upstream."""
         self._list_roots_callback = cb
+
+    def on_elicitation_request(self, cb: ElicitationFnT) -> None:
+        """Register a callback that handles elicitation/create requests from the upstream."""
+        self._elicitation_callback = cb
 
     async def _message_handler(
         self,
@@ -175,7 +187,12 @@ class StdioUpstreamConnection:
             # detail. Surface only the exception type; the original is chained
             # via ``from exc`` for a debugger but never stringified into logs or
             # API responses.
-            raise UpstreamUnavailable(f"upstream init failed: {type(leaf).__name__}") from exc
+            name = type(leaf).__name__
+            if _closed(leaf):
+                # The child exited during initialize; the reason is what it
+                # printed last, already masked in its log and scrubbed here.
+                name = f"{name} ({exited_detail(self._server_name)})"
+            raise UpstreamUnavailable(f"upstream init failed: {name}") from exc
 
         init_result = ready.result()
         try:
@@ -233,6 +250,7 @@ class StdioUpstreamConnection:
                         message_handler=self._message_handler,
                         sampling_callback=self._sampling_callback,
                         list_roots_callback=self._list_roots_callback,
+                        elicitation_callback=self._elicitation_callback,
                     )
                 )
                 init_result = await session.initialize()
@@ -311,6 +329,13 @@ class StdioUpstreamConnection:
             raise UpstreamTimeout(
                 f"MCP server {self._server_name!r} did not answer {method} within "
                 f"{self._request_timeout}s (its request timeout)"
+            ) from exc
+        except MCPError as exc:
+            if not _closed(exc):
+                raise
+            raise UpstreamUnavailable(
+                f"MCP server {self._server_name!r} failed {method}: "
+                f"{exited_detail(self._server_name)}"
             ) from exc
 
     async def _dispatch_method(

@@ -170,7 +170,7 @@ async def test_reach_is_local_and_never_committed() -> None:
     assert off.enabled is False
     assert vault_repository().head() == head
     reach = json.loads((local_root() / "reach.json").read_text())
-    assert reach[r.uid] == {"enabled": False, "agents": None, "projects": None}
+    assert reach[r.uid] == {"enabled": False, "agents": None}
     assert not (vault_root() / "reach.json").exists()
 
 
@@ -357,7 +357,7 @@ async def test_a_record_left_with_no_agent_is_switched_off_by_the_startup_step()
     (local_root() / "reach.json").write_text(
         json.dumps(
             {
-                on.uid: {"enabled": True, "agents": None, "projects": None},
+                on.uid: {"enabled": True, "agents": None},
                 empty_on.uid: {"enabled": True, "agents": [], "projects": None},
                 empty_off.uid: {"enabled": False, "agents": [], "projects": None},
                 chosen.uid: {"enabled": True, "agents": ["agent-1"], "projects": None},
@@ -387,7 +387,7 @@ async def test_a_stale_off_record_for_a_kind_with_no_switch_reads_as_on() -> Non
     r = await svc.register("widget", "w", {"colour": "blue"}, actor="user")
     reach_file = local_root() / "reach.json"
     reach_file.write_text(
-        json.dumps({r.uid: {"enabled": False, "agents": None, "projects": None}}),
+        json.dumps({r.uid: {"enabled": False, "agents": None}}),
         encoding="utf-8",
     )
     assert (await svc.get(r.uid)).enabled is True

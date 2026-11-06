@@ -47,8 +47,6 @@ export function GroupHeader({ group, onEdit, onDelete }: Props) {
   const tile = tileOf(state);
   const Icon = tile.icon;
   const calls = useCallsLine(group);
-  const source = group.source;
-  const spec = source ? [source.title, source.version].filter(Boolean).join(" ") : "";
   const actions: MenuAction[] = [
     {
       key: "delete",
@@ -76,14 +74,6 @@ export function GroupHeader({ group, onEdit, onDelete }: Props) {
           <StatusPill tone={healthTone(group.health)}>{t(`customTools.state.${state}`)}</StatusPill>
         </div>
         <p className="min-w-0 truncate text-xs text-text-muted">
-          {source ? t("customTools.group.imported") : t("customTools.group.byHand")}
-          {spec ? (
-            <>
-              <span className="text-text-subtle"> · </span>
-              {spec}
-            </>
-          ) : null}
-          <span className="text-text-subtle"> · </span>
           {calls}
         </p>
       </div>

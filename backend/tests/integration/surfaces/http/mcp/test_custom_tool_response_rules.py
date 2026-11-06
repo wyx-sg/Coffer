@@ -254,7 +254,6 @@ def test_an_error_header_convention_is_a_declared_rule(
         daemon,
         "rpc",
         {
-            "diagnostic_headers": ["x-sp-requestid"],
             "rules": [
                 {
                     "source": "header",
@@ -269,7 +268,7 @@ def test_an_error_header_convention_is_a_declared_rule(
     denied = agent.call("rpc__denied")
     assert denied["result"]["isError"] is True
     text = text_of(denied)
-    # A failed call names every diagnostic header (the fake server adds its own name).
+    # A failed call names every response header (the fake server adds its own name).
     assert "x-sp-error: 101" in text and "SGW" in text
     assert '"101" (success: "0"): ERROR_SP_NEED_AUTH' in text
     ok = agent.call("rpc__ok")
@@ -280,9 +279,9 @@ def test_an_error_header_convention_is_a_declared_rule(
 
 @pytest.mark.acceptance(
     spec="mcp-gateway",
-    scenario="a group's named headers reach the agent and a credential header cannot be named",
+    scenario="a successful call names only the headers its rules read",
 )
-def test_named_headers_reach_the_agent_and_a_credential_cannot_be_named(
+def test_a_successful_call_names_only_the_headers_its_rules_read(
     daemon: BoundaryDaemon, api: FakeHttpApi
 ) -> None:
     api.echo_secret = SECRET_VALUE
@@ -292,26 +291,26 @@ def test_named_headers_reach_the_agent_and_a_credential_cannot_be_named(
             "X-Backend-Region": "eu-" + SECRET_VALUE,
             "Server": "edge",
             "Set-Cookie": "session=abc",
+            "WWW-Authenticate": 'Bearer realm="api"',
             **JSON,
         },
         b'{"ok": true}',
     )
     create_group(daemon, "acme", api.base_url, [tool("x", "GET", "/x")])
-    set_response(daemon, "acme", {"diagnostic_headers": ["X-Backend-Region"]})
+    # A successful call names no header its rules do not read.
     text = text_of(Agent(daemon, CLAUDE).call("acme__x"))
-    assert "x-backend-region: eu-***" in text
-    assert "server" not in text and "session=abc" not in text and SECRET_VALUE not in text
+    assert "x-backend-region" not in text and "server" not in text
     tested = daemon.client.post(f"{GROUPS}/acme/tools/x/test", json={"arguments": {}}).json()
-    assert tested["response_headers"]["x-backend-region"] == "eu-***"
-    assert tested["response_headers"]["server"].endswith("edge")
-    assert "set-cookie" not in tested["response_headers"]
+    headers = tested["response_headers"]
+    assert headers["x-backend-region"] == "eu-***"
+    assert headers["server"].endswith("edge")
+    assert headers["set-cookie"] == "***"
+    assert headers["www-authenticate"] == 'Bearer realm="api"'
+    assert "session=abc" not in json.dumps(tested) and SECRET_VALUE not in json.dumps(tested)
     assert tested["body_bytes"] == len(b'{"ok": true}')
-    before = get_group(daemon, "acme")["response"]
+    # A group saved by an older build with a diagnostic-header list still loads.
     r = daemon.client.patch(
-        f"{GROUPS}/acme", json={"response": {"diagnostic_headers": ["Set-Cookie"]}}
+        f"{GROUPS}/acme", json={"response": {"diagnostic_headers": ["Set-Cookie"], "rules": []}}
     )
-    assert r.status_code in (400, 422), r.text
-    assert get_group(daemon, "acme")["response"] == before
-    assert json.dumps(before) == json.dumps(
-        {"diagnostic_headers": ["x-backend-region"], "rules": []}
-    )
+    assert r.status_code == 200, r.text
+    assert get_group(daemon, "acme")["response"] == {"rules": []}

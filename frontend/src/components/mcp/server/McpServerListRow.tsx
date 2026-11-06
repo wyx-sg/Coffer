@@ -22,7 +22,7 @@ import { toneTextClass } from "@/lib/statusColors";
 import { STATUS_TONE } from "@/lib/statusTone";
 import { openRowTarget } from "@/lib/rowClick";
 import { cn } from "@/lib/utils";
-import { serverState, shortTime, transportOf, type ServerState } from "@/lib/mcp/serverState";
+import { serverState, transportOf, type ServerState } from "@/lib/mcp/serverState";
 import { useScrollIntoViewWhenCurrent } from "@/lib/hooks/useScrollIntoViewWhenCurrent";
 
 interface Props {
@@ -71,11 +71,7 @@ function Subline({
   if (state.kind === "failing") {
     const error = detail?.last_error ?? t("mcp.page.reason.failing");
     return (
-      <span className={warn}>
-        {detail?.failing_since
-          ? t("mcp.page.reason.failingSince", { error, since: shortTime(detail.failing_since) })
-          : error}
-      </span>
+      <span className={warn}>{error}</span>
     );
   }
   const transport = transportOf(resource.config);

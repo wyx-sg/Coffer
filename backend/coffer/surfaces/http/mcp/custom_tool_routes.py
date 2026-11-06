@@ -8,19 +8,16 @@ the kind-agnostic resource routes by the group's uid.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, Response
 
-from coffer.application.mcp.custom_tool_import import CustomToolImporter
 from coffer.application.mcp.custom_tools import UNSET, CustomToolService
 from coffer.domain.errors import ConfigValidationError
 from coffer.domain.mcp.http_api_environment import LIFTED_ENVIRONMENT
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor
 from coffer.surfaces.http.mcp.custom_tool_dependencies import (
-    get_custom_tool_importer,
     get_custom_tool_service,
 )
 from coffer.surfaces.http.mcp.custom_tool_env_routes import router as env_router
@@ -32,17 +29,12 @@ from coffer.surfaces.http.mcp.custom_tool_schemas import (
     CustomToolHeaderIn,
     CustomToolIn,
     CustomToolPatch,
-    CustomToolReimportChangeOut,
-    CustomToolReimportIn,
-    CustomToolReimportPreviewOut,
     CustomToolTestIn,
     CustomToolTestOut,
     CustomToolUnsavedTestIn,
-    OpenApiReadIn,
-    OpenApiReadOut,
 )
 from coffer.surfaces.http.mcp.custom_tool_test_out import test_out
-from coffer.surfaces.http.mcp.custom_tool_views_out import group_out, operation_out
+from coffer.surfaces.http.mcp.custom_tool_views_out import group_out
 
 router = APIRouter(
     prefix="/api/v1/custom-tools",
@@ -52,7 +44,6 @@ router = APIRouter(
 router.include_router(env_router)
 
 _service = Depends(get_custom_tool_service)
-_importer = Depends(get_custom_tool_importer)
 _actor = Depends(get_actor)
 
 
@@ -73,11 +64,6 @@ async def list_groups(svc: CustomToolService = _service) -> CustomToolGroupListO
 async def create_group(
     body: CustomToolGroupIn, svc: CustomToolService = _service, actor: str = _actor
 ) -> CustomToolGroupOut:
-    source = (
-        {**body.source.model_dump(mode="json"), "fetched_at": datetime.now(tz=UTC).isoformat()}
-        if body.source
-        else None
-    )
     environments = (
         [e.model_dump(mode="json") for e in body.environments]
         if body.environments is not None
@@ -96,31 +82,10 @@ async def create_group(
         timeout_seconds=body.timeout_seconds,
         agents=body.agents,
         tools=[_tool_dict(t) for t in body.tools],
-        source=source,
         response=body.response.model_dump(mode="json"),
         actor=actor,
     )
     return group_out(view)
-
-
-@router.post("/openapi", response_model=OpenApiReadOut)
-async def read_openapi(
-    body: OpenApiReadIn, importer: CustomToolImporter = _importer
-) -> OpenApiReadOut:
-    """Read a document into draft tools; saves nothing."""
-    result = await importer.read(url=body.url, document=body.document, filename=body.filename)
-    r = result.reading
-    return OpenApiReadOut(
-        title=r.title,
-        version=r.version,
-        description=r.description,
-        base_url=r.base_url,
-        auth_header=r.auth_header,
-        source_kind=result.kind,
-        location=result.location,
-        operations=[operation_out(op) for op in r.operations],
-        warnings=r.warnings,
-    )
 
 
 @router.post("/test", response_model=CustomToolTestOut)
@@ -212,44 +177,3 @@ async def test_tool(
     """Run a draft tool once; saves nothing and records no invocation."""
     outcome = await svc.test_tool(name, _tool_dict(body.tool), body.arguments, body.environment)
     return test_out(outcome, group=name, method=body.tool.method)
-
-
-@router.post("/{name}/reimport/preview", response_model=CustomToolReimportPreviewOut)
-async def preview_reimport(
-    name: str, body: CustomToolReimportIn, importer: CustomToolImporter = _importer
-) -> CustomToolReimportPreviewOut:
-    reading, plan, changes = await importer.preview(name, document=body.document)
-    return CustomToolReimportPreviewOut(
-        title=reading.title,
-        version=reading.version,
-        added=[operation_out(op) for op in plan.added],
-        removed=plan.removed,
-        kept=plan.kept,
-        changed=[
-            CustomToolReimportChangeOut(
-                name=c.name,
-                method=c.method,  # type: ignore[arg-type]
-                path=c.path,
-                new_required=c.new_required,
-                request_changed=c.request_changed,
-                operation=c.operation,
-                old_text=c.old_text,
-                new_text=c.new_text,
-                new_start_line=c.new_start_line,
-                new_end_line=c.new_end_line,
-            )
-            for c in changes
-        ],
-        warnings=reading.warnings,
-    )
-
-
-@router.post("/{name}/reimport", response_model=CustomToolGroupOut)
-async def apply_reimport(
-    name: str,
-    body: CustomToolReimportIn,
-    importer: CustomToolImporter = _importer,
-    actor: str = _actor,
-) -> CustomToolGroupOut:
-    view = await importer.apply(name, document=body.document, add_keys=set(body.add), actor=actor)
-    return group_out(view)
