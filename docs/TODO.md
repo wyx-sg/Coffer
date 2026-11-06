@@ -48,6 +48,43 @@ threads appending at once rarely conflict:
   form request bodies. Needs an ADR on where the token lives and how a refresh
   failure is reported.
 
+### Forward an upstream's elicitation requests to the agent
+
+- **Added:** 2026-11-06, from the thread "梳理 MCP 和自定义工具还缺什么"
+- **What:** when an upstream MCP server asks its client a question mid-call
+  (`elicitation/create`, for example "which project?" or "confirm this delete"),
+  the gateway passes it to the agent and returns the person's answer, the way it
+  already relays `sampling/createMessage` and `roots/list`.
+- **Why later:** without it such a server gets "not supported" and falls back or
+  fails, so moving it into Coffer loses a feature it has when connected directly.
+  None of the current servers asks.
+- **Sketch:** reuse the sampling and roots relay: offer the capability to an
+  upstream only when the session's client declared it at `initialize`.
+
+### Tell the person at import that an OAuth server stays in the agent
+
+- **Added:** 2026-11-06, from the thread "梳理 MCP 和自定义工具还缺什么"
+- **What:** when an agent's MCP entry needs an OAuth browser login, the import
+  says Coffer does not log in to remote servers and leaves the entry in the
+  agent, instead of moving it and failing with 401.
+- **Why later:** the owner decided Coffer does not do upstream OAuth, because
+  Claude Code and Codex log in themselves; the notice only matters once such a
+  server shows up. None of the current servers uses OAuth.
+- **Sketch:** detect it from the entry (an `oauth` block, or a remote URL with no
+  auth header that answers 401 with `WWW-Authenticate` pointing at an
+  authorization server), then skip it with a reason, as an SSE entry is skipped.
+
+### Send form-encoded request bodies from custom tools
+
+- **Added:** 2026-11-06, from the thread "梳理 MCP 和自定义工具还缺什么"
+- **What:** a custom tool's body can be `application/x-www-form-urlencoded` as
+  well as JSON; today the request's Content-Type is fixed to JSON.
+- **Why later:** many older APIs and every OAuth token endpoint take form bodies,
+  but no current tool needs one. Build it together with OAuth2 client
+  credentials if that comes first.
+- **Sketch:** a body type switch on the tool (JSON or form); a form body is the
+  same `{name}` template filled per field and percent-encoded.
+
 ### Upload files from custom tools
 
 - **Added:** 2026-11-06, from the thread "梳理 MCP 和自定义工具还缺什么"
