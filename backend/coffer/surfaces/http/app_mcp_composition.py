@@ -28,7 +28,6 @@ from coffer.application.audit_service import AuditService
 from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.mcp.call_content import CallContentRecording
 from coffer.application.mcp.call_content import configure as configure_call_content
-from coffer.application.mcp.custom_tool_import import CustomToolImporter
 from coffer.application.mcp.custom_tool_views import GroupViewer
 from coffer.application.mcp.custom_tools import CustomToolService
 from coffer.application.mcp.discovery import CapabilityDiscovery
@@ -53,7 +52,6 @@ from coffer.domain.secrets import SecretDestination
 from coffer.infrastructure.daemon.call_content_setting import DaemonConfigCallContent
 from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.mcp.http_api_runner import HttpApiToolRunner
-from coffer.infrastructure.mcp.openapi_fetch import OpenApiDocumentSource
 from coffer.infrastructure.mcp.persistence import (
     MCPCapabilityPreferenceStore,
     MCPInvocationRepo,
@@ -248,7 +246,7 @@ def wire_custom_tools(
         resolver=lambda: boundary_resolver(secret_store),
         runner=HttpApiToolRunner(),
     )
-    set_custom_tool_services(service, CustomToolImporter(service, OpenApiDocumentSource()))
+    set_custom_tool_services(service)
     return service
 
 

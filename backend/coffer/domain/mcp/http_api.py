@@ -21,7 +21,6 @@ Pure: Pydantic and the standard library only.
 from __future__ import annotations
 
 import re
-from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -35,15 +34,13 @@ from coffer.domain.mcp.http_api_environment import (
 from coffer.domain.mcp.http_api_headers import check_headers
 from coffer.domain.mcp.http_api_render import template_holes
 from coffer.domain.mcp.http_api_response import MAX_RULES, HttpApiResponse, ResponseRule
-from coffer.domain.mcp.json_schema_check import InvalidSchema, check_schema
+from coffer.domain.mcp.json_schema import InvalidSchema, check_schema
 
 HttpMethod = Literal["GET", "POST", "PUT", "PATCH", "DELETE"]
 HTTP_METHODS: tuple[str, ...] = ("GET", "POST", "PUT", "PATCH", "DELETE")
 
 #: A tool's name: what follows ``<group>__`` in the name an agent sees.
 TOOL_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,39}$")
-#: How much of one operation's spec text a tool keeps.
-SOURCE_TEXT_LIMIT = 20_000
 
 
 def default_changes_data(method: str) -> bool:
@@ -70,11 +67,6 @@ class HttpApiTool(BaseModel):
     enabled: bool = True
     #: ``None`` follows the method (on for every method but GET).
     changes_data: bool | None = None
-    #: ``"<METHOD> <path>"`` of the OpenAPI operation this tool was imported from.
-    operation: str | None = None
-    #: The operation's text in the spec it was imported from, so a re-import
-    #: can show what changed in it.
-    source_text: str | None = Field(default=None, max_length=SOURCE_TEXT_LIMIT)
     #: The rules this tool's answers are judged by; ``None`` follows the
     #: group's (spec mcp-gateway "Judge a custom tool's answer by its group's
     #: response rules"). An empty list judges by the HTTP status alone.
@@ -161,18 +153,6 @@ class HttpApiTool(BaseModel):
         return f"{self.method} {self.path}"
 
 
-class OpenApiSource(BaseModel):
-    """Where a group's tools were imported from, for re-import."""
-
-    kind: Literal["url", "file"]
-    location: str = Field(min_length=1, max_length=2000)
-    title: str | None = None
-    version: str | None = None
-    fetched_at: datetime
-    #: Operation keys (``"<METHOD> <path>"``) seen and left out.
-    skipped: list[str] = Field(default_factory=list)
-
-
 class HttpApiTransport(BaseModel):
     """A custom-tool group: one set of tools, sent to one of its environments."""
 
@@ -180,7 +160,6 @@ class HttpApiTransport(BaseModel):
     environments: list[HttpApiEnvironment] = Field(min_length=1)
     #: The group's timeout; an environment may set its own.
     timeout_seconds: int = Field(default=30, ge=1, le=300)
-    source: OpenApiSource | None = None
     tools: list[HttpApiTool] = Field(default_factory=list)
     #: Extra headers to report and the rules every tool's answer is judged by.
     response: HttpApiResponse = Field(default_factory=HttpApiResponse)
@@ -224,9 +203,6 @@ class HttpApiTransport(BaseModel):
     def environment(self, name: str) -> HttpApiEnvironment | None:
         return next((e for e in self.environments if e.name == name), None)
 
-    def timeout_for(self, env: HttpApiEnvironment) -> int:
-        return env.timeout_seconds or self.timeout_seconds
-
     def rules_for(self, tool: HttpApiTool) -> list[ResponseRule]:
         """The rules ``tool``'s answers are judged by: its own, else the group's."""
         return tool.response_rules if tool.response_rules is not None else self.response.rules
@@ -239,13 +215,11 @@ def http_api_target(env: HttpApiEnvironment) -> str:
 
 __all__ = [
     "HTTP_METHODS",
-    "SOURCE_TEXT_LIMIT",
     "TOOL_NAME_RE",
     "HttpApiEnvironment",
     "HttpApiTool",
     "HttpApiTransport",
     "HttpMethod",
-    "OpenApiSource",
     "default_changes_data",
     "http_api_target",
 ]

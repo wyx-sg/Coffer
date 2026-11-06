@@ -179,7 +179,7 @@ def show_preview(result: dict[str, Any]) -> None:
         else:
             typer.echo(f"{h['name']}: {h['value']}")
     timeout = result.get("timeout_seconds")
-    typer.echo(f"timeout: {timeout} s (from the {result.get('timeout_source')})")
+    typer.echo(f"timeout: {timeout} s")
     if result.get("body") is not None:
         typer.echo("")
         typer.echo(result["body"])

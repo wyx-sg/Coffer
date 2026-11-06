@@ -8,7 +8,10 @@ Coffer endpoint instead of editing each client's config. Coffer aggregates the u
 prompts behind one namespaced surface, lets the user curate what that surface exposes (some tools are
 dangerous, some redundant, some unwanted right now), keeps the agent able to choose well when the aggregated
 catalogue grows past what a model can reason over, and records which capability was called, when, for how
-long and with what outcome — never what was said. `mcp_server` was Coffer's first resource kind.
+long and with what outcome. By default it also records what each call sent and got back, with known secrets
+masked and each part cut at 16 KB; recording that content can be switched off per machine. `mcp_server` was
+Coffer's first resource kind. What an agent can do itself, Coffer leaves to it: an agent turns an API document
+into custom tools with the `coffer custom-tool` commands, so the gateway has no importer of its own.
 
 This spec owns the gateway, capability curation, the invocation record and the `coffer mcp test` command and the shim
 over them. The kind-agnostic lifecycle an `mcp_server` is managed through (immutable `uid`, fixed name, per-agent
@@ -633,10 +636,7 @@ when it is saved, with nothing persisted.
 
 ### Requirement: Describe a custom-tool group
 A custom-tool group MUST carry an optional **description** saying what its API is
-for, set when the group is created (by hand or from an OpenAPI import) and
-changed later. Reading an OpenAPI document MUST return its `info.description`
-(trimmed, at most 2000 characters) so the import can start the new group with
-it. `coffer__search_tools` MUST score each of a group's tools against the
+for, set when the group is created and changed later. `coffer__search_tools` MUST score each of a group's tools against the
 group's description as well as the tool's own, and return the description
 beside each of the group's tools it finds as `group_description`. A tool's entry
 in `tools/list` MUST keep the tool's own description, with nothing added.
@@ -646,11 +646,6 @@ in `tools/list` MUST keep the tool's own description, with nothing added.
 - **WHEN** an agent calls `coffer__search_tools` with the query "weather forecast"
 - **THEN** `acme__list_items` is the first result, carrying the group's description as `group_description`
 - **AND** `tools/list` still offers `acme__list_items` with the description "List items"
-
-#### Scenario: an OpenAPI document's description is read for the new group
-- **GIVEN** an OpenAPI document whose `info.description` is set, and one without it
-- **WHEN** each is read for import
-- **THEN** the first returns that description, trimmed, and the second returns none
 
 ### Requirement: Make a custom tool's request in the gateway
 On `tools/call` for a custom tool the gateway MUST resolve the call's
@@ -662,8 +657,8 @@ or the host; each `{env:NAME}` filled with the environment's variable; a query
 pair whose hole's argument is absent dropped; the body template filled with JSON
 values, or, with no template, the unused arguments sent as a JSON object for
 POST, PUT and PATCH — add the environment's secret headers with each secret's
-value last, send it with the environment's timeout (the group's when it sets
-none) without following redirects, read at most 1 MiB of the response, and
+value last, send it with the group's timeout (one for every environment; an environment's
+own timeout, which older builds stored, is ignored) without following redirects, read at most 1 MiB of the response, and
 return one text result that starts with the HTTP status line. A status of 400 or
 more MUST be returned as an in-band tool error, and so MUST an answer that
 breaks one of the tool's response rules ("Judge a custom tool's answer by its
@@ -710,68 +705,6 @@ but GET, and a person MAY turn it off or on for any tool.
 - **GIVEN** a stdio server whose tool declares `readOnlyHint: true`
 - **WHEN** an agent lists the gateway's tools
 - **THEN** the namespaced entry carries `readOnlyHint: true`
-
-### Requirement: Import custom tools from an OpenAPI document
-The system MUST read an OpenAPI 3.0 or 3.1 document, JSON or YAML, given as a
-file or fetched from a URL, into draft tools — one per operation, named from
-its `operationId`, with its path and query parameters as holes, its JSON
-request body as a `body` argument, and local `$ref`s resolved — and suggest
-the base URL from its `servers` and the header a credential goes in from its
-security schemes (`Authorization` for bearer, basic and OAuth; the key's name for
-an API key), which the form pre-fills as one header row with no value. Each
-draft operation MUST carry its text in the document with its first and last
-line, and its text is kept on the tool it becomes. A document that cannot be
-parsed MUST be refused with the line and column where it broke. A URL that does
-not answer — its host name does not resolve, the connection is refused, or it
-times out — MUST be refused with the distinct code `OPENAPI_UNREACHABLE`, the
-reason, and a hand-off prompt about checking the URL, the network, VPN or proxy
-(Principle IV, AI-Native). A URL typed into the import MUST pass the SSRF guard before it is fetched, and
-the document MUST be at most 5 MiB. The chosen operations become the tools of
-a new group, which records where the document came from and the operations
-left out. **Re-import** MUST read the source again and first preview the
-operations it would add, the tools it would remove and the ones it keeps,
-changing nothing; applying it MUST remove the removed tools, add the chosen
-added ones switched on, refresh each kept tool's request from the document and
-keep its switch and changes-data flag, and MUST keep every environment of the
-group with its base URL, headers, secret bindings and variables unchanged. A
-tool added by hand is never removed by a re-import.
-
-#### Scenario: an OpenAPI document becomes draft tools
-- **GIVEN** an OpenAPI 3.1 document with five operations, a server URL and a bearer security scheme
-- **WHEN** it is read for import
-- **THEN** five draft tools are returned with their methods, paths and argument schemas, the server URL as the base URL and `Authorization` as the suggested header
-- **AND** creating a group from three of them yields exactly those three tools, each switched on, and records the other two as left out
-
-#### Scenario: the import preview shows each operation's source
-- **GIVEN** an OpenAPI document written over several lines
-- **WHEN** it is read for import
-- **THEN** each operation carries its first and last line and its text in the document, and the tool drafted from it keeps that text
-
-#### Scenario: an unreadable spec says where it broke
-- **GIVEN** a JSON document with a missing comma on line 5, and a YAML document with an unclosed bracket
-- **WHEN** each is read for import
-- **THEN** each is refused as `OPENAPI_UNREADABLE` with the line and column where it broke
-
-#### Scenario: an unreachable spec URL says why
-- **GIVEN** an import URL whose host name does not resolve, one that refuses the connection, and one that times out
-- **WHEN** each is read for import
-- **THEN** each is refused as `OPENAPI_UNREACHABLE` with the reason `dns`, `refused` or `timeout` and a hand-off prompt naming the URL
-
-#### Scenario: an OpenAPI URL on a private address is refused
-- **GIVEN** an import URL whose host resolves to a loopback or private address
-- **WHEN** it is read for import
-- **THEN** the read is refused before any request is sent, and the refusal says to import the document as a file
-
-#### Scenario: re-import applies additions and removals keeping switches
-- **GIVEN** a group imported with three operations, one of them switched off, and a document that now drops one of them and adds a new one
-- **WHEN** re-import is previewed and then applied with the new operation chosen
-- **THEN** the preview names one operation to add and one tool to remove and nothing changed before applying
-- **AND** after applying, the dropped tool is gone, the new tool is on, and the kept tools keep their switch
-
-#### Scenario: re-import keeps the group's environments
-- **GIVEN** an imported group with environments `test` and `live`, each with its own base URL, secret header and variable
-- **WHEN** it is re-imported from a document whose `servers` name another URL
-- **THEN** both environments keep their base URL, headers, secret bindings and variables, and no approval is asked again
 
 ### Requirement: Wait for approval before a custom tool sends its secret
 Binding a stored secret to one of an environment's headers MUST be treated as a
@@ -824,8 +757,7 @@ Custom-tool groups MUST be managed through `/api/v1/custom-tools` — list
 failures in the last 24 hours, its environments and its tools), create (with
 tools and environments), read, change, delete, add / change / remove one tool,
 add / change / remove one environment, test a draft tool once without saving it,
-test a saved tool, read an OpenAPI document, and preview and apply a re-import —
-on the Custom tools page, which calls those routes, and with the `coffer
+and test a saved tool — on the Custom tools page, which calls those routes, and with the `coffer
 custom-tool` commands ("Manage custom tools from the command line"). Every test
 names its environment and returns the actual target it reached (method and URL
 with secret-looking query values redacted). The page MUST show each
@@ -951,19 +883,6 @@ The daemon MUST run a request of a custom-tool group that is not saved yet — i
 - **WHEN** each is tested
 - **THEN** the first reports it could not connect and the second that the request could not be built, while a request the API answers reports no failure
 - **AND** only the one that could not connect carries a hand-off prompt
-
-### Requirement: List what a re-import changes in the tools it keeps
-A re-import's preview MUST name, besides the operations it would add and the tools it would remove, every kept tool whose operation the spec now describes differently — an argument it now requires, or a changed method, path or body template — with the operation's text as last imported and as it now reads (the old text is absent for a tool imported before Coffer kept it), and an OpenAPI reading MUST carry each operation's first tag, so the import form can group operations by it.
-
-#### Scenario: a re-import preview names the tools the spec changed
-- **GIVEN** a group imported from a spec whose `POST /invoices` took no arguments
-- **WHEN** the spec now requires a `currency` query argument there and the group is previewed for re-import
-- **THEN** the preview names `create_invoice` as changed with the new required argument `currency`, and the group's tools are unchanged
-
-#### Scenario: a re-import preview shows an operation's old and new text
-- **GIVEN** a group imported from a multi-line spec, and a spec whose `POST /invoices` request body now requires `currency`
-- **WHEN** the group is previewed for re-import
-- **THEN** the changed tool carries its operation key, the operation's old text, its new text and the new text's first and last line
 
 ### Requirement: Hand a failing MCP server's diagnosis to an agent
 Finding why a server will not start or answer depends on the machine, so a failing server MUST offer its
@@ -1298,8 +1217,7 @@ body template, argument schema, `changes_data` (a read-only `POST` may set
 `changes_data=false`) and its own response rules; set a group's response
 settings; add, update, rename, enable, disable and delete an
 environment and bind a secret to one of its headers; test a draft tool and a
-saved tool in a chosen environment; read an OpenAPI document; and preview and
-apply a re-import. A tool's definition, request template and schema MUST be
+saved tool in a chosen environment. A tool's definition, request template and schema MUST be
 accepted from flags, a file (`--data @file`) or standard input (`--data -`).
 Every command MUST offer `--json` and the exit codes of [resource-framework]
 "Offer every management operation on the command line". A command whose change
@@ -1319,11 +1237,6 @@ calls the upstream API itself.
 - **WHEN** a person renames one of its environments and switches a tool off on the Custom tools page, and an agent runs `coffer custom-tool group show <group> --json`
 - **THEN** the JSON carries the renamed environment and the tool switched off
 
-#### Scenario: an OpenAPI document is imported and re-imported from the command line
-- **GIVEN** an OpenAPI file with three operations
-- **WHEN** an agent runs `coffer custom-tool import read --file openapi.yaml --json`, creates a group from two operations with `coffer custom-tool group create --from-openapi openapi.yaml --operation <op> --operation <op>`, and later runs `coffer custom-tool reimport preview <group> --file openapi.yaml` and `coffer custom-tool reimport apply <group> --file openapi.yaml --add <op>`
-- **THEN** the read lists three draft tools, the group holds two, the preview names the one to add and changes nothing, and the apply adds it keeping every environment
-
 ### Requirement: Preview a custom tool's request without sending it
 The daemon MUST preview the request a custom tool would send — a saved tool with
 `POST /api/v1/custom-tools/{name}/tools/{tool}/preview` and a draft with
@@ -1335,8 +1248,7 @@ tool's environment on every call", the arguments checked by "Validate a custom
 tool's arguments before any request", and the request built by the gateway's own
 code ("Make a custom tool's request in the gateway"). It answers the chosen
 environment, the method, the final URL, every header as it would be sent, the
-rendered body, the timeout that applies and whose it is (the environment's own
-or the group's), and the environment's variables. A secret header MUST carry
+rendered body, the group's timeout, and the environment's variables. A secret header MUST carry
 `***` in place of the credential (behind its scheme, `Bearer ***`), its secret's
 id and name, its scheme and its state (`present`, `missing` or
 `pending_approval`, read from the store's presence and the approvals, never from
@@ -1348,9 +1260,9 @@ with `CUSTOM_TOOL_REQUEST_INVALID` (422, exit `6`). With `--json` the command
 prints the preview object as the route answers it.
 
 #### Scenario: a dry run shows each environment's request without sending it
-- **GIVEN** a group with environments `test` (the group's 30 s timeout, `region=eu-1`) and `live` (its own 7 s timeout, `region=us-1`), each with its own base URL, plain header and secret header, and a tool `POST /v1/{env:region}/search?cid={cid}` with a tool header and a body template
+- **GIVEN** a group with a 30 s timeout and environments `test` (`region=eu-1`) and `live` (`region=us-1`), each with its own base URL, plain header and secret header, and a tool `POST /v1/{env:region}/search?cid={cid}` with a tool header and a body template
 - **WHEN** the tool is previewed in `test` and in `live` with the same arguments
-- **THEN** each answer names its environment, its own base URL with its region and the query filled, its own plain header, the tool header, the rendered body, and 30 s from the group or 7 s from the environment
+- **THEN** each answer names its environment, its own base URL with its region and the query filled, its own plain header, the tool header, the rendered body, and the group's 30 s
 - **AND** the upstream receives nothing, and no secret value is read
 
 #### Scenario: a dry run names a secret header's secret but never its value

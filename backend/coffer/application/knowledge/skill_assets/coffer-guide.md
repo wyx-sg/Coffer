@@ -310,6 +310,16 @@ installed, new enough or logged in, check yourself (`command -v`, its
 if one a skill needs is missing, `coffer cli list --json` carries Coffer's
 install prompt for it.
 
+## Adding MCP servers and HTTP APIs
+
+When you add an MCP server that starts with `npx` or `uvx`, write the
+package's version into its arguments (`npx -y @acme/server@1.4.2`,
+`uvx acme-server==1.4.2`): an unpinned package can change under the developer
+between two starts. To turn an API document (an OpenAPI spec, a page of
+examples) into tools, create a group with `coffer custom-tool group create`
+and add each request you need with `coffer custom-tool tool add`; test one with
+`coffer custom-tool tool test`. `coffer custom-tool --help` lists the rest.
+
 ## Where a skill's scripts keep their files
 
 A skill's scripts write the logs, operation journals and temp files they

@@ -251,11 +251,11 @@ migration (`infrastructure/vault/free_name_migration.py`) turns an old-shape fil
 ### Reach — `~/.coffer/local/reach.json`
 
 ```json
-{ "<uid>": { "enabled": true, "agents": ["<agent uid>"], "projects": null } }
+{ "<uid>": { "enabled": true, "agents": ["<agent uid>"] } }
 ```
 
-`agents: null` is unrestricted and a list is never empty; `projects` is reserved and
-always `null`. A resource with no record has `enabled: true` and `agents: null`. A one-time startup step rewrites any record holding `agents: []`
+`agents: null` is unrestricted and a list is never empty. A `projects` key written by older
+builds is ignored on read and dropped on the next write. A resource with no record has `enabled: true` and `agents: null`. A one-time startup step rewrites any record holding `agents: []`
 to `enabled: false, agents: null`. `set_enabled` and `update_scope` write only this file and make
 no commit.
 

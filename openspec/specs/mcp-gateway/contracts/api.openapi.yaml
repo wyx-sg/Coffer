@@ -89,47 +89,6 @@ paths:
       summary: Create Group
       tags:
       - custom-tools
-  /api/v1/custom-tools/openapi:
-    post:
-      description: Read a document into draft tools; saves nothing.
-      operationId: read_openapi_api_v1_custom_tools_openapi_post
-      parameters:
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/OpenApiReadIn'
-        required: true
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OpenApiReadOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Read Openapi
-      tags:
-      - custom-tools
   /api/v1/custom-tools/test:
     post:
       description: 'Run a request of a group not saved yet: no secret, SSRF-guarded, nothing kept.'
@@ -519,106 +478,6 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
       summary: Preview Draft Tool
-      tags:
-      - custom-tools
-  /api/v1/custom-tools/{name}/reimport:
-    post:
-      operationId: apply_reimport_api_v1_custom_tools__name__reimport_post
-      parameters:
-      - in: path
-        name: name
-        required: true
-        schema:
-          title: Name
-          type: string
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      - in: header
-        name: x-coffer-actor
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Actor
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CustomToolReimportIn'
-        required: true
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CustomToolGroupOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Apply Reimport
-      tags:
-      - custom-tools
-  /api/v1/custom-tools/{name}/reimport/preview:
-    post:
-      operationId: preview_reimport_api_v1_custom_tools__name__reimport_preview_post
-      parameters:
-      - in: path
-        name: name
-        required: true
-        schema:
-          title: Name
-          type: string
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CustomToolReimportIn'
-        required: true
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CustomToolReimportPreviewOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Preview Reimport
       tags:
       - custom-tools
   /api/v1/custom-tools/{name}/test:
@@ -2227,13 +2086,6 @@ components:
         name:
           title: Name
           type: string
-        timeout_seconds:
-          anyOf:
-          - maximum: 300.0
-            minimum: 1.0
-            type: integer
-          - type: 'null'
-          title: Timeout Seconds
         variables:
           additionalProperties:
             type: string
@@ -2292,11 +2144,6 @@ components:
           - pending_approval
           title: Secret State
           type: string
-        timeout_seconds:
-          anyOf:
-          - type: integer
-          - type: 'null'
-          title: Timeout Seconds
         variables:
           additionalProperties:
             type: string
@@ -2309,7 +2156,6 @@ components:
       - base_url
       - headers
       - variables
-      - timeout_seconds
       - secret_state
       - pending_approvals
       - pending_secrets
@@ -2320,7 +2166,7 @@ components:
     CustomToolEnvironmentPatch:
       description: |-
         A partial change to one environment; ``headers`` and ``variables``
-        replace the whole list, and ``timeout_seconds: null`` uses the group's.
+        replace the whole list.
       properties:
         base_url:
           anyOf:
@@ -2349,13 +2195,6 @@ components:
           - type: string
           - type: 'null'
           title: Name
-        timeout_seconds:
-          anyOf:
-          - maximum: 300.0
-            minimum: 1.0
-            type: integer
-          - type: 'null'
-          title: Timeout Seconds
         variables:
           anyOf:
           - additionalProperties:
@@ -2404,10 +2243,6 @@ components:
           type: string
         response:
           $ref: '#/components/schemas/CustomToolResponse'
-        source:
-          anyOf:
-          - $ref: '#/components/schemas/OpenApiSourceIn'
-          - type: 'null'
         timeout_seconds:
           default: 30
           maximum: 300.0
@@ -2532,10 +2367,6 @@ components:
           - pending_approval
           title: Secret State
           type: string
-        source:
-          anyOf:
-          - $ref: '#/components/schemas/OpenApiSourceOut'
-          - type: 'null'
         timeout_seconds:
           title: Timeout Seconds
           type: integer
@@ -2562,7 +2393,6 @@ components:
       - timeout_seconds
       - response
       - scope
-      - source
       - health
       - health_reason
       - secret_state
@@ -2686,7 +2516,7 @@ components:
       title: CustomToolHeaderOut
       type: object
     CustomToolIn:
-      description: One tool as a request writes it — and as an OpenAPI reading drafts it.
+      description: One tool as a request writes it.
       properties:
         body_template:
           anyOf:
@@ -2728,11 +2558,6 @@ components:
         name:
           title: Name
           type: string
-        operation:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Operation
         path:
           title: Path
           type: string
@@ -2743,11 +2568,6 @@ components:
             type: array
           - type: 'null'
           title: Response Rules
-        source_text:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Source Text
       required:
       - name
       - path
@@ -2802,11 +2622,6 @@ components:
         name:
           title: Name
           type: string
-        operation:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Operation
         path:
           title: Path
           type: string
@@ -2829,7 +2644,6 @@ components:
       - enabled
       - changes_data
       - changes_data_set
-      - operation
       - response_rules
       - calls_24h
       - failures_24h
@@ -2949,130 +2763,6 @@ components:
       - state
       title: CustomToolPreviewSecretOut
       type: object
-    CustomToolReimportChangeOut:
-      description: A kept tool whose request the spec changed.
-      properties:
-        method:
-          enum:
-          - GET
-          - POST
-          - PUT
-          - PATCH
-          - DELETE
-          title: Method
-          type: string
-        name:
-          title: Name
-          type: string
-        new_end_line:
-          anyOf:
-          - type: integer
-          - type: 'null'
-          title: New End Line
-        new_required:
-          items:
-            type: string
-          title: New Required
-          type: array
-        new_start_line:
-          anyOf:
-          - type: integer
-          - type: 'null'
-          title: New Start Line
-        new_text:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: New Text
-        old_text:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Old Text
-        operation:
-          title: Operation
-          type: string
-        path:
-          title: Path
-          type: string
-        request_changed:
-          title: Request Changed
-          type: boolean
-      required:
-      - name
-      - method
-      - path
-      - new_required
-      - request_changed
-      - operation
-      - old_text
-      - new_text
-      - new_start_line
-      - new_end_line
-      title: CustomToolReimportChangeOut
-      type: object
-    CustomToolReimportIn:
-      properties:
-        add:
-          items:
-            type: string
-          title: Add
-          type: array
-        document:
-          anyOf:
-          - maxLength: 5242880
-            type: string
-          - type: 'null'
-          title: Document
-      title: CustomToolReimportIn
-      type: object
-    CustomToolReimportPreviewOut:
-      properties:
-        added:
-          items:
-            $ref: '#/components/schemas/OpenApiOperationOut'
-          title: Added
-          type: array
-        changed:
-          items:
-            $ref: '#/components/schemas/CustomToolReimportChangeOut'
-          title: Changed
-          type: array
-        kept:
-          items:
-            type: string
-          title: Kept
-          type: array
-        removed:
-          items:
-            type: string
-          title: Removed
-          type: array
-        title:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Title
-        version:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Version
-        warnings:
-          items:
-            type: string
-          title: Warnings
-          type: array
-      required:
-      - title
-      - version
-      - added
-      - removed
-      - kept
-      - changed
-      - warnings
-      title: CustomToolReimportPreviewOut
-      type: object
     CustomToolRequestPreviewOut:
       description: What one call would send; nothing was sent and no secret was read.
       properties:
@@ -3095,12 +2785,6 @@ components:
         timeout_seconds:
           title: Timeout Seconds
           type: integer
-        timeout_source:
-          enum:
-          - environment
-          - group
-          title: Timeout Source
-          type: string
         url:
           title: Url
           type: string
@@ -3116,7 +2800,6 @@ components:
       - headers
       - body
       - timeout_seconds
-      - timeout_source
       - variables
       title: CustomToolRequestPreviewOut
       type: object
@@ -4269,202 +3952,6 @@ components:
       - name
       - description
       title: McpTestToolOut
-      type: object
-    OpenApiOperationOut:
-      properties:
-        key:
-          title: Key
-          type: string
-        source:
-          anyOf:
-          - $ref: '#/components/schemas/OpenApiSourceTextOut'
-          - type: 'null'
-        summary:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Summary
-        tag:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Tag
-        tool:
-          $ref: '#/components/schemas/CustomToolIn'
-      required:
-      - key
-      - summary
-      - tag
-      - tool
-      - source
-      title: OpenApiOperationOut
-      type: object
-    OpenApiReadIn:
-      description: 'A document to read: its URL (fetched through the SSRF guard) or its text.'
-      properties:
-        document:
-          anyOf:
-          - maxLength: 5242880
-            type: string
-          - type: 'null'
-          title: Document
-        filename:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Filename
-        url:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Url
-      title: OpenApiReadIn
-      type: object
-    OpenApiReadOut:
-      properties:
-        auth_header:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Auth Header
-        base_url:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Base Url
-        description:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Description
-        location:
-          title: Location
-          type: string
-        operations:
-          items:
-            $ref: '#/components/schemas/OpenApiOperationOut'
-          title: Operations
-          type: array
-        source_kind:
-          enum:
-          - url
-          - file
-          title: Source Kind
-          type: string
-        title:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Title
-        version:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Version
-        warnings:
-          items:
-            type: string
-          title: Warnings
-          type: array
-      required:
-      - title
-      - version
-      - description
-      - base_url
-      - auth_header
-      - source_kind
-      - location
-      - operations
-      - warnings
-      title: OpenApiReadOut
-      type: object
-    OpenApiSourceIn:
-      properties:
-        kind:
-          enum:
-          - url
-          - file
-          title: Kind
-          type: string
-        location:
-          title: Location
-          type: string
-        skipped:
-          items:
-            type: string
-          title: Skipped
-          type: array
-        title:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Title
-        version:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Version
-      required:
-      - kind
-      - location
-      title: OpenApiSourceIn
-      type: object
-    OpenApiSourceOut:
-      properties:
-        fetched_at:
-          format: date-time
-          title: Fetched At
-          type: string
-        kind:
-          enum:
-          - url
-          - file
-          title: Kind
-          type: string
-        location:
-          title: Location
-          type: string
-        skipped:
-          items:
-            type: string
-          title: Skipped
-          type: array
-        title:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Title
-        version:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Version
-      required:
-      - kind
-      - location
-      - title
-      - version
-      - fetched_at
-      - skipped
-      title: OpenApiSourceOut
-      type: object
-    OpenApiSourceTextOut:
-      description: An operation's text in the document, for the viewer beside the list.
-      properties:
-        end_line:
-          title: End Line
-          type: integer
-        start_line:
-          title: Start Line
-          type: integer
-        text:
-          title: Text
-          type: string
-      required:
-      - start_line
-      - end_line
-      - text
-      title: OpenApiSourceTextOut
       type: object
     PreviewContentOut:
       description: One body of a resource, or one message of a prompt.

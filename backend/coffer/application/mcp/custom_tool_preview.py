@@ -12,7 +12,7 @@ whether it is there) and no HTTP request is made.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Any
 
 from coffer.application.mcp.custom_tool_views import SecretState
 from coffer.application.mcp.custom_tools import CustomToolService, secret_name_of, validated_tool
@@ -51,8 +51,6 @@ class RequestPreview:
     headers: list[PreviewHeader]
     body: str | None
     timeout_seconds: int
-    #: Whose timeout applies: the environment's own, or the group's.
-    timeout_source: Literal["environment", "group"]
     #: The environment's variables (never secret) the templates may use.
     variables: dict[str, str] = field(default_factory=dict)
 
@@ -93,8 +91,7 @@ def preview_of(
         url=request.url,
         headers=headers,
         body=request.body.decode("utf-8") if request.body is not None else None,
-        timeout_seconds=transport.timeout_for(env),
-        timeout_source="environment" if env.timeout_seconds is not None else "group",
+        timeout_seconds=transport.timeout_seconds,
         variables=dict(env.variables),
     )
 

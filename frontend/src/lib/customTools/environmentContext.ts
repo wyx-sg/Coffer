@@ -40,16 +40,6 @@ export function chooseEnvironment(group: WithEnvironments, name: string): Enviro
   return { state: "ok", environment };
 }
 
-/** The timeout a request in `env` waits, and whose it is. */
-export function effectiveTimeout(
-  group: Pick<CustomToolGroup, "timeout_seconds">,
-  env: Pick<CustomToolEnvironment, "timeout_seconds">,
-): { seconds: number; source: "environment" | "group" } {
-  return env.timeout_seconds != null
-    ? { seconds: env.timeout_seconds, source: "environment" }
-    : { seconds: group.timeout_seconds, source: "group" };
-}
-
 /** The first secret this environment's headers read, or null — never another environment's. */
 export function environmentSecret(env: Pick<CustomToolEnvironment, "headers">): string | null {
   return env.headers.find((h) => h.secret)?.secret ?? null;

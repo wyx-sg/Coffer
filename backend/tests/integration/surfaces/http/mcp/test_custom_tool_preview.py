@@ -72,7 +72,6 @@ def _two_envs(d: BoundaryDaemon, api: FakeHttpApi) -> None:
                 api.base_url + "/l",
                 "live-key",
                 variables={"region": "us-1"},
-                timeout_seconds=7,
             ),
         ],
         "tools": [_SEARCH],
@@ -120,8 +119,7 @@ def test_a_dry_run_shows_each_environments_request(
     assert test["url"] == api.base_url + "/t/v1/eu-1/search?cid=SG"
     assert live["url"] == api.base_url + "/l/v1/us-1/search?cid=SG"
     assert test["body"] == '{"query": "x"}'
-    assert (test["timeout_seconds"], test["timeout_source"]) == (30, "group")
-    assert (live["timeout_seconds"], live["timeout_source"]) == (7, "environment")
+    assert test["timeout_seconds"] == live["timeout_seconds"] == 30
     assert test["variables"] == {"region": "eu-1"}
 
     def headers(p: dict[str, Any]) -> dict[str, Any]:

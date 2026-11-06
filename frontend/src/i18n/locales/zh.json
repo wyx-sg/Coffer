@@ -2017,10 +2017,6 @@
     "CUSTOM_TOOL_NOT_FOUND": "没有这个名称的自定义工具或分组",
     "NOT_A_CUSTOM_TOOL_GROUP": "这个 MCP 服务器不是自定义工具分组",
     "CUSTOM_TOOL_EXISTS": "这个分组中已有同名工具",
-    "OPENAPI_UNREADABLE": "无法读取这个 OpenAPI 规范",
-    "OPENAPI_UNREACHABLE": "这台机器连不上规范的地址",
-    "NOT_IMPORTED_FROM_OPENAPI": "这个分组不是从 OpenAPI 规范导入的，无法重新导入",
-    "OPENAPI_FILE_NEEDED": "这个分组是从文件导入的：请再次选择该文件以重新导入",
     "SKILL_STAGING_NOT_FOUND": "暂存的来源已不存在——已添加、已取消或已过期。请重新开始。",
     "SKILL_SOURCE_UNREACHABLE": "Git 无法访问该技能的仓库。",
     "SKILL_UPDATE_NOT_PENDING": "这个提交不是该技能正在等待的更新。请重新打开更新。",
@@ -5203,7 +5199,6 @@
       "title": "添加自定义工具",
       "subtitle": "把一次 HTTP API 调用变成智能体可调用的工具。智能体看到的是 <group>__<tool>；密钥不会到达智能体。",
       "newGroup": "新分组",
-      "waysLabel": "添加方式",
       "continue": "继续",
       "back": "上一步",
       "nameInvalid": "只能用小写字母、数字和 -，以字母或数字开头，最多 24 个字符。",
@@ -5211,33 +5206,20 @@
       "putItIn": "放入",
       "newGroupSub": "独立的名称、base URL 和密钥",
       "noGroupMatches": "没有匹配的分组",
-      "startNew": "开始新分组",
       "existingNote": "添加到 {{group}} 的请求在它的各个环境中运行，使用各环境自己的基础 URL 和密钥。只有新建分组时才能导入 OpenAPI 规范。",
       "change": "更改",
       "handSummary": "基础 URL 和认证来自分组的环境",
-      "importSummary": "你选中的每个操作都会成为新分组中的一个工具",
       "addTo": "添加到 {{group}}",
       "into": "放入 {{group}}",
       "newGroupTag": "新分组"
     },
     "ways": {
-      "importTitle": "导入 OpenAPI 规范",
-      "importBody": "一个 URL 或一个文件。由你挑选操作，每个操作成为一个工具。",
-      "importPoint1": "base URL 和认证来自规范",
-      "importPoint2": "之后可重新导入以获取改动",
-      "handTitle": "手动添加一个请求",
-      "handBody": "方法、URL 模板、请求头、请求体模板和输入。",
-      "handPoint1": "由你设置 base URL 和认证",
-      "handPoint2": "添加前先测试"
+      "handTitle": "手动添加一个请求"
     },
     "fields": {
       "group": "分组",
       "groupName": "分组名称",
       "groupNameHelp": "智能体看到的是 {{prefix}}。小写字母、数字和 -，最多 24 个字符；创建后不可更改。",
-      "spec": "规范",
-      "specSource": "规范来源",
-      "specUrl": "URL",
-      "specFile": "文件",
       "baseUrl": "基础 URL",
       "baseUrlHelp": "每个请求的路径都拼接在它后面。",
       "availableTo": "可用于",
@@ -5245,68 +5227,12 @@
       "headers": "请求头",
       "headersHelp": "Coffer 会把这些加到每次调用中；密钥的值保存在 Coffer 的钥匙串里，智能体永远看不到。密钥请求头只保存密钥本身，Coffer 发送调用时会在它前面加上认证方式（Bearer 或 Token）。"
     },
-    "import": {
-      "title": "导入 OpenAPI 规范",
-      "step1": "第 1 步，共 2 步 · 规范与操作。",
-      "step2": "第 2 步，共 2 步 · 核对。只有这 {{count}} 个操作会成为工具；创建分组之前不会保存任何内容。",
-      "load": "加载",
-      "loading": "正在加载…",
-      "reload": "重新加载",
-      "loaded_other": "已加载 · {{count}} 个操作",
-      "readFailed": "无法读取规范：{{reason}}。Coffer 支持 OpenAPI 3.0 和 3.1 的 JSON 或 YAML。请修正，或切换到“文件”并选择本地副本。",
-      "urlHelp": "指向 OpenAPI 3.0 或 3.1 文档的 URL，JSON 或 YAML。",
-      "browse": "浏览…",
-      "fileHelp": "JSON 或 YAML，最大 5 MB。",
-      "tooLarge": "文件超过 5 MB。",
-      "review": "查看工具",
-      "create_other": "创建分组（{{count}} 个工具）",
-      "loaded_one": "已加载 · {{count}} 个操作",
-      "create_one": "创建分组（{{count}} 个工具）",
-      "groupNameHelp": "智能体看到的是 {{prefix}}。之后不可更改。",
-      "fetching": "正在获取规范…",
-      "operationsTitle": "操作",
-      "picked": "已选 {{count}} / {{total}}",
-      "filterOps": "筛选操作",
-      "readsOnly": "只选读取",
-      "section": "{{section}} · {{count}} / {{total}}",
-      "pickNote": "你选中的每个操作都会成为一个工具。读取类默认选中；会修改数据的操作默认不选。",
-      "baseUrlMissing": "规范没有声明服务器；每个请求的路径会接在这个 URL 后面。",
-      "availableToHelp": "分组内的每个工具都可用于这些智能体。",
-      "try": "试运行一个操作",
-      "tryNone": "请先选择一个操作。",
-      "tryPick": "要试运行的操作",
-      "reviewCount_one": "检查 {{count}} 个工具",
-      "reviewCount_other": "检查 {{count}} 个工具",
-      "groupTitle": "分组",
-      "name": "名称",
-      "skipped": "已跳过 · {{count}}",
-      "moreSkipped": "以及另外 {{count}} 个未选中的操作",
-      "headersHelpSpec": "根据规范的安全方案填入。密钥的值保存在 Coffer 的钥匙串里；智能体永远看不到。",
-      "none": "全不选",
-      "noHeaders": "没有请求头",
-      "line": "第 {{line}} 行",
-      "unreachable": "无法连接 {{host}}：{{reason}}。请检查 URL、网络、VPN 或 proxy。",
-      "reason": {
-        "dns": "无法解析主机名",
-        "refused": "连接被拒绝",
-        "timeout": "请求超时",
-        "unreachable": "无法访问该主机"
-      },
-      "noArguments": "没有输入",
-      "arguments_one": "{{count}} 个输入：{{names}}",
-      "arguments_other": "{{count}} 个输入：{{names}}",
-      "changes": "会修改数据",
-      "reads": "读取数据",
-      "noSource": "这个操作没有可显示的规范文本。"
-    },
     "newGroup": {
       "title": "新分组",
       "subtitle": "一个分组包含它的环境（每个环境有基础 URL 和请求头，其中可以有密钥）以及可使用它工具的范围。新建时先有一个环境。",
       "create": "创建分组"
     },
     "group": {
-      "imported": "从 OpenAPI 导入",
-      "byHand": "手动添加的请求",
       "noCalls": "24 小时内没有调用",
       "noCallsOff": "关闭期间没有调用",
       "callsLine": "24 小时内 {{calls}}，{{errors}}",
@@ -5357,8 +5283,6 @@
       "agentsSee": "智能体看到",
       "timeout": "超时",
       "timeoutValue": "每次调用 {{seconds}} 秒",
-      "spec": "规范",
-      "fetched": "获取于 {{date}}",
       "diagnosticHeaders": "诊断响应头",
       "responseRules": "响应规则",
       "statusOnly": "仅看 HTTP 状态码",
@@ -5497,7 +5421,6 @@
         "rejected": "API 拒绝了 {{secret}}。如果它已过期，请修改它的值；{{group}} 中的每个工具都使用同一个密钥。",
         "httpError": "API 返回了错误，响应见下方。请检查路径和输入的值，然后重试。没有保存任何内容。",
         "rejectedEnv": "API 拒绝了 {{secret}}。如果它已过期，请修改它的值；这个分组的每个工具在 {{environment}} 中都使用它。",
-        "timeoutEnv": "Coffer 在环境 {{environment}} 自己的 {{seconds}} 秒超时后停止了等待。如果只是 API 慢，请在“环境”中调大超时；如果它本该很快响应，请交给智能体查原因。没有保存任何内容。",
         "ruleFailed": "API 有响应，但响应没有通过某条响应规则。请检查「响应」里的规则或请求，然后重试。没有保存任何内容。"
       },
       "cutShort": "已在 {{size}} 处截断。",
@@ -5553,37 +5476,9 @@
       "basics": "基本",
       "judging": "响应判断"
     },
-    "reimport": {
-      "action": "重新导入",
-      "title": "重新导入 {{name}}",
-      "subtitle": "来自 {{location}}，刚刚获取。",
-      "file": "规范文件",
-      "fileHelp": "这个分组是从文件导入的：请再次选择该文件。",
-      "reading": "正在读取规范…",
-      "noChange": "规范中没有要添加的操作，也没有要移除的工具。",
-      "subtitleFile": "请重新选择 {{location}}。",
-      "gone": "已从规范中移除——智能体将失去它",
-      "apply_one": "应用 {{count}} 项改动",
-      "apply_other": "应用 {{count}} 项改动",
-      "kept_one": "{{count}} 个工具未变，保留其开关和可用范围。",
-      "kept_other": "{{count}} 个工具未变，保留其开关和可用范围。",
-      "summary_one": "{{name}} 中有 {{count}} 项改动",
-      "summary_other": "{{name}} 中有 {{count}} 项改动",
-      "willAddRead": "<b>{{name}}</b> 会成为工具，已开启。",
-      "willAddWrite": "<b>{{name}}</b> 会修改数据，所以不会添加，除非你勾选它。",
-      "willRequire_one": "<b>{{name}}</b> 新增了必填输入 {{names}}。",
-      "willRequire_other": "<b>{{name}}</b> 新增了必填输入 {{names}}。",
-      "willChange": "<b>{{name}}</b> 的请求有改动。",
-      "willRemove": "<b>{{name}}</b> 已从规范中移除；智能体将失去它。",
-      "add": "添加 {{name}}",
-      "afterApply": "应用后，智能体必须传入 {{names}}；缺少它的调用会被 API 返回 400。",
-      "noOldText": "这次导入没有保留之前的规范文本，所以没有对比。"
-    },
     "firstRun": {
       "title": "还没有自定义工具",
       "body": "自定义工具是 Coffer 替智能体发出的一次 HTTP 请求——无需运行 MCP 服务器。工具放在分组里；一个分组包含它的环境（每个环境有自己的基础 URL、请求头和密钥）和可使用它工具的范围。",
-      "importBody": "从 URL 或文件里挑选操作；这次导入成为一个分组。",
-      "importPoint": "之后可重新导入以获取改动。",
       "handBody": "方法、URL 模板、请求头、请求体和输入。",
       "handPoint": "新建一个分组；添加前先测试。"
     },
@@ -5599,9 +5494,6 @@
       "secretStays_other": "密钥 {{secret}} 保留在密钥页面；调用记录保留在活动中。",
       "historyStays": "调用记录保留在活动中。",
       "undo": "此操作无法撤销。如只想暂停一段时间，请改为关闭分组。"
-    },
-    "viewer": {
-      "wrap": "自动换行"
     },
     "environments": {
       "title": "环境",
@@ -5619,7 +5511,6 @@
       "variableValue": "{{name}} 的值",
       "removeVariable": "移除 {{name}}",
       "addVariable": "添加变量",
-      "timeoutHelp": "留空则使用组的 {{seconds}} 秒。",
       "switch": "启用环境 {{name}}",
       "edit": "编辑 {{name}}",
       "delete": "删除 {{name}}",
@@ -5638,11 +5529,7 @@
       "lastOne": "分组至少要有一个环境。",
       "headersOf": "{{name}} 的请求头",
       "variablesOf": "{{name}} 的变量",
-      "noVariables": "没有变量。",
-      "timeout": {
-        "environment": "每次调用 {{seconds}} 秒（此环境自己的）",
-        "group": "每次调用 {{seconds}} 秒（沿用分组的）"
-      }
+      "noVariables": "没有变量。"
     },
     "preview": {
       "secretState": {
@@ -5655,7 +5542,6 @@
       "variables": "变量：",
       "missingVariables": "环境 {{environment}} 没有定义 {{names}}，在这里无法构建请求。",
       "timeout": {
-        "environment": "超时 {{seconds}} 秒（环境 {{environment}} 自己的）",
         "group": "超时 {{seconds}} 秒（分组的）"
       }
     },

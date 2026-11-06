@@ -32,8 +32,6 @@ GROUP_HELP: dict[str, str] = {
     "custom-tool group": "Custom-tool groups: create, show, change, delete, switch, reach.",
     "custom-tool tool": "One custom tool: add, show, change, switch, test, delete.",
     "custom-tool env": "A group's environments: base URL, headers, secrets, variables.",
-    "custom-tool import": "Read an OpenAPI document into draft tools.",
-    "custom-tool reimport": "Preview and apply a re-import of a group's OpenAPI document.",
     "daemon": "The Coffer daemon: start, stop, status, and its settings.",
     "knowledge": "Knowledge collections (documents are plain files you edit directly).",
     "log": "Read Coffer's audit, MCP and daemon logs.",

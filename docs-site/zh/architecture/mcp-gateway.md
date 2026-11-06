@@ -343,14 +343,14 @@ MCP 服务器页面把 Coffer 自己的端点列在最后，归在「内置」�
 
 ## 自定义工具：HTTP API 传输 {#custom-tools-the-http-api-transport}
 
-一个 **自定义工具组** 是传输方式为 `http_api` 的 `mcp_server`。它的配置包括一张工具列表、一个默认超时和一个或多个**环境**；每个环境有一个用户起的、在组内唯一的名字、一个绑定键、一个基础 URL、若干 header 行（明文，或带认证方案的密钥引用：只存凭据，方案在发请求时加上）、非敏感变量、一个开关和一个可选超时。每个工具是一个方法、一个路径模板、header、一个请求体模板、一份描述参数的 JSON Schema、一个开关和一个「会修改数据」标志。工具从不按环境复制。面向用户的部分见 [自定义工具指南](/zh/guides/custom-tools)。
+一个 **自定义工具组** 是传输方式为 `http_api` 的 `mcp_server`。它的配置包括一张工具列表、一个默认超时和一个或多个**环境**；每个环境有一个用户起的、在组内唯一的名字、一个绑定键、一个基础 URL、若干 header 行（明文，或带认证方案的密钥引用：只存凭据，方案在发请求时加上）、非敏感变量和一个开关；超时用组的。每个工具是一个方法、一个路径模板、header、一个请求体模板、一份描述参数的 JSON Schema、一个开关和一个「会修改数据」标志。工具从不按环境复制。面向用户的部分见 [自定义工具指南](/zh/guides/custom-tools)。
 
 ### 原则 {#principles}
 
 - **同一条流水线，最后一跳不同。** 智能体和上游之间的一切都是网关的常规路径。只有「连接」不一样：它是一个进程内适配器，实现与任何上游相同的连接契约（启动并 initialize、发送请求、关闭）。它根据配置回答 `tools/list`，在 `tools/call` 时发出 HTTP 请求；`resources/list` 和 `prompts/list` 回答 *method not found*，而发现模块本来就把这读作「没有」。
 - **值只能填充请求，不能改变请求的形状。** 请求渲染对每个路径占位符做不保留任何安全字符的百分号编码，参数缺失时丢掉对应的查询参数对，并用 JSON 值填充请求体模板（字符串里的文本做 JSON 转义）。不是路径的路径，或者 schema 没有声明的占位符，会在保存工具时被拒绝。
 - **密钥只有一条出路。** 它通过请求的 header 覆盖到达，在调用时通过受保护的解析器、针对「这个组的这个环境在它的基础 URL」这个目的地解析（启动时什么都不解析）；它最后添加，在所有工具 header 之后；从不跟随重定向，所以它永远不会到达没人配置过的主机；上游返回的任何内容里，它的值都会被遮盖成 `***`。
-- **天然有界。** 每次调用一个 HTTP 客户端，使用环境的超时，没有则用组的（1–300 s），以流式方式最多读 1 MiB 响应。
+- **天然有界。** 每次调用一个 HTTP 客户端，使用组的超时（1–300 s），以流式方式最多读 1 MiB 响应。
 - **不内置任何 API 的约定。** 响应是否成功由 HTTP 状态码（400 及以上失败）和组或工具声明的响应规则决定：每条规则读取状态码、某个响应头或某个 JSON Pointer 字段，并列出表示成功的值。规则不成立时，`200` 也会变成带内工具错误并记为 `error`；测试用同样的方式判断。携带凭据或 Cookie 的头永远不会被报告，也不能被规则读取。见[判断响应是否成功](/zh/guides/custom-tools#judging-the-answer)。
 - **发送之前就拒绝。** 未知、缺失或已关闭的环境、违反 schema 的参数，以及缺失、等待批准或被拒绝的密钥，都在任何上游请求之前被拒绝。
 
@@ -362,7 +362,6 @@ MCP 服务器页面把 Coffer 自己的端点列在最后，归在「内置」�
 | 按工具的闸门 | 网关，按会话 | 按会话计算被关掉的和超出生效范围的工具；`tools/list` 和 `coffer__search_tools` 丢掉它们，`tools/call` 以 `denied` 拒绝它们，与停用的能力形态相同。 |
 | 注解 | 每个发现的工具的注解，复制到它的列表条目 | 会修改数据的工具列为 `readOnlyHint: false, destructiveHint: true`，其他的列为 `readOnlyHint: true`；每个上游自己的注解也会透传。 |
 | 管理 | MCP 应用层包和自定义工具 REST 路由（`/api/v1/custom-tools/…`，环境在 `/{name}/environments` 下），自定义工具页面和 `coffer custom-tool` 命令都通过它们操作 | 每次写入都经过资源服务，所以校验、缺失密钥探测、审计和逐出活动连接都随之而来。 |
-| OpenAPI | MCP 领域包里的一个纯读取器，以及 MCP 基础设施包里的一个获取器 | 文档被读成草稿工具；URL 通过 SSRF 防护获取（5 MiB、20 s、重定向会重新检查）。 |
 
 ### 环境与保留参数 {#environments-and-the-reserved-argument}
 
@@ -372,7 +371,7 @@ MCP 服务器页面把 Coffer 自己的端点列在最后，归在「内置」�
 
 ### 参数校验 {#argument-validation}
 
-MCP 领域包里有一个纯 JSON Schema 校验器（只用标准库），有两个入口：保存工具时检查 schema（关键字类型、合法的正则表达式、可解析的本地 `$ref`），以及校验每次调用的参数，把每个失败以 `{path, keyword, message}` 返回。它覆盖 `type`（包括 OpenAPI 3.0 的 `nullable`）、`enum`、`const`、数值边界和 `multipleOf`、字符串长度和 `pattern`、`items`、`prefixItems`、数组边界、`uniqueItems`、`contains`、`properties`、`required`、`additionalProperties`、`patternProperties`、属性个数、`propertyNames`、`allOf`、`anyOf`、`oneOf`、`not`、`if`/`then`/`else`、`dependentRequired` 以及本地 `$ref`。MCP 调用、CLI 测试以及页面上的草稿和已保存工具测试都用同一个校验器；失败为 `CUSTOM_TOOL_ARGUMENTS_INVALID`（REST 上是 422，MCP 上是带内工具错误），永远到不了渲染这一步。
+MCP 领域包用 `jsonschema` 库的 draft 2020-12 校验器检查 schema（[Custom Tool Arguments Are Checked by the `jsonschema` Library](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/custom-tool-arguments-are-checked-by-the-jsonschema-library.md)），有两个入口：保存工具时检查 schema（draft 2020-12 元 schema、合法的正则表达式、可解析的本地 `$ref`；远程 `$ref` 会被拒绝，从不去获取），以及校验每次调用的参数，把每一处失败都以 `{path, keyword, message}` 返回，`required`、`dependentRequired` 和 `additionalProperties` 按每个参数各一条。两步之前，OpenAPI 3.0 的 `nullable`、draft-04 的布尔型排他边界和 draft-07 的数组形式 `items` 都会先改写成 draft 2020-12。MCP 调用、CLI 测试以及页面上的草稿测试和已保存测试都用同一个校验器；失败时是 `CUSTOM_TOOL_ARGUMENTS_INVALID`（REST 上是 422，MCP 上是带内的工具错误），不会进入渲染步骤。
 
 ### 密钥边界 {#the-secret-boundary}
 
@@ -388,7 +387,7 @@ MCP 领域包里有一个纯 JSON Schema 校验器（只用标准库），有两
 
 两个预览展示一个工具将会发送的请求，既不发送，也不读取任何密钥值：`POST /api/v1/custom-tools/{name}/tools/{tool}/preview` 用于已保存的工具，`POST /api/v1/custom-tools/{name}/preview` 用于已保存的组里的草稿工具。
 
-没有收到应答时，结果会说明是怎么失败的：`request`（请求无法构建）、`timeout`、`connect` 或 `blocked`。重新导入的预览还会指出保留下来、但请求被规格改变了的工具（新增了必填参数，或者方法、路径、请求体模板变了），而读取结果会带上每个操作的第一个 tag，方便导入表单对它们分组。
+没有收到应答时，结果会说明是怎么失败的：`request`（请求无法构建）、`timeout`、`connect` 或 `blocked`。
 
 ### 健康状况 {#health}
 
@@ -419,8 +418,8 @@ MCP 领域包里有一个纯 JSON Schema 校验器（只用标准库），有两
 | `surfaces/http/` | 会话工厂、按会话和进程级的 supervisor、回收器的环境变量开关、内置服务器的智能体列表 |
 | `application/mcp/` | 网关会话（握手、分发、订阅、销毁）、共享的调用流水线及其闸门、并行扇出、降级服务器重试、分层、内置工具分发和身份注入、`coffer__search_tools`、`initialize` 说明文字、通知和采样转发、进程监管、发现、自定义工具组和按工具的闸门 |
 | `application/` 根目录和 `application/secret/` | 内置工具注册表；密钥引用具体化 |
-| `domain/mcp/` | 命名空间、服务器配置、HTTP API 传输、它的环境和请求渲染、JSON Schema 校验器、OpenAPI 读取、简化版 BM25 排序器、分层策略 |
-| `infrastructure/mcp/` | stdio、HTTP 和 HTTP API 上游连接、测试探针、分发表、OpenAPI 获取、持久化、带缓冲的调用写入器 |
+| `domain/mcp/` | 命名空间、服务器配置、HTTP API 传输、它的环境和请求渲染、JSON Schema 检查、简化版 BM25 排序器、分层策略 |
+| `infrastructure/mcp/` | stdio、HTTP 和 HTTP API 上游连接、测试探针、分发表、持久化、带缓冲的调用写入器 |
 
 ## 相关 {#related}
 

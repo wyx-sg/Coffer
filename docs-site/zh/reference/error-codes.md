@@ -96,10 +96,6 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `NOT_A_CUSTOM_TOOL_GROUP` | 404 | 该名字属于其他传输方式的 MCP 服务器，而不是自定义工具组。 | 在 **MCP 服务器**页面管理它，或在**自定义工具**里列出工具组。 |
 | `CUSTOM_TOOL_NOT_FOUND` | 404 | 该工具组中没有这个名字的工具。 | 在**自定义工具**里打开该工具组，列出它的工具。 |
 | `CUSTOM_TOOL_EXISTS` | 409 | 该工具组中已有同名工具。 | 换个名字，或编辑已有的工具。 |
-| `OPENAPI_UNREADABLE` | 422 | OpenAPI 文档无法获取、解析或读取：不是 JSON 或 YAML（`details.line` 和 `details.column` 指出出错位置）、不是 OpenAPI 3.x、大于 5 MiB，或者 URL 位于回环、私有或链路本地主机上。 | 修正文档，或把私有主机上的规范作为文件导入。 |
-| `OPENAPI_UNREACHABLE` | 502 | OpenAPI URL 没有响应：主机名无法解析、连接被拒绝或超时。`details.reason` 为 `dns`、`refused`、`timeout` 或 `unreachable`，`details.handoff.prompt` 是交给 agent 的提示词。 | 检查 URL、网络、VPN 或代理，或把规范作为文件导入。 |
-| `NOT_IMPORTED_FROM_OPENAPI` | 409 | 对一个工具全部是手动添加的工具组请求了重新导入。 | 没有可重新导入的内容；请手动添加工具。 |
-| `OPENAPI_FILE_NEEDED` | 422 | 该工具组是从文件导入的，重新导入需要再次提供那个文件。 | 在该工具组的页面重新导入，并提供文件。 |
 | `CUSTOM_TOOL_ARGUMENTS_INVALID` | 422 | 调用的参数违反了工具的 JSON Schema。`details.errors` 以 `{path, keyword, message}` 列出每一个失败。什么都没有发往上游。在 MCP 上，同样的列表是一个带内工具错误。 | 逐个修正列出的参数；见[自定义工具 → 任何请求之前先检查参数](/zh/guides/custom-tools#arguments-are-checked-before-any-request)。 |
 | `CUSTOM_TOOL_ENVIRONMENT_REQUIRED` | 422 | 该工具组开启了不止一个环境，而调用没有指定。`details.environments` 列出已开启的环境。什么都没发送。 | 传入 `coffer_environment`（命令行上是 `--env`）。见[自定义工具 → 选择一次调用的环境](/zh/guides/custom-tools#choosing-the-environment-of-a-call)。 |
 | `CUSTOM_TOOL_ENVIRONMENT_UNKNOWN` | 422 | 调用指定了该工具组没有的环境。`details.environments` 列出已开启的环境。什么都没发送。 | 使用列出的名字之一，与 `coffer custom-tool env list` 打印的完全一致。 |

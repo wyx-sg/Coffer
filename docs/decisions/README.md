@@ -176,6 +176,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`custom-tool-pages-give-testing-and-environments-their-own-tabs`](custom-tool-pages-give-testing-and-environments-their-own-tabs.md) | A Custom Tool's Test and a Group's Environments Each Have Their Own Tab |
 | [`what-an-agent-fills-in-a-custom-tool-is-an-input`](what-an-agent-fills-in-a-custom-tool-is-an-input.md) | What an Agent Fills in a Custom Tool Is an Input; Query Parameters Are Only the URL's |
 | [`a-body-template-is-laid-out-by-its-tokens`](a-body-template-is-laid-out-by-its-tokens.md) | A Body Template Is Laid Out by Its Tokens, Never Parsed |
+| [`custom-tool-arguments-are-checked-by-the-jsonschema-library`](custom-tool-arguments-are-checked-by-the-jsonschema-library.md) | Custom Tool Arguments Are Checked by the `jsonschema` Library |
 
 ### Agents & providers
 

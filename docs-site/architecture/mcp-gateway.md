@@ -343,14 +343,14 @@ An upstream's in-band `isError` result is not an error at this layer. It passes 
 
 ## Custom tools: the HTTP API transport
 
-A **custom-tool group** is an `mcp_server` whose transport is `http_api`. Its config holds one list of tools, a default timeout and one or more **environments**; each environment has a user-chosen name unique in the group, a binding key, a base URL, header rows (plain, or a secret ref behind an auth scheme: the credential only, with the scheme added when the request is sent), non-sensitive variables, an on/off switch and an optional timeout. Each tool is a method, a path template, headers, a body template, a JSON Schema for its arguments, an on/off switch and a changes-data flag. A tool is never copied per environment. The user-facing side is the [Custom tools guide](/guides/custom-tools).
+A **custom-tool group** is an `mcp_server` whose transport is `http_api`. Its config holds one list of tools, a default timeout and one or more **environments**; each environment has a user-chosen name unique in the group, a binding key, a base URL, header rows (plain, or a secret ref behind an auth scheme: the credential only, with the scheme added when the request is sent), non-sensitive variables and an on/off switch; the timeout is the group's. Each tool is a method, a path template, headers, a body template, a JSON Schema for its arguments, an on/off switch and a changes-data flag. A tool is never copied per environment. The user-facing side is the [Custom tools guide](/guides/custom-tools).
 
 ### Principles
 
 - **Same pipeline, different last hop.** Everything between the agent and the upstream is the gateway's ordinary path. Only the "connection" differs: it is an in-process adapter with the same connection contract as any upstream (start and initialise, send a request, close). It answers `tools/list` from the config and makes the HTTP request on `tools/call`; `resources/list` and `prompts/list` answer *method not found*, which discovery already reads as "none".
 - **A value can fill a request, never reshape it.** Request rendering percent-encodes every path hole with no safe characters, drops a query pair whose argument is absent, and fills a body template with JSON values (JSON-escaped text inside a string). A path that is not a path, or a hole the schema does not declare, is refused when the tool is saved.
 - **The secret has one way out.** It arrives in the request's header overlay, resolved at call time through the guarded resolver for the destination *this group's environment at its base URL* (nothing is resolved at spawn); it is added last, after every tool header; redirects are never followed, so it never reaches a host nobody configured; and its value is masked as `***` in whatever the upstream sends back.
-- **Bounded by construction.** One HTTP client per call, the environment's timeout or else the group's (1–300 s), at most 1 MiB of response read by streaming.
+- **Bounded by construction.** One HTTP client per call, the group's timeout (1–300 s), at most 1 MiB of response read by streaming.
 - **No API's convention is built in.** Whether an answer succeeded is decided by the HTTP status (400 or more fails) and by the response rules a group or tool declares: each reads the status, a response header or a JSON Pointer field and lists the values that mean success. A rule that fails turns a `200` into an in-band tool error that is logged as `error`; tests judge the same way. Headers that carry credentials or cookies can never be reported or read by a rule. See [Judging the answer](/guides/custom-tools#judging-the-answer).
 - **Refused before sending.** An unknown, missing or switched-off environment, arguments that break the schema, and a missing, pending or refused secret are each refused before any upstream request.
 
@@ -362,7 +362,6 @@ A **custom-tool group** is an `mcp_server` whose transport is `http_api`. Its co
 | The per-tool gate | The gateway, per session | Computes, per session, the switched-off and out-of-reach tools; `tools/list` and `coffer__search_tools` drop them and `tools/call` refuses them as `denied` — the same shape as a disabled capability. |
 | Annotations | Each discovered tool's annotations, copied to its listing entry | A tool that changes data is listed `readOnlyHint: false, destructiveHint: true`, any other `readOnlyHint: true`; every upstream's own annotations are passed through too. |
 | Management | The MCP application package and the custom-tool REST routes (`/api/v1/custom-tools/…`, environments under `/{name}/environments`), driven by the Custom tools page and the `coffer custom-tool` commands alike | Every write goes through the resource service, so validation, the missing-secret probe, audit and the eviction of live connections come with it. |
-| OpenAPI | A pure reader in the MCP domain package, and a fetcher in the MCP infrastructure package | The document is read into draft tools; a URL is fetched through the SSRF guard (5 MiB, 20 s, redirects re-checked). |
 
 ### Environments and the reserved argument
 
@@ -372,7 +371,7 @@ The gateway advertises each custom tool with a reserved argument, `coffer_enviro
 
 ### Argument validation
 
-A pure JSON Schema validator in the MCP domain package (standard library only) has two entry points: a schema check when a tool is saved (keyword types, valid regular expressions, resolvable local `$ref`s), and a validation of every call's arguments that returns every failure as `{path, keyword, message}`. It covers `type` (with OpenAPI 3.0 `nullable`), `enum`, `const`, numeric bounds and `multipleOf`, string length and `pattern`, `items`, `prefixItems`, array bounds, `uniqueItems`, `contains`, `properties`, `required`, `additionalProperties`, `patternProperties`, property counts, `propertyNames`, `allOf`, `anyOf`, `oneOf`, `not`, `if`/`then`/`else`, `dependentRequired` and local `$ref`. MCP calls, CLI tests and the page's draft and saved tests use the same validator; a failure is `CUSTOM_TOOL_ARGUMENTS_INVALID` (422 on REST, an in-band tool error on MCP) and the render step is never reached.
+The MCP domain package checks schemas with the `jsonschema` library's draft 2020-12 validator ([Custom Tool Arguments Are Checked by the `jsonschema` Library](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/custom-tool-arguments-are-checked-by-the-jsonschema-library.md)), with two entry points: a schema check when a tool is saved (the draft 2020-12 meta-schema, valid regular expressions, resolvable local `$ref`s; a remote `$ref` is refused and never fetched), and a validation of every call's arguments that returns every failure as `{path, keyword, message}`, one entry per argument for `required`, `dependentRequired` and `additionalProperties`. Before either, OpenAPI 3.0's `nullable`, draft-04's boolean exclusive bounds and draft-07's array `items` are rewritten into draft 2020-12. MCP calls, CLI tests and the page's draft and saved tests use the same validator; a failure is `CUSTOM_TOOL_ARGUMENTS_INVALID` (422 on REST, an in-band tool error on MCP) and the render step is never reached.
 
 ### The secret boundary
 
@@ -388,7 +387,7 @@ A request test runs one draft tool with the same request building and sending as
 
 Two previews show the request a tool would send, without sending it or reading any secret value: `POST /api/v1/custom-tools/{name}/tools/{tool}/preview` for a saved tool and `POST /api/v1/custom-tools/{name}/preview` for a draft tool in a saved group.
 
-When no answer came back, a result says how it failed: `request` (the request could not be built), `timeout`, `connect` or `blocked`. A re-import preview also names the kept tools whose request the spec changed — a newly required argument, or a moved method, path or body template — and a reading carries each operation's first tag so the import form can group them.
+When no answer came back, a result says how it failed: `request` (the request could not be built), `timeout`, `connect` or `blocked`.
 
 ### Health
 
@@ -419,8 +418,8 @@ A group's health is read, not stored: `off` while disabled, `failing` when its l
 | `surfaces/http/` | The session factory, per-session and process-wide supervisors, reaper env knobs, the built-in server's agent list |
 | `application/mcp/` | Gateway sessions (handshake, dispatch, subscriptions, disposal), the shared invoke pipeline and its gates, parallel fan-out, degraded-server retry, tiering, built-in dispatch and identity injection, `coffer__search_tools`, `initialize` instructions, notification and sampling relay, supervision, discovery, custom-tool groups and the per-tool gate |
 | `application/` root and `application/secret/` | The built-in tool registry; secret ref materialisation |
-| `domain/mcp/` | Namespacing, server config, the HTTP API transport, its environments and request rendering, the JSON Schema validator, OpenAPI reading, BM25-lite ranker, tiering policy |
-| `infrastructure/mcp/` | stdio, HTTP and HTTP API upstream connections, the test probe, dispatch table, OpenAPI fetch, persistence, buffered invocation writer |
+| `domain/mcp/` | Namespacing, server config, the HTTP API transport, its environments and request rendering, the JSON Schema checks, BM25-lite ranker, tiering policy |
+| `infrastructure/mcp/` | stdio, HTTP and HTTP API upstream connections, the test probe, dispatch table, persistence, buffered invocation writer |
 
 ## Related
 

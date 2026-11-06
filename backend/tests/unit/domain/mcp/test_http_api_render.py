@@ -118,3 +118,18 @@ def test_tool_names_are_unique_in_a_group():
     t = {"name": "a", "path": "/a"}
     with pytest.raises(ValidationError, match="unique"):
         HttpApiTransport(base_url="https://api.example", tools=[t, t])
+
+
+def test_an_environments_old_timeout_is_ignored_and_the_groups_applies():
+    """A group saved before environments lost their own timeout still loads."""
+    transport = HttpApiTransport.model_validate(
+        {
+            "type": "http_api",
+            "timeout_seconds": 20,
+            "environments": [
+                {"name": "live", "base_url": "https://api.example", "timeout_seconds": 5}
+            ],
+        }
+    )
+    assert transport.timeout_seconds == 20
+    assert "timeout_seconds" not in transport.environments[0].model_dump()

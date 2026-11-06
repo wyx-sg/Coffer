@@ -2713,8 +2713,8 @@ gateway as every other MCP server, and carries:
   for a tool ([mcp-gateway](../mcp-gateway/spec.md) "Describe a custom-tool group"),
   shown first in the group's definition;
 - its **environments** — at least one, each with the **base URL** its tools'
-  paths are relative to, its own header rows, variables and, when it differs
-  from the group's, its own timeout; the tools are the same in each
+  paths are relative to, its own header rows and variables (the timeout is the
+  group's); the tools are the same in each
   ([mcp-gateway](../mcp-gateway/spec.md) "Keep a custom-tool group's environments in the group");
 - per environment, **header rows** — each a name and a value that is plain text or one stored
   secret holding the credential alone, behind the row's auth scheme (a bearer
@@ -2862,7 +2862,7 @@ carrying no count) shows one **card** per environment, however many there are,
 everything it holds readable without opening it: its switch, name and secret
 state with **Edit** and a **⋯** menu holding Delete environment (off, with the
 reason, for a group's only environment) in the card's head, then its base URL,
-its timeout and whose it is (its own, or the group's), its headers in the same
+its headers in the same
 table as the tool editor's (a secret header by its secret's name and state,
 never a value) and its variables. Edit opens the environment's dialog, whose
 header and variable rows carry Name and Value column heads. **Edit group** edits,
@@ -3197,7 +3197,7 @@ environment's `{env:NAME}` filled and the sample values typed so far put in, the
 merged headers in the shared headers table (the environment's plain ones, a
 tool header replacing one of the same name, the environment's secret headers
 last, each by its secret's name and state, never a value), the body laid out as
-JSON, its variables and the timeout that applies (its own, else the group's) —
+JSON, its variables and the group's timeout —
 by the gateway's rules ([mcp-gateway](../mcp-gateway/spec.md) "Make a custom
 tool's request in the gateway"): a path hole with no value stays `{name}` and is
 named as missing, a query pair or tool header whose input has no value is left
@@ -3213,9 +3213,9 @@ preview, until another is picked; the form never runs in another environment in
 its place.
 
 #### Scenario: the tool form previews and tests in the environment it names
-- **GIVEN** a group with environments `test` (a secret header, a plain header, `region=eu-1`, the group's 30 s timeout) and `live` (a different base URL and plain header, no secret header, `region=us-1`, its own 7 s timeout) and a tool `GET /v1/{env:region}/items/{id}`
+- **GIVEN** a group with environments `test` (a secret header, a plain header, `region=eu-1`) and `live` (a different base URL and plain header, no secret header, `region=us-1`), the group's timeout 30 s, and a tool `GET /v1/{env:region}/items/{id}`
 - **WHEN** the person opens the tool, reads the request to send, picks `live` on the Test tab and runs it
-- **THEN** the help, headers and preview first show `test`'s base URL, headers, secret and 30 s, then `live`'s base URL with `us-1`, its header and 7 s, and no secret of `test` anywhere
+- **THEN** the help, headers and preview first show `test`'s base URL, headers, secret and 30 s, then `live`'s base URL with `us-1`, its header and the same 30 s, and no secret of `test` anywhere
 - **AND** the run names `live`, its result shows the allow-listed response headers, and nothing about the group is saved
 
 #### Scenario: a tool form never runs in an environment that is off or gone

@@ -1,4 +1,4 @@
-"""``coffer custom-tool group`` / ``import`` / ``reimport`` — the Custom tools page's groups.
+"""``coffer custom-tool group`` — the Custom tools page's groups.
 
 Spec mcp-gateway "Manage custom tools from the command line". Every command
 calls the daemon's ``/api/v1/custom-tools`` routes (or the kind-agnostic
@@ -8,12 +8,11 @@ this command, calls the upstream API.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 import typer
 
-from coffer.surfaces.cli import _io, _waits
+from coffer.surfaces.cli import _io
 from coffer.surfaces.cli._options import ExitCode
 from coffer.surfaces.cli.commands.custom_tool_common import (
     GROUPS,
@@ -28,8 +27,6 @@ from coffer.surfaces.cli.groups import group
 from coffer.surfaces.cli.registry import maps
 
 groups = group("custom-tool group")
-imports = group("custom-tool import")
-reimports = group("custom-tool reimport")
 _UI = "Custom tools · "
 
 
@@ -66,25 +63,11 @@ def show(
     _io.emit(read_group(name, as_json=as_json), as_json=as_json, human=show_group)
 
 
-def _read_document(source: str, *, as_json: bool) -> dict[str, Any]:
-    """A URL is fetched by the daemon (through its SSRF guard); a path is read here."""
-    if source.startswith(("http://", "https://")):
-        return {"url": source}
-    path = Path(source).expanduser()
-    try:
-        return {"document": path.read_text(encoding="utf-8"), "filename": path.name}
-    except OSError as e:
-        _io.fail(
-            "CLI_INVALID_INPUT", f"cannot read {path}: {e}", ExitCode.INVALID_INPUT, as_json=as_json
-        )
-
-
 @groups.command("create")
 @maps(
     "custom-tool group create",
     ("POST", GROUPS),
-    ("POST", GROUPS + "/openapi"),
-    ui=_UI + "add a group (by hand or from an OpenAPI document)",
+    ui=_UI + "add a group",
 )
 def create(
     name: str = typer.Argument(..., help="The group's name (fixed; prefixes its tools)"),
@@ -104,12 +87,6 @@ def create(
     timeout: int | None = typer.Option(None, "--timeout", help="Seconds per request (1-300)"),
     agent: list[str] | None = typer.Option(
         None, "--agent", help="Reach only this agent (name or uid); repeat. Default: every agent"
-    ),
-    from_openapi: str | None = typer.Option(
-        None, "--from-openapi", help="An OpenAPI file or URL to draft the tools from"
-    ),
-    operation: list[str] | None = typer.Option(
-        None, "--operation", help="With --from-openapi: an operation key to import; repeat"
     ),
     response: str | None = typer.Option(
         None,
@@ -144,34 +121,6 @@ def create(
         body["response"] = json_arg(response, "--response", as_json=as_json)
     if agent:
         body["agents"] = [_agent_uid(a, as_json=as_json) for a in agent]
-    if from_openapi:
-        reading = _io.call(
-            "POST",
-            GROUPS + "/openapi",
-            as_json=as_json,
-            body=_read_document(from_openapi, as_json=as_json),
-            timeout=_waits.NETWORK_S,
-        )
-        chosen = set(operation or [op["key"] for op in reading["operations"]])
-        unknown = chosen - {op["key"] for op in reading["operations"]}
-        if unknown:
-            _io.fail(
-                "CLI_INVALID_INPUT",
-                "no such operation(s) in the document: " + ", ".join(sorted(unknown)),
-                ExitCode.INVALID_INPUT,
-                as_json=as_json,
-            )
-        body["tools"] = [op["tool"] for op in reading["operations"] if op["key"] in chosen]
-        body["source"] = {
-            "kind": reading["source_kind"],
-            "location": reading["location"],
-            "title": reading.get("title"),
-            "version": reading.get("version"),
-            "skipped": [op["key"] for op in reading["operations"] if op["key"] not in chosen],
-        }
-        body.setdefault("description", reading.get("description"))
-        if "environments" not in body and "base_url" not in body and reading.get("base_url"):
-            body.update(base_url=reading["base_url"], headers=rows)
     if "environments" not in body and "base_url" not in body:
         _io.fail(
             "CLI_INVALID_INPUT",
@@ -276,100 +225,4 @@ def reach(
     _io.emit(answer, as_json=as_json, human=lambda _v: typer.echo(f"{name}: reach set"))
 
 
-@imports.command("read")
-@maps("custom-tool import read", ("POST", GROUPS + "/openapi"), ui=_UI + "read an OpenAPI document")
-def import_read(
-    url: str | None = typer.Option(None, "--url", help="The document's URL"),
-    file: str | None = typer.Option(None, "--file", help="The document's path"),
-    as_json: bool = _io.json_option(),
-) -> None:
-    """Read an OpenAPI document into draft tools; saves nothing."""
-    source = url or file
-    if not source:
-        _io.fail(
-            "CLI_INVALID_INPUT", "give --url or --file", ExitCode.INVALID_INPUT, as_json=as_json
-        )
-    reading = _io.call(
-        "POST",
-        GROUPS + "/openapi",
-        as_json=as_json,
-        body=_read_document(source, as_json=as_json),
-        timeout=_waits.NETWORK_S,
-    )
-
-    def human(r: dict[str, Any]) -> None:
-        typer.echo(
-            f"{r.get('title') or 'OpenAPI'} {r.get('version') or ''}  base URL: {r.get('base_url')}"
-        )
-        _io.table(
-            [
-                {"key": op["key"], "tool": op["tool"]["name"], "summary": op.get("summary")}
-                for op in r["operations"]
-            ],
-            ["key", "tool", "summary"],
-        )
-
-    _io.emit(reading, as_json=as_json, human=human)
-
-
-def _reimport_body(file: str | None, *, as_json: bool) -> dict[str, Any]:
-    if file is None:
-        return {}
-    return {"document": _read_document(file, as_json=as_json).get("document")}
-
-
-@reimports.command("preview")
-@maps(
-    "custom-tool reimport preview",
-    ("POST", GROUPS + "/{name}/reimport/preview"),
-    ui=_UI + "preview a re-import",
-)
-def reimport_preview(
-    name: str = typer.Argument(...),
-    file: str | None = typer.Option(
-        None, "--file", help="The document again (a file-imported group)"
-    ),
-    as_json: bool = _io.json_option(),
-) -> None:
-    """What a re-import would add, remove, keep and change; changes nothing."""
-    preview = _io.call(
-        "POST",
-        group_path(name) + "/reimport/preview",
-        as_json=as_json,
-        body=_reimport_body(file, as_json=as_json),
-        timeout=_waits.NETWORK_S,
-    )
-
-    def human(p: dict[str, Any]) -> None:
-        typer.echo("add:     " + (", ".join(op["key"] for op in p["added"]) or "-"))
-        typer.echo("remove:  " + (", ".join(p["removed"]) or "-"))
-        typer.echo("changed: " + (", ".join(c["name"] for c in p.get("changed") or []) or "-"))
-        typer.echo("kept:    " + (", ".join(p["kept"]) or "-"))
-
-    _io.emit(preview, as_json=as_json, human=human)
-
-
-@reimports.command("apply")
-@maps(
-    "custom-tool reimport apply",
-    ("POST", GROUPS + "/{name}/reimport"),
-    ui=_UI + "apply a re-import",
-)
-def reimport_apply(
-    name: str = typer.Argument(...),
-    file: str | None = typer.Option(None, "--file"),
-    add: list[str] | None = typer.Option(
-        None, "--add", help="An added operation's key to import; repeat"
-    ),
-    as_json: bool = _io.json_option(),
-) -> None:
-    """Apply a re-import: removed tools go, chosen additions arrive switched on,
-    kept tools keep their switch, and every environment is kept as it is."""
-    body = {**_reimport_body(file, as_json=as_json), "add": list(add or [])}
-    applied = _io.call(
-        "POST", group_path(name) + "/reimport", as_json=as_json, body=body, timeout=_waits.NETWORK_S
-    )
-    _io.emit(applied, as_json=as_json, human=show_group)
-
-
-__all__ = ["groups", "imports", "reimports"]
+__all__ = ["groups"]

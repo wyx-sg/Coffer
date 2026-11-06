@@ -1,9 +1,9 @@
 """``coffer custom-tool`` against a real in-process daemon.
 
 Spec mcp-gateway "Manage custom tools from the command line": an agent sets a
-group up one command at a time, the page's view of it is the same, a change made
-on the page reads back on the command line, and an OpenAPI document is imported
-and re-imported — every command a client of the daemon's own routes.
+group up one command at a time, the page's view of it is the same, and a change
+made on the page reads back on the command line — every command a client of the
+daemon's own routes.
 """
 
 from __future__ import annotations
@@ -238,42 +238,6 @@ def test_a_change_made_on_the_page_reads_back(daemon: BoundaryDaemon, api: FakeH
     assert "billing" in listed and "uat" in listed
 
 
-@pytest.mark.acceptance(
-    spec="mcp-gateway",
-    scenario="an OpenAPI document is imported and re-imported from the command line",
-)
-def test_an_openapi_document_is_imported_and_reimported(
-    daemon: BoundaryDaemon, api: FakeHttpApi, tmp_path: pathlib.Path
-) -> None:
-    def spec(*ops: str) -> dict[str, Any]:
-        return {
-            "openapi": "3.1.0",
-            "info": {"title": "Billing", "version": "1"},
-            "servers": [{"url": api.base_url}],
-            "paths": {f"/{op}": {"get": {"operationId": op}} for op in ops},
-        }
-
-    doc = tmp_path / "openapi.json"
-    doc.write_text(json.dumps(spec("a", "b", "c")))
-    reading = as_json("custom-tool", "import", "read", "--file", str(doc))
-    assert [op["key"] for op in reading["operations"]] == ["GET /a", "GET /b", "GET /c"]
-    created = as_json(
-        "custom-tool", "group", "create", "billing", "--from-openapi", str(doc),
-        "--operation", "GET /a", "--operation", "GET /b",
-        "--env", f"test={api.base_url}", "--env", f"live={api.base_url}/l",
-    )  # fmt: skip
-    assert [t["name"] for t in created["tools"]] == ["a", "b"]
-    doc.write_text(json.dumps(spec("a", "b", "c", "d")))
-    preview = as_json("custom-tool", "reimport", "preview", "billing", "--file", str(doc))
-    assert [op["key"] for op in preview["added"]] == ["GET /d"]
-    assert daemon.client.get("/api/v1/custom-tools/billing").json()["tools"] == created["tools"]
-    applied = as_json(
-        "custom-tool", "reimport", "apply", "billing", "--file", str(doc), "--add", "GET /d"
-    )
-    assert [t["name"] for t in applied["tools"]] == ["a", "b", "d"]
-    assert [e["name"] for e in applied["environments"]] == ["test", "live"]
-
-
 def test_every_custom_tool_group_renders_its_help() -> None:
-    for path in ("group", "tool", "env", "import", "reimport"):
+    for path in ("group", "tool", "env"):
         assert "Usage" in coffer("custom-tool", path, "--help").output

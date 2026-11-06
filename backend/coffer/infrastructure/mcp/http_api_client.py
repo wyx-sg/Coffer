@@ -286,7 +286,7 @@ class HttpApiUpstreamConnection:
         try:
             outcome = await send_request(
                 request,
-                timeout_seconds=self._transport.timeout_for(env),
+                timeout_seconds=self._transport.timeout_seconds,
                 secrets=secrets,
                 client_factory=self._client_factory,
                 check=response_check(self._transport, tool),
