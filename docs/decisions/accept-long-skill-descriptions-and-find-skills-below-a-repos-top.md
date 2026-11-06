@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-11-06
 **Deciders**: Yuxing Wu
-**Related**: spec skill-manager "Add a skill from a Git repository", "Import skills from a folder or archive"; [A Git Skill's Folder Is Fetched in One Request From a Partial Clone](git-source-partial-clone-prefetch.md)
+**Related**: spec skill-manager "Add skills from a Git repository", "Add skills from an archive", "Validate imported skill folders against AgentSkills"; [A Git Skill's Folder Is Fetched in One Request From a Partial Clone](git-source-partial-clone-prefetch.md)
 
 ## Context
 

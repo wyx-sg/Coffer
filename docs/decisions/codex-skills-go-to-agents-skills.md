@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-11-06
 **Deciders**: Yuxing Wu
-**Related**: spec skill-manager "Deliver a skill to every agent in its reach"; [Skills Reach an Agent as a Directory Link to One Master Folder](cross-platform-skill-delivery.md); [Trim Skill Management to What an Agent Cannot Do](trim-skill-management-to-what-an-agent-cannot-do.md)
+**Related**: spec skill-manager "Deliver a skill as a directory link"; [Skills Reach an Agent as a Directory Link to One Master Folder](cross-platform-skill-delivery.md); [Trim Skill Management to What an Agent Cannot Do](trim-skill-management-to-what-an-agent-cannot-do.md)
 
 ## Context
 
