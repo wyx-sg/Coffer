@@ -194,7 +194,7 @@ xingz@sea.com · 2026-10-21 07:18 UTC: [voice] unavailable — the model cannot 
 | `/stop` | 中断正在运行的轮次，并暂停排在它后面的消息，带 **Continue** 和 **Discard** 按钮。 |
 | `/status` | 这个聊天正在运行什么，以卡片显示，只带对它有用的按钮。 |
 | `/model [name]` | 查看或设置模型。 |
-| `/dir [path\|name]` | 查看或切换工作目录，切换会开一个新对话。 |
+| `/dir [path\|name]` | 查看或切换工作目录，切换会开一个新对话；还没跑过任何一轮的空对话会被替换，不会留在旁边。 |
 | `/resume [n]` | 重新打开这个聊天之前的一个对话。 |
 | `/thread [title]` | 在私聊中，在单独的话题里打开一个并行对话。 |
 | `/close` | 在并行对话里发，关闭它。 |

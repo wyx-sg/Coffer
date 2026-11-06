@@ -194,7 +194,7 @@ Ten words are Coffer's commands. Everything else you type — including other te
 | `/stop` | Interrupt the running turn and hold the messages queued behind it, with **Continue** and **Discard** buttons. |
 | `/status` | What this chat is running, as a card with the buttons that act on it. |
 | `/model [name]` | Show or set the model. |
-| `/dir [path\|name]` | Show or switch the working directory, in a fresh conversation. |
+| `/dir [path\|name]` | Show or switch the working directory, in a fresh conversation; an empty conversation nothing ran in is replaced, not kept beside it. |
 | `/resume [n]` | Reopen an earlier conversation from this chat. |
 | `/thread [title]` | In a direct chat, open a parallel conversation in its own thread. |
 | `/close` | Inside a parallel thread, close it. |

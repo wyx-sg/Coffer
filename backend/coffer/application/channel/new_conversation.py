@@ -98,13 +98,22 @@ async def _open_and_announce(ctx: CommandContext) -> None:
         )
 
 
-async def open_fresh(ctx: CommandContext) -> bool:
+async def open_fresh(ctx: CommandContext, *, replace_unused: bool = False) -> bool:
     """Open a fresh conversation for the thread on its sticky settings;
-    ``False`` after saying why it could not be opened."""
+    ``False`` after saying why it could not be opened.
+
+    With ``replace_unused`` (a change of directory) the conversation it replaces
+    is dropped when nothing ever ran in it, so the change does not leave an empty
+    twin in the list (spec channels "Keep a chat's agent, model and directory
+    across its conversations")."""
+    threads = ctx.commands._threads
+    row = await threads.get(ctx.resource_uid, ctx.chat_id, ctx.conversation_thread_id)
+    previous = row.active_conversation_id if row is not None else None
+    busy = ctx.session is not None and ctx.session.running_conversation_id is not None
     try:
-        await open_conversation(
+        opened = await open_conversation(
             ctx.commands._conversations,
-            ctx.commands._threads,
+            threads,
             ctx.binding,
             ctx.peer,
             ctx.conversation_thread_id,
@@ -113,4 +122,19 @@ async def open_fresh(ctx: CommandContext) -> bool:
     except CofferError as e:
         await ctx.say(explain_conversation_error(e))
         return False
+    if replace_unused and previous is not None and previous != opened and not busy:
+        await _drop_if_unused(ctx, previous)
     return True
+
+
+async def _drop_if_unused(ctx: CommandContext, conversation_id: str) -> None:
+    """Delete ``conversation_id`` when no turn ever ran in it (it has no agent
+    session). Best effort: a conversation that stays is only a spare row."""
+    conversations = ctx.commands._conversations
+    try:
+        config = await conversations.get_agent_config(conversation_id)
+        if config.session_id:
+            return
+        await conversations.delete_conversation(conversation_id)
+    except CofferError:
+        return

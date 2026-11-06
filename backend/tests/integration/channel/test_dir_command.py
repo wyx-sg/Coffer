@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from coffer.application.channel.dir_switch import NO_DIRECTORIES
+from coffer.domain.chat.agent_config import AgentConfig
 
 from .conftest import ChannelEnv, FakeChannelAdapter, Resource, inbound, tap_event
 
@@ -63,6 +64,41 @@ async def test_dir_switches_to_an_allowed_directory_in_a_fresh_conversation(
     await env.processor.on_message(inbound("tg", "owner", "/new"))
     assert env.provider.last_agent_config == {"cwd": f"{app}/sub"}
     assert adapter.texts()[-1].endswith(f" · {app}/sub")
+
+
+@pytest.mark.acceptance(
+    spec="channels",
+    scenario="a conversation nothing ran in is replaced, not kept beside the new one",
+)
+async def test_a_conversation_nothing_ran_in_is_replaced_by_dir(
+    env: ChannelEnv, tmp_path: Path
+) -> None:
+    app, lib = _dirs(tmp_path)
+    resource, _adapter = await _channel(env, [app, lib])
+    await env.processor.on_message(inbound("tg", "owner", "/new"))
+    before = await env.active_conversation(resource)
+
+    await env.processor.on_message(inbound("tg", "owner", "/dir lib"))
+
+    after = await env.active_conversation(resource)
+    assert after not in (None, before)
+    assert [c.id for c in await env.conversations()] == [after]
+
+
+async def test_a_conversation_that_ran_stays_when_dir_opens_a_new_one(
+    env: ChannelEnv, tmp_path: Path
+) -> None:
+    app, lib = _dirs(tmp_path)
+    resource, _adapter = await _channel(env, [app, lib])
+    await env.processor.on_message(inbound("tg", "owner", "/new"))
+    before = await env.active_conversation(resource)
+    assert before is not None
+    await env.chat.set_agent_config(before, AgentConfig(cwd=app, session_id="native-1"))
+
+    await env.processor.on_message(inbound("tg", "owner", "/dir lib"))
+
+    after = await env.active_conversation(resource)
+    assert {c.id for c in await env.conversations()} == {before, after}
 
 
 @pytest.mark.acceptance(spec="channels", scenario="/dir refuses a directory outside the allow-list")
