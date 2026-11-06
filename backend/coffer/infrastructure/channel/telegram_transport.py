@@ -22,6 +22,9 @@ _logger = logging.getLogger(__name__)
 #: adapter's declared capabilities": a rate-limited send backs off and retries).
 _RATE_RETRIES = 3
 _MAX_RETRY_AFTER_SECONDS = 30.0
+#: Waits before resending a call whose connection never opened (a dropped
+#: network, a connect timeout): the call was not sent, so resending is safe.
+_CONNECT_BACKOFF = (1.0, 3.0)
 
 
 async def call(
@@ -37,9 +40,21 @@ async def call(
     transport fault, and a caller must not retry it the same way.
     """
     attempt = 0
+    unreached = 0
     while True:
         try:
             response = await client.post(f"{base}/{method}", json=params)
+        except (httpx.ConnectError, httpx.ConnectTimeout) as e:
+            # The request never reached Telegram, so resending cannot duplicate it.
+            if unreached >= len(_CONNECT_BACKOFF):
+                raise ChannelSendFailed(name, type(e).__name__) from e
+            wait = _CONNECT_BACKOFF[unreached]
+            unreached += 1
+            _logger.warning(
+                "telegram.unreached", extra={"channel": name, "method": method, "delay": wait}
+            )
+            await asyncio.sleep(wait)
+            continue
         except httpx.HTTPError as e:
             raise ChannelSendFailed(name, type(e).__name__) from e
         delay = _retry_after(response) if response.status_code == 429 else None

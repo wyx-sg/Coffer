@@ -4,8 +4,10 @@ card" and "List the commands with /help").
 `/status` names things, never ids: a parallel thread's mark when asked in one,
 then one line with the agent, model and directory by
 the names a person reads, and whether a turn is running, how many messages wait,
-or how many a stop left on hold, then the chat's parallel threads (spec channels
-"Open parallel conversations beside a direct chat"), the open ones only; in a
+or how many a stop left on hold; a running turn adds how long it has run, its
+step count, the agent's latest words and the step in hand; then the chat's
+parallel threads (spec channels "Open parallel conversations beside a direct
+chat"), the open ones only; in a
 closed thread its state reads ``Closed``. `/status` works only in a direct
 chat. Its card carries only what acts on what it shows: Stop while a turn
 runs, Continue and Discard while messages are on hold, then Model and Dir; a
@@ -72,6 +74,11 @@ async def cmd_status(ctx: CommandContext, _text: str = "") -> None:
         await settings_line(ctx.commands, settings),
         "Closed" if closed else _state(running, queued, held),
     ]
+    # A running turn says what it is doing, so a platform with no live surface
+    # (SeaTalk shows only typing) can still be asked.
+    progress = ctx.session.progress if running and ctx.session is not None else None
+    if progress is not None:
+        lines += [line for line in progress().splitlines() if line]
     lines += await thread_lines(ctx)
     body = "\n".join(lines)
     lead = [ChoiceButton(label="Stop", value="cmd:stop")] if running else []

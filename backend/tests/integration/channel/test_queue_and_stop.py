@@ -365,6 +365,7 @@ async def test_platform_stop_in_a_thread_with_nothing_running_is_silent(env: Cha
     assert adapter.sent_routed == before
 
 
+@pytest.mark.acceptance(spec="channels", scenario="/status says what a running turn is doing")
 async def test_status_while_a_turn_runs_counts_the_waiting_and_offers_stop(
     env: ChannelEnv,
 ) -> None:
@@ -381,5 +382,7 @@ async def test_status_while_a_turn_runs_counts_the_waiting_and_offers_stop(
 
     _chat, text, buttons = adapter.cards[-1]
     assert text.splitlines()[1] == "Running · 1 waiting"
+    # What the running turn is doing, for a platform with no live surface.
+    assert text.splitlines()[2].startswith("⏳ Working · ")
     assert [b.label for b in buttons] == ["Stop", "Model", "Dir"]
     gated.release.set()
