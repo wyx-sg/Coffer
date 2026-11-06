@@ -2,15 +2,14 @@
 //
 // My tasks are the ones the owner set up (the daily report among them);
 // Follow-ups the ones an agent booked in a thread. Coffer internal lists the
-// daemon's own background workers, read-only: the featured ones, then the
-// rest under Show all (spec daemon "Show Coffer's own background work beside
-// the owner's tasks").
+// daemon's own background workers, read-only, every one of them: the ones a
+// person recognises first, then the rest by name (spec daemon "Show Coffer's
+// own background work beside the owner's tasks").
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ListLoadError, ListLoadingRows } from "@/components/ListPaneStates";
 import { SearchInput } from "@/components/SearchInput";
-import { Button } from "@/components/ui/button";
 import type { DaemonWorker } from "@/lib/api/daemon";
 import type { ScheduledTask } from "@/lib/api/scheduledTasks";
 import { groupTasks, orderWorkers, workerLabel } from "@/lib/scheduledTasks/format";
@@ -44,13 +43,12 @@ export function TaskList(props: Props) {
   const { items, workers, loading, error, onRetry, selected, onOpen, onOpenWorker } = props;
   const { t } = useTranslation();
   const [filter, setFilter] = useState("");
-  const [showAll, setShowAll] = useState(false);
   const { mine, followUps } = groupTasks(items, filter);
   const q = filter.trim().toLowerCase();
   const { featured, rest } = orderWorkers(
     q ? workers.filter((w) => workerLabel(t, w.name).toLowerCase().includes(q)) : workers,
   );
-  const shownWorkers = showAll || q ? [...featured, ...rest] : featured;
+  const shownWorkers = [...featured, ...rest];
   const groups = [
     { key: "mine", rows: mine },
     { key: "followUps", rows: followUps },
@@ -106,18 +104,6 @@ export function TaskList(props: Props) {
                 />
               ))}
             </ul>
-            {rest.length > 0 && !q ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="mt-1 text-text-muted"
-                onClick={() => setShowAll((v) => !v)}
-              >
-                {showAll
-                  ? t("scheduledTasks.internal.showFewer")
-                  : t("scheduledTasks.internal.showAll", { count: rest.length })}
-              </Button>
-            ) : null}
           </section>
         ) : null}
       </div>

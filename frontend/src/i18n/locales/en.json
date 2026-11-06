@@ -6831,8 +6831,6 @@
     "internal": {
       "title": "Status",
       "help": "Coffer's own background work. It runs by itself; nothing here can be changed.",
-      "showAll": "Show all ({{count}} more)",
-      "showFewer": "Show fewer",
       "failedLine": "Last pass failed",
       "lastLine": "{{mode}} · last {{last}}",
       "mode": {

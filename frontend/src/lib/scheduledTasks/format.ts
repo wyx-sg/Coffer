@@ -3,7 +3,7 @@
 // Spec channels "Manage scheduled tasks from the Scheduled tasks page" and
 // daemon "Show Coffer's own background work beside the owner's tasks". The
 // internal section names the daemon's workers in words; the ones the owner
-// would recognise are featured, the rest wait under Show all.
+// would recognise come first, then every other worker by name.
 import type { TFunction } from "i18next";
 
 import type {

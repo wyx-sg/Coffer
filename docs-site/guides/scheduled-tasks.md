@@ -92,7 +92,7 @@ Turn **Catch up** off on a task to skip every missed run instead.
 
 - **My tasks**: the ones you set up, the daily report among them. Each row says when it runs next, or that it is paused or failing.
 - **Follow-ups**: the ones agents booked.
-- **Coffer internal**: Coffer's own background work — sync, memory sync, cleaning up old records, keeping agents' config files in line, starting scheduled tasks, and more — with how each is woken and when it last ran. **Show all** lists every worker. Nothing here can be changed: these settings live on their own pages.
+- **Coffer internal**: Coffer's own background work — sync, memory sync, cleaning up old records, keeping agents' config files in line, starting scheduled tasks, and more — with how each is woken and when it last ran. Nothing here can be changed: these settings live on their own pages.
 
 Open a task for its header (**Run now**, **Pause** or **Resume**, **Edit**, and **⋯ › Delete**), what it does, and **History**: every run, newest first, with how it ended — **Replied**, **Nothing to say**, **Done** (a task in no chat), **Skipped**, **Failed**, **Stopped** — and why. A run that used a conversation names it as a link: it takes you to that conversation on the **Conversations** page, selected in the list, and opens it in your terminal, so you can read what the run did and carry the conversation on. Runs are kept for 90 days by default; change it in Settings › Data.
 

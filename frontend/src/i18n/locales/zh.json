@@ -6831,8 +6831,6 @@
     "internal": {
       "title": "状态",
       "help": "Coffer 自己的后台工作。它们自动运行，这里不能修改。",
-      "showAll": "显示全部（另有 {{count}} 个）",
-      "showFewer": "收起",
       "failedLine": "上次运行失败",
       "lastLine": "{{mode}} · 上次 {{last}}",
       "mode": {

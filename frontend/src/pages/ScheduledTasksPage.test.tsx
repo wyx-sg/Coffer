@@ -272,15 +272,14 @@ describe("ScheduledTasksPage", () => {
   acceptance("daemon", "the internal section lists the daemon's workers", async () => {
     renderPage();
     await screen.findByRole("heading", { name: "Morning summary" });
-    // The featured workers, in the catalogue's order; the rest under Show all.
-    expect(rows("Coffer internal")).toEqual(["Sync", "Reconciler", "Scheduled tasks"]);
-    fireEvent.click(screen.getByRole("button", { name: "Show all (1 more)" }));
+    // Every worker: the recognised ones in the catalogue's order, then the rest.
     expect(rows("Coffer internal")).toEqual([
       "Sync",
       "Reconciler",
       "Scheduled tasks",
       "Usage import",
     ]);
+    expect(screen.queryByRole("button", { name: /^Show all/ })).not.toBeInTheDocument();
     fireEvent.click(
       within(screen.getByRole("region", { name: "Coffer internal" })).getByText("Sync"),
     );
