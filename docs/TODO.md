@@ -48,19 +48,6 @@ threads appending at once rarely conflict:
   form request bodies. Needs an ADR on where the token lives and how a refresh
   failure is reported.
 
-### Forward an upstream's elicitation requests to the agent
-
-- **Added:** 2026-11-06, from the thread "梳理 MCP 和自定义工具还缺什么"
-- **What:** when an upstream MCP server asks its client a question mid-call
-  (`elicitation/create`, for example "which project?" or "confirm this delete"),
-  the gateway passes it to the agent and returns the person's answer, the way it
-  already relays `sampling/createMessage` and `roots/list`.
-- **Why later:** without it such a server gets "not supported" and falls back or
-  fails, so moving it into Coffer loses a feature it has when connected directly.
-  None of the current servers asks.
-- **Sketch:** reuse the sampling and roots relay: offer the capability to an
-  upstream only when the session's client declared it at `initialize`.
-
 ### Tell the person at import that an OAuth server stays in the agent
 
 - **Added:** 2026-11-06, from the thread "梳理 MCP 和自定义工具还缺什么"
