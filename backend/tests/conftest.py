@@ -70,11 +70,11 @@ os.environ.setdefault("COFFER_WEBUI_DIR", str(_RUN_ROOT / "no-webui"))
 # tests check only when they ask.
 os.environ.setdefault("COFFER_PROVIDER_HEALTH", "off")
 # Every experimental feature is off until switched on, and almost every test
-# drives routes, tools or passes of one of them, so the suite pins both on
+# drives routes, tools or passes of one of them, so the suite pins them all on
 # (``COFFER_FEATURES``). The tests of the feature mechanism itself, and the
 # gate tests of each feature's off state, replace the pin with
 # ``tests.support.features.pin_features`` / ``monkeypatch``.
-os.environ.setdefault("COFFER_FEATURES", "knowledge=on,memory=on")
+os.environ.setdefault("COFFER_FEATURES", "knowledge=on,memory=on,scheduled_tasks=on")
 
 
 @pytest.fixture(autouse=True)

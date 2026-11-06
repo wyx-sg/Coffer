@@ -32,6 +32,7 @@ export type ListKind =
   | "skills"
   | "clis"
   | "channels"
+  | "scheduledTasks"
   | "customTools"
   | "providers"
   | "knowledge"

@@ -80,6 +80,7 @@ from coffer.surfaces.http.reconcile_routes import attention_router
 from coffer.surfaces.http.reconcile_routes import router as reconcile_router
 from coffer.surfaces.http.resource_routes import router as resource_router
 from coffer.surfaces.http.retention_routes import router as retention_router
+from coffer.surfaces.http.schedule_routes import router as schedule_router
 from coffer.surfaces.http.secret_boundary_routes import router as secret_boundary_router
 from coffer.surfaces.http.secret_notes_routes import router as secret_notes_router
 from coffer.surfaces.http.secret_routes import router as secret_router
@@ -171,6 +172,7 @@ def include_all_routers(app: FastAPI) -> None:
         chat_conversation_router,  # the Conversations page's REST surface
         chat_turn_router,  # … and stopping a turn
         channel_router,  # spec channels
+        schedule_router,  # spec channels (scheduled tasks)
         price_list_router,  # spec provider-switching (before /providers/{uid})
         model_switch_router,  # spec provider-switching: review + apply a model change
         provider_health_router,  # spec provider-switching (before /providers/{uid})

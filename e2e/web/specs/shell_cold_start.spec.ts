@@ -57,7 +57,7 @@ acceptance(
     const SIDEBAR_GROUPS: [string | null, RegExp[]][] = [
       [null, [/^Overview$/i]],
       ["Agents", [/^Agents$/i, /^Model providers$/i]],
-      ["Run", [/^Conversations$/i, /^Channels$/i]],
+      ["Run", [/^Conversations$/i, /^Channels$/i, /^Scheduled tasks$/i]],
       [
         "Capabilities",
         [/^MCP servers$/i, /^Custom tools$/i, /^Skills$/i, /^CLIs$/i],
@@ -86,7 +86,7 @@ acceptance(
       }
     }
     // The upper bound: nothing in the sidebar this list does not name.
-    await expect(nav.getByRole("link")).toHaveCount(14);
+    await expect(nav.getByRole("link")).toHaveCount(15);
 
     // Settings is not an entry: a labelled row sits at the bottom of the
     // sidebar; it shows no daemon state (spec web-ui "Open Settings as a

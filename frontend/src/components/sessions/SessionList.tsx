@@ -38,6 +38,8 @@ interface Props extends RowHandlers {
   agentNames?: ReadonlyMap<string, string>;
   /** The id of the row whose Stop is in flight. */
   stoppingId?: string | null;
+  /** The id of the row a link landed on. */
+  selectedId?: string | null;
 }
 
 const skeletons = (n: number, prefix: string) =>
@@ -82,6 +84,7 @@ export function SessionList({
   showChannel,
   agentNames,
   stoppingId = null,
+  selectedId = null,
   ...handlers
 }: Props) {
   const { t } = useTranslation();
@@ -96,6 +99,7 @@ export function SessionList({
       agentName={row.agentKey ? agentNames?.get(row.agentKey) : undefined}
       now={now}
       stopping={stoppingId === row.id}
+      selected={selectedId === row.id}
       {...handlers}
     />
   );

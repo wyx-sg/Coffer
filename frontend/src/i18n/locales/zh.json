@@ -230,6 +230,7 @@
     "forward": "前进",
     "agents": "智能体",
     "channels": "消息渠道",
+    "scheduledTasks": "定时任务",
     "activity": "活动",
     "modelProviders": "模型提供商",
     "sync": "同步",
@@ -1363,11 +1364,13 @@
       "saveFailed": "无法保存这次更改：{{reason}}",
       "names": {
         "knowledge": "知识",
-        "memory": "记忆"
+        "memory": "记忆",
+        "scheduled_tasks": "定时任务"
       },
       "descriptions": {
         "knowledge": "智能体可以查阅的笔记和文档，以可直接编辑的普通文件保存。",
-        "memory": "每个智能体记住的东西，同步到你其他智能体自己的记忆中。"
+        "memory": "每个智能体记住的东西，同步到你其他智能体自己的记忆中。",
+        "scheduled_tasks": "Coffer 按时间把提示词发给智能体，每次运行都是一个新会话。"
       },
       "source": {
         "pin": "由 COFFER_FEATURES 固定——请在启动守护进程的地方修改",
@@ -1904,6 +1907,14 @@
         "notFoundTitle": "这个密钥已不存在",
         "notFoundBody": "没有以 <mono>{{id}}</mono> 保存的密钥，它已被删除。",
         "back": "返回密钥列表"
+      },
+      "scheduledTasks": {
+        "plural": "定时任务",
+        "singular": "任务",
+        "filterHelp": "按名称、提示词和渠道筛选。",
+        "notFoundTitle": "这个任务已不存在",
+        "notFoundBody": "没有 id 为 <mono>{{id}}</mono> 的定时任务。它已被删除或已完成最后一次运行。",
+        "back": "返回定时任务"
       }
     }
   },
@@ -3729,6 +3740,7 @@
       "emptyTitle": "还没有对话",
       "emptyBody": "智能体有了会话就会出现在这里：在终端里开始的、由消息渠道发起的，或用“新建对话”开始的。",
       "noMatches": "没有匹配的对话",
+      "openMissing": "链接指向的对话已不在列表中。",
       "clearFilters": "清除筛选",
       "unavailable_one": "无法读取 {{agents}} 的会话",
       "unavailable_other": "无法读取 {{agents}} 的会话"
@@ -6668,5 +6680,114 @@
     "added": "已为 {{name}} 添加值",
     "replace": "更换",
     "keep": "不更换"
+  },
+  "scheduledTasks": {
+    "title": "定时任务",
+    "subtitle": "Coffer 按时间把提示词发给智能体，每次运行都是一个新会话。",
+    "newTask": "新建任务",
+    "search": "筛选任务",
+    "on": "开",
+    "off": "关",
+    "pause": "暂停",
+    "resume": "恢复",
+    "menu": "{{name}} 的更多操作",
+    "empty": {
+      "title": "还没有定时任务",
+      "body": "任务会在你选的时间把提示词发给智能体，每次新开一个会话：早间汇总、夜间检查。结果怎么处理，写在提示词里。"
+    },
+    "list": {
+      "none": "暂无。",
+      "noMatch": "没有匹配的任务。",
+      "pausedLine": "已暂停",
+      "failedLine": "上次运行失败 · {{reason}}",
+      "nextLine": "{{when}} · 下次 {{next}}"
+    },
+    "state": {
+      "running": "正在运行",
+      "ready": "已排期",
+      "paused": "已暂停",
+      "failed": "连续失败",
+      "done": "已完成"
+    },
+    "schedule": {
+      "onceAt": "一次，{{when}}",
+      "hourlyAt": "每小时第 {{minute}} 分",
+      "dailyAt": "每天 {{time}}",
+      "weeklyAt": "每{{day}} {{time}}",
+      "cron": "Cron {{expr}}",
+      "manual": "仅手动运行"
+    },
+    "outcome": {
+      "running": "运行中",
+      "skipped": "已跳过",
+      "failed": "失败",
+      "stopped": "已停止",
+      "done": "完成"
+    },
+    "runNow": {
+      "action": "立即运行",
+      "started": "已开始，在一个新会话里运行。"
+    },
+    "delete": {
+      "action": "删除",
+      "title": "删除 {{name}}？",
+      "body": "它不会再运行。运行记录保留到保留期结束。",
+      "pending": "正在删除…",
+      "failed": "无法删除 {{name}}"
+    },
+    "detail": {
+      "next": "下次 {{next}}",
+      "what": "任务内容"
+    },
+    "runs": {
+      "title": "运行记录",
+      "help": "每次运行：何时运行、结果如何、原因，以及用的是哪个对话。点对话标题会跳到对话页并选中它，在终端里打开，可以查看这次运行，也可以接着聊。记录保留 90 天。",
+      "none": "还没有运行过。",
+      "byHand": "手动运行",
+      "late": "迟到，原定 {{due}}",
+      "conversation": "对话：",
+      "conversationGone": "这次运行的对话已被删除。"
+    },
+    "dialog": {
+      "title": "新建定时任务",
+      "editTitle": "编辑 {{name}}",
+      "body": "到了你选的时间，Coffer 用下面的智能体开一个新会话，把提示词发过去。要通知你、发到某个聊天、写报告，都写在提示词里，或者让它用某个 skill。",
+      "name": "名称",
+      "namePlaceholder": "留空则按提示词命名",
+      "when": "时间",
+      "weekday": "星期",
+      "time": "时刻",
+      "minute": "分钟",
+      "at": "日期和时间",
+      "cron": "Cron 表达式",
+      "kind": {
+        "daily": "每天",
+        "weekly": "每周",
+        "hourly": "每小时",
+        "once": "一次",
+        "cron": "Cron",
+        "manual": "仅手动"
+      },
+      "localTime": "按这台 Mac 的本地时间。",
+      "cronHint": "五个字段：分 时 日 月 星期，按你填的时区，或这台 Mac 的本地时间。",
+      "manualHint": "只在你点击立即运行时运行。",
+      "prompt": "提示词",
+      "promptPlaceholder": "汇总昨天还开着的 PR",
+      "promptHint": "回复留在这次运行的会话里，可以从任务的运行记录打开。想收到通知，就在提示词里让智能体通知你。",
+      "agent": "智能体",
+      "model": "模型",
+      "cwd": "目录",
+      "catchUp": "补跑",
+      "catchUpHint": "Mac 休眠或 Coffer 未运行时错过的一次，会迟到补跑一次。",
+      "submit": "创建任务",
+      "addFailed": "无法创建任务",
+      "editFailed": "无法保存任务",
+      "agentDefault": "智能体默认",
+      "homeFolder": "主目录",
+      "timezone": "时区",
+      "timezonePlaceholder": "这台 Mac 的时间",
+      "timezoneHint": "按你填的时区（IANA 名称，例如 Asia/Singapore），不填就按这台 Mac 的本地时间。",
+      "agentDefaultNamed": "智能体默认（{{model}}）"
+    }
   }
 }

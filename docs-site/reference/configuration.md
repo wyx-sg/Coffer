@@ -145,12 +145,13 @@ The daemon's runtime state — its pid, port and API token — lives in a differ
 
 An experimental feature is a capability that is off until you switch it on, per machine; while it is off it looks absent — its pages, commands and routes are closed — and nothing it holds is deleted. Each registry entry names its key, the routes it owns and the resource kinds it owns.
 
-The registry holds two features, in this order:
+The registry holds three features, in this order:
 
 | Key | Closes | REST prefixes |
 | --- | --- | --- |
 | `knowledge` | Knowledge | `/api/v1/knowledge` |
 | `memory` | Memory | `/api/v1/memory` |
+| `scheduled_tasks` | Scheduled tasks | `/api/v1/scheduled-tasks` |
 
 Everything else is always on, including vault sync, model providers (with the local model proxy and Usage), conversations and channels. Any other key is not a feature: `PUT /api/v1/daemon/features/<key>` answers `FEATURE_UNKNOWN`. A stored setting for a key the registry does not name is ignored.
 
@@ -166,7 +167,7 @@ Highest precedence first:
 2. **Setting** — this machine's value in `daemon-config.json` under `features`.
 3. **Default** — off, for every feature in every build.
 
-**Settings → Features** lists the two features in every build and the source of each state is reported as `pin`, `setting` or `default`. A pinned feature's switch is disabled.
+**Settings → Features** lists the three features in every build and the source of each state is reported as `pin`, `setting` or `default`. A pinned feature's switch is disabled.
 
 ### COFFER_FEATURES syntax
 

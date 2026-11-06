@@ -22,11 +22,12 @@ from tests.support.features import FAKE_FEATURE, replace_registry
 
 @pytest.mark.acceptance(
     spec="experimental-features",
-    scenario="the registry names the two experimental features",
+    scenario="the registry names the three experimental features",
 )
-def test_the_registry_names_the_two_experimental_features() -> None:
-    assert feature_keys() == ("knowledge", "memory")
+def test_the_registry_names_the_three_experimental_features() -> None:
+    assert feature_keys() == ("knowledge", "memory", "scheduled_tasks")
     assert feature_for_kind("knowledge") == "knowledge"
+    assert feature_for_kind("scheduled_task") == "scheduled_tasks"
     # Everything else is always there: channels, conversations, and the
     # graduated sync and models features (the ``provider`` kind) included.
     for kind in ("agent", "skill", "mcp_server", "secret", "channel", "provider"):
@@ -35,6 +36,7 @@ def test_the_registry_names_the_two_experimental_features() -> None:
     assert feature_for_path("/api/v1/channels/abc") is None
     assert feature_for_path("/api/v1/knowledge/collections") == "knowledge"
     assert feature_for_path("/api/v1/memory/partitions") == "memory"
+    assert feature_for_path("/api/v1/scheduled-tasks/t-1/runs") == "scheduled_tasks"
     # Always-on routes, the routes the agent pages and the internal engine use,
     # and the graduated sync and models routes.
     for path in (
