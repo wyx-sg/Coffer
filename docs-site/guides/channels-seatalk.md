@@ -27,7 +27,7 @@ Two consequences follow:
 
 1. On the SeaTalk Open Platform, create an app.
 2. Enable the **Bot** capability and set the bot **Online**.
-3. Request the scopes the bot needs. At minimum you need *Send Message to Bot User*; your organisation's admin may have to approve them. Add *Get Employee Profile* if you want the channel's owner list to show each owner's SeaTalk picture; without it the list shows their initials.
+3. Request the scopes the bot needs. At minimum you need *Send Message to Bot User*; your organisation's admin may have to approve them.
 4. Note the app's **App ID** and **App Secret**.
 
 Leave the event delivery setting for step 4: SeaTalk only verifies WebSocket delivery while Coffer holds the connection.
@@ -122,7 +122,7 @@ Each group thread is its own conversation, so you can run Claude Code in one thr
 
 Because a main-chat @mention always roots a new thread, `@bot /new <agent>` in the main chat sets the **group's default agent**, which every new thread in the group starts on, and `@bot /stop` stops every turn running in the group. `/del` withdraws a reply, as described under [How replies look](#how-replies-look). `/model`, `/dir`, `/status`, `/resume`, `/thread` and `/close` work only in a direct chat; sent in a group they get one private line saying so. Inside a group thread, `/new` and `/stop` apply to that thread. See [Group defaults on SeaTalk](/reference/channel-commands#group-defaults-on-seatalk).
 
-To have the bot leave alone a message that also @mentions another person, turn on **Ignore messages that @mention someone else** on the channel's **Settings** tab under **Receiving messages**. SeaTalk has no **Answer only when @mentioned** switch: it already delivers only @mentions.
+SeaTalk has no **Answer only when @mentioned** switch: it already delivers only @mentions, and the bot answers each one, even when it also @mentions someone else.
 
 The bot never reads recent messages from a group's main chat. SeaTalk does not grant that permission to a self-built app, and the message you address to the bot is meant to carry what it needs.
 

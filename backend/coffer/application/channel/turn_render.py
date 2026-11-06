@@ -108,7 +108,6 @@ class TurnRenderer:
     mention_user_email: str = ""
     mention_user_name: str = ""  # for a transport whose mention shows a name
     # The channel's "show steps" setting: off hides the step lines.
-    show_steps: bool = True
     # Cadences, injectable so a test can drive them fast.
     #: What the reply was delivered as, filed for ``/del`` and the 🗑 button; ``None``
     #: (a renderer built without a ledger) tracks nothing.
@@ -149,9 +148,7 @@ class TurnRenderer:
 
     async def _consume(self, queue: asyncio.Queue[Any]) -> TurnOutcome:
         started = self._clock = self.now()
-        self._status = TurnStatus(
-            started=started, show_steps=self.show_steps, chat_kind=self.chat_kind
-        )
+        self._status = TurnStatus(started=started, chat_kind=self.chat_kind)
         self._reply = ReplyText()
         self._surface = TurnSurface(self.adapter, self.chat_id, self.thread_id, self.chat_kind)
         ticker = spawn(self._tick(), name=f"channel-turn-ticker:{self.chat_id}")

@@ -176,25 +176,6 @@ describe("message batching", () => {
   );
 });
 
-describe("replies", () => {
-  acceptance("channels", "the step lines are hidden in the channel's settings", async () => {
-    const api = installApi();
-    renderSettings(TG);
-
-    fireEvent.click(screen.getByRole("switch", { name: /show step lines/i }));
-    await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
-    expect(patched(api, 0).show_steps).toBe(false);
-  });
-
-  test("a SeaTalk channel, which shows only typing while a turn runs, offers no step lines", () => {
-    installApi();
-    renderSettings();
-
-    expect(screen.queryByRole("switch", { name: /show step lines/i })).toBeNull();
-    expect(screen.queryByLabelText(/long-task ping after/i)).toBeNull();
-  });
-});
-
 describe("conversations", () => {
   const idleField = () => screen.getByLabelText(/start a new conversation after/i);
 
@@ -317,7 +298,7 @@ describe("group chats", () => {
 
     renderSettings();
     expect(screen.queryByRole("switch", { name: /only when @mentioned/i })).toBeNull();
-    expect(screen.getByRole("switch", { name: /someone else/i })).toBeInTheDocument();
+    expect(screen.queryByRole("switch", { name: /someone else/i })).toBeNull();
   });
 });
 

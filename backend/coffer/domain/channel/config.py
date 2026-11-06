@@ -50,7 +50,7 @@ def _reject_raw_secret(field: str, value: str) -> str:
 #: Keys a channel config used to carry and no longer does. A stored document
 #: may still hold them; they are dropped on read rather than refused, so an
 #: upgrade never stops a channel from starting.
-_RETIRED_KEYS = frozenset({"notify_after_seconds"})
+_RETIRED_KEYS = frozenset({"notify_after_seconds", "ignore_other_mentions", "show_steps"})
 
 #: The longest reply style a channel keeps per chat kind (spec channels "Let the
 #: owner rewrite a channel's reply style"). It rides on every turn, so it is
@@ -91,11 +91,8 @@ class _CommonChannelFields(BaseModel):
     default_agent_config: dict[str, Any] | None = None
     # Group inbound gating ("Configure when the bot answers in a group").
     # ``require_mention`` (default on) keeps the
-    # bot silent in a group until @mentioned / replied-to; ``ignore_other_mentions``
-    # (opt-in) drops a group message that @mentions any non-bot user, even when
-    # it also mentions the bot, so the bot never butts into human-aimed traffic.
+    # bot silent in a group until @mentioned / replied-to.
     require_mention: bool = True
-    ignore_other_mentions: bool = False
     # "Let others in a group ask the bot": in a group an owner has registered,
     # anyone else who @mentions the bot gets an answer, read-only — questions
     # and checks, never a change or a task. Off, only owners are answered.
@@ -105,10 +102,6 @@ class _CommonChannelFields(BaseModel):
     # no text, before the held burst runs. 0 runs every message as its own turn.
     wait_after_text_seconds: float = Field(default=1.5, ge=0, le=60)
     wait_after_forward_seconds: float = Field(default=5.0, ge=0, le=60)
-    # "Show a turn's working state as one status line": whether the live status
-    # lists the turn's step lines under its header. Off keeps the header (time,
-    # step count) and the narration line and hides the steps — e.g. in a group.
-    show_steps: bool = True
     # "Open a new conversation after an idle period": a direct chat, or a group
     # whose main chat is one conversation, whose active conversation has been
     # idle longer than this many hours opens a NEW conversation on the owner's
@@ -147,6 +140,9 @@ class _CommonChannelFields(BaseModel):
         """Migrations on read (the file loses the old keys on its next write).
 
         - The long-turn ping is gone: drop ``notify_after_seconds``.
+        - The "ignore messages that also @mention someone else" and "show step
+          lines" switches are gone: drop ``ignore_other_mentions`` and
+          ``show_steps`` (a group answers every @mention; steps always show).
         - The owner prompt became the reply style: a stored
           ``direct_system_prompt`` / ``group_system_prompt`` was appended after
           Coffer's whole note, so it becomes a rewrite holding Coffer's default

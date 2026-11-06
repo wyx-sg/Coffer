@@ -531,8 +531,8 @@ exception is the channel's two reply styles (see "Let the owner rewrite a
 channel's reply style"): they are prose, so their **System prompt** section
 shows them beside Coffer's read-only channel note and edits them through an
 **Edit** button and a dialog with Cancel and Save. They cover the channel's name, its type's plain settings (a
-SeaTalk app id), its two group-gating switches, `require_mention` and
-`ignore_other_mentions` (see "Configure when the bot answers in a group"), and
+SeaTalk app id), its group-gating switch, `require_mention` (see "Configure when the bot answers
+in a group"), and
 the rest of what this requirement and the others in this spec name as a channel
 setting. A secret is shown masked and replaced through its own dialog, **in
 place**: the new value MUST be written to the secret store under the ref the
@@ -588,10 +588,10 @@ and `PATCH /api/v1/resources/{uid}`.
 - **AND** the channel's configuration is then saved to the same channel with
   every ref unchanged, so nothing its pairing hangs off moves
 
-#### Scenario: the group-gating switches are edited in the Settings tab
-- **GIVEN** a registered channel with `require_mention` on and `ignore_other_mentions` off (the defaults)
-- **WHEN** the owner switches `require_mention` off and `ignore_other_mentions` on in the channel's Settings tab
-- **THEN** the saved configuration carries both changes and every other setting and ref as it was
+#### Scenario: the group-gating switch is edited in the Settings tab
+- **GIVEN** a registered channel with `require_mention` on (the default)
+- **WHEN** the owner switches `require_mention` off in the channel's Settings tab
+- **THEN** the saved configuration carries the change and every other setting and ref as it was
 
 #### Scenario: a channel's lifecycle and reach run through the resource routes
 - **GIVEN** a registered, enabled channel named `tg`
@@ -1401,10 +1401,10 @@ same group/thread, not a DM.
 ### Requirement: Configure when the bot answers in a group
 Per-group inbound gating MUST be configurable. A channel may set
 require-mention (default on for groups — the bot answers only when @mentioned or
-replied-to) and ignore-messages-that-@-someone-else (opt-in — a group message
-that @mentions any non-bot user is dropped silently, even when it also mentions
-the bot) — so a bot sitting in a busy group answers only when it should. Both
-are plain config bools; the channel stays owner-gated regardless, so this is
+replied-to), so a bot sitting in a busy group answers only when it should. A
+message that @mentions the bot is answered even when it also @mentions someone
+else: whoever wrote it wanted the bot to see it. It is a plain config bool; the
+channel stays owner-gated regardless, so this is
 about *when* to answer, not *who* may drive turns. Who else may ask is "Let
 others in a group ask the bot".
 
@@ -1420,14 +1420,8 @@ others in a group ask the bot".
 - **THEN** it passes the mention gate and drives a turn (still owner-gated: a
   non-owner would be refused by the sender checks below the gate)
 
-#### Scenario: ignore_other_mentions drops a message that also @mentions a human
-- **GIVEN** a paired channel with `ignore_other_mentions` on
-- **WHEN** a group message @mentions the bot but also @mentions another user
-- **THEN** it is dropped silently — no reply and no turn — so the bot does not
-  butt into human-aimed traffic
-
-#### Scenario: ignore_other_mentions off still answers when @mentioned alongside a human
-- **GIVEN** a paired channel with `ignore_other_mentions` off (the default)
+#### Scenario: a message that @mentions the bot alongside a human is answered
+- **GIVEN** a paired channel
 - **WHEN** a group message @mentions the bot alongside another user
 - **THEN** the turn still runs — the extra human @mention does not suppress it
 
@@ -2623,43 +2617,16 @@ switch; the Overview MUST NOT raise a "not running" item for it.
 - **THEN** the status reports `running: false` and `starting: true`, and the Channels page shows it connecting
 - **AND** after the pass it is running and `starting` is false, while a start that failed leaves `starting` false
 
-### Requirement: Show each paired person's platform picture
-The people list on a channel's Overview SHALL show each paired person's picture
-on the platform beside their name, and their initials when there is no picture
-to show. The line under the name SHALL read "Owner · paired <date>". The picture
-MUST be asked of the channel's running adapter on this machine when the page
-first asks for it: Telegram's newest profile photo (`getUserProfilePhotos`), and
-SeaTalk's employee profile picture (`/contacts/v2/profile`, which needs the app's
-Get Employee Profile permission). It MUST be kept in a machine-local cache that
-is never synced, served from there for a day, and asked for again after that. A
-fetch that fails or is refused, and a person with no picture, MUST read as no
-picture, show initials, and not be asked again for an hour; a refused refresh
-leaves the cached picture in place. Only bytes that are a JPEG, PNG, GIF or WebP
-image of at most 2 MB are served. Removing the person or deleting the channel
-MUST drop their cached picture, and a person not paired to the channel has none.
+### Requirement: Show each paired person by name and initials
+The people list on a channel's Overview SHALL show each paired person's initials
+beside their name; Coffer fetches no picture from the platform. The line under
+the name SHALL read "Owner · paired <date>".
 
-#### Scenario: an owner row shows the person's platform picture or their initials
-- **GIVEN** a channel with two paired people, one with a picture on the platform and one without
+#### Scenario: an owner row shows the person's initials
+- **GIVEN** a channel with a paired person
 - **WHEN** the owner opens the channel's Overview
-- **THEN** the first person's row shows their picture and the other's shows their initials
-- **AND** the line under each name reads "Owner · paired <date>"
-
-#### Scenario: a paired person's picture is fetched once and kept a day
-- **GIVEN** a running channel and a paired person with a picture on the platform
-- **WHEN** the page asks for the picture twice, and again a day later after the person changed it
-- **THEN** the platform is asked once for the first two, and the day-old picture is replaced by the new one
-
-#### Scenario: a person with no reachable picture keeps their initials
-- **GIVEN** a SeaTalk app without the Get Employee Profile permission
-- **WHEN** the page asks for a paired person's picture
-- **THEN** there is no picture and the row keeps the person's initials
-- **AND** the platform is not asked again for that person within the hour
-
-#### Scenario: a paired person's picture is served from the running adapter
-- **GIVEN** a running channel with two paired people, one with a picture
-- **WHEN** a client reads `GET /api/v1/channels/{uid}/people/{sender_id}/avatar` for each, and for a sender who is not paired
-- **THEN** the first answers 200 with the image, the others 204
-- **AND** after the first person is removed their cached picture is gone
+- **THEN** the person's row shows their initials beside their name
+- **AND** the line under the name reads "Owner · paired <date>"
 
 ### Requirement: Show a turn's progress on one live surface
 A turn's progress MUST show on a live surface where the transport has one —
@@ -2743,10 +2710,6 @@ narration replies with its last words.
 A turn whose agent wrote no text at all sends no reply: no placeholder line is
 posted, and the live surface is closed.
 
-A channel setting `show_steps` (default on) hides the step lines and keeps the
-header and narration — useful in a busy group. It is edited on the Channels
-page, which offers it only for a platform that has a live surface (Telegram).
-
 A transport that must shorten a snapshot to its own limit clips the answer's
 oldest words and keeps the status block whole; only a limit too small for the
 block drops the step lines, then the header.
@@ -2785,15 +2748,6 @@ block drops the step lines, then the header.
   writing nothing after it
 - **WHEN** the reply is delivered
 - **THEN** it holds the last text the agent wrote
-
-#### Scenario: hiding steps keeps only the header
-- **GIVEN** a channel with `show_steps` off
-- **WHEN** a turn calls a tool
-- **THEN** the status block shows the header and narration but no step line
-
-#### Scenario: the step lines are hidden in the channel's settings
-- **WHEN** the owner switches the channel's step lines off in its settings, then on again
-- **THEN** the channel's `show_steps` setting is off, then on again
 
 #### Scenario: narration the agent marked never reaches the reply
 - **GIVEN** a turn whose agent marks a message as narration, calls a tool, marks

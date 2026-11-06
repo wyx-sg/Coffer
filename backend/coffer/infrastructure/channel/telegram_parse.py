@@ -98,31 +98,6 @@ def _mention_span(
     return None
 
 
-def _mentions_other(
-    message: dict[str, Any], text: str, *, bot_id: int | None, bot_username: str | None
-) -> bool:
-    """Whether any @mention/text_mention entity names a user OTHER than the bot
-    ("Configure when the bot answers in a group"): a ``mention`` entity whose token isn't
-    ``@<bot_username>``, or a ``text_mention`` whose ``user.id`` isn't ``bot_id``."""
-    entities = message.get("entities") or []
-    for ent in entities:
-        if not isinstance(ent, dict):
-            continue
-        etype = ent.get("type")
-        if etype == "text_mention":
-            user = ent.get("user")
-            if not (isinstance(user, dict) and bot_id is not None and user.get("id") == bot_id):
-                return True
-        elif etype == "mention":
-            offset, length = ent.get("offset"), ent.get("length")
-            if not isinstance(offset, int) or not isinstance(length, int):
-                continue
-            token = _utf16_span(text, offset, length)
-            if not (bot_username and token.casefold() == f"@{bot_username}".casefold()):
-                return True
-    return False
-
-
 def addressed_and_text(
     message: dict[str, Any],
     text: str,
@@ -281,12 +256,8 @@ def build_inbound_message(
     # A media message carries its text in ``caption``, not ``text``.
     raw_text = str(message.get("text") or message.get("caption") or "")
     addressed, raw = (True, raw_text)
-    mentions_other = False
     named = command_target(message, raw_text, bot_username=bot_username)
     if group:
-        mentions_other = _mentions_other(
-            message, raw_text, bot_id=bot_id, bot_username=bot_username
-        )
         if named is not None:
             # ``/cmd@name`` says who it is for, over any reply or @mention: ours
             # is addressed whatever require_mention says, another bot's is not.
@@ -323,7 +294,6 @@ def build_inbound_message(
         # message origin"); a DM's chat has no title.
         chat_title=str(message.get("chat", {}).get("title") or ""),
         addressed=addressed,
-        mentions_others=mentions_other,
         thread_id=str(message.get("message_thread_id") or ""),
         replies_to_message_id=_replied_to_id(message),
         forwarded=forwarded,

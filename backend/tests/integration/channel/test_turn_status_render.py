@@ -132,19 +132,6 @@ async def test_the_header_ticks_while_a_tool_runs_in_silence() -> None:
     await task
 
 
-async def test_hidden_steps_keep_the_step_lines_off_the_surface() -> None:
-    adapter = _streaming()
-
-    await _run(
-        _renderer(adapter, show_steps=False),
-        [ToolCall(tool_use_id="t1", tool_name="Bash", tool_input={"command": "ls"}), _DONE],
-    )
-
-    [live] = adapter.live_handles
-    assert live.snapshots[-1] == "⏳ Working · 0s · 1 step"
-    assert not any("Bash" in s for s in live.snapshots)
-
-
 async def test_a_long_answer_is_clipped_under_a_header_that_stays() -> None:
     adapter = FakeChannelAdapter(supports_edit=True, max_message_chars=60)
     box = [0.0]

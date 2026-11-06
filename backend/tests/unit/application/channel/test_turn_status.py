@@ -39,15 +39,6 @@ def test_the_block_shows_time_steps_and_only_the_newest_three() -> None:
     assert block[2:] == ["✅ Bash · step 5", "✅ Bash · step 6", "⏳ Grep · retry"]
 
 
-@pytest.mark.acceptance(spec="channels", scenario="hiding steps keeps only the header")
-def test_hiding_steps_keeps_the_header_and_the_narration() -> None:
-    status = TurnStatus(started=0.0, show_steps=False)
-    status.call("t1", "Read", {"file_path": "/a/b/spec.ts"})
-    status.narrate("Let me look at the spec.")
-
-    assert status.block(5.0) == "⏳ Working · 5s · 1 step\n💬 Let me look at the spec."
-
-
 def test_a_turn_with_no_steps_yet_shows_just_the_clock() -> None:
     assert TurnStatus(started=0.0).block(0.0) == "⏳ Working · 0s"
 

@@ -25,7 +25,6 @@ __all__ = [
     "combined_forwarded_items",
     "dedup_key",
     "interactive_card",
-    "mentions_others",
     "message_to_item",
     "split_to_byte_limit",
     "strip_group_mentions",
@@ -67,27 +66,6 @@ CARD_BARE_BUTTONS_MAX = 5
 #: body, so these are read off the narrowest card Coffer sends (a two-line
 #: "Current agent" body): "Claude Code" was cut to "Claude C…" two to a row.
 _ROW_LABEL_COLUMNS = {1: 18, 2: 8, 3: 5}
-
-
-def mentions_others(mentioned_list: Sequence[Any] | None) -> bool:
-    """Whether a group message @mentions a user OTHER than the bot (see "Configure when the bot
-    answers in a group").
-
-    ``new_mentioned_message_received_from_group_chat`` only fires when the bot
-    IS mentioned, so the bot already occupies one slot in ``mentioned_list``;
-    more than one distinct username therefore means a non-bot user was also
-    @mentioned.
-    """
-    return (
-        len(
-            {
-                m["username"]
-                for m in mentioned_list or []
-                if isinstance(m, dict) and m.get("username")
-            }
-        )
-        > 1
-    )
 
 
 def _size(text: str) -> int:

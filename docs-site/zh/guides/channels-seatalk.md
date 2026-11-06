@@ -27,7 +27,7 @@ Coffer 通过**每个消息渠道一条出站 WebSocket 连接**接收 SeaTalk �
 
 1. 在 SeaTalk 开放平台上创建一个应用。
 2. 启用 **Bot** 能力，并把机器人设为 **Online**。
-3. 申请机器人需要的权限范围。最少需要 *Send Message to Bot User*；可能需要你们组织的管理员审批。如果希望消息渠道的主人列表显示每位主人的 SeaTalk 头像，再加上 *Get Employee Profile*；没有它时列表显示姓名首字母。
+3. 申请机器人需要的权限范围。最少需要 *Send Message to Bot User*；可能需要你们组织的管理员审批。
 4. 记下应用的 **App ID** 和 **App Secret**。
 
 事件投递设置留到第 4 步：只有在 Coffer 持有连接时，SeaTalk 才能校验 WebSocket 投递。
@@ -122,7 +122,7 @@ SeaTalk 没有启动链接，所以要你手动输入配对码。它只能用一
 
 因为在主聊天里 @ 提及总会开一个新线程，所以在主聊天里发 `@bot /new <agent>` 设置的是**群组的默认智能体**，群组里每个新线程都从它开始；`@bot /stop` 停止群组里正在运行的所有轮次。`/del` 撤回回复，见[回复的样子](#how-replies-look)。`/model`、`/dir`、`/status`、`/resume`、`/thread` 和 `/close` 只能在私聊里用，在群里发会得到一行私下的提示。在群组线程里，`/new` 和 `/stop` 只作用于该线程。见 [SeaTalk 上的群组默认值](/zh/reference/channel-commands#group-defaults-on-seatalk)。
 
-如果希望机器人不理会同时 @ 了其他人的消息，在消息渠道**设置**标签页的**接收消息**下打开**忽略同时 @ 了其他人的消息**。SeaTalk 没有**仅在被 @ 时回复**开关：它本来就只投递 @ 提及。
+SeaTalk 没有**仅在被 @ 时回复**开关：它本来就只投递 @ 提及，机器人每条都回复，即使同时 @ 了其他人。
 
 机器人从不读取群组主聊天里的最近消息。SeaTalk 不给自建应用这个权限，而且你发给机器人的那条消息本就应该带上它需要的内容。
 

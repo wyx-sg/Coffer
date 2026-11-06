@@ -2,9 +2,8 @@
 
 ``require_mention`` (default on) keeps the bot silent in a group until it is
 @mentioned/replied-to; turning it off admits an un-addressed (but still
-owner-gated) group message. ``ignore_other_mentions`` (opt-in) silently drops a
-group message that @mentions any non-bot user, even when it also mentions the
-bot, so a bot in a busy group never butts into human-aimed traffic.
+owner-gated) group message. A message that @mentions the bot is answered even
+when it also @mentions someone else.
 """
 
 from __future__ import annotations
@@ -91,45 +90,15 @@ async def test_require_mention_off_drops_a_non_owners_chatter_silently(env: Chan
 
 @pytest.mark.acceptance(
     spec="channels",
-    scenario="ignore_other_mentions drops a message that also @mentions a human",
+    scenario="a message that @mentions the bot alongside a human is answered",
 )
-async def test_ignore_other_mentions_drops_message_mentioning_a_human(env: ChannelEnv) -> None:
-    """With ``ignore_other_mentions`` on, a group message that @mentions another
-    user is dropped silently — no reply, no turn — even though it also mentions
-    the bot and comes from the owner."""
-    resource = await env.register_channel("tg")
-    adapter = env.bind(resource, ignore_other_mentions=True)
-    await env.pair(resource, "owner", sender_id="owner-1")
-
-    await env.processor.on_message(
-        inbound(
-            "tg",
-            "grp-1",
-            "@bot @alice can you two sort this out",
-            chat_kind="group",
-            addressed=True,
-            mentions_others=True,
-            sender_id="owner-1",
-            thread_id="th-1",
-        )
-    )
-
-    assert adapter.sent == []
-    assert await env.conversations() == []
-    assert await env.peers.get_by_chat(resource.uid, "grp-1") is None
-
-
-@pytest.mark.acceptance(
-    spec="channels",
-    scenario="ignore_other_mentions off still answers when @mentioned alongside a human",
-)
-async def test_ignore_other_mentions_off_still_answers_when_mentioned_with_a_human(
+async def test_a_mention_alongside_a_human_is_answered(
     env: ChannelEnv,
 ) -> None:
-    """With ``ignore_other_mentions`` off (the default), a group message that
-    @mentions the bot still drives a turn even when it also @mentions a human."""
+    """A group message that @mentions the bot drives a turn even when it also
+    @mentions a human."""
     resource = await env.register_channel("tg")
-    adapter = env.bind(resource)  # ignore_other_mentions defaults to False
+    adapter = env.bind(resource)
     await env.pair(resource, "owner", sender_id="owner-1")
 
     await env.processor.on_message(
@@ -139,7 +108,6 @@ async def test_ignore_other_mentions_off_still_answers_when_mentioned_with_a_hum
             "@bot @alice what's the plan",
             chat_kind="group",
             addressed=True,
-            mentions_others=True,
             sender_id="owner-1",
             thread_id="th-1",
         )

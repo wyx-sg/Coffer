@@ -45,8 +45,6 @@ export interface ChannelEditValues {
    *  stored value alone — the form sends it only where the platform honours it
    *  (see honoursRequireMention). */
   require_mention?: boolean;
-  /** Drop a group message that also @mentions another user. */
-  ignore_other_mentions?: boolean;
   /** In a group an owner registered, answer anyone else's questions, read-only. */
   others_can_ask?: boolean;
   /** Quiet window (seconds) after a text message before the burst runs as one
@@ -54,9 +52,6 @@ export interface ChannelEditValues {
   wait_after_text_seconds?: number;
   /** Quiet window (seconds) after a forwarded chat record or text-less files. */
   wait_after_forward_seconds?: number;
-  /** List each step under the live status line while a turn runs. Undefined
-   *  leaves the stored value alone. */
-  show_steps?: boolean;
   /** Open a new conversation when the chat was idle this many hours; 0 never
    *  does. Undefined leaves the stored value alone. */
   new_conversation_after_idle_hours?: number;
@@ -120,13 +115,6 @@ export function honoursRequireMention(channelType: unknown): boolean {
   return channelType === "telegram";
 }
 
-/** Whether a channel type shows a turn's progress on a live status line, so its
- *  step-lines setting means anything. SeaTalk shows only the typing indicator
- *  while a turn runs (spec channels/seatalk "Show only typing while a turn runs"). */
-export function showsStepLines(channelType: unknown): boolean {
-  return channelType === "telegram";
-}
-
 export interface ChannelEditInput {
   /** The channel's identity — what the PATCH is addressed to. */
   uid: string;
@@ -172,11 +160,9 @@ export function planChannelEdit(input: ChannelEditInput): ChannelEditPlan {
   if (values.require_mention !== undefined && honoursRequireMention(config.channel_type)) {
     setIfChanged(nextConfig, config, "require_mention", values.require_mention);
   }
-  setIfChanged(nextConfig, config, "ignore_other_mentions", values.ignore_other_mentions);
   setIfChanged(nextConfig, config, "others_can_ask", values.others_can_ask);
   setIfChanged(nextConfig, config, "wait_after_text_seconds", values.wait_after_text_seconds);
   setIfChanged(nextConfig, config, "wait_after_forward_seconds", values.wait_after_forward_seconds);
-  setIfChanged(nextConfig, config, "show_steps", values.show_steps);
   setIfChanged(
     nextConfig,
     config,

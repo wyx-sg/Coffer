@@ -68,10 +68,6 @@ EXEMPT: dict[tuple[str, str], tuple[Category, str]] = {
         "an agent's native memory is its own plain file",
     ),
     # Acts whose whole meaning is the window a person sits at.
-    ("GET", "/channels/{uid}/people/{sender_id}/avatar"): (
-        "window",
-        "a paired person's picture in the owner list",
-    ),
     ("GET", "/fs/browse"): ("window", "the folder picker's own listing"),
     ("GET", "/fs/editors"): ("window", "which editors the Open in… menu offers"),
     ("GET", "/fs/terminals"): ("window", "which terminals the Open in… menu offers"),

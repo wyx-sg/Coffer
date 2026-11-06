@@ -16,11 +16,9 @@ ChannelConfig (discriminator: channel_type)
 │   ├── default_agent: str | None = None    # uid of the agent resource this channel drives
 │   ├── default_agent_config: dict | None
 │   ├── require_mention: bool = True        # group gating
-│   ├── ignore_other_mentions: bool = False # group gating
 │   ├── others_can_ask: bool = True         # others in a registered group may ask, read-only
 │   ├── wait_after_text_seconds: float = 1.5     # burst quiet window after text (0–60)
 │   ├── wait_after_forward_seconds: float = 5.0  # …after a forward or bare files (0–60)
-│   ├── show_steps: bool = True             # step lines under the live status line
 │   ├── new_conversation_after_idle_hours: float = 24.0  # idle hours before a direct chat's (or a thread-less group's) next message opens a new conversation; threads never roll over (0–8760; 0 = never)
 │   ├── directories: list[str] = []         # absolute paths `/dir` may switch into (≤32)
 │   ├── direct_reply_style: str = ""        # owner's reply style for direct chats + their threads ("" = Coffer's default; ≤6000, trimmed)
@@ -143,17 +141,6 @@ touching any other; un-pairing the last chat removes the channel's entry, and
 deleting the channel removes it too. What a chat's live conversation is — and
 the agent a thread has stuck to — is not in it: those are `runs.db`'s thread
 tables below.
-
-## Pictures — `derived/channel-avatars/<channel>/<person>`
-
-Each paired person's picture on the platform, as the adapter fetched it (spec
-channels "Show each paired person's platform picture"). One file per channel
-and person, both named by a SHA-256 prefix (of the channel uid and of the
-`sender_id`), holding the image bytes alone: the type is read back from the
-bytes and the age from the file's modification time. It is the `derived`
-class: a copy of what the platform holds, never synced, and deleting it only
-costs a fetch. Removing a person deletes their file and deleting the channel its
-directory (`FileAvatarStore`, `infrastructure/channel/avatar_store.py`).
 
 ## `runs.db` — the thread tables
 

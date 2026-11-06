@@ -450,7 +450,6 @@ Plain files are read and edited with your own tools, and a few acts only make se
 | --- | --- |
 | `GET /agents/{uid}/config-files/{key}/content` | plain file: an agent's config file is its own plain file |
 | `GET /agents/{uid}/native-memory/files/content` | plain file: an agent's native memory is its own plain file |
-| `GET /channels/{uid}/people/{sender_id}/avatar` | the window: a paired person's picture in the owner list |
 | `GET /fs/browse` | the window: the folder picker's own listing |
 | `GET /fs/editors` | the window: which editors the Open in… menu offers |
 | `POST /fs/open` | the window: opens a file in the person's editor |

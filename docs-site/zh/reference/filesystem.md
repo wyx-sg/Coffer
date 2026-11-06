@@ -125,7 +125,6 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 
 | 路径 | 用途 | 由谁重建 |
 | --- | --- | --- |
-| `derived/channel-avatars/` | 与渠道配对的人的头像，每人一个文件，从平台获取。 | 下一次获取 |
 | `derived/derived.db` | MCP 服务器健康状态、哪些技能副本投递到了哪些智能体、每项上游能力首次和最近一次被看到的时间。表结构版本不一致时会重建。 | 健康检查、技能投递、网关 |
 | `derived/genai-prices.json` | 从 genai-prices 获取的模型价格表，以及获取时间。 | 每天的价格刷新 |
 | `derived/reported-prices.json` | 列出模型时，提供商的 API 报告的价格。 | 下一次列出模型 |

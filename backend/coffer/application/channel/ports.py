@@ -248,14 +248,11 @@ class ChannelBinding:
     # Group inbound gating (see "Configure when the bot answers in a group"), sourced
     # from the channel config.
     require_mention: bool = True
-    ignore_other_mentions: bool = False
     # "Let others in a group ask the bot", from the channel config.
     others_can_ask: bool = True
     # Quiet windows of "Take a burst of messages as one turn", from the channel config.
     wait_after_text_seconds: float = 1.5
     wait_after_forward_seconds: float = 5.0
-    # "Show a turn's working state as one status line": list the step lines.
-    show_steps: bool = True
     # "Open a new conversation after an idle period": a direct chat (or a group
     # that is one conversation) idle longer than this many hours opens a new
     # conversation on its next message; 0 never does. Threads never roll over.

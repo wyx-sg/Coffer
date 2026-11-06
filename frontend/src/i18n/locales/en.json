@@ -4158,8 +4158,6 @@
       "groups": {
         "requireMention": "Answer only when @mentioned",
         "requireMentionHint": "In a group, stays quiet until someone @mentions it or replies to it. Off, it acts on every group message you send, which needs the bot's privacy mode off in BotFather.",
-        "ignoreOtherMentions": "Ignore messages that @mention someone else",
-        "ignoreOtherMentionsHint": "Even when they mention the bot too.",
         "othersCanAsk": "Let others in the group ask",
         "othersCanAskHint": "Anyone else who @mentions the bot in a group you've used it in gets answers and read-only checks. Changes and tasks stay yours."
       },
@@ -4170,10 +4168,6 @@
         "waitAfterForward": "Wait after a forward or files",
         "waitAfterForwardHint": "They're rarely the whole question, so wait longer.",
         "invalid": "Enter a number of seconds from {{min}} to {{max}}."
-      },
-      "replies": {
-        "showSteps": "Show step lines",
-        "showStepsHint": "While working, show the last 3 steps under the status line."
       },
       "idle": {
         "label": "Start a new conversation after",

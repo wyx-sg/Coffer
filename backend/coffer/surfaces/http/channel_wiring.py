@@ -20,7 +20,6 @@ from fastapi import FastAPI
 
 from coffer.application.audit_service import AuditService
 from coffer.application.builtin_tools import BuiltinToolRegistry
-from coffer.application.channel.avatars import PersonAvatars
 from coffer.application.channel.inbound import InboundProcessor
 from coffer.application.channel.kind import make_channel_kind
 from coffer.application.channel.notify_tool import OwnerNotifier, channel_notify_tool
@@ -38,7 +37,6 @@ from coffer.domain.channel.config import parse_channel_config
 from coffer.domain.channel.envelopes import ChannelCapabilities
 from coffer.domain.resource import Resource
 from coffer.domain.secrets import SecretDestination, channel_destination
-from coffer.infrastructure.channel.avatar_store import FileAvatarStore
 from coffer.infrastructure.channel.persistence import (
     ChannelOutboxRepo,
     ChannelPeerRepo,
@@ -57,7 +55,6 @@ from coffer.surfaces.http.channel_credential_wiring import build_credential_chec
 from coffer.surfaces.http.channel_prompt_preview import set_channel_prompt_reader
 from coffer.surfaces.http.channel_routes import (
     get_channel_service,
-    set_channel_avatars,
     set_channel_service,
     set_credential_check,
 )
@@ -193,15 +190,8 @@ def wire_channel_kind(
     events.late_sinks.append(runtime.on_changed)
     on_approval_applied(runtime.poke)
 
-    # Each paired person's picture, asked of the running adapter when the
-    # Channels page wants it (spec channels "Show each paired person's platform
-    # picture").
-    avatars = PersonAvatars(store=FileAvatarStore(), peers=peers, adapter_of=runtime.adapter)
-    set_channel_avatars(avatars)
-
     async def on_delete(channel: Resource) -> None:
         await runtime.evict(channel)
-        avatars.forget(channel.uid)
         peers.forget(channel.uid)
         # The history rows name the channel by uid and nothing cascades from
         # a file, so they go here, with the channel.

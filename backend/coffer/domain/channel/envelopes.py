@@ -63,9 +63,6 @@ class InboundMessage:
     # events carry only ``group_id``) — the origin block then names the chat by id
     # alone ("Open every turn with its message origin")
     addressed: bool = True  # DMs always; group only when @mentioned / reply-to-bot
-    # group message @-mentions a non-bot user ("Configure when the bot answers
-    # in a group")
-    mentions_others: bool = False
     thread_id: str = ""  # non-empty when the message is inside a thread/topic
     # The message this one quotes/replies-to; "" when it quotes nothing. SeaTalk
     # delivers it on BOTH the DM (``message_from_bot_subscriber``) and the

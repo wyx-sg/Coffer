@@ -1,6 +1,6 @@
 // frontend/src/components/channel/ChannelPeopleList.tsx
-// The people a channel answers, one row each: their picture on the platform
-// (their initials while there is none), who they are there, when they were
+// The people a channel answers, one row each: their initials, who they are
+// there, when they were
 // paired, and Remove. Past a few owners a search box filters them by
 // name, and the list scrolls inside a fixed-height window. Add owner opens the
 // pairing dialog (the caller's); the list prints nothing of the flow itself. Every person is an owner with the
@@ -13,7 +13,6 @@ import { Plus } from "lucide-react";
 import { SearchInput } from "@/components/SearchInput";
 import { Button } from "@/components/ui/button";
 import type { ChannelPerson } from "@/lib/api/channels";
-import { useChannelPersonAvatar } from "@/lib/hooks/useChannels";
 
 /** More owners than this and the list gets a search box. */
 const SEARCH_FROM = 5;
@@ -34,33 +33,19 @@ function initials(name: string): string {
   return letters.toUpperCase();
 }
 
-/** The person's platform picture, or their initials while there is none. */
-function PersonAvatar({ channelUid, person }: { channelUid: string; person: ChannelPerson }) {
-  const { data: src } = useChannelPersonAvatar(channelUid, person.sender_id);
-  const [broken, setBroken] = useState(false);
-  const box = "inline-flex size-[26px] shrink-0 items-center justify-center rounded-md";
-  if (src && !broken) {
-    return (
-      <img
-        src={src}
-        alt=""
-        aria-hidden
-        className={`${box} object-cover`}
-        data-testid="channel-owner-avatar"
-        onError={() => setBroken(true)}
-      />
-    );
-  }
+/** The person's initials, in place of a picture. */
+function PersonInitials({ person }: { person: ChannelPerson }) {
   return (
-    <span aria-hidden className={`${box} bg-chip text-2xs font-semibold text-text-muted`}>
+    <span
+      aria-hidden
+      className="inline-flex size-[26px] shrink-0 items-center justify-center rounded-md bg-chip text-2xs font-semibold text-text-muted"
+    >
       {initials(person.display_name)}
     </span>
   );
 }
 
 interface Props {
-  /** The channel's uid, which each person's picture is asked under. */
-  channelUid: string;
   people: readonly ChannelPerson[];
   /** Whether Add owner is on offer (not while the channel cannot pair yet). */
   canAdd: boolean;
@@ -68,7 +53,7 @@ interface Props {
   onRemove: (person: ChannelPerson) => void;
 }
 
-export function ChannelPeopleList({ channelUid, people, canAdd, onAdd, onRemove }: Props) {
+export function ChannelPeopleList({ people, canAdd, onAdd, onRemove }: Props) {
   const { t, i18n } = useTranslation();
   const [query, setQuery] = useState("");
   // With only a few owners the list is its own answer; a search box earns its
@@ -105,7 +90,7 @@ export function ChannelPeopleList({ channelUid, people, canAdd, onAdd, onRemove 
               className="flex min-h-[46px] items-center gap-2.5 border-t border-border-subtle px-3 first:border-t-0"
               data-testid="channel-owner"
             >
-              <PersonAvatar channelUid={channelUid} person={person} />
+              <PersonInitials person={person} />
               <span className="flex min-w-0 flex-col">
                 <span className="truncate text-sm font-label">{person.display_name}</span>
                 <span className="text-xs text-text-muted">

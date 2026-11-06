@@ -72,9 +72,6 @@ class TurnStatus:
     """The running tally one turn's status block is drawn from."""
 
     started: float
-    #: Per channel ("show steps"): off keeps the header and narration but hides
-    #: the step lines — e.g. in a busy group.
-    show_steps: bool = True
     #: "group" names only the tool on each step line — everyone in the group
     #: reads it, and a tool's input can carry a command, a query or a path.
     chat_kind: str = "direct"
@@ -120,7 +117,7 @@ class TurnStatus:
         out = [self.header(now)]
         if self.narration:
             out.append(f"💬 {self.narration}")
-        if self.show_steps and self._lines:
+        if self._lines:
             lines = list(self._lines.values())
             hidden = len(lines) - _VISIBLE_STEPS
             if hidden > 0:

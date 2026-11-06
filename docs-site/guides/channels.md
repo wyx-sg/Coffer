@@ -80,7 +80,6 @@ Send the bot a message. The first message opens a conversation on the channel's 
 
   A step line in a direct chat adds the agent's own one-line description or the file name, never the raw command. In a group it names only the tool (`⏳ Bash`), because everyone there reads it.
 
-  **Show step lines**, on the channel's **Settings** tab under **Replies and conversations**, turns the step list off and keeps only the status header and the 💬 line, which is useful in a busy group. Only Telegram channels have it, because a SeaTalk chat shows no steps.
 - The reply is only what the agent wrote after its last tool call, on every platform; what it said between steps is not sent. Text the agent itself marks as passing commentary (Codex does) is left out too, wherever it stands. A turn that ends on a tool call replies with the last thing the agent wrote. A turn whose agent wrote no text sends no reply at all, not even a placeholder. In a chat the agent does not start background tasks; a sub-agent it runs in the foreground is waited for. If one still ends up in the background, the turn stays open until that sub-agent finishes and the agent writes its answer, up to four hours.
 - A turn that fails or is stopped ends with a one-line summary: the outcome, tool count, duration and tokens. A turn that succeeds sends no summary; the reply is the signal.
 
@@ -255,9 +254,8 @@ Two channel settings tune when the bot answers in a group. They change when the 
 | Setting | Default | Effect |
 | --- | --- | --- |
 | `require_mention` | on | The bot stays quiet in a group until someone @mentions it or replies to it. Turned off, it acts on every group message the owner sends. Telegram only: SeaTalk delivers a group message to a bot only when it @mentions the bot. |
-| `ignore_other_mentions` | off | A group message that also @mentions another person is left alone, even when it mentions the bot too. |
 
-**Web UI:** on the channel's **Settings** tab, use the switches under **Receiving messages**: **Answer only when @mentioned** (Telegram channels only) and **Ignore messages that @mention someone else**. They save as you flip them.
+**Web UI:** on the channel's **Settings** tab, use the switch under **Receiving messages**: **Answer only when @mentioned** (Telegram channels only). It saves as you flip it. A message that @mentions the bot is answered even when it also @mentions someone else.
 
 ### Others in the group {#others-in-the-group}
 
@@ -329,7 +327,7 @@ The header names the channel, its status (`SeaTalk app 8231 · WebSocket`), and 
 
 **Overview** is one column, with these sections stacked:
 
-- **Who can use it** — a bordered list of the paired owners, each with their picture on Telegram or SeaTalk (their initials when there is none), when they paired and **Remove**, and **Add owner** below it; an unpaired channel says nobody is paired yet, and the bot ignores every message until you pair.
+- **Who can use it** — a bordered list of the paired owners, each with their initials, when they paired and **Remove**, and **Add owner** below it; an unpaired channel says nobody is paired yet, and the bot ignores every message until you pair.
 - **Agents** — **Default agent** and **Default model** (each saved as soon as you pick it) and **Agents it may drive**, the channel's scope (see [Default agent and scope](#default-agent-and-scope)).
 - **Conversations from this channel →** — one link to the Conversations page filtered to this channel. The commands the bot answers are not listed here; see [Channel commands](/reference/channel-commands).
 

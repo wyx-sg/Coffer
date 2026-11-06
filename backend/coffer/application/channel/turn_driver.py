@@ -340,7 +340,6 @@ class TurnDriver:
             mention_user_id=item.mention_user_id,
             mention_user_email=item.mention_user_email,
             mention_user_name=item.mention_user_name,
-            show_steps=binding.show_steps,
             tracker=tracker,
             rewrite=None if item.rewrite else rewrite,
             offer_full_report=item.rewrite,
