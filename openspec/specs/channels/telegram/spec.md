@@ -390,7 +390,7 @@ reply's first is sent silently and opens with `(2/3)`.
 Where the Bot API offers `sendRichMessageDraft` (10.1; private chats only), a
 direct chat's draft MUST be a rich draft: the status header ([channels](../spec.md)
 "Show a turn's working state as one status line") in the draft-only
-`<tg-thinking>` block, the narration and step lines under it as a list, and the
+`<tg-thinking>` block, the narration under it, and the
 answer written so far as rich markdown. A server that does not know the method
 latches it off (see "Read the bot's identity from getMe and latch off
 unsupported surfaces") and the same snapshot goes out as the plain

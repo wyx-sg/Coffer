@@ -267,19 +267,11 @@ been delivered.
 - **THEN** telegram receives HTML (falling back to plain text if rejected)
   and the other channel receives its declared format
 
-#### Scenario: channel progress lines describe each tool call from its input
+#### Scenario: the status block names no tool and nothing from its input
 - **GIVEN** a paired channel on an adapter that can edit messages
 - **WHEN** the agent invokes a tool during a turn
-- **THEN** the call's step line in the status block names the tool and a short
-  descriptor drawn from its input (e.g. the Bash description, the file basename
-  for Read) in a direct chat; a raw command, or an argument of a tool it has no
-  rule for, is never used as the descriptor
-
-#### Scenario: a group's progress lines name only the tool
-- **GIVEN** a paired group chat on an adapter that can edit messages
-- **WHEN** the agent invokes a tool during a turn
-- **THEN** the call's step line in the status block names the tool and nothing
-  from its input, because everyone in the group reads it
+- **THEN** the status block counts the step and shows no line for it: neither
+  the tool's name nor anything from its input appears
 
 ### Requirement: Answer the conversation commands from any paired chat
 Ten words are Coffer's commands in a paired chat, and nothing else: `/new`,
@@ -2626,11 +2618,9 @@ While a turn runs on a transport with a live surface (see "Show a turn's
 progress on one live surface"), that surface MUST show one status block the
 reader can take in at a glance: a header saying that the turn is working, for how long,
 and how many steps it has taken (`⏳ Working · 2m 14s · 7 steps`, with the
-failed count when there is one); the agent's latest narration as a `💬` line;
-and the newest three step lines, older ones collapsed into `+N earlier`. A step
-line names the tool, plus a short descriptor from its input in a direct chat
-only; a group's step lines carry nothing from the input. The answer written so
-far follows under a rule. The header MUST keep ticking while nothing else
+failed count when there is one), and the agent's latest narration as a `💬`
+line. No line names a tool or carries anything from its input. The answer
+written so far follows under a rule. The header MUST keep ticking while nothing else
 happens — a long silent tool still shows time passing — on the cadence the live
 surfaces already keep alive at, so the tick costs no extra traffic.
 
@@ -2651,14 +2641,14 @@ posted, and the live surface is closed.
 
 A transport that must shorten a snapshot to its own limit clips the answer's
 oldest words and keeps the status block whole; only a limit too small for the
-block drops the step lines, then the header.
+block drops the narration, then the header.
 
 #### Scenario: a long turn shows elapsed time and step count in one status line
 - **GIVEN** a turn that has run for 2 minutes 14 seconds and called eight tools,
   one of which failed
 - **WHEN** its status block is drawn
-- **THEN** the header reads `⏳ Working · 2m 14s · 8 steps (1 failed)`, followed by
-  `+5 earlier` and the newest three step lines
+- **THEN** the block reads `⏳ Working · 2m 14s · 8 steps (1 failed)` and holds no
+  step lines
 
 #### Scenario: a turn that wrote no text sends no reply
 - **GIVEN** a turn whose agent ended without writing any text

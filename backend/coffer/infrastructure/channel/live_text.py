@@ -28,8 +28,8 @@ _logger = logging.getLogger(__name__)
 
 #: How often a snapshot that is NOT a pure append may be written. A client has
 #: no "append": every update replaces the whole preview, and a snapshot that
-#: changes anything already on screen — the step lines shifting up, the clock,
-#: "+N earlier" — redraws all of it. A long tool run offers one of those per
+#: changes anything already on screen — the step count, the clock, the
+#: narration line — redraws all of it. A long tool run offers one of those per
 #: step, so without this bound the preview redraws several times a second and
 #: visibly flickers. Text that only grows at the end keeps the surface's own
 #: fast interval; everything else is folded into one write at most this often.

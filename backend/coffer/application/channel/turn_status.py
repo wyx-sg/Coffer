@@ -3,19 +3,15 @@
 Spec channels "Show a turn's working state as one status line". A long turn
 used to show either nothing or the one sentence the agent wrote before its
 first tool — frozen there for minutes. The status block replaces that with the
-three facts a person watching a phone wants: THAT it is working, for HOW LONG,
-and WHAT it is doing now::
+facts a person watching a phone wants: THAT it is working, for HOW LONG, and
+what the agent last said it was doing::
 
     ⏳ Working · 2m 14s · 7 steps
     💬 Checking the deploy logs
-    +4 earlier
-    ✅ Read · checkout.spec.ts
-    ✅ Bash · rerun the 3DS test
-    ⏳ Grep · retry in e2e/
 
-The header ticks on the live surfaces' keep-alive cadence, so a long silent tool
-still shows time passing. In a group a step line names only the tool: everyone
-there reads it, and a tool's input can carry a command, a query or a path. Text
+No line names a tool or its input: the owner chose not to see steps. The header
+ticks on the live surfaces' keep-alive cadence, so a long silent tool still
+shows time passing. Text
 the agent writes BETWEEN tool calls is narration ("Let me check the logs"): it
 becomes the ``💬`` line rather than the answer, and the final reply leaves it
 out — it carries only what the agent wrote after its last tool call
@@ -28,8 +24,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from coffer.application.channel.turn_progress import _clip, _describe_tool, _progress_line
-
 __all__ = ["LIVE_SEPARATOR", "ReplyText", "TurnStatus", "format_elapsed", "split_snapshot"]
 
 #: The line between a live snapshot's status block and the answer growing under
@@ -38,10 +32,13 @@ __all__ = ["LIVE_SEPARATOR", "ReplyText", "TurnStatus", "format_elapsed", "split
 #: plain rule.
 LIVE_SEPARATOR = "─"
 
-#: How many step lines a phone shows — the newest; older ones collapse into
-#: one "+N earlier" line.
-_VISIBLE_STEPS = 3
 _NARRATION_MAX_CHARS = 80
+
+
+def _clip(text: str, limit: int) -> str:
+    """Collapse whitespace and cap length so the line stays one tidy line."""
+    text = " ".join(text.split())
+    return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
 def split_snapshot(snapshot: str) -> tuple[str, str]:
@@ -72,30 +69,21 @@ class TurnStatus:
     """The running tally one turn's status block is drawn from."""
 
     started: float
-    #: "group" names only the tool on each step line — everyone in the group
-    #: reads it, and a tool's input can carry a command, a query or a path.
-    chat_kind: str = "direct"
-    _lines: dict[str, str] = field(default_factory=dict)  # tool_use_id -> line
-    _desc: dict[str, str] = field(default_factory=dict)  # tool_use_id -> descriptor
+    _calls: set[str] = field(default_factory=set)  # tool_use_ids seen
     failed: int = 0
     narration: str = ""
 
     @property
     def steps(self) -> int:
-        return len(self._lines)
+        return len(self._calls)
 
-    def call(self, tool_use_id: str, tool_name: str, tool_input: object) -> None:
-        descriptor = _describe_tool(tool_name, tool_input, chat_kind=self.chat_kind)
-        self._desc[tool_use_id] = descriptor
-        self._lines[tool_use_id] = _progress_line("⏳", tool_name, descriptor)
+    def call(self, tool_use_id: str) -> None:
+        self._calls.add(tool_use_id)
 
-    def result(self, tool_use_id: str, tool_name: str, *, error: bool) -> None:
-        # Keep the call's descriptor so the finished line still says what it did
-        # ('✅ Read · wedding.json'); the result event carries no input.
+    def result(self, tool_use_id: str, *, error: bool) -> None:
+        self._calls.add(tool_use_id)
         if error:
             self.failed += 1
-        mark = "❌" if error else "✅"
-        self._lines[tool_use_id] = _progress_line(mark, tool_name, self._desc.get(tool_use_id, ""))
 
     def narrate(self, text: str) -> None:
         """Show ``text`` (the agent's latest words before a tool) as the 💬 line."""
@@ -113,16 +101,10 @@ class TurnStatus:
         return " · ".join(facts)
 
     def block(self, now: float) -> str:
-        """The whole status block: header, narration, and the newest steps."""
+        """The whole status block: the header, then the narration if any."""
         out = [self.header(now)]
         if self.narration:
             out.append(f"💬 {self.narration}")
-        if self._lines:
-            lines = list(self._lines.values())
-            hidden = len(lines) - _VISIBLE_STEPS
-            if hidden > 0:
-                out.append(f"+{hidden} earlier")
-            out.extend(lines[-_VISIBLE_STEPS:])
         return "\n".join(out)
 
 

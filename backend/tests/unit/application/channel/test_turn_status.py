@@ -25,18 +25,14 @@ def test_elapsed_time_is_short_enough_for_a_header(seconds: float, shown: str) -
     spec="channels",
     scenario="a long turn shows elapsed time and step count in one status line",
 )
-def test_the_block_shows_time_steps_and_only_the_newest_three() -> None:
+def test_the_block_shows_time_and_step_count_and_no_step_lines() -> None:
     status = TurnStatus(started=100.0)
     for i in range(7):
-        status.call(f"t{i}", "Bash", {"description": f"step {i}"})
-        status.result(f"t{i}", "Bash", error=i == 2)
-    status.call("t7", "Grep", {"pattern": "retry"})
+        status.call(f"t{i}")
+        status.result(f"t{i}", error=i == 2)
+    status.call("t7")
 
-    block = status.block(234.0).splitlines()
-
-    assert block[0] == "⏳ Working · 2m 14s · 8 steps (1 failed)"
-    assert block[1] == "+5 earlier"
-    assert block[2:] == ["✅ Bash · step 5", "✅ Bash · step 6", "⏳ Grep · retry"]
+    assert status.block(234.0) == "⏳ Working · 2m 14s · 8 steps (1 failed)"
 
 
 def test_a_turn_with_no_steps_yet_shows_just_the_clock() -> None:
@@ -84,14 +80,6 @@ def test_a_turn_that_ends_on_a_tool_call_answers_with_its_last_text() -> None:
 def test_a_snapshot_splits_into_its_block_and_its_answer() -> None:
     assert split_snapshot("⏳ Working · 3s\n─\nthe answer") == ("⏳ Working · 3s", "the answer")
     assert split_snapshot("⏳ Working · 3s") == ("⏳ Working · 3s", "")
-
-
-def test_a_group_step_line_names_only_the_tool() -> None:
-    status = TurnStatus(started=0.0, chat_kind="group")
-    status.call("t1", "Read", {"file_path": "/a/b/secret-plan.md"})
-    status.result("t1", "Read", error=False)
-
-    assert status.block(0.0).splitlines()[-1] == "✅ Read"
 
 
 def test_narration_the_agent_marked_is_left_out_of_the_answer() -> None:

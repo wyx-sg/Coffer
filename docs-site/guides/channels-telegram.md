@@ -57,7 +57,7 @@ The code is single-use, expires after an hour, and is invalidated after 10 wrong
 Send the bot a message, for example `list the files in my home directory`. You should see:
 
 1. a 👀 reaction on your message as soon as Coffer receives it, which becomes 👨‍💻 when the turn starts;
-2. for a longer turn, the status line (`⏳ Working · 12s · 2 steps`, then the newest steps) and the reply as it is written;
+2. for a longer turn, the status line (`⏳ Working · 12s · 2 steps`, then what the agent last said it was doing) and the reply as it is written;
 3. the final reply, formatted, with the status removed;
 4. a 👌 reaction on your message when the turn finished — 😢 if it failed, 🤷 if it was stopped. Telegram lets a bot react with a fixed list of emoji only, and these are on it.
 

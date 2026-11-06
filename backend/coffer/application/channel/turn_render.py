@@ -148,7 +148,7 @@ class TurnRenderer:
 
     async def _consume(self, queue: asyncio.Queue[Any]) -> TurnOutcome:
         started = self._clock = self.now()
-        self._status = TurnStatus(started=started, chat_kind=self.chat_kind)
+        self._status = TurnStatus(started=started)
         self._reply = ReplyText()
         self._surface = TurnSurface(self.adapter, self.chat_id, self.thread_id, self.chat_kind)
         ticker = spawn(self._tick(), name=f"channel-turn-ticker:{self.chat_id}")
@@ -174,11 +174,11 @@ class TurnRenderer:
                 elif isinstance(event, ToolCall):
                     tool_ids.add(event.tool_use_id)
                     self._close_segment()
-                    self._status.call(event.tool_use_id, event.tool_name, event.tool_input)
+                    self._status.call(event.tool_use_id)
                     await self._refresh()
                 elif isinstance(event, ToolResult):
                     self._close_segment()
-                    self._status.result(event.tool_use_id, event.tool_name, error=bool(event.error))
+                    self._status.result(event.tool_use_id, error=bool(event.error))
                     await self._refresh()
                 elif isinstance(event, TurnDone):
                     stop_reason = event.stop_reason

@@ -1,6 +1,6 @@
 """Pure text helpers for the turn renderer.
 
-Split out of ``turn_render`` (at its size budget) the way ``turn_progress``
+Split out of ``turn_render`` (at its size budget) the way ``turn_status``
 already was: no I/O, no platform schema — just the two shaping decisions the
 renderer makes about the text it is about to hand a transport.
 """

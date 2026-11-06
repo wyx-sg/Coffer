@@ -571,7 +571,7 @@ the first opening with its place, `(2/3)`; in a group, withdrawable cards (see
 "Send group replies as withdrawable cards").
 
 SeaTalk can stream a message, but its client re-types the whole message whenever
-a snapshot changes anything already on screen — a step line shifting, the clock
+a snapshot changes anything already on screen — the step count, the clock
 — so a reply that carries the turn's progress flickers on every step. And a
 message created when the turn began notifies nobody when it is finished, so a
 long turn needed a second message to say it had ended. Typing says the turn is

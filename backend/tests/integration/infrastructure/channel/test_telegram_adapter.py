@@ -1351,13 +1351,13 @@ async def test_a_rich_draft_puts_the_status_header_in_the_thinking_block(
     surface = await adapter.open_live_text("555")
     try:
         await surface.update(
-            "⏳ Working · 2m 14s · 2 steps\n✅ Read · a.ts\n─\nThe **answer** so far"
+            "⏳ Working · 2m 14s · 2 steps\n💬 Reading a.ts\n─\nThe **answer** so far"
         )
     finally:
         await adapter.stop()
     [draft] = fake_telegram.calls_for("sendRichMessageDraft")
     assert draft["rich_message"]["markdown"] == (
-        "<tg-thinking>Working · 2m 14s · 2 steps</tg-thinking>\n\n- ✅ Read · a.ts\n\n"
+        "<tg-thinking>Working · 2m 14s · 2 steps</tg-thinking>\n\n- 💬 Reading a.ts\n\n"
         "The **answer** so far"
     )
     assert draft["can_stop"] is True

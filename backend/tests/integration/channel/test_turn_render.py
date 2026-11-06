@@ -103,9 +103,8 @@ async def test_supports_edit_creates_then_deletes_a_progress_message() -> None:
     await _render(adapter, _TOOL_TURN)
 
     # The first send is the progress message created on ToolCall: the status
-    # header, then a step line naming the tool (a tool with no descriptor rule
-    # shows none of its arguments)…
-    assert adapter.sent[0] == ("owner", "⏳ Working · 0s · 1 step\n⏳ search")
+    # header alone, with no step line…
+    assert adapter.sent[0] == ("owner", "⏳ Working · 0s · 1 step")
     progress_id = "m1"  # ids are issued in send order
     # …which is deleted when the turn finishes, before the final reply.
     assert adapter.deleted == [("owner", progress_id)]
@@ -180,48 +179,9 @@ async def test_error_turn_still_delivers_what_was_streamed_before_it() -> None:
 
 @pytest.mark.acceptance(
     spec="channels",
-    scenario="channel progress lines describe each tool call from its input",
+    scenario="the status block names no tool and nothing from its input",
 )
-async def test_progress_line_describes_a_bash_call_from_its_input() -> None:
-    adapter = FakeChannelAdapter(supports_edit=True)
-    events = [
-        ToolCall(
-            tool_use_id="t1",
-            tool_name="Bash",
-            tool_input={"command": "ls ~/Desktop", "description": "list the desktop"},
-        ),
-        TextDelta(text="done"),
-        TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
-    ]
-
-    await _render(adapter, events)
-
-    # The progress message created on the ToolCall names the tool AND what it does.
-    assert adapter.sent[0][1].splitlines()[-1] == "⏳ Bash · list the desktop"
-
-
-async def test_progress_line_uses_the_file_basename_for_a_read() -> None:
-    adapter = FakeChannelAdapter(supports_edit=True)
-    events = [
-        ToolCall(
-            tool_use_id="t1",
-            tool_name="Read",
-            tool_input={"file_path": "/Users/x/wedding-invitation/data/wedding.json"},
-        ),
-        TextDelta(text="done"),
-        TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
-    ]
-
-    await _render(adapter, events)
-
-    assert adapter.sent[0][1].splitlines()[-1] == "⏳ Read · wedding.json"
-
-
-@pytest.mark.acceptance(
-    spec="channels",
-    scenario="a group's progress lines name only the tool",
-)
-async def test_group_progress_line_names_only_the_tool() -> None:
+async def test_the_status_block_names_no_tool_and_nothing_from_its_input() -> None:
     adapter = FakeChannelAdapter(supports_edit=True)
     events = [
         ToolCall(
@@ -233,25 +193,12 @@ async def test_group_progress_line_names_only_the_tool() -> None:
         TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
     ]
 
-    await _render(adapter, events, chat_kind="group")
-
-    assert adapter.sent[0] == ("owner", "⏳ Working · 0s · 1 step\n⏳ Bash")
-
-
-async def test_direct_progress_line_never_shows_a_raw_command_or_guessed_argument() -> None:
-    adapter = FakeChannelAdapter(supports_edit=True)
-    events = [
-        ToolCall(tool_use_id="t1", tool_name="Bash", tool_input={"command": "rm -rf build"}),
-        ToolCall(tool_use_id="t2", tool_name="mysql_query", tool_input={"sql": "select 1"}),
-        TextDelta(text="done"),
-        TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
-    ]
-
     await _render(adapter, events)
 
+    assert adapter.sent[0] == ("owner", "⏳ Working · 0s · 1 step")
     shown = " ".join(text for _, text in adapter.sent)
     shown += " ".join(text for _chat, _mid, text in adapter.edits)
-    assert "rm -rf" not in shown and "select 1" not in shown
+    assert "Bash" not in shown and "desktop" not in shown and "id_rsa" not in shown
 
 
 @pytest.mark.acceptance(
@@ -497,9 +444,9 @@ async def test_reply_text_streams_into_the_status_message() -> None:
     # A ticking clock (step > the 1.5s throttle) makes each render pass the throttle.
     await _render(adapter, events, now=_ticking())
 
-    # Before any text, the status message shows the tool-progress line…
+    # Before any text, the status message shows the status header alone…
     assert _is_status(adapter.sent[0][1])
-    assert adapter.sent[0][1].endswith("⏳ search")
+    assert adapter.sent[0][1].endswith("1 step")
     # …then the SAME single message is edited with the growing reply text (plain,
     # not HTML) under the status block, so the user watches the answer materialize.
     answers = [_answer(text) for _chat, mid, text in adapter.edits if mid == "m1"]

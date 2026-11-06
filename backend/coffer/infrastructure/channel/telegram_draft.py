@@ -70,8 +70,8 @@ def _entity_escape(text: str) -> str:
 def draft_markdown(snapshot: str) -> str:
     """A live snapshot as a rich draft (spec channels/telegram "Show the working
     status in a direct chat's thinking block"): the status header goes in the
-    draft-only ``<tg-thinking>`` block, the narration and step lines follow as a
-    list, and the answer written so far is rich markdown under them."""
+    draft-only ``<tg-thinking>`` block, the narration follows as a
+    list item, and the answer written so far is rich markdown under them."""
     block, answer = split_snapshot(snapshot)
     header, *rest = block.split("\n")
     parts = [f"<tg-thinking>{_entity_escape(header.removeprefix('⏳ ').strip())}</tg-thinking>"]

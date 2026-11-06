@@ -58,7 +58,7 @@ async def test_narration_moves_up_and_the_answer_grows_under_the_status() -> Non
     )
 
     [live] = adapter.live_handles
-    after_tool = [s for s in live.snapshots if "✅ Bash · tail log" in s]
+    after_tool = [s for s in live.snapshots if "PR #441" in s]
     block, answer = split_snapshot(after_tool[-1])
     assert "💬 Let me check the deploy logs." in block.splitlines()
     assert answer == "PR #441 is red on one flaky e2e."

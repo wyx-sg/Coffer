@@ -74,7 +74,7 @@ async def test_deltas_within_one_text_block_still_join_without_a_break() -> None
 
 async def test_tool_progress_keeps_updating_after_the_agent_has_written_text() -> None:
     # The long-task case: one sentence of narration, then a run of tools. The
-    # live surface must keep showing each tool, not freeze on the sentence.
+    # live surface must keep counting each tool, not freeze on the sentence.
     adapter = FakeChannelAdapter(supports_edit=True)
     box = [0.0]
 
@@ -100,7 +100,7 @@ async def test_tool_progress_keeps_updating_after_the_agent_has_written_text() -
     await renderer.consume(queue)
 
     snapshots = adapter.live_handles[0].snapshots
-    assert any("Grep · 3DS" in s for s in snapshots)
+    assert any("2 steps" in s for s in snapshots)
 
 
 @pytest.mark.acceptance(spec="channels", scenario="a turn that wrote no text sends no reply")

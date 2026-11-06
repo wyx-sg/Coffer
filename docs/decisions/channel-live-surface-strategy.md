@@ -28,7 +28,7 @@ The platforms offer very different ways to show a turn while it runs:
 - **SeaTalk** cannot edit a text message at all, but can **stream** one:
   `init_stream` opens a message and each `update_stream` replaces its content
   with a full snapshot. The client re-types the whole message whenever a
-  snapshot changes anything already shown — a step line shifting, the clock —
+  snapshot changes anything already shown — the step count, the clock —
   so a message carrying a status block flickers on every step. Updates more
   than 30 s apart terminate the stream. SeaTalk has a typing cue (about 4 s
   long, in direct chats and group threads) and no reactions.
@@ -53,8 +53,8 @@ keep updating while the turn runs?* — and gets a `LiveText` handle whose
 `update(text)` always takes the full accumulated snapshot and whose
 `close(text)` returns whatever still has to be sent the ordinary way
 (`application/channel/ports.py`). The surface shows the status block — the
-narration, the step lines ("⏳ Bash · list the desktop") — with the answer
-growing under it, and is always **scaffolding**: the finished reply goes out as
+working header with its clock and step count, and the agent's latest narration;
+no line names a tool or its input — with the answer growing under it, and is always **scaffolding**: the finished reply goes out as
 a new message, which is also what notifies. The renderer
 (`application/channel/turn_render.py`) never knows which mechanism is
 underneath, and adds **no throttle of its own**: the surface's transport owns
