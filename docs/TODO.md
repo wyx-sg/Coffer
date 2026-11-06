@@ -29,19 +29,6 @@ threads appending at once rarely conflict:
 
 ## Channels and conversations
 
-### Continue a terminal session from the phone
-
-- **Added:** 2026-11-06, from the thread "梳理对话与消息渠道的缺口和缺陷"
-- **What:** pick up a session started in a terminal from a chat channel, the
-  reverse of opening a channel's conversation in the terminal.
-- **Why later:** reaching an agent on this machine from elsewhere is what a
-  channel is for, but `/resume` only lists conversations the chat itself opened.
-  Nobody needs the desk-to-phone direction yet.
-- **Sketch:** a **Continue in <channel>** item in a Conversations row's ⋯ menu
-  attaches the session to a new `🧵` parallel thread in the owner's direct chat,
-  reusing the session takeover from #697. Comparable: Claude Code Remote Control,
-  Happy.
-
 ### Steer a running turn
 
 - **Added:** 2026-11-06, from the thread "梳理对话与消息渠道的缺口和缺陷"
