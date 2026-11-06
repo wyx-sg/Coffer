@@ -166,9 +166,9 @@ An agent's merge is never an answer by itself. When a copy holds a merge, the fi
 
 Then **Continue round**.
 
-An encrypted secret (`secret/*.enc`) is never handed to an agent or edited by hand. It offers only the two choices, and the prompt never carries its contents.
+An encrypted secret (`secret/*.enc`) is never handed to an agent or edited by hand. In a round it never conflicts (below); one a join left different offers only the two choices, and the prompt never carries its contents.
 
-A resource with the same name but a different uid on each side (two machines created `jira` independently) is a conflict too. Secret ciphertext never conflicts: the more recently encrypted value wins.
+A resource with the same name but a different uid on each side (two machines created `jira` independently) is a conflict too. In a round, secret ciphertext never conflicts: the more recently encrypted value wins.
 
 ## When a round is held for deletions
 
@@ -179,7 +179,9 @@ A round that would lose **20 or more** files in one area, or **5 or more** that 
 
 A file that reappears at another path in the same round is a move, not a loss, and a resource file counts by its uid, so reorganising or renaming never asks.
 
-Either answer continues the round. On the web the **Status** tab says who deleted how many files, and **Review deletions** lists every one of them, folder by folder; the file list and the diff sit side by side at the same height, each scrolling on its own; the chosen file shows its whole text as the lines a delete removes. Its foot has two buttons, **Keep the files** and **Delete N files**. Each acts at once: the page already shows what a delete removes, so no second dialog repeats it, and a safety snapshot is taken before a delete. If this machine was just reinstalled or restored, keep the files: do not delete.
+Deletions Coffer can explain are not counted either: memories the memory sync removed from the hub (they follow your agents' own memories, which stay where they are) and documents a **Tidy** you started removed. Whatever removed them, an area that would be left with no files is still held. A hand deletion, a shell's `rm -rf` and deletions you make in Coffer count as before.
+
+Either answer continues the round. On the web the **Status** tab says who deleted how many files, and **Review deletions** lists every one of them, folder by folder; the file list and the diff sit side by side at the same height, each scrolling on its own; the chosen file shows its whole text as the lines a delete removes. Its foot has two buttons, **Keep the files** and **Delete N files**. Each acts at once: the page already shows what a delete removes, so no second dialog repeats it, and a safety snapshot is taken before a delete. If this machine was just reinstalled or restored, keep the files: do not delete. Once you delete, the round does not ask about the same files again, even if it next stops on something else, such as a plaintext secret, and the fix adds a commit; it asks again only if the remote moved meanwhile.
 
 ## When a round finds a plaintext secret
 

@@ -136,6 +136,8 @@ A round is **held** when, in any area and in either direction, its losses reach 
 
 It counts **losses, not deletions**. A resource file is lost only when its uid is gone from the other side, so a renamed or moved file is a move by construction. Any other file is a move when its exact bytes land elsewhere in the same area, or git's own rename detection pairs it with a file in the same area. The empty blob never pairs anything, and a pairing across areas is not a move. `machines/` and the manifest are never counted.
 
+It also reads **who** made each loss: the writer of the newest commit that deleted the file in the range the deletion comes from. A loss the memory sync or an agent's Tidy made is set aside, unless the area would be left empty; every other writer, and a deletion only a merge made, still counts. A **Delete** answer is remembered by file while the remote tip is unchanged, so this machine's own later commits (a plaintext fix) do not ask it again.
+
 A hold is answered one of two ways, and either continues the round:
 
 - **Confirm** applies the deletions (**Delete N files**).

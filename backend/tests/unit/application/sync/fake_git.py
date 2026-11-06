@@ -221,6 +221,7 @@ class FakeState:
     choices: tuple[ConflictFile, ...] = ()
     pair: tuple[str, str] | None = None
     is_joined: bool = True
+    approved: frozenset[str] = frozenset()
 
     def stop(self) -> Stop | None:
         return self.current
@@ -239,6 +240,14 @@ class FakeState:
 
     def set_confirmed(self, pair: tuple[str, str] | None) -> None:
         self.pair = pair
+        if pair is None:
+            self.approved = frozenset()
+
+    def approved_losses(self) -> frozenset[str]:
+        return self.approved
+
+    def approve_losses(self, paths: Sequence[str]) -> None:
+        self.approved = self.approved | frozenset(paths)
 
     def joined(self) -> bool:
         return self.is_joined

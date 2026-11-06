@@ -25,6 +25,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from coffer.application.audit_service import AuditService
 from coffer.application.sync import round_answers, round_join, round_resume, round_rollback
@@ -221,7 +222,19 @@ class SyncService(MoveMixin, PlaintextMixin, RemoteMixin, MachinesMixin, StatusM
 
     async def _record(self, name: str, record: RoundRecord) -> None:
         level = logging.DEBUG if record.status in _QUIET else logging.WARNING
-        _log.log(level, "sync.%s", name, extra={"status": record.status.value})
+        # Why a round needs a person, or failed, is in the log too: a record
+        # with only its status sends whoever reads the log to the Sync page.
+        extra: dict[str, Any] = {"status": record.status.value}
+        for key in ("detail", "path", "held_direction"):
+            value = getattr(record, key)
+            if value:
+                extra[key] = value
+        for key in ("held", "conflicts"):
+            if getattr(record, key):
+                extra[key] = getattr(record, key)
+        if record.plaintext:
+            extra["plaintext"] = len(record.plaintext)
+        _log.log(level, "sync.%s", name, extra=extra)
         await self._audit.record(
             AuditEventType.SYNC_ROLLED_BACK.value
             if record.status is RoundStatus.ROLLED_BACK

@@ -576,12 +576,23 @@ whose Review held deletions view lists every held file, folder by folder, shows 
 as the lines a delete removes (see "Review a file's change before acting on it"), and offers the two
 answers as two buttons — **Keep the files** and **Delete N files** — each acting at once: the view
 itself shows what a delete removes, so no second dialog repeats it.
+A **delete** answer MUST be remembered by file while the remote stays where it
+was when the person answered: a later hold of the same round that loses only
+files they agreed to delete, after this machine's own edits moved the vault
+(the round stopped next on a plaintext secret, and the fix is a new commit),
+MUST NOT be asked again. A moved remote voids the answer. Applying or pushing
+the round forgets it.
 
 #### Scenario: an oversized deletion is held for confirmation
 - **GIVEN** a machine that removed 22 documents of one folder, and the machine that receives that deletion
 - **WHEN** each runs a round
 - **THEN** the first is held outgoing and the second incoming, each listing the files by folder, with nothing applied or pushed
 - **AND** confirming pushes the deletion, while restoring keeps the files here and pushes them back
+
+#### Scenario: a confirmed hold is not asked again after a later edit
+- **GIVEN** a round held on an outgoing deletion of 25 files, which the person confirmed
+- **WHEN** this machine commits another edit before the round continues, and the next round runs against the same remote tip
+- **THEN** the round is not held again and pushes the deletion with the edit
 
 #### Scenario: the held deletions view answers with one press
 - **GIVEN** a round held on an outgoing deletion of 22 files in one folder
@@ -621,6 +632,32 @@ breaker's unit is the area, and the empty file never pairs on content.
 - **GIVEN** 25 resource files renamed, each keeping its uid
 - **WHEN** the machine that renamed them and the other machine run rounds
 - **THEN** neither round is held
+
+### Requirement: Set aside deletions Coffer can explain
+The breaker MUST read who made each loss: the writer and operation of the
+newest commit that deleted the file in the range the round's deletions come
+from (this machine's commits since the shared base outgoing, the remote's
+incoming). A loss MUST be set aside, and not counted or listed, when that
+commit is the **memory sync's** (the memory hub follows the agents' own
+memories, which stay on the machine that published the removal) or an
+**agent's Tidy** (started by the person, whose report lists what it removed).
+Every other deletion still counts: a hand edit, a shell's `rm -rf`, a person's
+deletions through Coffer, a sync merge, the daemon, a curation pass, an
+agent's other tool calls. A deletion only a merge commit made is never set
+aside. An area that would be left with no files keeps all of its losses
+counted, whoever made them. This is the guard reading the vault's history, not
+a way around it: no caller can ask for it.
+
+#### Scenario: a deletion Coffer can explain is not asked about
+- **GIVEN** a machine whose memory sync removed 25 of 30 hub memories and whose Tidy removed 25 knowledge documents
+- **WHEN** it runs a round, and then the other machine does
+- **THEN** neither round is held, and both machines no longer hold those files
+- **AND** a memory sync that removed every memory in the hub is still held
+
+#### Scenario: a hand deletion beside Coffer's own is still held
+- **GIVEN** a machine whose memory sync removed 25 memories and whose person removed 25 documents through Coffer
+- **WHEN** it runs a round
+- **THEN** the round is held on the 25 documents alone
 
 ### Requirement: Ask git about renames separately from the applied diff
 The breaker MUST ask git's rename detection as a question of its own, only to

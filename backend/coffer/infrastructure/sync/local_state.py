@@ -78,6 +78,15 @@ class JsonRoundState:
 
     def set_confirmed(self, pair: tuple[str, str] | None) -> None:
         self._set("confirmed", list(pair) if pair else None)
+        if pair is None:
+            self._set("approved_losses", None)
+
+    def approved_losses(self) -> frozenset[str]:
+        return frozenset(self._get("approved_losses") or ())
+
+    def approve_losses(self, paths: Sequence[str]) -> None:
+        merged = sorted(self.approved_losses() | set(paths))
+        self._set("approved_losses", merged or None)
 
     def joined(self) -> bool:
         return bool(self._get("joined"))

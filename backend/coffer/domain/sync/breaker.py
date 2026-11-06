@@ -24,8 +24,10 @@ from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 
+from coffer.domain.knowledge.history import OP_TIDY
 from coffer.domain.vault.content_ids import EMPTY_BLOB
 from coffer.domain.vault.layout import RESOURCES, area_of
+from coffer.domain.vault.writers import WRITER_AGENT, WRITER_MEMORY_SYNC
 
 SHARE = 0.5
 FLOOR = 20
@@ -114,4 +116,56 @@ def breached(
     return out
 
 
-__all__ = ["FLOOR", "SHARE", "SHARE_MIN", "Breach", "PathDelta", "breached", "losses", "totals"]
+def accounted_for(writer: str, operation: str) -> bool:
+    """Whether a deletion by this writer is one Coffer can explain, so the
+    breaker need not ask (ADR sync-deletion-breaker, addendum 2026-11-06):
+
+    - ``memory-sync``: the memory hub follows the agents' own memories, which
+      stay where they are on the machine that published the removal;
+    - ``agent`` running ``tidy``: the agent a person started with Tidy, whose
+      report lists what it removed.
+
+    Everything else still counts: a ``disk`` write (an editor, a shell,
+    ``rm -rf``), a person's deletions through Coffer, a ``sync`` merge, the
+    daemon, a curation pass and an agent's other tool calls.
+    """
+    if writer == WRITER_MEMORY_SYNC:
+        return True
+    return writer == WRITER_AGENT and operation == OP_TIDY
+
+
+def unaccounted(
+    lost: Iterable[str],
+    deleted_by: Mapping[str, tuple[str, str]],
+    before_totals: Mapping[str, int],
+) -> list[str]:
+    """The losses still to be counted once accounted deletions are set aside.
+
+    ``deleted_by`` maps a path to the ``(writer, operation)`` of the newest
+    commit that deleted it. An area that would be left empty keeps every one
+    of its losses: whoever wrote that, it is asked about.
+    """
+    lost = sorted(lost)
+    per_area = Counter(area_of(p) for p in lost)
+    emptied = {a for a, n in per_area.items() if n >= before_totals.get(a, 0)}
+    kept: list[str] = []
+    for p in lost:
+        who = deleted_by.get(p)
+        if who is not None and area_of(p) not in emptied and accounted_for(*who):
+            continue
+        kept.append(p)
+    return kept
+
+
+__all__ = [
+    "FLOOR",
+    "SHARE",
+    "SHARE_MIN",
+    "Breach",
+    "PathDelta",
+    "accounted_for",
+    "breached",
+    "losses",
+    "totals",
+    "unaccounted",
+]
