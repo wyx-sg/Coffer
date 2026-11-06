@@ -29,17 +29,6 @@ threads appending at once rarely conflict:
 
 ## Channels and conversations
 
-### Steer a running turn
-
-- **Added:** 2026-11-06, from the thread "梳理对话与消息渠道的缺口和缺陷"
-- **What:** add a sentence to the turn that is running instead of queueing it
-  behind the turn or stopping it.
-- **Why later:** the agents support it natively (Codex `turn/steer`, Claude Code
-  streaming input); queue plus `/stop` is enough for now.
-- **Sketch:** `/steer <text>`; falls back to the queue, saying why, where the
-  agent cannot take it. No queue-mode setting. Comparable: OpenClaw (steer by
-  default), Hermes (`/steer`, `/queue`).
-
 ### Add more chat platforms
 
 - **Added:** 2026-11-06, from the thread "梳理对话与消息渠道的缺口和缺陷"
