@@ -111,7 +111,7 @@ def default_session_factory(options: ClaudeAgentOptions) -> ClaudeSdkSession:
 
 #: The CLI's wait for background work after the last turn (see ``_build_options``).
 BACKGROUND_WAIT_CEILING_ENV = "CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS"
-BACKGROUND_WAIT_CEILING_MS = str(60 * 60 * 1000)
+BACKGROUND_WAIT_CEILING_MS = str(4 * 60 * 60 * 1000)
 _CEILING_DEFAULT = {BACKGROUND_WAIT_CEILING_ENV: BACKGROUND_WAIT_CEILING_MS}
 
 #: Sentinel pushed after the terminal event so ``_stream`` knows to stop.

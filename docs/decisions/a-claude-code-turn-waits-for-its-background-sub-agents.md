@@ -33,12 +33,12 @@ sub-agent's work returns through the parent's own messages.
 
 Track sub-agent and workflow tasks from the SDK's task messages. A result that
 arrives while one is running is held back; the turn ends on a result that arrives
-with none running. Raise the CLI's wait to one hour. If the stream ends first,
+with none running. Raise the CLI's wait to four hours. If the stream ends first,
 the held result ends the turn.
 
 - ✅ The answer the owner asked for arrives, in the same reply, as one turn.
 - ✅ Uses only what the SDK reports; no polling and no extra model turn.
-- ⚠️ A sub-agent that hangs keeps the turn open for up to an hour; `/stop` ends it.
+- ⚠️ A sub-agent that hangs keeps the turn open for up to four hours; `/stop` ends it.
 - ⚠️ Relies on the SDK's task messages; a task type it never reports is not waited for.
 
 ### Option B — Keep ending at the first result; tell the owner the work was cut off
@@ -73,8 +73,8 @@ channels: a turn whose agent wrote no text sends no reply, with no placeholder.
 
 - `claude_sdk_mapping` tracks the running sub-agent and workflow task ids and
   holds a successful result while any runs; `claude_sdk_agent` sends the held
-  result if the stream ends first and sets the CLI's wait to one hour unless the
+  result if the stream ends first and sets the CLI's wait to four hours unless the
   environment already sets it.
 - A background shell command is not waited for: it does not wake the agent and
   may never end.
-- A turn can now run past an hour of wall-clock only through the agent's own work.
+- A turn can now run past four hours of wall-clock only through the agent's own work.

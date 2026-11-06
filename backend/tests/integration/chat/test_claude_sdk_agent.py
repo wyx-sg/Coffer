@@ -857,7 +857,7 @@ async def test_the_cli_waits_an_hour_for_background_work(monkeypatch: pytest.Mon
     factory = _Factory(_basic_messages())
     await _collect(_adapter(factory), _user_turn("hi"))
     assert factory.last_options is not None
-    assert factory.last_options.env["CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS"] == "3600000"
+    assert factory.last_options.env["CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS"] == "14400000"
 
 
 @pytest.mark.asyncio
@@ -1082,7 +1082,7 @@ async def test_adapter_adds_only_the_background_wait_when_env_is_none(
     adapter = _adapter(factory)  # no env kwarg
     await _collect(adapter, _user_turn("hi"))
     assert factory.last_options is not None
-    assert factory.last_options.env == {"CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS": "3600000"}
+    assert factory.last_options.env == {"CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS": "14400000"}
 
 
 # ---------------------------------------------------------------------------

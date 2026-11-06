@@ -155,7 +155,7 @@ shell command is not waited for: it does not wake the agent and may never end. A
 result that is an error ends the turn at once. If the agent stream ends while a
 result is held (the CLI stopped the task at its ceiling), the held result ends
 the turn. The adapter MUST raise the CLI's wait for background work from its
-10-minute default to one hour, unless the environment already sets
+10-minute default to four hours, unless the environment already sets
 `CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS`.
 
 #### Scenario: a result held while a sub-agent runs ends with the follow-up turn
