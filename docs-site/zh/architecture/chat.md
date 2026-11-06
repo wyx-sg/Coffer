@@ -304,14 +304,11 @@ flowchart TD
 
 ### 定时轮次 {#scheduled-turns}
 
-[定时任务](/zh/guides/scheduled-tasks)是 Coffer 在已配对的聊天里、没有收到消息时自己发起的一轮对话（ADR [scheduled-tasks-are-turns-coffer-starts-in-a-chat](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/scheduled-tasks-are-turns-coffer-starts-in-a-chat.md)）。任务是一个只在本机的 `scheduled_task` 资源：计划（一次、每小时、每天、工作日、每周、cron、手动，都可以带一个 IANA 时区）、提示词、运行所在的聊天，以及是接着那个聊天的对话，还是用自己的智能体、模型和目录开一个新对话。聊天可以不绑：不绑聊天的任务就是一段按计划发出的提示词，和智能体自带的 automation 一样，它需要的流程属于 skill（ADR [automation-is-a-scheduled-prompt](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/automation-is-a-scheduled-prompt.md)）。
+[定时任务](/zh/guides/scheduled-tasks)是 Coffer 按时间发给智能体的一段提示词，每次运行都是一个新会话（ADR [automation-is-a-scheduled-prompt](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/automation-is-a-scheduled-prompt.md)）。任务是一个只在本机的 `scheduled_task` 资源：计划（一次、每小时、每天、每周、cron、手动，都可以带一个 IANA 时区）、提示词、智能体，以及可选的模型和目录。机制就这么多：它不绑聊天，也没有模板；一次运行要怎么用聊天、写报告或走流程，写在提示词里，或者交给提示词点名的 skill。
 
-- **调度器**是一个可唤醒循环 `scheduled-tasks`，睡到最早的到期时间；任何任务被写入都会唤醒它。在宽限期内到期的时间点交给执行器；超过宽限期的记为已跳过。一次性任务的宽限期是它等待时长的一半（15 分钟到 2 小时）；重复任务的到当天结束。任务上一次运行还没结束时到期的那一次会被跳过。
-- **执行器**像处理一条收到的消息那样找到聊天（`continue`：话题当前的对话，排在正在运行的轮次后面；`fresh`：按任务设置新开一个对话），然后交给轮次驱动一个定时轮次。渲染器像平常一样发送回复，除非回复以 `[SILENT]` 开头；失败一定会发出。连续失败三次的重复任务会被关闭，并通知聊天。
-- **不绑聊天的任务**总是新开对话，并写明智能体。执行器用那个智能体、模型和目录（默认主目录）开一个不属于任何渠道的对话，经编排器发出消息；这次运行随轮次结束记为 `done` 或 `failed`，什么都不发出。它的 `[Scheduled task]` 块会说明回复不会发到任何地方，并指向 `coffer__channel_notify`。
-- **智能体读到的**是提示词前面的一段 `[Scheduled task]`：任务、计划、原定时间、是否迟到或手动启动；跟进还会写明它在链条中的位置和要 @ 谁，以及怎么保持沉默。提示词文本会被中和，不能提前结束这一段。每日汇报的运行还会加一段 `[Material]`：当天的渠道对话（在哪里、最后问了什么、回答的第一行，运行时从每个智能体自己的会话里读取）、当天被跳过和失败的运行，以及在等的任务；当天没有对话就跳过这次运行。
-- **工具。** `coffer__schedule_task`、`coffer__scheduled_tasks` 和 `coffer__cancel_scheduled_task` 是按轮次限定的内置工具。网关的轮次令牌对应到对话，轮次驱动在渲染期间记住这一轮的来源（渠道、聊天、话题、是否所有者提问、要 @ 谁）。所有者的轮次可以安排任何任务；否则只能在同一个话题里安排一次性跟进：5 分钟到 7 天之后，每个话题最多同时 3 个，链条最多 10 次且在 7 天之内。只读提问者的轮次和重复任务的运行会被拒绝。
-- **运行记录。** 每次运行是 `runs.db` 里 `scheduled_task_runs` 的一行（原定、开始、结束、结果、原因、对话），由保留期清理。一次性跟进运行后会删除它的资源。`/status` 列出它所在对话里在等的任务，每个带一个取消按钮。
+- **调度器**是一个可唤醒循环 `scheduled-tasks`，睡到最早的到期时间；任何任务被写入都会唤醒它。在宽限期内到期的时间点交给执行器；超过宽限期的记为已跳过。一次性任务的宽限期是它等待时长的一半（15 分钟到 2 小时）；重复任务的到当天结束。任务上一次运行还没结束时到期的那一次会被跳过。一次性任务运行后被关闭，连续失败三次的重复任务会被暂停。
+- **执行器**用任务的智能体、模型和目录（默认主目录）开一个不属于任何渠道的对话，经编排器发出提示词，和在对话页新开一样。迟到的运行会在提示词后面加一行，说明原定时间和实际运行时间。这次运行随轮次结束记为 `done`、`failed` 或 `stopped`，什么都不发出；需要通知所有者时，由智能体自己用 `coffer__channel_notify`。
+- **运行记录。** 每次运行是 `runs.db` 里 `scheduled_task_runs` 的一行（原定、开始、结束、结果、原因、对话），由保留期清理。
 
 ### 聊天之后对话去哪里 {#where-a-conversation-goes-after-the-chat}
 

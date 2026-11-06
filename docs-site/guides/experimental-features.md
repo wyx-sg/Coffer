@@ -15,7 +15,7 @@ A stable release and a build from source behave the same way here: every experim
 | --- | --- | --- |
 | `knowledge` | Knowledge | The Knowledge page and its files, and the knowledge sections of the `coffer-guide` skill. |
 | `memory` | Memory | The Memory page and memory sync, which carries each agent's memories into your other agents' own memory. |
-| `scheduled_tasks` | Scheduled tasks | The Scheduled tasks page, the scheduler, the follow-up tools agents use in a channel turn, tasks in `/status`, and the Daily report card on a channel's Overview. |
+| `scheduled_tasks` | Scheduled tasks | The Scheduled tasks page and the scheduler that runs its tasks. |
 
 Everything else is always on: the app shell, Overview, Agents, model providers, the local model proxy and Usage, the MCP gateway and custom tools, Skills, Secrets, Activity, Sync, Settings, Conversations and Channels. The agent list and its model catalogue, the speech-to-text settings, the vault and an agent's own transcripts and memory files are not gated either.
 
@@ -27,7 +27,7 @@ No feature needs another. When one is off, the others keep working:
 | --- | --- |
 | `knowledge` | The Knowledge page and its API are gone, the `coffer-guide` skill has no knowledge catalogue, the knowledge sweep skips. The others are unaffected. |
 | `memory` | The Memory page and its API are gone and memory sync does not run. Copies already written stay in your agents as ordinary memory they own (see [Turning memory off](/guides/memory#turning-memory-off)). The others are unaffected. |
-| `scheduled_tasks` | The Scheduled tasks page and its API are gone, no task runs, agents are not offered the follow-up tools, `/status` lists no tasks and the Daily report card leaves a channel's Overview. Every task and its history is kept; switched on again, a slot missed meanwhile is caught up once or skipped, like any missed slot. Channels and conversations are unaffected. |
+| `scheduled_tasks` | The Scheduled tasks page and its API are gone and no task runs. Every task and its history is kept; switched on again, a slot missed meanwhile is caught up once or skipped, like any missed slot. Channels and conversations are unaffected. |
 
 ### Graduated features
 

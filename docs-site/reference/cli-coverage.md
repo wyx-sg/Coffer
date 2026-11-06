@@ -415,8 +415,6 @@ Every management operation a person does on a Coffer page or in the desktop app 
 | UI operation | Route | Command | Acceptance |
 | --- | --- | --- | --- |
 | Scheduled tasks · New task | `POST /scheduled-tasks` | `coffer task add` | `test_cli_parity.py` |
-| Scheduled tasks · New task · where it runs | `GET /scheduled-tasks/chats` | `coffer task chats` | `test_cli_parity.py` |
-| Channels · Daily report | `PUT /scheduled-tasks/daily-report` | `coffer task daily-report` | `test_cli_parity.py` |
 | Scheduled tasks · Delete | `DELETE /resources/{uid}` | `coffer task delete` | `test_cli_parity.py` |
 | Scheduled tasks · switch off | `POST /resources/{uid}/disable` | `coffer task disable` | `test_cli_parity.py` |
 | Scheduled tasks · switch on | `POST /resources/{uid}/enable` | `coffer task enable` | `test_cli_parity.py` |

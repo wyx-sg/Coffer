@@ -4,7 +4,7 @@
 // A task is a `scheduled_task` resource: editing, pausing, resuming, renaming
 // and deleting ride the generic /resources routes (`resourcesApi`); these are
 // a task's own reads and actions — the list with next and last runs, a task's
-// run history, Run now, the chats a task may run in, and the daily report.
+// run history and Run now.
 //
 // Wire types are the channels contract's generated schemas.
 
@@ -19,9 +19,7 @@ export type ScheduledTaskConfig = Schemas["ScheduledTaskConfig"];
 export type ScheduledTaskIn = Schemas["ScheduledTaskIn"];
 export type Schedule = ScheduledTaskConfig["schedule"];
 export type ScheduleKind = Schedule["kind"];
-export type TaskChat = Schemas["TaskChatOut"];
 export type RunOutcome = ScheduledRun["outcome"];
-export type DailyReportIn = Schemas["DailyReportIn"];
 
 export const scheduledTasksApi = {
   list: (): Promise<ScheduledTask[]> =>
@@ -38,8 +36,4 @@ export const scheduledTasksApi = {
     ).then((r) => r.items),
   runNow: (uid: string): Promise<ScheduledRun> =>
     unwrap(getApiClient().POST("/scheduled-tasks/{uid}/run", { params: { path: { uid } } })),
-  chats: (): Promise<TaskChat[]> =>
-    unwrap(getApiClient().GET("/scheduled-tasks/chats")).then((r) => r.items),
-  setDailyReport: (body: DailyReportIn): Promise<ScheduledTask> =>
-    unwrap(getApiClient().PUT("/scheduled-tasks/daily-report", { body })),
 };

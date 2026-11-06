@@ -2,7 +2,7 @@
 times it names").
 
 A schedule is one of a few shapes a person picks from — once, every hour, every
-day, on weekdays, once a week — plus a cron expression for anything else, and
+day, once a week — plus a cron expression for anything else, and
 ``manual`` for a task that runs only when asked. Every time is a wall-clock
 time: "every day at 18:00" means 18:00 on the clock on the wall, summer time or
 not, so the arithmetic is done on naive wall datetimes and only the result is
@@ -39,7 +39,6 @@ __all__ = [
     "ManualSchedule",
     "OnceSchedule",
     "Schedule",
-    "WeekdaysSchedule",
     "WeeklySchedule",
     "conversions",
     "is_repeating",
@@ -122,12 +121,6 @@ class DailySchedule(_Shape):
         return value
 
 
-class WeekdaysSchedule(DailySchedule):
-    """Monday to Friday at ``time`` (local)."""
-
-    kind: Literal["weekdays"] = "weekdays"  # type: ignore[assignment]
-
-
 class WeeklySchedule(DailySchedule):
     """Once a week: ``weekday`` (0 is Monday) at ``time`` (local)."""
 
@@ -155,13 +148,7 @@ class ManualSchedule(_Shape):
 
 
 Schedule = Annotated[
-    OnceSchedule
-    | HourlySchedule
-    | DailySchedule
-    | WeekdaysSchedule
-    | WeeklySchedule
-    | CronSchedule
-    | ManualSchedule,
+    OnceSchedule | HourlySchedule | DailySchedule | WeeklySchedule | CronSchedule | ManualSchedule,
     Field(discriminator="kind"),
 ]
 
@@ -223,10 +210,7 @@ def _next_wall(schedule: Schedule, after: datetime) -> datetime | None:
         slot = datetime.combine(after.date(), at)
         if slot <= after:
             slot += timedelta(days=1)
-        if isinstance(schedule, WeekdaysSchedule):
-            while slot.weekday() >= 5:
-                slot += timedelta(days=1)
-        elif isinstance(schedule, WeeklySchedule):
+        if isinstance(schedule, WeeklySchedule):
             slot += timedelta(days=(schedule.weekday - slot.weekday()) % 7)
         return slot
     return None

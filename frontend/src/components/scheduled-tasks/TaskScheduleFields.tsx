@@ -20,7 +20,7 @@ interface Props {
 
 export function TaskScheduleFields({ form, set }: Props) {
   const { t, i18n } = useTranslation();
-  const needsTime = form.kind === "daily" || form.kind === "weekdays" || form.kind === "weekly";
+  const needsTime = form.kind === "daily" || form.kind === "weekly";
   const repeats = form.kind !== "once" && form.kind !== "manual";
   return (
     <div className="space-y-1.5">

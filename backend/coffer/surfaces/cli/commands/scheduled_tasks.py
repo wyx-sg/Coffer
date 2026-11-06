@@ -21,7 +21,7 @@ SPECS = [
         _UI + "list",
         "Every scheduled task, with its next and last run.",
         rows="items",
-        columns=("name", "enabled", "next_run", "channel_name", "uid"),
+        columns=("name", "enabled", "next_run", "uid"),
     ),
     RouteCommand(
         "task show",
@@ -37,18 +37,9 @@ SPECS = [
         "/scheduled-tasks",
         _UI + "New task",
         "Add a scheduled task. Body: name, description, config (schedule with an "
-        "optional IANA timezone, prompt, chat {channel, chat_id} or none, session "
-        "continue|fresh, agent, cwd, model). A task with no chat runs fresh on its agent.",
+        "optional IANA timezone, prompt, agent, model, cwd). Every run opens a new "
+        "conversation on the agent.",
         body=True,
-    ),
-    RouteCommand(
-        "task chats",
-        "GET",
-        "/scheduled-tasks/chats",
-        _UI + "New task · where it runs",
-        "The paired chats a task may run in.",
-        rows="items",
-        columns=("channel_name", "chat_kind", "label", "chat_id", "channel"),
     ),
     RouteCommand(
         "task run",
@@ -68,15 +59,6 @@ SPECS = [
         query=(Q("limit", kind=int),),
         rows="items",
         columns=("started_at", "trigger", "outcome", "reason"),
-    ),
-    RouteCommand(
-        "task daily-report",
-        "PUT",
-        "/scheduled-tasks/daily-report",
-        "Channels · Daily report",
-        "Set the daily report's time, made from its template the first time. Body: "
-        "channel, time (HH:MM), agent.",
-        body=True,
     ),
 ]
 

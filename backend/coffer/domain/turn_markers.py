@@ -3,8 +3,7 @@ untrusted text from forging one.
 
 A channel turn hands the agent several kinds of text in one string: where the
 message came from, the thread around it, the message it quotes, a chat record
-someone forwarded, the person's own words, and the files that came with them — or, for a turn a
-scheduled task started, the task and what Coffer gathered for it.
+someone forwarded, the person's own words, and the files that came with them.
 Each kind sits in its own block that opens with a heading line and closes with an
 end line (spec channels "Open every turn with its message origin" and the
 requirements after it), so the agent can always tell who wrote what.
@@ -32,14 +31,10 @@ __all__ = [
     "ATTACHMENTS_END",
     "FORWARDED",
     "FORWARDED_END",
-    "MATERIAL",
-    "MATERIAL_END",
     "ORIGIN",
     "ORIGIN_END",
     "QUOTED",
     "QUOTED_END",
-    "SCHEDULED",
-    "SCHEDULED_END",
     "THREAD",
     "THREAD_END",
     "THREAD_NEW",
@@ -77,12 +72,6 @@ ATTACHMENTS_END = "End of attachments"
 #: A voice attachment an agent's speech-to-text turned into words.
 VOICE_TRANSCRIPT = "Voice message transcript"
 VOICE_TRANSCRIPT_END = "End of voice message transcript"
-#: A turn a scheduled task started: which task, when it was due, what to do.
-SCHEDULED = "Scheduled task"
-SCHEDULED_END = "End of scheduled task"
-#: What Coffer gathered for a scheduled run (the day's channel conversations).
-MATERIAL = "Material"
-MATERIAL_END = "End of material"
 
 #: The names a forged line could start with. A heading is matched on its leading
 #: words, so ``[Forwarded chat record]`` and ``[User message 2/3]`` both count.
@@ -95,8 +84,6 @@ _NAMES = (
     USER,
     ATTACHMENTS,
     VOICE_TRANSCRIPT,
-    SCHEDULED,
-    MATERIAL,
 )
 _FORGED = re.compile(
     r"^(\s*)\[(?=(?:End of )?(?:" + "|".join(re.escape(n) for n in _NAMES) + r")(?:[\]\s:—#/]|$))",

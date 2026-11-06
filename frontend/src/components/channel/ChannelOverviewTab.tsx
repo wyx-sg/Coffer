@@ -1,9 +1,8 @@
 // frontend/src/components/channel/ChannelOverviewTab.tsx
 // A channel's Overview, one column: who can use it (the paired owners: add,
 // remove), which agents it drives — the default agent a new conversation
-// starts on and the shared reach control for the agents it may drive — the
-// daily report (off, or a time each day), and one link to the conversations it
-// started. It lists no messages and no
+// starts on and the shared reach control for the agents it may drive — and
+// one link to the conversations it started. It lists no messages and no
 // conversations: Conversations, filtered by this channel, is where those are read.
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
@@ -25,9 +24,7 @@ import type { ResourceOut } from "@/lib/api/resources";
 import { storedDefaultModel } from "@/lib/channels/editChannel";
 import { useAgentModelList } from "@/lib/hooks/useAgentModelList";
 import { useAgentResolvedDefault } from "@/lib/hooks/useAgentModels";
-import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
 import { CHANNEL_KIND } from "@/lib/hooks/useChannels";
-import { ChannelDailyReportSection } from "./ChannelDailyReportSection";
 import { ChannelPeopleList } from "./ChannelPeopleList";
 
 function Row({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
@@ -64,10 +61,6 @@ export function ChannelOverviewTab({
   onDefaultModelChange,
 }: Props) {
   const { t } = useTranslation();
-  // The daily report is a scheduled task: its card is there only while the
-  // experimental feature is on (spec experimental-features "Close the
-  // scheduled tasks feature's surfaces").
-  const dailyReport = useFeatureEnabled("scheduled_tasks") === true;
   const people = status?.people ?? [];
   const defaultAgent =
     typeof channel.config.default_agent === "string" ? channel.config.default_agent : "";
@@ -137,8 +130,6 @@ export function ChannelOverviewTab({
           <ScopeControl kind={CHANNEL_KIND} uid={channel.uid} enabled={channel.enabled} />
         </Row>
       </SettingsSection>
-
-      {dailyReport ? <ChannelDailyReportSection channelUid={channel.uid} /> : null}
 
       <Link
         to={channelConversationsHref(channel.uid)}

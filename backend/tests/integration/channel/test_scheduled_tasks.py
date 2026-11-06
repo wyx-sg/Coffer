@@ -1,33 +1,36 @@
-"""Scheduled tasks end to end through the real channel core (spec channels "Keep
-scheduled tasks as machine-local resources", "Run a scheduled task at the times
-it names", "Catch up a missed run once, within its grace", "Run a scheduled task
-in the chat it names", "Stay silent when a scheduled run has nothing to say",
-"Keep every scheduled run in the task's history").
+"""Scheduled tasks end to end through the real chat platform (spec channels
+"Keep scheduled tasks as machine-local resources", "Run a scheduled task at the
+times it names", "Catch up a missed run once, within its grace", "Run a
+scheduled task in a fresh conversation of its own", "Keep every scheduled run
+in the task's history").
 
 The clock is the test's: a pass is run by hand with the clock where the test
-put it, and the turn it starts is a real turn through the turn driver."""
+put it, and the turn it starts is a real turn through the orchestrator."""
 
 from __future__ import annotations
 
 import os
 import time
 from collections.abc import Iterator
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
+from pydantic import BaseModel, ConfigDict
 
-from coffer.application.builtin_tools import BuiltinToolRegistry
-from coffer.application.channel import turn_origin
 from coffer.application.channel.schedule.kind import KIND
-from coffer.application.channel.schedule.tools import schedule_tools
+from coffer.domain.chat.events import TurnError, TurnStarted
 from coffer.domain.errors import ConfigValidationError
-from coffer.domain.resource import StorageClass
-from coffer.domain.turn_markers import SCHEDULED
-from coffer.surfaces.http.schedule_wiring import ScheduleWiring, _Chats, _GatedChatTasks
+from coffer.domain.resource import Kind, StorageClass
+from coffer.surfaces.http.schedule_wiring import _Reads
+from tests.unit.chat.conftest import FakeAgentAdapter
 
-from .conftest import ChannelEnv, default_reply_adapter, inbound, wait_until
+from .conftest import ChannelEnv, default_reply_adapter
 from .scheduling import START, build_scheduling, daily, task_config
 from .test_queue_and_stop import GatedAdapter
+
+
+class _AnyConfig(BaseModel):
+    model_config = ConfigDict(extra="allow")
 
 
 @pytest.fixture(autouse=True)
@@ -37,7 +40,6 @@ def _utc() -> Iterator[None]:
     os.environ["TZ"] = "UTC"
     time.tzset()
     yield
-    turn_origin.clear()
     if old is None:
         os.environ.pop("TZ", None)
     else:
@@ -48,38 +50,47 @@ def _utc() -> Iterator[None]:
 # --- the resource ------------------------------------------------------------
 
 
-@pytest.mark.acceptance(spec="channels", scenario="a task in a paired chat is created")
-async def test_a_task_in_a_paired_chat_is_created(
-    env: ChannelEnv, monkeypatch: pytest.MonkeyPatch
-) -> None:
+@pytest.mark.acceptance(spec="channels", scenario="a task is created")
+async def test_a_task_is_created(env: ChannelEnv, monkeypatch: pytest.MonkeyPatch) -> None:
     s = build_scheduling(env, monkeypatch)
-    channel, _ = await env.paired_channel()
+    env.add_agent("codex")
     task = await s.tasks.create(
         None,
-        task_config(channel, schedule={"kind": "weekdays", "time": "09:00"}),
+        task_config(
+            agent="codex",
+            cwd="/tmp/site",
+            schedule={"kind": "daily", "time": "11:00", "timezone": "Asia/Singapore"},
+        ),
         actor="test",
     )
     assert task.kind == KIND
     assert env.resources.storage_of(KIND, task.config) is StorageClass.LOCAL
     assert task.name == "Summarise the open pull requests"
+    assert task.config["agent"] == "codex" and task.config["cwd"] == "/tmp/site"
+    assert "chat" not in task.config
     view = await s.tasks.view(task.uid)
-    # Thursday 10:00 → Friday 09:00.
-    assert view.next_run == (START + timedelta(days=1)).replace(hour=9)
-    # The generic create checks the same: the kind holds the rule.
-    with pytest.raises(ConfigValidationError, match="not paired"):
-        await env.resources.register(KIND, "x", task_config(channel, "stranger"), "test")
+    # Thursday 10:00 UTC is 18:00 in Singapore: the next 11:00 there is
+    # Friday's, 03:00 UTC.
+    assert view.next_run == datetime(2026, 10, 30, 3, 0, tzinfo=UTC)
 
 
-@pytest.mark.acceptance(
-    spec="channels", scenario="a task in a chat the channel never paired is refused"
-)
-async def test_a_task_in_an_unpaired_chat_is_refused(
+@pytest.mark.acceptance(spec="channels", scenario="a task without an agent is refused")
+async def test_a_task_without_an_agent_is_refused(
     env: ChannelEnv, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     s = build_scheduling(env, monkeypatch)
-    channel, _ = await env.paired_channel()
-    with pytest.raises(ConfigValidationError, match="not paired"):
-        await s.tasks.create(None, task_config(channel, "stranger"), actor="test")
+    config = task_config()
+    config.pop("agent")
+    with pytest.raises(ConfigValidationError, match="agent"):
+        await s.tasks.create(None, config, actor="test")
+    # A chat is no part of a task now.
+    with pytest.raises(ConfigValidationError, match="chat"):
+        await s.tasks.create(
+            None, task_config(chat={"channel": "c", "chat_id": "owner"}), actor="test"
+        )
+    # The generic create holds the same rules.
+    with pytest.raises(ConfigValidationError):
+        await env.resources.register(KIND, "x", config, "test")
     assert await env.resources.list(kind=KIND) == []
 
 
@@ -88,31 +99,87 @@ async def test_a_schedule_closer_than_fifteen_minutes_is_refused(
     env: ChannelEnv, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     s = build_scheduling(env, monkeypatch)
-    channel, _ = await env.paired_channel()
     with pytest.raises(ConfigValidationError, match="15 minutes"):
         await s.tasks.create(
-            None,
-            task_config(channel, schedule={"kind": "cron", "expr": "*/5 * * * *"}),
-            actor="test",
+            None, task_config(schedule={"kind": "cron", "expr": "*/5 * * * *"}), actor="test"
         )
     past = (START - timedelta(minutes=1)).isoformat()
     with pytest.raises(ConfigValidationError):
+        await s.tasks.create(None, task_config(schedule={"kind": "once", "at": past}), actor="test")
+    # Monday to Friday is a cron expression now; the shape is gone.
+    with pytest.raises(ConfigValidationError):
         await s.tasks.create(
-            None, task_config(channel, schedule={"kind": "once", "at": past}), actor="test"
+            None, task_config(schedule={"kind": "weekdays", "time": "09:00"}), actor="test"
         )
 
 
-async def test_removing_a_channel_removes_its_tasks(
+@pytest.mark.acceptance(spec="channels", scenario="an unknown timezone is refused")
+async def test_an_unknown_timezone_is_refused(
     env: ChannelEnv, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     s = build_scheduling(env, monkeypatch)
-    channel, _ = await env.paired_channel()
-    await s.tasks.create(None, task_config(channel), actor="test")
-    wiring = ScheduleWiring(
-        tasks=s.tasks, scheduler=s.scheduler, runs=s.runs, resources=env.resources
-    )
-    await wiring.forget_channel(channel.uid)
+    with pytest.raises(ConfigValidationError, match="Mars/Olympus"):
+        await s.tasks.create(
+            None,
+            task_config(schedule={"kind": "daily", "time": "09:00", "timezone": "Mars/Olympus"}),
+            actor="test",
+        )
     assert await env.resources.list(kind=KIND) == []
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="a task an older Coffer wrote is read without its chat"
+)
+async def test_a_task_an_older_coffer_wrote_is_read_without_its_chat(
+    env: ChannelEnv, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    s = build_scheduling(env, monkeypatch)
+    # Files as the 2026-10-29 build wrote them, stored as they are.
+    env.kinds[KIND] = Kind(
+        name=KIND,
+        display_name="Scheduled task",
+        config_schema=_AnyConfig,
+        free_name=True,
+        storage=StorageClass.LOCAL,
+    )
+    chat = {"channel": "c1", "chat_id": "owner", "chat_kind": "direct"}
+    old = await env.resources.register(
+        KIND,
+        "Standup",
+        {
+            "schedule": {"kind": "weekdays", "time": "09:00"},
+            "prompt": "Post the standup",
+            "chat": chat,
+            "session": "fresh",
+            "material": "none",
+            "template": "",
+            "origin": "owner",
+            "chain_index": 1,
+            "catch_up": True,
+        },
+        "test",
+    )
+    follow_up = await env.resources.register(
+        KIND,
+        "Check the deploy",
+        {
+            "schedule": {"kind": "once", "at": (START + timedelta(hours=1)).isoformat()},
+            "prompt": "Check the deploy",
+            "chat": chat,
+            "session": "continue",
+            "origin": "agent",
+        },
+        "test",
+    )
+    s = build_scheduling(env, monkeypatch, s.clock)
+
+    assert await s.tasks.drop_retired_follow_ups() == 1
+    (view,) = await s.tasks.views()
+    assert view.task.uid == old.uid != follow_up.uid
+    assert view.config.agent == "claude_code"
+    assert view.config.schedule.kind == "cron"
+    assert view.config.schedule.expr == "0 9 * * 1-5"  # type: ignore[union-attr]
+    assert "chat" not in view.config.model_dump()
 
 
 # --- running on time ---------------------------------------------------------
@@ -123,9 +190,8 @@ async def test_a_daily_task_runs_at_its_time(
     env: ChannelEnv, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     s = build_scheduling(env, monkeypatch)
-    channel, adapter = await env.paired_channel()
     env.provider.adapter = default_reply_adapter("Two PRs are open.")
-    task = await s.tasks.create(None, task_config(channel, schedule=daily("10:30")), actor="t")
+    task = await s.tasks.create(None, task_config(schedule=daily("10:30")), actor="t")
 
     await s.tick()  # 10:00: not yet
     assert await s.history(task.uid) == []
@@ -133,17 +199,28 @@ async def test_a_daily_task_runs_at_its_time(
     s.clock.advance(timedelta(minutes=30))
     await s.tick()
     (run,) = await s.settled(task.uid)
-    assert run.outcome == "replied" and run.trigger == "schedule" and not run.catch_up
+    assert run.outcome == "done" and run.trigger == "schedule" and not run.catch_up
     assert run.due_at == START.replace(minute=30)
-    await wait_until(lambda: "Two PRs are open." in adapter.texts())
-    prompt = env.raw_prompts(run.conversation_id)[0]
-    assert prompt.startswith(f"[{SCHEDULED}]")
-    assert "Summarise the open pull requests" in prompt
+    assert env.raw_prompts(run.conversation_id) == ["Summarise the open pull requests"]
 
     view = await s.tasks.view(task.uid)
     assert view.next_run == START.replace(minute=30) + timedelta(days=1)
     await s.tick()  # the same slot never runs twice
     assert len(await s.history(task.uid)) == 1
+
+
+@pytest.mark.acceptance(spec="channels", scenario="a one-off task is switched off after it runs")
+async def test_a_one_off_task_is_switched_off_after_it_runs(
+    env: ChannelEnv, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    s = build_scheduling(env, monkeypatch)
+    at = (START + timedelta(minutes=30)).isoformat()
+    task = await s.tasks.create(None, task_config(schedule={"kind": "once", "at": at}), actor="t")
+    s.clock.advance(timedelta(minutes=30))
+    await s.tick()
+    (run,) = await s.settled(task.uid)
+    assert run.outcome == "done"
+    assert not (await env.resources.get(task.uid)).enabled
 
 
 @pytest.mark.acceptance(
@@ -153,11 +230,10 @@ async def test_a_slot_whose_previous_run_is_still_going_is_skipped(
     env: ChannelEnv, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     s = build_scheduling(env, monkeypatch)
-    channel, _ = await env.paired_channel()
     gated = GatedAdapter()
     env.provider.adapter = gated
     task = await s.tasks.create(
-        None, task_config(channel, schedule={"kind": "hourly", "minute": 0}), actor="t"
+        None, task_config(schedule={"kind": "hourly", "minute": 0}), actor="t"
     )
     s.clock.advance(timedelta(hours=1))  # 11:00
     await s.tick()
@@ -182,15 +258,14 @@ async def test_a_missed_daily_slot_runs_late_once(
     env: ChannelEnv, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     s = build_scheduling(env, monkeypatch)
-    channel, _ = await env.paired_channel()
-    task = await s.tasks.create(None, task_config(channel, schedule=daily("10:30")), actor="t")
+    task = await s.tasks.create(None, task_config(schedule=daily("10:30")), actor="t")
     s.clock.advance(timedelta(hours=3))  # asleep until 13:00
     await s.tick()
     (run,) = await s.settled(task.uid)
-    assert run.catch_up and run.outcome == "replied"
-    prompt = env.raw_prompts(run.conversation_id)[0]
-    assert "running now at 2026-10-29 13:00" in prompt and "late" in prompt
-    assert "due: 2026-10-29 10:30" in prompt
+    assert run.catch_up and run.outcome == "done"
+    (prompt,) = env.raw_prompts(run.conversation_id)
+    assert prompt.startswith("Summarise the open pull requests\n\n")
+    assert "due at 2026-10-29 10:30" in prompt and "late, at 2026-10-29 13:00" in prompt
 
 
 @pytest.mark.acceptance(spec="channels", scenario="a week of missed daily slots runs once")
@@ -198,8 +273,7 @@ async def test_a_week_of_missed_slots_runs_once(
     env: ChannelEnv, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     s = build_scheduling(env, monkeypatch)
-    channel, _ = await env.paired_channel()
-    task = await s.tasks.create(None, task_config(channel, schedule=daily("10:30")), actor="t")
+    task = await s.tasks.create(None, task_config(schedule=daily("10:30")), actor="t")
     s.clock.advance(timedelta(days=7, hours=1))  # a week later, 11:00
     await s.tick()
     (run,) = await s.settled(task.uid)
@@ -208,30 +282,26 @@ async def test_a_week_of_missed_slots_runs_once(
     assert len(await s.history(task.uid)) == 1
 
 
-@pytest.mark.acceptance(spec="channels", scenario="a follow-up missed past its grace is skipped")
-async def test_a_follow_up_missed_past_its_grace_is_skipped(
+@pytest.mark.acceptance(spec="channels", scenario="a one-off missed past its grace is skipped")
+async def test_a_one_off_missed_past_its_grace_is_skipped(
     env: ChannelEnv, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     s = build_scheduling(env, monkeypatch)
-    channel, adapter = await env.paired_channel()
-    args = s.in_turn("conv-1", channel)
-    booked = await s.tools.schedule({**args, "after": "30m", "prompt": "check the deploy"})
+    at = (START + timedelta(minutes=30)).isoformat()
+    task = await s.tasks.create(None, task_config(schedule={"kind": "once", "at": at}), actor="t")
     s.clock.advance(timedelta(hours=1))  # off from 10:00 to 11:00; grace 15 min
     await s.tick()
-    (run,) = await s.history(booked["id"])
+    (run,) = await s.history(task.uid)
     assert run.outcome == "skipped" and "missed" in run.reason
-    assert adapter.texts() == []
-    # A one-off the agent booked is over once its slot is: it is removed.
-    assert await env.resources.list(kind=KIND) == []
+    assert not (await env.resources.get(task.uid)).enabled
 
 
 async def test_a_task_that_does_not_catch_up_skips_a_late_slot(
     env: ChannelEnv, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     s = build_scheduling(env, monkeypatch)
-    channel, _ = await env.paired_channel()
     task = await s.tasks.create(
-        None, task_config(channel, schedule=daily("10:30"), catch_up=False), actor="t"
+        None, task_config(schedule=daily("10:30"), catch_up=False), actor="t"
     )
     s.clock.advance(timedelta(hours=1))
     await s.tick()
@@ -239,52 +309,59 @@ async def test_a_task_that_does_not_catch_up_skips_a_late_slot(
     assert run.outcome == "skipped"
 
 
-# --- the chat -------------------------------------------------------------------
+# --- the conversation ------------------------------------------------------------
 
 
 @pytest.mark.acceptance(
-    spec="channels", scenario="a fresh task opens a new conversation on its own agent"
+    spec="channels", scenario="a task runs in a new conversation of its own each time"
 )
-async def test_a_fresh_task_opens_a_new_conversation(
+async def test_a_task_runs_in_a_new_conversation_each_time(
     env: ChannelEnv, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     s = build_scheduling(env, monkeypatch)
-    other = env.add_agent("codex", reply="from codex")
     channel, adapter = await env.paired_channel()
-    await env.processor.on_message(inbound("tg", "owner", "hi"))
-    await wait_until(lambda: "Hello world" in adapter.texts())
-    before = await env.active_conversation(channel)
+    env.provider.adapter = default_reply_adapter("The build is green.")
     task = await s.tasks.create(
-        None,
-        task_config(channel, session="fresh", agent="codex", cwd="/tmp"),
-        actor="t",
+        "Nightly build", task_config(cwd="/tmp/site", schedule=daily("10:30")), actor="t"
     )
+
     s.clock.advance(timedelta(minutes=30))
     await s.tick()
-    (run,) = await s.settled(task.uid)
-    assert run.outcome == "replied"
-    await wait_until(lambda: "from codex" in adapter.texts())
-    assert other.turns and other.turns[0][0] == run.conversation_id
-    conversation = await env.chat.get_conversation(run.conversation_id)
-    assert conversation.agent_key == "codex"
-    assert conversation.agent_config.cwd == "/tmp"
-    assert await env.active_conversation(channel) == run.conversation_id != before
+    (first,) = await s.settled(task.uid)
+    s.clock.advance(timedelta(days=1))
+    await s.tick()
+    second, again = await s.settled(task.uid, count=2)
+    assert again == first
+
+    for run in (first, second):
+        assert run.outcome == "done" and run.reason == ""
+        conversation = await env.chat.get_conversation(run.conversation_id)
+        assert conversation.agent_key == "builtin"
+        assert conversation.agent_config.cwd == "/tmp/site"
+        assert conversation.channel_uid is None
+        assert conversation.title == "Nightly build"
+        assert env.raw_prompts(run.conversation_id) == ["Summarise the open pull requests"]
+    assert first.conversation_id != second.conversation_id
+    # Nothing was posted to any chat, and the chat's own conversation is untouched.
+    assert adapter.texts() == []
+    assert await env.active_conversation(channel) is None
 
 
-@pytest.mark.acceptance(spec="channels", scenario="a follow-up with nothing new says nothing")
-async def test_a_silent_reply_is_not_sent(env: ChannelEnv, monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.acceptance(spec="channels", scenario="a task whose turn fails is recorded failed")
+async def test_a_task_whose_turn_fails_is_recorded_failed(
+    env: ChannelEnv, monkeypatch: pytest.MonkeyPatch
+) -> None:
     s = build_scheduling(env, monkeypatch)
-    channel, adapter = await env.paired_channel()
-    env.provider.adapter = default_reply_adapter("[SILENT] still deploying")
-    task = await s.tasks.create(None, task_config(channel), actor="t")
-    s.clock.advance(timedelta(minutes=30))
-    await s.tick()
-    (run,) = await s.settled(task.uid)
-    assert run.outcome == "silent"
-    assert not any("still deploying" in t for t in adapter.texts())
-    # A person's message is answered whatever the reply starts with.
-    await env.processor.on_message(inbound("tg", "owner", "hi"))
-    await wait_until(lambda: any("still deploying" in t for t in adapter.texts()))
+    _, adapter = await env.paired_channel()
+    env.provider.adapter = FakeAgentAdapter(
+        [TurnStarted(), TurnError(code="PROVIDER_TIMEOUT", message="upstream timed out")]
+    )
+    task = await s.tasks.create(None, task_config(), actor="t")
+    run = await s.scheduler.run_now(await env.resources.get(task.uid))
+    (ended,) = await s.settled(task.uid)
+    assert ended.run_id == run.run_id
+    assert ended.outcome == "failed" and ended.reason == "upstream timed out"
+    assert adapter.texts() == []
 
 
 @pytest.mark.acceptance(spec="channels", scenario="a repeating task that keeps failing is paused")
@@ -292,19 +369,17 @@ async def test_a_repeating_task_that_keeps_failing_is_paused(
     env: ChannelEnv, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     s = build_scheduling(env, monkeypatch)
-    channel, _ = await env.paired_channel()
-    await env.pair(channel, "second")
-    task = await s.tasks.create(None, task_config(channel, "second"), actor="t")
-    await env.peers.delete_by_chat(channel.uid, "second")
-    s.clock.advance(timedelta(minutes=30))  # 10:30, then the next two days
-    for _ in range(3):
+    env.provider.adapter = FakeAgentAdapter(
+        [TurnStarted(), TurnError(code="PROVIDER_TIMEOUT", message="upstream timed out")]
+    )
+    task = await s.tasks.create(None, task_config(schedule=daily("10:30")), actor="t")
+    for day in range(3):
+        s.clock.now = START.replace(minute=30) + timedelta(days=day)
         await s.tick()
-        s.clock.advance(timedelta(days=1))
+        await s.settled(task.uid, count=day + 1)
     rows = await s.history(task.uid)
     assert [r.outcome for r in rows] == ["failed"] * 3
-    assert "no longer paired" in rows[0].reason
     assert not (await env.resources.get(task.uid)).enabled
-    assert s.notices and "paused" in s.notices[0][1]
 
 
 # --- history -------------------------------------------------------------------
@@ -315,16 +390,15 @@ async def test_the_history_says_how_each_run_ended(
     env: ChannelEnv, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     s = build_scheduling(env, monkeypatch)
-    channel, _ = await env.paired_channel()
     task = await s.tasks.create(
-        None, task_config(channel, schedule=daily("10:30"), catch_up=False), actor="t"
+        None, task_config(schedule=daily("10:30"), catch_up=False), actor="t"
     )
     s.clock.advance(timedelta(hours=1))  # missed, no catch-up
     await s.tick()
     s.clock.advance(timedelta(days=1, minutes=-30))  # tomorrow 10:30, on time
     await s.tick()
     rows = await s.settled(task.uid, count=2)
-    assert [r.outcome for r in rows] == ["replied", "skipped"]
+    assert [r.outcome for r in rows] == ["done", "skipped"]
     assert rows[0].conversation_id and rows[1].reason
 
 
@@ -333,19 +407,18 @@ async def test_the_history_names_each_run_s_conversation(
     env: ChannelEnv, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     s = build_scheduling(env, monkeypatch)
-    channel, _ = await env.paired_channel()
-    task = await s.tasks.create(None, task_config(channel), actor="t")
+    task = await s.tasks.create(None, task_config(), actor="t")
     s.clock.advance(timedelta(minutes=30))
     await s.tick()
     (row,) = await s.settled(task.uid)
-    chats = _Chats(env.resources, env.peers, env.threads, s.runs, env.chat)
-    found = await chats.conversations({row.conversation_id, ""})
+    reads = _Reads(s.runs, env.chat)
+    found = await reads.conversations({row.conversation_id, ""})
     conv = found[row.conversation_id]
     assert conv["conversation_id"] == row.conversation_id
     assert conv["agent_key"] and "session_id" in conv and conv["running"] is False
     # A conversation removed since is left out; the row keeps its id.
     await env.chat.remove_conversation(row.conversation_id)
-    assert await chats.conversations({row.conversation_id}) == {}
+    assert await reads.conversations({row.conversation_id}) == {}
 
 
 @pytest.mark.acceptance(
@@ -355,10 +428,9 @@ async def test_a_run_left_open_is_closed_on_start(
     env: ChannelEnv, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     s = build_scheduling(env, monkeypatch)
-    channel, _ = await env.paired_channel()
     gated = GatedAdapter()
     env.provider.adapter = gated
-    task = await s.tasks.create(None, task_config(channel), actor="t")
+    task = await s.tasks.create(None, task_config(), actor="t")
     s.clock.advance(timedelta(minutes=30))
     await s.tick()
     await gated.entered.wait()
@@ -377,64 +449,38 @@ async def test_run_now_runs_a_paused_task_once(
     env: ChannelEnv, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     s = build_scheduling(env, monkeypatch)
-    channel, adapter = await env.paired_channel()
     env.provider.adapter = default_reply_adapter("ran by hand")
     task = await s.tasks.create(
         None,
-        task_config(channel, schedule={"kind": "weekly", "weekday": 0, "time": "09:00"}),
+        task_config(schedule={"kind": "weekly", "weekday": 0, "time": "09:00"}),
         actor="t",
     )
     await env.resources.set_enabled(task.uid, False, "t")
     task = await env.resources.get(task.uid)
     await s.scheduler.run_now(task)
     (run,) = await s.settled(task.uid)
-    assert run.trigger == "manual" and run.outcome == "replied"
-    await wait_until(lambda: "ran by hand" in adapter.texts())
-    assert "started by hand" in env.raw_prompts(run.conversation_id)[0]
+    assert run.trigger == "manual" and run.outcome == "done"
+    # A run by hand is the prompt alone: it is not late for anything.
+    assert env.raw_prompts(run.conversation_id) == ["Summarise the open pull requests"]
     assert not (await env.resources.get(task.uid)).enabled
 
 
 # --- the experimental feature ---------------------------------------------------
 
 
-@pytest.mark.acceptance(
-    spec="experimental-features", scenario="scheduled tasks off runs nothing and lists nothing"
-)
-async def test_scheduled_tasks_off_runs_nothing_and_lists_nothing(
+@pytest.mark.acceptance(spec="experimental-features", scenario="scheduled tasks off runs nothing")
+async def test_scheduled_tasks_off_runs_nothing(
     env: ChannelEnv, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     s = build_scheduling(env, monkeypatch)
     switch = {"on": False}
     s.scheduler._enabled = lambda: switch["on"]
-    channel, _ = await env.paired_channel()
-    task = await s.tasks.create(None, task_config(channel), actor="t")
+    task = await s.tasks.create(None, task_config(), actor="t")
     s.clock.advance(timedelta(minutes=30))
     await s.tick()
     assert await s.history(task.uid) == []
-    gated = _GatedChatTasks(s.tasks, lambda: switch["on"])
-    assert await gated.waiting(channel.uid, "owner", "") == []
-    assert await gated.cancel(task.uid, actor="t") is None
     # Switched on: the slot that just passed runs, late, within its grace.
     switch["on"] = True
-    assert [w.uid for w in await gated.waiting(channel.uid, "owner", "")] == [task.uid]
     await s.tick()
     (row,) = await s.settled(task.uid)
-    assert row.outcome == "replied"
-
-
-@pytest.mark.acceptance(
-    spec="experimental-features", scenario="scheduled tasks off closes their routes and tools"
-)
-def test_scheduled_tasks_off_withdraws_the_tools(
-    env: ChannelEnv, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    s = build_scheduling(env, monkeypatch)
-    switch = {"on": False}
-    registry = BuiltinToolRegistry(feature_enabled=lambda key: switch["on"])
-    for tool in schedule_tools(s.tools):
-        registry.register(tool)
-    names = {"coffer__schedule_task", "coffer__scheduled_tasks", "coffer__cancel_scheduled_task"}
-    turn = registry.view(in_turn=True)
-    assert not any(turn.is_builtin(n) for n in names)
-    switch["on"] = True
-    assert all(registry.view(in_turn=True).is_builtin(n) for n in names)
+    assert row.outcome == "done"

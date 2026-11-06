@@ -106,28 +106,24 @@ Validation rules:
 
 ## Resource kind: `scheduled_task`
 
-A turn Coffer starts in a paired chat at a time (spec channels "Keep scheduled
-tasks as machine-local resources"; ADR
-scheduled-tasks-are-turns-coffer-starts-in-a-chat). Stored under
-`local/resources/scheduled_task/<uid>.json`, never synced, like the channel it
-names. `name` is the task's label (free text); `enabled: false` is a paused task.
+A prompt Coffer sends an agent at a time, each run in a new conversation of its
+own (spec channels "Keep scheduled tasks as machine-local resources"; ADR
+automation-is-a-scheduled-prompt). Stored under
+`local/resources/scheduled_task/<uid>.json`, never synced: its agent and
+directory are this machine's. `name` is the task's label (free text);
+`enabled: false` is a paused task, or a one-off that has run.
 
 | config key | type | notes |
 | --- | --- | --- |
-| `schedule` | object | one of `{kind: once, at}`, `{kind: hourly, minute}`, `{kind: daily\|weekdays, time: "HH:MM"}`, `{kind: weekly, weekday: 0-6 (Monday 0), time}`, `{kind: cron, expr}`, `{kind: manual}`; local time; a repeating schedule at most every 15 min |
-| `prompt` | string | what the agent is asked; non-empty |
-| `chat` | object | `{channel, chat_id, chat_kind, thread_id, conversation_thread_id}`; a paired chat of that channel |
-| `session` | `fresh` \| `continue` | default `fresh` |
-| `agent`, `model`, `cwd` | string \| null | for `fresh` only; null takes the channel's defaults |
+| `schedule` | object | one of `{kind: once, at}`, `{kind: hourly, minute}`, `{kind: daily, time: "HH:MM"}`, `{kind: weekly, weekday: 0-6 (Monday 0), time}`, `{kind: cron, expr}`, `{kind: manual}`; a repeating one may add `timezone` (IANA), this machine's local time otherwise; at most every 15 min |
+| `prompt` | string | what the agent is asked; non-empty, at most 8000 characters |
+| `agent` | `claude_code` \| `codex` | required |
+| `model`, `cwd` | string \| null | null is the agent's default model and the home folder |
 | `catch_up` | bool | default `true` |
-| `material` | `none` \| `channel_day` | `channel_day` adds the day's channel conversations to the run |
-| `template` | `""` \| `daily_report` | the template the task was made from |
-| `origin` | `owner` \| `agent` | `agent` for a follow-up an agent booked on its own |
-| `chain_started_at`, `chain_index` | datetime \| null, int | a follow-up chain's first booking and this link's place (1-based) |
-| `mention` | object \| null | `{user_id, name, email}`: whom a group reply @mentions |
 
-A one-off `origin: agent` task is deleted after its run. Deleting a channel
-deletes its tasks.
+A file an older Coffer wrote may carry `chat`, `session`, `mention`,
+`material`, `template`, `origin` and `chain_*`: they are dropped on read, and a
+follow-up (`origin: agent`) is removed when the daemon starts.
 
 ## Pairings — `local/channel-peers.json`
 
@@ -317,21 +313,19 @@ Index on `(resource_uid, chat_id, sent_at)`.
 
 Every run of a scheduled task (spec channels "Keep every scheduled run in the
 task's history"). Ids, times and outcomes only. Pruned by retention
-(`started_at`, 90 days by default) and with its channel.
+(`started_at`, 90 days by default).
 
 | column | type | notes |
 | --- | --- | --- |
 | `run_id` | VARCHAR PK | |
 | `task_uid` | VARCHAR NOT NULL | |
 | `task_name` | VARCHAR NOT NULL | the name at run time, kept after the task is gone |
-| `channel_uid` | VARCHAR NOT NULL | |
-| `chat_id` | VARCHAR NOT NULL | |
 | `due_at` | TIMESTAMP (UTC) | the slot it ran for |
 | `catch_up` | BOOLEAN | ran late, within its grace |
 | `trigger` | VARCHAR | `schedule` / `manual` |
 | `started_at` | TIMESTAMP (UTC) | |
 | `finished_at` | TIMESTAMP (UTC) NULL | null while running |
-| `outcome` | VARCHAR | `running` / `replied` / `silent` / `skipped` / `failed` / `stopped` |
+| `outcome` | VARCHAR | `running` / `done` / `skipped` / `failed` / `stopped` (an older `replied` or `silent` reads as `done`) |
 | `reason` | TEXT | why it was skipped, failed or stopped; `""` otherwise |
 | `conversation_id` | VARCHAR | `""` when it never started |
 

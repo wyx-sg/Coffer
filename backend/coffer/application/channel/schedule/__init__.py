@@ -1,2 +1,2 @@
-"""Scheduled tasks: turns Coffer starts on its own in a paired chat (spec
-channels, ADR scheduled-tasks-are-turns-coffer-starts-in-a-chat)."""
+"""Scheduled tasks: prompts Coffer sends an agent at a time, each run in a new
+conversation of its own (spec channels, ADR automation-is-a-scheduled-prompt)."""

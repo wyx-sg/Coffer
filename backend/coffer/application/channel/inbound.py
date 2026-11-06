@@ -40,7 +40,6 @@ from coffer.application.channel.parallel_threads import (
     route_thread,
 )
 from coffer.application.channel.ports import AgentCatalogPort, ChannelBinding, ModelSuggestionPort
-from coffer.application.channel.queued_inbound import QueuedInbound
 from coffer.application.channel.store_ports import (
     ChannelPeerRepoPort,
     ChannelThreadConversationRepoPort,
@@ -48,7 +47,12 @@ from coffer.application.channel.store_ports import (
     ThreadCursorPort,
 )
 from coffer.application.channel.turn_context import ThreadContextFolder
-from coffer.application.channel.turn_driver import ConversationPort, TurnDriver, TurnPort
+from coffer.application.channel.turn_driver import (
+    ConversationPort,
+    QueuedInbound,
+    TurnDriver,
+    TurnPort,
+)
 from coffer.application.channel.turn_driver import Session as _Session
 from coffer.application.channel.turn_media import conversation_title_hint
 from coffer.application.channel.withdraw import ReplyWithdrawal
@@ -180,10 +184,6 @@ class InboundProcessor:
         """What renders a turn into a chat — also for a web-queued turn."""
         return self._turn_driver
 
-    @property
-    def commands(self) -> ChannelCommands:
-        return self._commands
-
     def shutdown(self) -> None:
         for channel_uid in list(self._bindings):
             self.unbind(channel_uid)
@@ -285,7 +285,6 @@ class InboundProcessor:
             mention_user_name=msg.sender_display,
             title_hint=title_hint,
             conversation_thread_id=conv_thread,
-            asker_is_owner=is_owner,
         )
         await self._turn_driver.acknowledge(binding, peer, item)
         self._burst.add(

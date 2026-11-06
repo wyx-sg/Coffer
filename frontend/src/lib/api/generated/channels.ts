@@ -133,46 +133,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/scheduled-tasks/chats": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Task Chats
-         * @description The chats a new task may run in.
-         */
-        get: operations["list_task_chats_api_v1_scheduled_tasks_chats_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/scheduled-tasks/daily-report": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Set Daily Report
-         * @description Make the daily report task from its template, or move the one there is.
-         */
-        put: operations["set_daily_report_api_v1_scheduled_tasks_daily_report_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/scheduled-tasks/{uid}": {
         parameters: {
             query?: never;
@@ -367,18 +327,6 @@ export interface components {
             /** Timezone */
             timezone?: string | null;
         };
-        /** DailyReportIn */
-        DailyReportIn: {
-            /** Agent */
-            agent?: string | null;
-            /** Channel */
-            channel: string;
-            /**
-             * Time
-             * @default 18:00
-             */
-            time?: string;
-        };
         /**
          * DailySchedule
          * @description Every day at ``time`` (local).
@@ -566,7 +514,7 @@ export interface components {
              * Outcome
              * @enum {string}
              */
-            outcome: "running" | "replied" | "done" | "silent" | "skipped" | "failed" | "stopped";
+            outcome: "running" | "done" | "skipped" | "failed" | "stopped";
             /** Reason */
             reason: string;
             /** Run Id */
@@ -592,53 +540,20 @@ export interface components {
          */
         ScheduledTaskConfig: {
             /** Agent */
-            agent?: string | null;
+            agent: string;
             /**
              * Catch Up
              * @default true
              */
             catch_up?: boolean;
-            /**
-             * Chain Index
-             * @default 1
-             */
-            chain_index?: number;
-            /** Chain Started At */
-            chain_started_at?: string | null;
-            chat?: components["schemas"]["TaskChat"] | null;
             /** Cwd */
             cwd?: string | null;
-            /**
-             * Material
-             * @default none
-             * @enum {string}
-             */
-            material?: "none" | "channel_day";
-            mention?: components["schemas"]["TaskMention"] | null;
             /** Model */
             model?: string | null;
-            /**
-             * Origin
-             * @default owner
-             * @enum {string}
-             */
-            origin?: "owner" | "agent";
             /** Prompt */
             prompt: string;
             /** Schedule */
-            schedule: components["schemas"]["OnceSchedule"] | components["schemas"]["HourlySchedule"] | components["schemas"]["DailySchedule"] | components["schemas"]["WeekdaysSchedule"] | components["schemas"]["WeeklySchedule"] | components["schemas"]["CronSchedule"] | components["schemas"]["ManualSchedule"];
-            /**
-             * Session
-             * @default fresh
-             * @enum {string}
-             */
-            session?: "continue" | "fresh";
-            /**
-             * Template
-             * @default
-             * @enum {string}
-             */
-            template?: "" | "daily_report";
+            schedule: components["schemas"]["OnceSchedule"] | components["schemas"]["HourlySchedule"] | components["schemas"]["DailySchedule"] | components["schemas"]["WeeklySchedule"] | components["schemas"]["CronSchedule"] | components["schemas"]["ManualSchedule"];
         };
         /** ScheduledTaskIn */
         ScheduledTaskIn: {
@@ -658,8 +573,6 @@ export interface components {
         };
         /** ScheduledTaskOut */
         ScheduledTaskOut: {
-            /** Channel Name */
-            channel_name: string;
             config: components["schemas"]["ScheduledTaskConfig"];
             /**
              * Created At
@@ -767,82 +680,6 @@ export interface components {
              */
             state: "pending" | "refused";
         };
-        /**
-         * TaskChat
-         * @description Where the task's turn runs and its reply goes: one chat of one channel.
-         *
-         *     ``thread_id`` is where the reply is posted; ``conversation_thread_id`` is
-         *     which of the chat's conversations it joins — the two differ for a casual
-         *     reply-in-thread in a direct chat, exactly as for a message that arrived
-         *     there (spec channels "Key conversation identity by channel, chat and thread").
-         */
-        TaskChat: {
-            /** Channel */
-            channel: string;
-            /** Chat Id */
-            chat_id: string;
-            /**
-             * Chat Kind
-             * @default direct
-             * @enum {string}
-             */
-            chat_kind?: "direct" | "group";
-            /**
-             * Conversation Thread Id
-             * @default
-             */
-            conversation_thread_id?: string;
-            /**
-             * Thread Id
-             * @default
-             */
-            thread_id?: string;
-        };
-        /** TaskChatListOut */
-        TaskChatListOut: {
-            /** Items */
-            items: components["schemas"]["TaskChatOut"][];
-        };
-        /**
-         * TaskChatOut
-         * @description A chat a task may run in: one the owner uses with a channel's bot.
-         */
-        TaskChatOut: {
-            /** Channel */
-            channel: string;
-            /** Channel Name */
-            channel_name: string;
-            /** Chat Id */
-            chat_id: string;
-            /**
-             * Chat Kind
-             * @enum {string}
-             */
-            chat_kind: "direct" | "group";
-            /** Label */
-            label: string;
-        };
-        /**
-         * TaskMention
-         * @description Whom a group reply opens by @mentioning — whoever asked for the follow-up.
-         */
-        TaskMention: {
-            /**
-             * Email
-             * @default
-             */
-            email?: string;
-            /**
-             * Name
-             * @default
-             */
-            name?: string;
-            /**
-             * User Id
-             * @default
-             */
-            user_id?: string;
-        };
         /** TelegramChannelConfig */
         TelegramChannelConfig: {
             /** Bot Token Ref */
@@ -924,21 +761,6 @@ export interface components {
              * @enum {string}
              */
             platform: "telegram" | "seatalk";
-        };
-        /**
-         * WeekdaysSchedule
-         * @description Monday to Friday at ``time`` (local).
-         */
-        WeekdaysSchedule: {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            kind: "weekdays";
-            /** Time */
-            time: string;
-            /** Timezone */
-            timezone?: string | null;
         };
         /**
          * WeeklySchedule
@@ -1328,91 +1150,6 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ScheduledTaskOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    list_task_chats_api_v1_scheduled_tasks_chats_get: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TaskChatListOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    set_daily_report_api_v1_scheduled_tasks_daily_report_put: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-                "x-coffer-actor"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DailyReportIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
                 headers: {
                     [name: string]: unknown;
                 };

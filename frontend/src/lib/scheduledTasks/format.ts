@@ -20,9 +20,17 @@ export function scheduleText(t: TFunction, schedule: Schedule, lang: string): st
   return zone ? `${words} (${zone})` : words;
 }
 
-/** Where a task runs: its chat's channel, or "No chat". */
-export function whereText(t: TFunction, task: ScheduledTask): string {
-  return task.config.chat ? task.channel_name : t("scheduledTasks.noChat");
+/** The agents a task may run on, by key, as the page names them. */
+export const AGENTS = [
+  { key: "claude_code", label: "Claude Code" },
+  { key: "codex", label: "Codex" },
+] as const;
+
+/** The agent a task runs on, with its model when it names one. */
+export function agentText(task: ScheduledTask): string {
+  const c = task.config;
+  const agent = AGENTS.find((a) => a.key === c.agent)?.label ?? c.agent;
+  return c.model ? `${agent} · ${c.model}` : agent;
 }
 
 function scheduleWords(t: TFunction, schedule: Schedule, lang: string): string {
@@ -40,8 +48,6 @@ function scheduleWords(t: TFunction, schedule: Schedule, lang: string): string {
       });
     case "daily":
       return t("scheduledTasks.schedule.dailyAt", { time: schedule.time });
-    case "weekdays":
-      return t("scheduledTasks.schedule.weekdaysAt", { time: schedule.time });
     case "weekly":
       return t("scheduledTasks.schedule.weeklyAt", {
         day: weekdayName(schedule.weekday, lang),
@@ -62,9 +68,7 @@ export function weekdayName(weekday: number, lang: string): string {
 
 export const OUTCOME_TONE: Record<RunOutcome, StatusTone> = {
   running: "ok",
-  replied: "ok",
   done: "ok",
-  silent: "off",
   skipped: "warn",
   failed: "err",
   stopped: "warn",
@@ -90,25 +94,20 @@ export const STATE_TONE: Record<TaskState, StatusTone> = {
   failed: "err",
 };
 
-/** The list's groups: what the owner set up, and the follow-ups agents booked. */
-export function groupTasks(items: ScheduledTask[], filter: string) {
+/** The tasks whose name or prompt holds the filter. */
+export function filterTasks(items: ScheduledTask[], filter: string): ScheduledTask[] {
   const q = filter.trim().toLowerCase();
-  const shown = q
+  return q
     ? items.filter((task) =>
-        [task.name, task.config.prompt, task.channel_name].some((s) => s.toLowerCase().includes(q)),
+        [task.name, task.config.prompt].some((s) => s.toLowerCase().includes(q)),
       )
     : items;
-  return {
-    mine: shown.filter((task) => task.config.origin !== "agent"),
-    followUps: shown.filter((task) => task.config.origin === "agent"),
-  };
 }
 
 // --- the form ----------------------------------------------------------------
 
 export const SCHEDULE_KINDS: readonly ScheduleKind[] = [
   "daily",
-  "weekdays",
   "weekly",
   "hourly",
   "once",
@@ -116,13 +115,8 @@ export const SCHEDULE_KINDS: readonly ScheduleKind[] = [
   "manual",
 ];
 
-/** The Runs in choice for a task bound to no chat. */
-export const NO_CHAT = "__no_chat__";
-
 export interface TaskForm {
   name: string;
-  /** `channel uid` + "\n" + `chat id`, or {@link NO_CHAT}; "" while none is picked. */
-  chat: string;
   kind: ScheduleKind;
   time: string;
   minute: string;
@@ -133,15 +127,10 @@ export interface TaskForm {
   /** A one-off task's moment, as a datetime-local input holds it. */
   at: string;
   prompt: string;
-  session: "continue" | "fresh";
   agent: string;
   model: string;
   cwd: string;
   catchUp: boolean;
-}
-
-export function chatKey(channel: string, chatId: string): string {
-  return `${channel}\n${chatId}`;
 }
 
 function localInput(iso: string): string {
@@ -155,7 +144,6 @@ export function formFrom(task?: ScheduledTask): TaskForm {
   const s = c?.schedule;
   return {
     name: task?.name ?? "",
-    chat: c ? (c.chat ? chatKey(c.chat.channel, c.chat.chat_id) : NO_CHAT) : "",
     kind: s?.kind ?? "daily",
     time: s && "time" in s ? s.time : "09:00",
     minute: String(s?.kind === "hourly" ? (s.minute ?? 0) : 0),
@@ -164,8 +152,7 @@ export function formFrom(task?: ScheduledTask): TaskForm {
     timezone: s && "timezone" in s ? (s.timezone ?? "") : "",
     at: s?.kind === "once" ? localInput(s.at) : "",
     prompt: c?.prompt ?? "",
-    session: c?.session ?? "fresh",
-    agent: c?.agent ?? "",
+    agent: c?.agent ?? "claude_code",
     model: c?.model ?? "",
     cwd: c?.cwd ?? "",
     catchUp: c?.catch_up ?? true,
@@ -181,8 +168,7 @@ function scheduleFrom(form: TaskForm): Schedule {
     case "hourly":
       return { kind: "hourly", minute: Number(form.minute) || 0, ...timezone };
     case "daily":
-    case "weekdays":
-      return { kind: form.kind, time: form.time, ...timezone };
+      return { kind: "daily", time: form.time, ...timezone };
     case "weekly":
       return { kind: "weekly", weekday: form.weekday, time: form.time, ...timezone };
     case "cron":
@@ -192,34 +178,20 @@ function scheduleFrom(form: TaskForm): Schedule {
   }
 }
 
-/** The config a form saves, over what the task already holds (a follow-up's
- *  chain and mention, the daily report's template, stay as they are). */
-export function configFrom(form: TaskForm, base?: ScheduledTaskConfig): ScheduledTaskConfig {
-  const noChat = form.chat === NO_CHAT;
-  const [channel, chatId] = form.chat.split("\n");
-  // A task in no chat has no conversation to carry on: every run is fresh.
-  const session = noChat ? "fresh" : form.session;
-  const fresh = session === "fresh";
-  const sameChat = base?.chat && base.chat.channel === channel && base.chat.chat_id === chatId;
-  const config: ScheduledTaskConfig = {
-    ...base,
+/** The config a form saves. */
+export function configFrom(form: TaskForm): ScheduledTaskConfig {
+  return {
     schedule: scheduleFrom(form),
     prompt: form.prompt.trim(),
-    chat: sameChat ? base.chat : { channel, chat_id: chatId },
-    session,
-    agent: fresh ? form.agent || null : null,
-    model: fresh ? form.model.trim() || null : null,
-    cwd: fresh ? form.cwd.trim() || null : null,
+    agent: form.agent,
+    model: form.model.trim() || null,
+    cwd: form.cwd.trim() || null,
     catch_up: form.catchUp,
   };
-  if (noChat) delete config.chat;
-  return config;
 }
 
 export function formValid(form: TaskForm): boolean {
-  if (!form.chat || !form.prompt.trim()) return false;
-  // A task in no chat has no channel to fall back on: it names its agent.
-  if (form.chat === NO_CHAT && !form.agent) return false;
+  if (!form.prompt.trim() || !form.agent) return false;
   if (form.kind === "once") return form.at !== "" && !Number.isNaN(new Date(form.at).getTime());
   if (form.kind === "cron") return form.expr.trim().split(/\s+/).length === 5;
   return true;

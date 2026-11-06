@@ -1,10 +1,10 @@
-"""Channel-kind ORM model + repo for ``scheduled_task_runs``: every run of every
-scheduled task (spec channels "Keep every scheduled run in the task's history").
+"""ORM model + repo for ``scheduled_task_runs``: every run of every scheduled
+task (spec channels "Keep every scheduled run in the task's history").
 
-``runs.db`` holds it, beside the other per-chat history, and the retention
-worker prunes it by ``started_at``. A run outlives its task — a follow-up is
-removed once it has run — so rows carry the task's name as it was. Ids, times
-and outcomes only: what the agent said stays in its own session.
+``runs.db`` holds it, beside the other run history, and the retention worker
+prunes it by ``started_at``. A run outlives its task, so rows carry the task's
+name as it was. Ids, times and
+outcomes only: what the agent said stays in the run's conversation.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import UTC, datetime
 
-from sqlalchemy import TIMESTAMP, Boolean, Index, String, Text, delete, select, update
+from sqlalchemy import TIMESTAMP, Boolean, Index, String, Text, select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -30,8 +30,6 @@ class ScheduledRunModel(Base):
     run_id: Mapped[str] = mapped_column(String, primary_key=True)
     task_uid: Mapped[str] = mapped_column(String, nullable=False)
     task_name: Mapped[str] = mapped_column(String, nullable=False)
-    channel_uid: Mapped[str] = mapped_column(String, nullable=False)
-    chat_id: Mapped[str] = mapped_column(String, nullable=False)
     due_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     catch_up: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     trigger: Mapped[str] = mapped_column(String, nullable=False, default="schedule")
@@ -58,8 +56,6 @@ def _to_domain(row: ScheduledRunModel) -> ScheduledRun:
         run_id=row.run_id,
         task_uid=row.task_uid,
         task_name=row.task_name,
-        channel_uid=row.channel_uid,
-        chat_id=row.chat_id,
         due_at=_aware(row.due_at) or row.due_at,
         catch_up=bool(row.catch_up),
         trigger="manual" if row.trigger == "manual" else "schedule",
@@ -84,8 +80,6 @@ class ScheduledRunRepo:
                     run_id=run.run_id,
                     task_uid=run.task_uid,
                     task_name=run.task_name,
-                    channel_uid=run.channel_uid,
-                    chat_id=run.chat_id,
                     due_at=run.due_at,
                     catch_up=run.catch_up,
                     trigger=run.trigger,
@@ -200,10 +194,3 @@ class ScheduledRunRepo:
             )
             await session.commit()
             return int(result.rowcount or 0)
-
-    async def delete_for_channel(self, channel_uid: str) -> None:
-        async with self._sm() as session:
-            await session.execute(
-                delete(ScheduledRunModel).where(ScheduledRunModel.channel_uid == channel_uid)
-            )
-            await session.commit()

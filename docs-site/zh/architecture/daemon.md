@@ -292,7 +292,7 @@ coffer: WARNING: attached to a Coffer daemon at version 0.1.0 (/Users/you/.coffe
 | 价格刷新 | 60 s 后第一次，然后每天 | 刷新用于估算费用的模型价格表。 |
 | 提供商健康 | 启动时一次，然后每 30 分钟，每次编辑某个连接时也会再查 | 列出每个启用的模型提供商的模型，判断它的接入地址能否应答、是否接受密钥，并据此产生提供商的待处理事项。 |
 | 发布检查 | 60 s 后第一次，然后每天 | 仅限安装脚本装的二进制。向 GitHub 查询最新的 Coffer 发布，有更新的版本时在**设置 › 关于**里报告。`update_check` 关闭或设置了 `COFFER_UPDATE_CHECK=off` 时不运行。见[分发](/zh/architecture/distribution#how-the-installer-s-binaries-update)。 |
-| 定时任务 | 睡到最早任务的下一个时间点；任何任务被写入都会唤醒它 | 通过轮次驱动启动每个到期的[定时任务](/zh/architecture/chat#scheduled-turns)，在宽限期内补跑一次错过的时间点，并记录每次运行。 |
+| 定时任务 | 睡到最早任务的下一个时间点；任何任务被写入都会唤醒它 | 在新会话里启动每个到期的[定时任务](/zh/architecture/chat#scheduled-turns)，在宽限期内补跑一次错过的时间点，并记录每次运行。 |
 
 保险库扫描器、对账器、提醒检查、知识清扫、消息渠道运行时、模型代理监管者、用量摄取、MCP 会话回收器和定时任务跑在同一个共用的可唤醒循环上：提示或文件事件会唤醒它（一连串事件只跑一次），没有事件时它的周期就是兜底，一次运行失败会记日志，循环继续；但如果它所在的任务已被取消，就不再继续：清理过程把取消变成了别的错误（连接正在关闭时又来一次取消，SQLAlchemy 会抛出 "no active connection"），循环照样结束，关闭流程不会一直等它（[ADR](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/background-loops-stop-when-their-task-is-cancelled.md)）。对账器的一轮对账、监管器里会重启的任务和其他定期运行的后台任务也一样。后三个在没有需要服务的对象时停住，不留任何定时器。`coffer daemon status --workers` 列出它们每一个的上次运行，以及兜底下次什么时候运行它，见[可观测性](/zh/architecture/observability#background-tasks-and-event-loop-lag)。
 

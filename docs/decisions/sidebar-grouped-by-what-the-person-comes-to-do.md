@@ -15,7 +15,7 @@
 [Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process](standalone-secrets-are-named-references-injected-into-one-child.md),
 spec web-ui "Group the sidebar by what the user comes to do",
 spec web-ui "Keep the sidebar to its fifteen entries",
-[Scheduled Tasks Are Turns Coffer Starts in a Chat](scheduled-tasks-are-turns-coffer-starts-in-a-chat.md),
+[A Scheduled Task Is a Prompt on a Schedule](automation-is-a-scheduled-prompt.md),
 spec web-ui "Manage custom tool groups on their own page",
 spec web-ui "Show every CLI a skill requires on the CLIs page",
 spec web-ui "Give each listed resource kind one sidebar entry",
@@ -226,12 +226,11 @@ second kind of conversation. They share a group because both are how work with a
 they are two entries because the user comes to each for a different reason. A reply sent from
 Coffer into a channel-opened conversation is also delivered back to that channel (a behaviour since removed).
 
-**Scheduled tasks is an entry in Run, after Channels.** A scheduled task is a turn Coffer starts
-in a chat at a time ([Scheduled Tasks Are Turns Coffer Starts in a Chat](scheduled-tasks-are-turns-coffer-starts-in-a-chat.md)):
-it puts an agent to work, which is what Run is for, and it runs through a channel, so it sits
-next to Channels. It is not a tab of Channels because a task is managed on its own — its history,
-Run now, pause — and the page also lists Coffer's own background workers, which belong to no
-channel. It was planned as a schedule trigger on Workflows; it shipped first and on its own, so
+**Scheduled tasks is an entry in Run, after Channels.** A scheduled task is a prompt Coffer
+sends an agent at a time ([A Scheduled Task Is a Prompt on a Schedule](automation-is-a-scheduled-prompt.md)):
+it puts an agent to work, which is what Run is for. It was first a turn in a chat, which put it
+next to Channels, and it stays there. It is not a tab of Channels because a task is managed on
+its own — its history, Run now, pause — and belongs to no channel. It was planned as a schedule trigger on Workflows; it shipped first and on its own, so
 it took its own entry, and Run holds three (Conversations, Channels, Scheduled tasks). That makes
 fifteen entries; a sixteenth is still a spec change.
 

@@ -55,7 +55,7 @@ class ExperimentalFeature:
 #: — is always on and owns no entry.
 #:
 #: ``knowledge`` — the knowledge collections. ``memory`` — agent memory.
-#: ``scheduled_tasks`` — scheduled tasks, follow-ups and the daily report. Each
+#: ``scheduled_tasks`` — scheduled tasks. Each
 #: is off until the person switches it on, on this machine. A feature joins by
 #: adding one entry here and tagging its other surfaces with its key; it leaves
 #: by deleting that entry and every gate that names it, and by adding one entry

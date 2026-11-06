@@ -18,8 +18,16 @@ vi.mock("@/lib/api/scheduledTasks", () => ({
     create: vi.fn(),
     runs: vi.fn(),
     runNow: vi.fn(),
-    chats: vi.fn(),
-    setDailyReport: vi.fn(),
+  },
+}));
+vi.mock("@/lib/api/agentModels", () => ({
+  agentModelsApi: {
+    list: vi.fn().mockResolvedValue({
+      models: [{ id: "claude-sonnet", label: "Sonnet", description: "" }],
+      default_model: null,
+      builtin_default: null,
+      resolved_default: null,
+    }),
   },
 }));
 vi.mock("@/lib/api/resources", () => ({
@@ -33,7 +41,6 @@ function task(over: Partial<ScheduledTask> & { uid: string; name: string }): Sch
   return {
     description: null,
     enabled: true,
-    channel_name: "Work",
     created_at: "2026-10-28T10:00:00Z",
     updated_at: "2026-10-28T10:00:00Z",
     last_run: null,
@@ -42,25 +49,23 @@ function task(over: Partial<ScheduledTask> & { uid: string; name: string }): Sch
     config: {
       schedule: { kind: "daily", time: "09:00" },
       prompt: "Summarise the open pull requests",
-      chat: { channel: "ch-1", chat_id: "owner" },
+      agent: "claude_code",
     },
     ...over,
   };
 }
 
 const MORNING = task({ uid: "t-1", name: "Morning summary" });
-const FOLLOW_UP = task({
+const NIGHTLY = task({
   uid: "t-2",
-  name: "Deploy check",
+  name: "Nightly build",
   next_run: "2026-10-29T16:00:00Z",
   config: {
-    schedule: { kind: "once", at: "2026-10-29T16:00:00Z" },
-    prompt: "Check the deploy reached live",
-    chat: { channel: "ch-1", chat_id: "grp", chat_kind: "group", thread_id: "th-1" },
-    session: "continue",
-    origin: "agent",
-    chain_index: 1,
-    mention: { user_id: "u-1", name: "Sam" },
+    schedule: { kind: "cron", expr: "0 2 * * *" },
+    prompt: "Check the nightly build",
+    agent: "codex",
+    model: "gpt-5",
+    cwd: "~/work/site",
   },
 });
 
@@ -86,42 +91,31 @@ function renderPage(path = "/scheduled-tasks") {
   );
 }
 
-function rows(region: string): string[] {
-  return within(screen.getByRole("region", { name: region }))
+function rows(): string[] {
+  return within(screen.getByRole("list", { name: "Scheduled tasks" }))
     .getAllByRole("listitem")
     .map((li) => li.querySelector(".text-sm")?.textContent ?? "");
 }
 
 beforeEach(() => {
-  api.list.mockResolvedValue([MORNING, FOLLOW_UP]);
+  api.list.mockResolvedValue([MORNING, NIGHTLY]);
   api.runs.mockResolvedValue([]);
-  api.chats.mockResolvedValue([
-    {
-      channel: "ch-1",
-      channel_name: "Work",
-      chat_id: "owner",
-      chat_kind: "direct",
-      label: "Yuxing",
-    },
-    { channel: "ch-1", channel_name: "Work", chat_id: "grp", chat_kind: "group", label: "Release" },
-  ]);
 });
 afterEach(() => vi.clearAllMocks());
 
 describe("ScheduledTasksPage", () => {
-  test("lists the owner's tasks and the agents' follow-ups apart, the first open", async () => {
+  test("lists every task in one list, the first open", async () => {
     renderPage();
     expect(await screen.findByRole("heading", { name: "Morning summary" })).toBeInTheDocument();
-    expect(rows("My tasks")).toEqual(["Morning summary"]);
-    expect(rows("Follow-ups")).toEqual(["Deploy check"]);
+    expect(rows()).toEqual(["Morning summary", "Nightly build"]);
     expect(screen.getAllByText(/Every day at 09:00 · next/).length).toBeGreaterThan(0);
   });
 
-  test("a follow-up says who it was booked for", async () => {
+  test("an open task names its agent, model and directory", async () => {
     renderPage("/scheduled-tasks/t-2");
-    expect(await screen.findByRole("heading", { name: "Deploy check" })).toBeInTheDocument();
-    expect(screen.getByText("Follow-up 1, booked by an agent for Sam")).toBeInTheDocument();
-    expect(screen.getByText("Carries on the chat's conversation")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Nightly build" })).toBeInTheDocument();
+    expect(screen.getAllByText("Codex · gpt-5").length).toBeGreaterThan(0);
+    expect(screen.getByText("~/work/site")).toBeInTheDocument();
   });
 
   test("Run now starts the open task", async () => {
@@ -146,7 +140,7 @@ describe("ScheduledTasksPage", () => {
       due_at: "2026-10-29T09:00:00Z",
       started_at: "2026-10-29T09:00:00Z",
       finished_at: "2026-10-29T09:02:00Z",
-      outcome: "replied",
+      outcome: "done",
       reason: "",
       catch_up: false,
       trigger: "schedule",
@@ -175,50 +169,21 @@ describe("ScheduledTasksPage", () => {
     expect(screen.queryByRole("button", { name: /^Open in/ })).toBeNull();
   });
 
-  acceptance("channels", "the page creates a task in a chosen chat", async () => {
+  acceptance("channels", "the page creates a task", async () => {
     api.list.mockResolvedValue([]);
-    api.create.mockResolvedValue(task({ uid: "t-new", name: "Weekly check" }));
+    api.create.mockResolvedValue(task({ uid: "t-new", name: "Nightly build" }));
     renderPage();
     expect(await screen.findByText("No scheduled tasks yet")).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole("button", { name: "New task" })[0]);
     const dialog = await screen.findByRole("dialog");
-    fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "Weekly check" } });
-    const chat = within(dialog).getByRole("combobox", { name: /Runs in/ });
-    await waitFor(() => expect(chat).not.toBeDisabled());
-    fireEvent.keyDown(chat, { key: "ArrowDown" });
-    fireEvent.click(await screen.findByRole("option", { name: "Release · group" }));
-    fireEvent.change(within(dialog).getByLabelText(/Prompt/), {
-      target: { value: "List what shipped this week" },
-    });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Create task" }));
-    await waitFor(() => expect(api.create).toHaveBeenCalledTimes(1));
-    expect(api.create.mock.calls[0][0]).toMatchObject({
-      name: "Weekly check",
-      config: {
-        schedule: { kind: "daily", time: "09:00" },
-        prompt: "List what shipped this week",
-        chat: { channel: "ch-1", chat_id: "grp" },
-        session: "fresh",
-        catch_up: true,
-      },
-    });
-    await waitFor(() =>
-      expect(screen.getByTestId("where")).toHaveTextContent("/scheduled-tasks/t-new"),
-    );
-  });
-
-  acceptance("channels", "the page creates a task in no chat", async () => {
-    api.list.mockResolvedValue([]);
-    api.create.mockResolvedValue(task({ uid: "t-solo", name: "Nightly build" }));
-    renderPage();
-    expect(await screen.findByText("No scheduled tasks yet")).toBeInTheDocument();
-    fireEvent.click(screen.getAllByRole("button", { name: "New task" })[0]);
-    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).queryByRole("combobox", { name: /Runs in/ })).toBeNull();
     fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "Nightly build" } });
-    const chat = within(dialog).getByRole("combobox", { name: /Runs in/ });
-    await waitFor(() => expect(chat).not.toBeDisabled());
-    fireEvent.keyDown(chat, { key: "ArrowDown" });
-    fireEvent.click(await screen.findByRole("option", { name: /^No chat/ }));
+    const model = within(dialog).getByRole("combobox", { name: "Model" });
+    await waitFor(() => {
+      fireEvent.keyDown(model, { key: "ArrowDown" });
+      expect(screen.getByRole("option", { name: "Sonnet" })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole("option", { name: "Sonnet" }));
     fireEvent.change(within(dialog).getByLabelText(/Directory/), {
       target: { value: "~/work/site" },
     });
@@ -227,16 +192,19 @@ describe("ScheduledTasksPage", () => {
     });
     fireEvent.click(within(dialog).getByRole("button", { name: "Create task" }));
     await waitFor(() => expect(api.create).toHaveBeenCalledTimes(1));
-    const body = api.create.mock.calls[0][0];
-    expect(body).toMatchObject({
+    expect(api.create.mock.calls[0][0]).toEqual({
       name: "Nightly build",
       config: {
+        schedule: { kind: "daily", time: "09:00" },
         prompt: "Check the nightly build",
-        session: "fresh",
         agent: "claude_code",
+        model: "claude-sonnet",
         cwd: "~/work/site",
+        catch_up: true,
       },
     });
-    expect(body.config).not.toHaveProperty("chat");
+    await waitFor(() =>
+      expect(screen.getByTestId("where")).toHaveTextContent("/scheduled-tasks/t-new"),
+    );
   });
 });

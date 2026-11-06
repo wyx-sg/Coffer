@@ -9,7 +9,7 @@ injected ports — no per-processor state.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, Protocol
 
@@ -67,7 +67,6 @@ async def open_conversation(
     thread_id: str = "",
     *,
     chat_kind: str | None = None,
-    prefer: Mapping[str, str | None] | None = None,
 ) -> str:
     """Create a conversation from this thread's sticky settings + channel defaults
     (resolver) and make it the thread's active conversation (see "Key conversation
@@ -77,19 +76,13 @@ async def open_conversation(
     (``thread_id=""``) and each group thread open independently, so concurrent
     turns in different threads never collide on one conversation. What the
     thread has not set comes from the channel's defaults. The conversation is
-    recorded in the thread's history, which `/resume` lists.
-
-    ``prefer`` overrides individual ``preferred_*`` settings for this one
-    conversation without making them sticky: a scheduled task that names its
-    own agent, model or directory opens on them (spec channels "Run a scheduled
-    task in the chat it names")."""
+    recorded in the thread's history, which `/resume` lists."""
     row = await threads.get(binding.resource.uid, peer.chat_id, thread_id)
     kind = chat_kind or (row.chat_kind if row is not None else None)
 
     def pick(field: str) -> str | None:
-        chosen = (prefer or {}).get(field)
         value: str | None = getattr(row, field) if row is not None else None
-        return chosen or value
+        return value
 
     spec = resolve_conversation_spec(
         default_agent=binding.default_agent,

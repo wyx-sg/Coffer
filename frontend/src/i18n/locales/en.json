@@ -1370,7 +1370,7 @@
       "descriptions": {
         "knowledge": "Notes and documents that agents can look up, kept as plain files you can edit.",
         "memory": "What each agent remembers, synced into your other agents' own memory.",
-        "scheduled_tasks": "Turns Coffer starts on its own in a chat: your scheduled tasks, follow-ups agents book, and the daily report."
+        "scheduled_tasks": "Prompts Coffer sends an agent on a schedule, each run in a new conversation of its own."
       },
       "source": {
         "pin": "Pinned by COFFER_FEATURES — change it where the daemon is started",
@@ -6683,7 +6683,7 @@
   },
   "scheduledTasks": {
     "title": "Scheduled tasks",
-    "subtitle": "Prompts Coffer sends an agent on a schedule: your tasks, follow-ups agents booked, and Coffer's own background work.",
+    "subtitle": "Prompts Coffer sends an agent on a schedule, each run in a new conversation of its own.",
     "newTask": "New task",
     "search": "Filter tasks",
     "on": "On",
@@ -6693,11 +6693,9 @@
     "menu": "More for {{name}}",
     "empty": {
       "title": "No scheduled tasks yet",
-      "body": "A task asks an agent something at the time you choose, in one of your chats or in a new conversation of its own: a morning summary, a nightly check. Agents can also book follow-ups in a thread."
+      "body": "A task sends an agent a prompt at the time you choose, in a new conversation each time: a morning summary, a nightly check. What it does with the answer is up to the prompt."
     },
     "list": {
-      "mine": "My tasks",
-      "followUps": "Follow-ups",
       "none": "None yet.",
       "noMatch": "No task matches.",
       "pausedLine": "Paused",
@@ -6715,27 +6713,20 @@
       "onceAt": "Once, {{when}}",
       "hourlyAt": "Every hour at :{{minute}}",
       "dailyAt": "Every day at {{time}}",
-      "weekdaysAt": "Weekdays at {{time}}",
       "weeklyAt": "Every {{day}} at {{time}}",
       "cron": "Cron {{expr}}",
       "manual": "Only when run by hand"
     },
     "outcome": {
       "running": "Running",
-      "replied": "Replied",
-      "silent": "Nothing to say",
       "skipped": "Skipped",
       "failed": "Failed",
       "stopped": "Stopped",
       "done": "Done"
     },
-    "chatKind": {
-      "direct": "direct chat",
-      "group": "group"
-    },
     "runNow": {
       "action": "Run now",
-      "started": "Started. The reply goes to the task's chat."
+      "started": "Started in a new conversation."
     },
     "delete": {
       "action": "Delete",
@@ -6746,13 +6737,7 @@
     },
     "detail": {
       "next": "next {{next}}",
-      "what": "What it does",
-      "continues": "Carries on the chat's conversation",
-      "freshDefault": "A fresh conversation, with the channel's agent",
-      "kind": "Kind",
-      "dailyReport": "The daily report: written from today's channel conversations",
-      "followUp": "Follow-up {{index}}, booked by an agent for {{who}}",
-      "theOwner": "you"
+      "what": "What it does"
     },
     "runs": {
       "title": "History",
@@ -6766,13 +6751,9 @@
     "dialog": {
       "title": "New scheduled task",
       "editTitle": "Edit {{name}}",
-      "body": "At the time you choose, Coffer sends the prompt to an agent: in a chat, where the reply goes, or in a new conversation of its own.",
+      "body": "At the time you choose, Coffer sends the prompt to the agent below in a new conversation. Anything else — telling you, posting in a chat, a report — goes in the prompt or a skill it names.",
       "name": "Name",
       "namePlaceholder": "Named after the prompt when left empty",
-      "chat": "Runs in",
-      "chatPlaceholder": "Choose a chat",
-      "chatHint": "A chat you already use with a bot.",
-      "noChats": "No paired chats yet. Message one of your bots first, then come back.",
       "when": "When",
       "weekday": "Day",
       "time": "Time",
@@ -6781,7 +6762,6 @@
       "cron": "Cron expression",
       "kind": {
         "daily": "Every day",
-        "weekdays": "Weekdays",
         "weekly": "Every week",
         "hourly": "Every hour",
         "once": "Once",
@@ -6793,40 +6773,21 @@
       "manualHint": "Runs only when you press Run now.",
       "prompt": "Prompt",
       "promptPlaceholder": "Summarise yesterday's open pull requests",
-      "promptHint": "If there is nothing to report, the agent can stay silent and nothing is sent.",
-      "promptHintNoChat": "The answer stays in the run's conversation; open it from the task's history.",
-      "session": "Conversation",
-      "fresh": "Fresh each run",
-      "continue": "Carry on the chat's",
+      "promptHint": "The answer stays in the run's conversation; open it from the task's history. To hear about it, ask the agent in the prompt to notify you.",
       "agent": "Agent",
       "model": "Model",
       "cwd": "Directory",
-      "channelDefault": "Channel default",
       "catchUp": "Catch up",
       "catchUpHint": "A run missed while the Mac slept or Coffer was off runs once, late.",
       "submit": "Create task",
       "addFailed": "Couldn’t create the task",
       "editFailed": "Couldn’t save the task",
-      "noChat": "No chat — a new conversation each time",
-      "noChatHint": "Each run opens a new conversation on the agent below and keeps its answer there; nothing is posted. Ask the agent in the prompt to notify you when it should.",
       "agentDefault": "Agent default",
       "homeFolder": "Home folder",
       "timezone": "Timezone",
       "timezonePlaceholder": "This Mac's time",
-      "timezoneHint": "In the timezone you name (an IANA name such as Asia/Singapore), or this Mac's local time."
-    },
-    "dailyReport": {
-      "title": "Daily report",
-      "help": "Once a day, a short message to you about this channel's conversations. A day with none sends nothing.",
-      "off": "Off",
-      "on": "Every day at {{time}}",
-      "set": "Set up",
-      "save": "Save",
-      "time": "Time",
-      "open": "Open task",
-      "saved": "Daily report set for {{time}}.",
-      "failed": "Couldn’t set the daily report"
-    },
-    "noChat": "No chat"
+      "timezoneHint": "In the timezone you name (an IANA name such as Asia/Singapore), or this Mac's local time.",
+      "agentDefaultNamed": "Agent default ({{model}})"
+    }
   }
 }

@@ -108,7 +108,7 @@ owned by no feature and is always there:
  RUN
   Conversations    /conversations     — every agent's sessions, wherever they started, each opened in the agent's own terminal
   Channels         /channels          — the IM bots agents answer on
-  Scheduled tasks  /scheduled-tasks   — prompts Coffer sends an agent on a schedule, in a chat or a conversation of its own
+  Scheduled tasks  /scheduled-tasks   — prompts Coffer sends an agent on a schedule, each run a conversation of its own
  CAPABILITIES
   MCP servers      /mcp-servers       — the aggregated upstream servers
   Custom tools     /custom-tools      — HTTP APIs Coffer serves to agents as tools, in groups

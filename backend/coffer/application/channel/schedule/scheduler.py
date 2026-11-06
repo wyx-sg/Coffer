@@ -18,11 +18,10 @@ recent slot it missed and decides once:
 * the task's previous run is still going → record it skipped for that reason.
 
 Older missed slots are never run: a daily task that missed a week runs once
-(ADR scheduled-tasks-are-turns-coffer-starts-in-a-chat, "Missed runs").
+(ADR automation-is-a-scheduled-prompt, "Missed runs").
 
-Once a run has ended: a one-off is over — a follow-up the agent booked is
-removed (its history stays), the owner's is switched off — and a repeating
-task that has failed three times in a row is paused and the chat is told.
+Once a run has ended: a one-off is over and is switched off, and a repeating
+task that has failed three times in a row is paused; the page shows both.
 
 Application layer only: no infrastructure import here.
 """
@@ -30,7 +29,7 @@ Application layer only: no infrastructure import here.
 from __future__ import annotations
 
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
 from coffer.application.channel.schedule.kind import KIND
@@ -57,9 +56,6 @@ _MAX_SLEEP = 300.0
 #: How late a run may start and still not be called late.
 _ON_TIME = timedelta(minutes=1)
 
-#: Tells a task's chat something (the pause notice); best-effort.
-Notify = Callable[[Resource, str], Awaitable[None]]
-
 
 class TaskScheduler:
     def __init__(
@@ -68,7 +64,6 @@ class TaskScheduler:
         resources: ResourceService,
         runs: ScheduledRunRepoPort,
         runner: TaskRunner,
-        notify: Notify | None = None,
         clock: Callable[[], datetime] = lambda: datetime.now(tz=UTC),
         enabled: Callable[[], bool] = lambda: True,
     ) -> None:
@@ -79,7 +74,6 @@ class TaskScheduler:
         self._enabled = enabled
         self._runs = runs
         self._runner = runner
-        self._notify = notify
         self._clock = clock
         #: Tasks with a run under way, by uid.
         self._running: set[str] = set()
@@ -189,10 +183,7 @@ class TaskScheduler:
         if isinstance(config.schedule, OnceSchedule) and run.trigger == "schedule":
             if run.outcome == "running":
                 return
-            if config.origin == "agent":
-                await self._resources.delete(task.uid, ACTOR)
-            else:
-                await self._resources.set_enabled(task.uid, False, ACTOR)
+            await self._resources.set_enabled(task.uid, False, ACTOR)
             return
         if not is_repeating(config.schedule) or run.outcome != "failed":
             return
@@ -200,9 +191,3 @@ class TaskScheduler:
         failed = [r for r in recent if r.outcome == "failed"]
         if len(recent) == FAILURES_BEFORE_PAUSE and len(failed) == FAILURES_BEFORE_PAUSE:
             await self._resources.set_enabled(task.uid, False, ACTOR)
-            if self._notify is not None:
-                await self._notify(
-                    task,
-                    f"⏸ Scheduled task “{task.name}” failed {FAILURES_BEFORE_PAUSE} times "
-                    "in a row and is paused. Resume it on the Scheduled tasks page.",
-                )

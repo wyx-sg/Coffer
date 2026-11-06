@@ -20,7 +20,6 @@ from coffer.domain.channel.schedule import (
     HourlySchedule,
     ManualSchedule,
     OnceSchedule,
-    WeekdaysSchedule,
     WeeklySchedule,
     is_repeating,
     next_slot,
@@ -29,7 +28,6 @@ from coffer.domain.channel.schedule import (
 )
 from coffer.domain.channel.scheduled_task import (
     ScheduledTaskConfig,
-    TaskChat,
     grace_for,
     min_repeat_ok,
 )
@@ -87,17 +85,6 @@ def test_hourly_daily_and_weekly_slots(local_tz: None) -> None:
     assert _wall(next_slot(DailySchedule(time="18:00"), after)) == (2026, 10, 29, 18, 0)
     # weekday 0 = Monday.
     assert _wall(next_slot(WeeklySchedule(weekday=0, time="09:00"), after)) == (
-        2026,
-        11,
-        2,
-        9,
-        0,
-    )
-
-
-def test_weekdays_skip_the_weekend(local_tz: None) -> None:
-    friday_evening = _local(2026, 10, 30, 19, 0)
-    assert _wall(next_slot(WeekdaysSchedule(time="09:00"), friday_evening)) == (
         2026,
         11,
         2,
@@ -178,24 +165,24 @@ def _config(**changes: object) -> dict[str, object]:
     base: dict[str, object] = {
         "schedule": {"kind": "daily", "time": "09:00"},
         "prompt": "Check the deploy",
-        "chat": {"channel": "ch-1", "chat_id": "owner"},
+        "agent": "claude_code",
     }
     return {**base, **changes}
 
 
-def test_a_fresh_task_may_name_agent_model_and_directory() -> None:
+def test_a_task_names_its_agent_model_and_directory() -> None:
     config = ScheduledTaskConfig.model_validate(
-        _config(session="fresh", agent="codex", model="gpt-5", cwd="/tmp/work")
+        _config(agent="codex", model="gpt-5", cwd="/tmp/work")
     )
-    assert config.agent == "codex" and config.model == "gpt-5"
+    assert config.agent == "codex" and config.model == "gpt-5" and config.cwd == "/tmp/work"
 
 
 @pytest.mark.parametrize(
     "changes",
     [
-        {"session": "continue", "agent": "codex"},  # continue names no agent
-        {"session": "fresh", "model": "gpt-5"},  # a model needs its agent
-        {"origin": "agent"},  # an agent books one-offs only
+        {"agent": ""},  # a task names its agent
+        {"chat": {"channel": "ch-1", "chat_id": "owner"}},  # a task has no chat
+        {"schedule": {"kind": "weekdays", "time": "09:00"}},  # Monday to Friday is cron
         {"prompt": ""},
         {"prompt": "x" * 8001},
     ],
@@ -205,9 +192,22 @@ def test_a_config_breaking_a_rule_is_refused(changes: dict[str, object]) -> None
         ScheduledTaskConfig.model_validate(_config(**changes))
 
 
-def test_the_chat_defaults_to_a_direct_chat_with_no_thread() -> None:
-    chat = TaskChat(channel="ch", chat_id="c")
-    assert (chat.chat_kind, chat.thread_id, chat.conversation_thread_id) == ("direct", "", "")
+def test_an_older_file_is_read_without_its_chat() -> None:
+    config = ScheduledTaskConfig.model_validate(
+        {
+            "schedule": {"kind": "weekdays", "time": "08:05", "timezone": "Asia/Singapore"},
+            "prompt": "Standup",
+            "chat": {"channel": "ch-1", "chat_id": "owner"},
+            "session": "continue",
+            "mention": {"name": "Sam"},
+            "material": "channel_day",
+            "template": "daily_report",
+            "origin": "owner",
+            "chain_index": 1,
+        }
+    )
+    assert config.agent == "claude_code"
+    assert config.schedule == CronSchedule(expr="5 8 * * 1-5", timezone="Asia/Singapore")
 
 
 # --- grace -------------------------------------------------------------------
@@ -249,14 +249,12 @@ def test_a_schedule_reads_its_times_in_its_own_timezone() -> None:
     os.environ["TZ"] = "UTC"
     time.tzset()
     try:
-        schedule = WeekdaysSchedule(time="11:00", timezone="Asia/Singapore")
+        schedule = DailySchedule(time="11:00", timezone="Asia/Singapore")
         monday = datetime(2026, 11, 2, 0, 0, tzinfo=UTC)
         assert next_slot(schedule, monday) == datetime(2026, 11, 2, 3, 0, tzinfo=UTC)
         # A repeating slot's grace lasts to the end of that day in its zone:
         # 11:00 Singapore is 13 hours from Singapore's midnight.
-        config = ScheduledTaskConfig(
-            schedule=schedule, prompt="x", agent="claude_code", session="fresh"
-        )
+        config = ScheduledTaskConfig(schedule=schedule, prompt="x", agent="claude_code")
         slot = datetime(2026, 11, 2, 3, 0, tzinfo=UTC)
         assert grace_for(config, slot=slot, created_at=monday) == timedelta(hours=13)
     finally:
@@ -285,20 +283,7 @@ def test_an_unknown_timezone_is_not_a_schedule() -> None:
         DailySchedule(time="09:00", timezone="Mars/Olympus")
 
 
-def test_a_task_in_no_chat_is_fresh_on_a_named_agent() -> None:
-    base = {"schedule": {"kind": "daily", "time": "09:00"}, "prompt": "x"}
-    assert ScheduledTaskConfig.model_validate({**base, "agent": "codex"}).chat is None
-    with pytest.raises(ValidationError, match="names the agent"):
-        ScheduledTaskConfig.model_validate(base)
-    with pytest.raises(ValidationError, match="mentions no one"):
-        ScheduledTaskConfig.model_validate({**base, "agent": "codex", "mention": {"name": "S"}})
-    follow_up = {
-        "schedule": {"kind": "once", "at": "2026-11-06T10:00:00+00:00"},
-        "prompt": "x",
-        "origin": "agent",
-        "session": "continue",
-    }
-    with pytest.raises(ValidationError, match="chat it was booked in"):
-        ScheduledTaskConfig.model_validate(follow_up)
-    dumped = ScheduledTaskConfig.model_validate({**base, "agent": "codex"}).model_dump()
+def test_a_task_dumps_without_empty_fields() -> None:
+    base = {"schedule": {"kind": "daily", "time": "09:00"}, "prompt": "x", "agent": "codex"}
+    dumped = ScheduledTaskConfig.model_validate(base).model_dump(exclude_none=True)
     assert "chat" not in dumped and "timezone" not in dumped["schedule"]

@@ -337,7 +337,6 @@ class MCPGatewaySession:
             params,
             session_cwd=self._session_cwd,
             agent_label=await agent_actor_label(self._resources, self._session_agent_uid),
-            turn_token=self.turn_token,
         )
 
     async def _dispatch_handler(

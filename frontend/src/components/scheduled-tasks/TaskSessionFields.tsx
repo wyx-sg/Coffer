@@ -1,11 +1,11 @@
-// src/components/scheduled-tasks/TaskSessionFields.tsx — for a task that opens a fresh conversation: the agent, model and directory it opens with.
+// src/components/scheduled-tasks/TaskSessionFields.tsx — the agent, model and directory every run of a task opens its new conversation with.
 //
-// Each is optional for a task in a chat: left empty, the chat's channel
-// decides, as it does for a message. A task in no chat has no channel to
-// decide, so it names its agent; its directory left empty is the home folder.
+// The agent is required; the model lists the agent's catalogue, with the
+// agent's own default first; the directory is picked like every other folder
+// in Coffer (the native dialog, or typed), and left empty is the home folder.
 import { useTranslation } from "react-i18next";
 
-import { Input } from "@/components/ui/input";
+import { FolderPickerField } from "@/components/FolderPickerField";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -14,13 +14,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { NO_CHAT, type TaskForm } from "@/lib/scheduledTasks/format";
+import { useQuery } from "@tanstack/react-query";
+import { agentModelsApi } from "@/lib/api/agentModels";
+import { agentProviderModelsKey } from "@/lib/api/queryKeys";
+import { useAgentResolvedDefault } from "@/lib/hooks/useAgentModels";
+import { AGENTS, type TaskForm } from "@/lib/scheduledTasks/format";
 
-const CHANNEL_DEFAULT = "__channel__";
-const AGENTS = [
-  { key: "claude_code", label: "Claude Code" },
-  { key: "codex", label: "Codex" },
-] as const;
+// Radix Select forbids an empty item value, so "the agent's default" is this sentinel.
+const AGENT_DEFAULT = "__agent_default__";
 
 interface Props {
   form: TaskForm;
@@ -29,26 +30,30 @@ interface Props {
 
 export function TaskSessionFields({ form, set }: Props) {
   const { t } = useTranslation();
-  const noChat = form.chat === NO_CHAT;
+  const catalogue = useQuery({
+    queryKey: agentProviderModelsKey(form.agent),
+    queryFn: () => agentModelsApi.list(form.agent),
+    enabled: form.agent !== "",
+  });
+  const resolved = useAgentResolvedDefault(form.agent).data ?? null;
+  const models = catalogue.data?.models ?? [];
+  const model = form.model.trim();
+  // A stored id the catalogue does not list still shows as itself.
+  const options =
+    model && !models.some((m) => m.id === model)
+      ? [...models, { id: model, label: model, description: "" }]
+      : models;
   return (
-    <div className="grid grid-cols-[140px_minmax(0,1fr)] gap-2.5 pt-1">
+    <div className="grid grid-cols-[140px_minmax(0,1fr)] gap-2.5">
       <div className="space-y-1.5">
-        <Label htmlFor="task-agent" required={noChat}>
+        <Label htmlFor="task-agent" required>
           {t("scheduledTasks.dialog.agent")}
         </Label>
-        <Select
-          value={form.agent || CHANNEL_DEFAULT}
-          onValueChange={(v) => set({ agent: v === CHANNEL_DEFAULT ? "" : v })}
-        >
+        <Select value={form.agent} onValueChange={(agent) => set({ agent, model: "" })}>
           <SelectTrigger id="task-agent">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {noChat ? null : (
-              <SelectItem value={CHANNEL_DEFAULT}>
-                {t("scheduledTasks.dialog.channelDefault")}
-              </SelectItem>
-            )}
             {AGENTS.map((a) => (
               <SelectItem key={a.key} value={a.key}>
                 {a.label}
@@ -59,25 +64,36 @@ export function TaskSessionFields({ form, set }: Props) {
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="task-model">{t("scheduledTasks.dialog.model")}</Label>
-        <Input
-          id="task-model"
-          value={form.model}
-          autoComplete="off"
-          placeholder={t(
-            noChat ? "scheduledTasks.dialog.agentDefault" : "scheduledTasks.dialog.channelDefault",
-          )}
-          onChange={(e) => set({ model: e.target.value })}
-        />
+        <Select
+          value={model || AGENT_DEFAULT}
+          onValueChange={(v) => set({ model: v === AGENT_DEFAULT ? "" : v })}
+        >
+          <SelectTrigger id="task-model">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={AGENT_DEFAULT}>
+              {resolved
+                ? t("scheduledTasks.dialog.agentDefaultNamed", { model: resolved })
+                : t("scheduledTasks.dialog.agentDefault")}
+            </SelectItem>
+            {options.map((m) => (
+              <SelectItem key={m.id} value={m.id}>
+                {m.label || m.id}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
       <div className="col-span-2 space-y-1.5">
         <Label htmlFor="task-cwd">{t("scheduledTasks.dialog.cwd")}</Label>
-        <Input
-          id="task-cwd"
-          value={form.cwd}
-          className="font-mono"
-          autoComplete="off"
-          placeholder={noChat ? t("scheduledTasks.dialog.homeFolder") : "~/work/project"}
-          onChange={(e) => set({ cwd: e.target.value })}
+        <FolderPickerField
+          inputId="task-cwd"
+          value={form.cwd || null}
+          onChange={(cwd) => set({ cwd: cwd ?? "" })}
+          placeholder={t("scheduledTasks.dialog.homeFolder")}
+          clearable
+          typeable
         />
       </div>
     </div>

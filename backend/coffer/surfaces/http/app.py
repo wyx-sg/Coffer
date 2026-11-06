@@ -94,6 +94,7 @@ from coffer.surfaces.http.reconcile_wiring import (
 )
 from coffer.surfaces.http.release_check_wiring import wire_release_check
 from coffer.surfaces.http.routing import include_all_routers
+from coffer.surfaces.http.schedule_wiring import wire_scheduled_tasks
 from coffer.surfaces.http.secret_boundary_wiring import remember_destination_sources
 from coffer.surfaces.http.secret_composition import init_secret_store
 from coffer.surfaces.http.secret_index_wiring import wire_secret_index
@@ -243,6 +244,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     channel_runtime = wire_channel_kind(
         app, resource_svc, audit, sm, vault, secret_store, chat, builtin_tools, events
     )
+    # Scheduled tasks start turns on the chat platform too.
+    await wire_scheduled_tasks(app, resource_svc=resource_svc, sm=sm, chat=chat, events=events)
 
     # Every kind has registered its secret destinations; the approval refresh reads them.
     remember_destination_sources(resource_svc, audit)

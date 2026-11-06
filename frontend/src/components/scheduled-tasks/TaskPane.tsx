@@ -1,16 +1,15 @@
 // src/components/scheduled-tasks/TaskPane.tsx — the open task (board TaskDetail): its header and actions, then What it does and History.
 //
-// The header is the name with its state pill and one meta line (where it runs ·
-// the schedule in words · next run). What it does lists the prompt, how the
-// conversation opens, catch-up, and, for a follow-up, who booked it and where
-// the chain stands. History is every run.
+// The header is the name with its state pill and one meta line (the agent ·
+// the schedule in words · next run). What it does lists the prompt, the agent,
+// model and directory every run opens with, and catch-up. History is every run.
 import { CalendarClock } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { Section, SectionStack } from "@/components/Section";
 import { StatusPill } from "@/components/status/StatusPill";
 import type { ScheduledTask } from "@/lib/api/scheduledTasks";
-import { STATE_TONE, scheduleText, taskState, whereText } from "@/lib/scheduledTasks/format";
+import { STATE_TONE, agentText, scheduleText, taskState } from "@/lib/scheduledTasks/format";
 import { formatMoment } from "@/lib/time";
 import { TaskActions } from "./TaskActions";
 import { TaskRuns } from "./TaskRuns";
@@ -34,7 +33,7 @@ export function TaskPane({ task, onDeleted }: Props) {
   const state = taskState(task);
   const c = task.config;
   const meta = [
-    whereText(t, task),
+    agentText(task),
     scheduleText(t, c.schedule, i18n.language),
     task.next_run
       ? t("scheduledTasks.detail.next", { next: formatMoment(task.next_run, i18n.language, t) })
@@ -42,11 +41,6 @@ export function TaskPane({ task, onDeleted }: Props) {
   ]
     .filter(Boolean)
     .join(" · ");
-  const opens =
-    c.session === "continue"
-      ? t("scheduledTasks.detail.continues")
-      : [c.agent, c.model, c.cwd].filter(Boolean).join(" · ") ||
-        t("scheduledTasks.detail.freshDefault");
   return (
     <div className="flex flex-col gap-5">
       <header className="flex min-w-0 items-start gap-3">
@@ -73,23 +67,13 @@ export function TaskPane({ task, onDeleted }: Props) {
             <Row label={t("scheduledTasks.dialog.prompt")}>
               <span className="whitespace-pre-wrap">{c.prompt}</span>
             </Row>
-            <Row label={t("scheduledTasks.dialog.session")}>{opens}</Row>
+            <Row label={t("scheduledTasks.dialog.agent")}>{agentText(task)}</Row>
+            <Row label={t("scheduledTasks.dialog.cwd")}>
+              <span className="font-mono">{c.cwd || t("scheduledTasks.dialog.homeFolder")}</span>
+            </Row>
             <Row label={t("scheduledTasks.dialog.catchUp")}>
               {c.catch_up ? t("scheduledTasks.on") : t("scheduledTasks.off")}
             </Row>
-            {c.template === "daily_report" ? (
-              <Row label={t("scheduledTasks.detail.kind")}>
-                {t("scheduledTasks.detail.dailyReport")}
-              </Row>
-            ) : null}
-            {c.origin === "agent" ? (
-              <Row label={t("scheduledTasks.detail.kind")}>
-                {t("scheduledTasks.detail.followUp", {
-                  index: c.chain_index ?? 1,
-                  who: c.mention?.name || t("scheduledTasks.detail.theOwner"),
-                })}
-              </Row>
-            ) : null}
           </dl>
         </Section>
         <TaskRuns uid={task.uid} />

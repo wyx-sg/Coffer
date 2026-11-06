@@ -217,7 +217,7 @@ The gates are request-time:
 
 - Every router whose prefix falls under a feature's prefix is mounted with a feature-gate dependency that checks the feature's state. The routes stay registered, so the OpenAPI document never changes with the switch, and a switch takes effect on the next request.
 - The kind-agnostic `/api/v1/resources` routes refuse a resource whose kind a switched-off feature owns, and leave such resources out of lists.
-- The MCP gateway's builtin tools `coffer__search_tools` and, inside a Coffer turn, `coffer__channel_read_thread` belong to no feature. The three scheduled-task tools belong to `scheduled_tasks` and leave every turn's tool list while it is off.
+- The MCP gateway's builtin tools — `coffer__search_tools`, and inside a Coffer turn `coffer__channel_read_thread` — belong to no feature, so switching a feature on or off never changes the tool list.
 - CLI commands reach the daemon over the gated routes and print the daemon's one line naming **Settings › Features** as where to switch it on, then exit 1.
 - Background passes owned by the feature skip their rounds: the knowledge sweep while `knowledge` is off, the memory sync while `memory` is off, and the task scheduler while `scheduled_tasks` is off (a slot it passed is caught up once or skipped on switch-on, like any missed slot).
 - Whatever a feature put in front of agents is withdrawn and returns on switch-on: the knowledge sections of the `coffer-guide` skill (`knowledge`). The copies the memory sync wrote into the agents stay, as ordinary memory the agents own (Off keeps data); **Undo sync** removes them.

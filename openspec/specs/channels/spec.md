@@ -2990,52 +2990,38 @@ they are closed as [experimental-features](../experimental-features/spec.md)
 "Close the scheduled tasks feature's surfaces" says.
 A scheduled task MUST be a resource of kind `scheduled_task`, kept on this
 machine (`local/resources/scheduled_task/<uid>.json`) and never synced, since
-the chat, agent and directory it names are this machine's. Its config MUST
-carry a schedule and the prompt the run is given (at most 8000 characters),
-and MAY carry the chat it runs in: a channel uid and a chat that channel has
-paired, with the thread it answers in. A task that names no chat runs in no
-chat ("Run a task bound to no chat in a fresh conversation of its own"); a
-follow-up an agent books always names the chat it was booked in. A schedule is
-one of: once at a time, every hour at a minute, every day at a time, Monday to
-Friday at a time, one weekday at a time, a five-field cron expression, or
-manual (only Run now starts it); a repeating schedule MAY name an IANA
-timezone, and its times are that zone's wall clock, or this machine's when it
-names none. A task MAY run `fresh`, in a new conversation each time, naming
-its own agent, model and working directory; one that `continue`s runs in the
-chat's current conversation and names none. A task in no chat MUST run
-`fresh` and MUST name its agent.
+the agent and directory it names are this machine's. Its config MUST carry a
+schedule, the prompt the run is given (at most 8000 characters) and the agent
+every run opens on (`claude_code` or `codex`), and MAY carry the model (the
+agent's default otherwise) and the working directory (the home folder
+otherwise). That is the whole task: it names no chat and no template, and what
+it does with a chat, a report or a flow is its prompt's (ADR
+automation-is-a-scheduled-prompt). A schedule is one of: once at a time, every
+hour at a minute, every day at a time, one weekday at a time, a five-field
+cron expression, or manual (only Run now starts it); a repeating schedule MAY
+name an IANA timezone, and its times are that zone's wall clock, or this
+machine's when it names none.
 
-A task MUST be refused, on every path that creates or edits one, when its chat
-is not paired with the channel, when its channel is not one on this machine,
-when a one-off's time is being set to one that has passed, when a repeating
-schedule's slots come closer than 15 minutes apart, when its timezone is not a
-known IANA zone, or when it names no chat and either names no agent or
-continues a conversation. `POST /api/v1/scheduled-tasks` creates one and names
-it after its prompt when no name is given; editing, renaming, pausing
-(switching it off), resuming and deleting are the kind-agnostic resource
-routes. A channel's removal removes the tasks that run in its chats, and their
-history.
+A task MUST be refused, on every path that creates or edits one, when it names
+no agent, when a one-off's time is being set to one that has passed, when a
+repeating schedule's slots come closer than 15 minutes apart, or when its
+timezone is not a known IANA zone. `POST /api/v1/scheduled-tasks` creates one
+and names it after its prompt when no name is given; editing, renaming,
+pausing (switching it off), resuming and deleting are the kind-agnostic
+resource routes. A task file an older Coffer wrote MUST still be read: the
+chat, conversation mode, mention, material and template it carries are
+dropped, it runs on Claude Code when it named no agent, and a Monday-to-Friday
+schedule reads as the cron expression it meant; a follow-up an agent booked
+in a chat is removed when the daemon starts, its history kept.
 
-#### Scenario: a task in a paired chat is created
-- **GIVEN** a channel with one paired direct chat
-- **WHEN** the owner creates a task in that chat, every weekday at 09:00, with a prompt
-- **THEN** a `scheduled_task` resource is stored under `local/` with that schedule, prompt and chat
-- **AND** it is listed with its next run, the coming weekday at 09:00 local time
-
-#### Scenario: a task in no chat is created
+#### Scenario: a task is created
 - **GIVEN** no channel at all
-- **WHEN** the owner creates a task on Codex in `~/work/site`, every weekday at 11:00 in `Asia/Singapore`, naming no chat
-- **THEN** it is stored with no chat and listed with its next run at 11:00 Singapore time
+- **WHEN** the owner creates a task on Codex in `~/work/site`, every day at 11:00 in `Asia/Singapore`
+- **THEN** it is stored under `local/` with that schedule, prompt, agent and directory, and listed with its next run at 11:00 Singapore time
 
-#### Scenario: a task in no chat without an agent is refused
-- **WHEN** a task is created naming no chat and no agent
-- **THEN** it is refused saying a task in no chat names the agent it runs on, and nothing is stored
-
-#### Scenario: a task in a chat the channel never paired is refused
-- **GIVEN** a channel with one paired chat
-- **WHEN** a task is created naming another chat id
-- **THEN** it is refused with a message saying the chat is not paired, and nothing is stored
-- **AND** the generic resource create refuses it the same way
+#### Scenario: a task without an agent is refused
+- **WHEN** a task is created naming no agent
+- **THEN** it is refused, and nothing is stored
 
 #### Scenario: a schedule closer than 15 minutes is refused
 - **WHEN** a task is created with the cron expression `*/5 * * * *`
@@ -3044,6 +3030,12 @@ history.
 #### Scenario: an unknown timezone is refused
 - **WHEN** a task is created with timezone `Mars/Olympus`
 - **THEN** it is refused naming the timezone, and nothing is stored
+
+#### Scenario: a task an older Coffer wrote is read without its chat
+- **GIVEN** a task file that runs in a chat, `fresh`, every weekday at 09:00, naming no agent, and a follow-up an agent booked
+- **WHEN** the daemon starts
+- **THEN** the task is listed on Claude Code with the cron expression `0 9 * * 1-5` and no chat
+- **AND** the follow-up is gone
 
 ### Requirement: Run a scheduled task at the times it names
 The daemon MUST start each enabled task when its next slot comes, the slot
@@ -3054,18 +3046,17 @@ daylight-saving change. A local time a daylight-saving change skips on one day
 MUST run once, at the first valid time after it. The worker MUST sleep until
 the earliest slot any enabled task names and no longer than five minutes, and
 MUST be woken early by any resource change and by every run that ends. A
-one-off task is over once its run ends: a follow-up an agent booked is removed
-(its history stays), and the owner's own one-off is switched off. A task whose
+one-off task is over once its run ends and is switched off. A task whose
 previous run is still going when its next slot comes MUST NOT start a second
 run; the slot is recorded skipped for that reason.
 
 #### Scenario: a daily task runs at its time
 - **GIVEN** an enabled task every day at 09:00, created yesterday
 - **WHEN** the local clock reaches 09:00
-- **THEN** one run starts in its chat, and its next run is tomorrow at 09:00
+- **THEN** one run starts, and its next run is tomorrow at 09:00
 
 #### Scenario: a task in another timezone runs at that zone's time
-- **GIVEN** a machine on UTC and a task every weekday at 11:00 in `Asia/Singapore`
+- **GIVEN** a machine on UTC and a task every day at 11:00 in `Asia/Singapore`
 - **WHEN** its next run is computed on a Monday at 00:00 UTC
 - **THEN** it is that Monday at 03:00 UTC, 11:00 Singapore time
 
@@ -3075,10 +3066,10 @@ run; the slot is recorded skipped for that reason.
 - **THEN** that day's run is due at 03:00 New York time
 - **AND** the following run is 02:30 the next day
 
-#### Scenario: a one-off follow-up is removed after it runs
-- **GIVEN** a follow-up an agent booked for 14:30
+#### Scenario: a one-off task is switched off after it runs
+- **GIVEN** a task once at 14:30
 - **WHEN** its run ends
-- **THEN** the task is gone from the list and its run stays in the history
+- **THEN** the task is switched off and its run stays in the history
 
 #### Scenario: a slot whose previous run is still going is skipped
 - **GIVEN** an hourly task whose 10:00 run is still running at 11:00
@@ -3088,96 +3079,84 @@ run; the slot is recorded skipped for that reason.
 ### Requirement: Catch up a missed run once, within its grace
 A slot missed because the Mac slept or Coffer was not running MUST run once,
 late, when the daemon notices it — if the task catches up (on by default) and
-the slot is within its grace — and the run MUST say it is late, when it was due
-and when it is really running. Only the most recent missed slot MAY run; every
-older one is let go. A one-off's grace is half the time between its booking and
-its slot, no less than 15 minutes and no more than 2 hours; a repeating slot's
-grace lasts until the end of that slot's day on the schedule's wall clock. A
-slot past its grace, or more than a minute late on a task that does not catch
-up, MUST be recorded skipped with the reason and not run.
+the slot is within its grace — and the run's message MUST say, after the
+prompt, when it was due, when it is really running, and that the agent should
+judge whether the work still makes sense. Only the most recent missed slot MAY
+run; every older one is let go. A one-off's grace is half the time between its
+creation and its slot, no less than 15 minutes and no more than 2 hours; a
+repeating slot's grace lasts until the end of that slot's day on the
+schedule's wall clock. A slot past its grace, or more than a minute late on a
+task that does not catch up, MUST be recorded skipped with the reason and not
+run.
 
 #### Scenario: a daily task missed this morning runs late, once
 - **GIVEN** a daily 09:00 task and a Mac asleep from 08:00 to 11:00
 - **WHEN** the Mac wakes at 11:00
-- **THEN** the task runs once, and its run opens by saying it was due at 09:00 and is running late at 11:00
+- **THEN** the task runs once, and its message says after the prompt that it was due at 09:00 and is running late at 11:00
 
-#### Scenario: a follow-up missed past its grace is skipped
-- **GIVEN** a follow-up booked at 10:00 for 10:30 (grace 15 minutes)
+#### Scenario: a one-off missed past its grace is skipped
+- **GIVEN** a task created at 10:00 to run once at 10:30 (grace 15 minutes)
 - **WHEN** Coffer was off until 11:00
-- **THEN** the follow-up does not run and its slot is recorded skipped as missed
+- **THEN** the task does not run and its slot is recorded skipped as missed
 
 #### Scenario: a week of missed daily slots runs once
 - **GIVEN** a daily task and Coffer stopped for a week
 - **WHEN** Coffer starts
 - **THEN** at most one run starts, for today's slot, and no run starts for the older slots
 
-### Requirement: Run a scheduled task in the chat it names
-A run MUST enter its chat the way a message does: through the channel's turn
-driver, queued behind whatever that conversation is doing, rendered by the same
-live surface, and answered in the task's thread. A task that `continue`s runs in
-the chat thread's active conversation, which a run does not roll over for being
-idle; a `fresh` task opens a new conversation with its own agent, model and
-directory where it names them (the chat's settings otherwise), and that
-conversation becomes the thread's active one, as `/new` would. A follow-up's
-reply MUST mention the person who asked for it, where the transport can. A run
-that cannot start — the channel is not running, the chat is no longer paired,
-the conversation cannot be opened, the conversation's queue is full — MUST be
-recorded failed with the reason, and the chat told in one line when it can
-still be reached. A repeating task whose last three runs all failed MUST be
-paused, and its chat told, while its channel is running, that it was paused and
-where to resume it.
+### Requirement: Run a scheduled task in a fresh conversation of its own
+Every run MUST open a new conversation on the task's agent, with its model
+when it names one and in its directory, or the home folder when it names none,
+titled after the task; that conversation MUST be listed on the Conversations
+page like any other and MUST be the run's conversation in its history. Its one
+turn MUST be given the task's prompt as written, followed only by the late
+note of "Catch up a missed run once, within its grace" when the run is late.
+Nothing MUST be posted to any chat by Coffer for a run, however it ends; the
+agent reaches the owner, when the prompt asks it to, the way any turn can
+(`coffer__channel_notify`). The run MUST be closed `done` when its turn
+finishes, `failed` with the turn's error when it fails, and `stopped` when it
+is stopped; a conversation that cannot be opened MUST close it `failed` with
+the reason. A repeating task whose last three runs all failed MUST be paused.
 
-#### Scenario: a follow-up answers in its thread and mentions the asker
-- **GIVEN** a follow-up Sam's question booked in a group thread
-- **WHEN** it runs
-- **THEN** the reply is posted in that thread, in the thread's conversation, mentioning Sam
+#### Scenario: a task runs in a new conversation of its own each time
+- **GIVEN** a task on Claude Code in `~/work/site`
+- **WHEN** its slot comes twice, on two days
+- **THEN** each run opens a new Claude Code conversation in `~/work/site`, titled after the task, whose turn is the task's prompt
+- **AND** each run is closed `done` with its own conversation, and no chat receives anything
 
-#### Scenario: a fresh task opens a new conversation on its own agent
-- **GIVEN** a task that runs `fresh` on Codex in `~/work/site`, in a direct chat whose conversation runs Claude Code
+#### Scenario: a task whose turn fails is recorded failed
+- **GIVEN** a task whose agent's turn ends with an error
 - **WHEN** it runs
-- **THEN** a new conversation on Codex in `~/work/site` answers it and becomes the chat's active conversation
+- **THEN** its run is `failed` with that error, and no chat receives anything
 
 #### Scenario: a repeating task that keeps failing is paused
-- **GIVEN** a daily task whose chat is no longer paired with its channel
+- **GIVEN** a daily task whose agent's turn fails every time
 - **WHEN** its third run in a row fails
-- **THEN** the task is switched off and the chat is told the task was paused and where to resume it
-
-### Requirement: Stay silent when a scheduled run has nothing to say
-A run's reply that opens with `[SILENT]` MUST NOT be sent to the chat: the live
-surface is withdrawn and nothing else is posted, and the run is recorded
-`silent`. This applies to scheduled runs only; a reply to a person's message is
-sent whatever it starts with.
-
-#### Scenario: a follow-up with nothing new says nothing
-- **GIVEN** a follow-up to check whether a deploy reached live
-- **WHEN** the agent replies `[SILENT] still deploying, will check again` after booking the next follow-up
-- **THEN** nothing is posted in the chat and the run is recorded silent
+- **THEN** the task is switched off
 
 ### Requirement: Keep every scheduled run in the task's history
 Every slot a task reached and every Run now MUST be one row in `runs.db`
 (`scheduled_task_runs`), opened `running` before the run starts and closed with
-how it ended: `replied`, `silent`, `done`, `skipped`, `failed` or `stopped`,
-with the reason for a skip or failure, when it was due, when it started and
-finished, whether it ran late, whether it was started by hand, and the
-conversation it ran in. `replied` and `silent` are a chat run's; `done` is the
-run of a task in no chat whose turn finished. A row a stopped daemon left
-`running` MUST be closed `failed` when the daemon next starts. The rows are
-pruned by the retention worker (`scheduled_task_runs`, 90 days by default).
-`GET /api/v1/scheduled-tasks/{uid}/runs` and `coffer task runs` list a task's
-rows, newest first. Each listed row MUST carry the conversation it ran in, with
-that conversation's title, agent, native session and whether a turn is running
-on it, or none when the run started no conversation or it has since been
-removed. On the Scheduled tasks page every history row with a conversation MUST
-show its title as a link to the Conversations page, which lands on that
-conversation in its full list and opens it there ([chat](../chat/spec.md)
-"Open a conversation in the terminal"), so the owner can read the run and carry
-it on. The history row has no open button of its own: conversations open from
-one place.
+how it ended: `done`, `skipped`, `failed` or `stopped`, with the reason for a
+skip or failure, when it was due, when it started and finished, whether it ran
+late, whether it was started by hand, and the conversation it ran in. A row a
+stopped daemon left `running` MUST be closed `failed` when the daemon next
+starts. The rows are pruned by the retention worker (`scheduled_task_runs`, 90
+days by default). `GET /api/v1/scheduled-tasks/{uid}/runs` and `coffer task
+runs` list a task's rows, newest first. Each listed row MUST carry the
+conversation it ran in, with that conversation's title, agent, native session
+and whether a turn is running on it, or none when the run started no
+conversation or it has since been removed. On the Scheduled tasks page every
+history row with a conversation MUST show its title as a link to the
+Conversations page, which lands on that conversation in its full list and
+opens it there ([chat](../chat/spec.md) "Open a conversation in the terminal"),
+so the owner can read the run and carry it on. The history row has no open
+button of its own: conversations open from one place.
 
 #### Scenario: a run's history row says how it ended
-- **GIVEN** a task that ran twice: once it replied, once it was skipped as missed
+- **GIVEN** a task that ran twice: once it finished, once it was skipped as missed
 - **WHEN** its history is listed
-- **THEN** two rows are listed newest first, one `replied` with its conversation and one `skipped` with the reason
+- **THEN** two rows are listed newest first, one `done` with its conversation and one `skipped` with the reason
 
 #### Scenario: a run's conversation opens from its history
 - **GIVEN** a task with two runs: the conversation of one still exists, the other's has been removed
@@ -3190,173 +3169,24 @@ one place.
 - **WHEN** the daemon starts again
 - **THEN** that row is `failed` with the reason that Coffer stopped while it was running
 
-### Requirement: Let an agent book a follow-up in the thread it is answering
-Inside a channel turn an agent MUST be offered `coffer__schedule_task`,
-`coffer__scheduled_tasks` and `coffer__cancel_scheduled_task`. The chat, thread
-and asker MUST come from the turn the call is made in, never from the tool's
-arguments. `coffer__schedule_task` with a prompt and `after` (`30m`, `2h`,
-`1d`, `1h30m`) or `at` (an ISO time, local when it has no offset) books a
-follow-up in that thread for itself: at least 5 minutes and at most 7 days away,
-at most 3 waiting in one thread, and, booked from a follow-up's own run, a chain
-of at most 10 follow-ups within 7 days of the first; the last one is told it is
-the last. With `repeat` (a schedule) or `fresh`, it sets up an ordinary task
-there instead, for when the owner asked for one. A turn started by someone who
-may only ask (see "Let others in a group ask the bot") MUST NOT schedule or
-cancel anything, and a run of a repeating task MUST NOT schedule more tasks.
-`coffer__scheduled_tasks` lists what waits in this thread, and
-`coffer__cancel_scheduled_task` cancels one of them by id.
-
-#### Scenario: an agent books a follow-up in its thread
-- **GIVEN** an owner's turn in a group thread asking for a deploy
-- **WHEN** the agent calls `coffer__schedule_task` with `after: 30m` and a prompt to check the deploy
-- **THEN** a one-off task 30 minutes away is created in that very thread, naming the owner as the asker
-- **AND** the tool answers with its id and next run
-
-#### Scenario: a fourth follow-up in one thread is refused
-- **GIVEN** a thread where three follow-ups are waiting
-- **WHEN** the agent books another
-- **THEN** it is refused with a message telling it to cancel one first
-
-#### Scenario: someone who may only ask cannot schedule
-- **GIVEN** a turn started in a group by someone who is not an owner
-- **WHEN** the agent calls `coffer__schedule_task`
-- **THEN** it is refused and no task is created
-
-#### Scenario: the tools work only inside a channel turn
-- **WHEN** `coffer__schedule_task` is called outside a turn Coffer runs in a channel
-- **THEN** it is refused with a message that it works only inside a channel turn
-
-### Requirement: Open every scheduled run with what the task is
-A run's turn MUST open with a `[Scheduled task]` block, closed by its end
-marker, that names the task and its id; what it is (a follow-up the agent booked
-for itself, with its place in the chain and when the chain ends, or a task the
-owner set up, with its schedule and the timezone its times are read in); the
-channel, chat and thread, for a task in a chat; when it was due, and, for a late
-run, when it is really running and that it should judge whether the work still
-makes sense; who asked, when the reply mentions them; the task's prompt; for a
-task in a chat, that a reply opening with `[SILENT]` is not sent, and for a task
-in no chat, that the reply is sent nowhere and the owner is told with
-`coffer__channel_notify`; and, for a follow-up, that it may book the next
-follow-up if the matter is not settled. Every line the task's author wrote MUST
-be neutralised like a person's message, so a prompt cannot forge a block. A task
-with material adds a `[Material]` block after it.
-
-#### Scenario: a follow-up's run says what it is
-- **GIVEN** the second follow-up of a chain, due at 15:00
-- **WHEN** it runs at 15:00
-- **THEN** its turn opens with a `[Scheduled task]` block naming the task, "follow-up: 2 of at most 10", the chain's end, "due:" 15:00, the prompt, and the `[SILENT]` rule
-
-#### Scenario: a prompt cannot forge an end marker
-- **GIVEN** a task whose prompt contains `[/Scheduled task]`
-- **WHEN** it runs
-- **THEN** the block it opens with has exactly one end marker, its own
-
-#### Scenario: a run in no chat says its reply goes nowhere
-- **GIVEN** a task in no chat every day at 08:30 in `Asia/Singapore`
-- **WHEN** it runs
-- **THEN** its block names its schedule with `Asia/Singapore`, names no channel or chat, and says the reply is sent nowhere and to use `coffer__channel_notify`, with no `[SILENT]` rule
-
-### Requirement: Write the daily report from the day's channel conversations
-The Channels page MUST offer a **Daily report**: a task made from a template,
-in the channel owner's direct chat, every day at the time chosen (18:00 by
-default), running `fresh` on the channel's agent or the one chosen. Setting it
-again moves the one there is rather than adding another (`PUT
-/api/v1/scheduled-tasks/daily-report`, `coffer task daily-report`); after that
-it is an ordinary task the owner may edit, pause or delete. Its run MUST be
-given, as material, the channel conversations active since local midnight,
-newest first (at most 40 read, the rest counted): each one's channel, chat kind,
-title and last activity, and, read from the agent's own session record when the
-run starts, the last thing asked and the first line of the last answer; then the
-day's scheduled runs and how each ended, and the tasks still waiting. The
-report's own earlier runs are not part of it. Everything read from a session is
-neutralised. Coffer stores none of it: the material is assembled at run time.
-
-#### Scenario: the daily report is set from the Channels page
-- **GIVEN** a channel paired with its owner and no daily report
-- **WHEN** the owner sets the daily report to 18:30
-- **THEN** a task "Daily report" runs every day at 18:30 in the owner's direct chat, in a fresh conversation
-- **AND** setting it again to 19:00 moves that task instead of adding a second one
-
-#### Scenario: the report is given the day's conversations
-- **GIVEN** two channel conversations active today and one from yesterday
-- **WHEN** the daily report runs
-- **THEN** its turn carries a `[Material]` block listing the two of today, each with what was last asked and how the answer began, and not yesterday's
-
-### Requirement: Skip the daily report on a day with no conversations
-A daily report whose day had no channel conversation MUST NOT start a turn or
-send anything; its run MUST be recorded `skipped` with the reason that there
-were no channel conversations today.
-
-#### Scenario: a quiet day sends no report
-- **GIVEN** no channel conversation was active today
-- **WHEN** the daily report's time comes
-- **THEN** nothing is sent and its run is recorded skipped because there were no channel conversations today
-
-### Requirement: List and cancel a chat's scheduled tasks from /status
-`/status` MUST list, under a "Scheduled:" line, the enabled tasks that run in
-the conversation it is about, soonest first: each one's next time (the time
-alone today, the date and time otherwise) and name, at most five, then how many
-more there are on the Scheduled tasks page. Where the transport has buttons, the
-card MUST carry a "Cancel ⏰n" button for each one listed; tapping it, an
-owner-gated tap like every card's, removes that task and says so.
-
-#### Scenario: /status lists a waiting follow-up with its Cancel button
-- **GIVEN** a direct chat with a follow-up waiting at 15:00 today
-- **WHEN** the owner sends `/status`
-- **THEN** the card lists "Scheduled:" and "⏰ 1. 15:00" with the follow-up's name, and carries a "Cancel ⏰1" button
-- **AND** tapping it removes the follow-up and says it was cancelled
-
 ### Requirement: Manage scheduled tasks from the Scheduled tasks page
 The web app MUST have a **Scheduled tasks** page in the Run group of the
-navigation. Its **My tasks** section lists every task, soonest first, with its
-schedule, where it runs ("No chat" for a task in no chat), its next run and how
-its last run ended; a running task says so. Opening a task shows its prompt,
-its settings and its run history; it offers Run now (refused while it runs),
-Pause or Resume, Edit (through a dialog) and Delete. **New task** creates one
-either in a paired chat chosen from a list (`GET
-/api/v1/scheduled-tasks/chats`) or in no chat, with its agent, model and
-directory; either may name a timezone for a repeating schedule. The CLI mirrors
-the page:
-`coffer task list|show|add|update|enable|disable|delete|run|runs|chats|daily-report`;
-a task in no chat is one whose config names no chat.
+navigation. It lists every task, soonest first, with its schedule, its agent,
+its next run and how its last run ended; a running task says so. Opening a
+task shows its prompt, its settings and its run history; it offers Run now
+(refused while it runs), Pause or Resume, Edit (through a dialog) and Delete.
+**New task** asks for a name, the schedule (with a timezone for a repeating
+one), the prompt, the agent, the model — the agent's default or one of the
+models the agent offers — and the directory, picked with the folder picker
+the other pages use or typed, and empty for the home folder. The CLI mirrors
+the page: `coffer task list|show|add|update|enable|disable|delete|run|runs`.
 
 #### Scenario: the owner runs a task now from the page
 - **GIVEN** a paused weekly task
 - **WHEN** the owner opens it and presses Run now
-- **THEN** one run starts at once in its chat, recorded as started by hand, and the task stays paused
+- **THEN** one run starts at once, recorded as started by hand, and the task stays paused
 
-#### Scenario: the page creates a task in a chosen chat
-- **GIVEN** a channel with a paired direct chat
-- **WHEN** the owner presses New task, picks that chat, "Every day" at 08:30 and writes a prompt
-- **THEN** the task is listed with its next run at 08:30
-
-#### Scenario: the page creates a task in no chat
+#### Scenario: the page creates a task
 - **GIVEN** no channel at all
-- **WHEN** the owner presses New task, picks "No chat", Claude Code, a directory, "Every day" at 08:30 and a prompt
-- **THEN** the task is listed as running in no chat with its next run at 08:30
-
-### Requirement: Run a task bound to no chat in a fresh conversation of its own
-A run of a task that names no chat MUST open a new conversation on the task's
-agent, with its model when it names one and in its directory, or the home
-folder when it names none, titled after the task; that conversation MUST be
-listed on the Conversations page like any other and MUST be the run's
-conversation in its history. The run's one turn MUST open with the
-`[Scheduled task]` block ("Open every scheduled run with what the task is"),
-which names no channel, chat or thread and says that the reply is sent nowhere
-and that the agent tells the owner, when it has to, with
-`coffer__channel_notify`. Nothing MUST be posted to any chat for such a run,
-however it ends, and no chat is told when such a task is paused. The run MUST
-be closed `done` when its turn finishes, `failed` with the turn's error when it
-fails, and `stopped` when it is stopped; a conversation that cannot be opened
-MUST close it `failed` with the reason.
-
-#### Scenario: a task in no chat runs in a new conversation of its own
-- **GIVEN** a task in no chat on Claude Code in `~/work/site`
-- **WHEN** its slot comes twice, on two days
-- **THEN** each run opens a new Claude Code conversation in `~/work/site`, titled after the task, whose turn opens with a `[Scheduled task]` block naming no chat
-- **AND** each run is closed `done` with its own conversation, and no chat receives anything
-
-#### Scenario: a task in no chat whose turn fails is recorded failed
-- **GIVEN** a task in no chat whose agent's turn ends with an error
-- **WHEN** it runs
-- **THEN** its run is `failed` with that error, and no chat receives anything
+- **WHEN** the owner presses New task, picks Claude Code, a directory, "Every day" at 08:30 and writes a prompt
+- **THEN** the task is listed on Claude Code with its next run at 08:30

@@ -2,10 +2,9 @@
 Scheduled tasks page").
 
 What is particular to a task lives here: creating one (named after its prompt
-when no name is given), its run history, Run now, the chats a task may run in,
-and the daily report made from its template. Editing, pausing, renaming and
-removing a task are the kind-agnostic ``/api/v1/resources`` routes; the kind
-checks the chat and the schedule on every one of them.
+when no name is given), its run history and Run now. Editing, pausing,
+renaming and removing a task are the kind-agnostic ``/api/v1/resources``
+routes; the kind checks the schedule on every one of them.
 """
 
 from __future__ import annotations
@@ -14,7 +13,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from coffer.domain.channel.scheduled_run import ScheduledRun
 from coffer.domain.channel.scheduled_task import ScheduledTaskConfig
@@ -31,14 +30,14 @@ router = APIRouter(prefix="/api/v1/scheduled-tasks", dependencies=[Depends(requi
 class _Wired:
     tasks: Any = None
     scheduler: Any = None
-    chats: Any = None
+    reads: Any = None
 
 
 _WIRED = _Wired()
 
 
-def set_schedule_services(*, tasks: TaskService, scheduler: TaskScheduler, chats: Any) -> None:
-    _WIRED.tasks, _WIRED.scheduler, _WIRED.chats = tasks, scheduler, chats
+def set_schedule_services(*, tasks: TaskService, scheduler: TaskScheduler, reads: Any) -> None:
+    _WIRED.tasks, _WIRED.scheduler, _WIRED.reads = tasks, scheduler, reads
 
 
 def _tasks() -> TaskService:
@@ -68,7 +67,7 @@ class ScheduledRunOut(BaseModel):
     due_at: datetime
     started_at: datetime
     finished_at: datetime | None
-    outcome: Literal["running", "replied", "done", "silent", "skipped", "failed", "stopped"]
+    outcome: Literal["running", "done", "skipped", "failed", "stopped"]
     #: Why it was skipped or failed; ``""`` otherwise.
     reason: str
     #: Late for its slot: the Mac slept or Coffer was off.
@@ -89,8 +88,6 @@ class ScheduledTaskOut(BaseModel):
     config: ScheduledTaskConfig
     created_at: datetime
     updated_at: datetime
-    #: The channel's name, as the list shows it.
-    channel_name: str
     last_run: ScheduledRunOut | None
     next_run: datetime | None
     running: bool
@@ -109,28 +106,6 @@ class ScheduledTaskIn(BaseModel):
     name: str | None = None
     description: str = ""
     config: ScheduledTaskConfig
-
-
-class TaskChatOut(BaseModel):
-    """A chat a task may run in: one the owner uses with a channel's bot."""
-
-    channel: str
-    channel_name: str
-    chat_id: str
-    chat_kind: Literal["direct", "group"]
-    #: Who paired it (a direct chat) — Coffer keeps no group title.
-    label: str
-
-
-class TaskChatListOut(BaseModel):
-    items: list[TaskChatOut]
-
-
-class DailyReportIn(BaseModel):
-    channel: str = Field(min_length=1)
-    time: str = Field(default="18:00", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
-    #: The agent key that writes it; omitted, the channel's default agent.
-    agent: str | None = None
 
 
 def run_out(run: ScheduledRun, conversation: RunConversationOut | None = None) -> ScheduledRunOut:
@@ -152,7 +127,6 @@ def run_out(run: ScheduledRun, conversation: RunConversationOut | None = None) -
 
 async def _out(view: TaskView) -> ScheduledTaskOut:
     task = view.task
-    names = await _WIRED.chats.channel_names() if _WIRED.chats is not None else {}
     return ScheduledTaskOut(
         uid=task.uid,
         name=task.name,
@@ -161,11 +135,6 @@ async def _out(view: TaskView) -> ScheduledTaskOut:
         config=view.config,
         created_at=task.created_at,
         updated_at=task.updated_at,
-        channel_name=(
-            names.get(view.config.chat.channel, view.config.chat.channel)
-            if view.config.chat is not None
-            else ""
-        ),
         last_run=run_out(view.last_run) if view.last_run is not None else None,
         next_run=view.next_run,
         running=view.running,
@@ -188,24 +157,6 @@ async def create_task(body: ScheduledTaskIn, actor: str = Depends(get_actor)) ->
     return await _out(await _tasks().view(task.uid))
 
 
-@router.get("/chats", response_model=TaskChatListOut)
-async def list_task_chats() -> TaskChatListOut:
-    """The chats a new task may run in."""
-    rows = await _WIRED.chats.chats() if _WIRED.chats is not None else []
-    return TaskChatListOut(items=[TaskChatOut(**row) for row in rows])
-
-
-@router.put("/daily-report", response_model=ScheduledTaskOut)
-async def set_daily_report(
-    body: DailyReportIn, actor: str = Depends(get_actor)
-) -> ScheduledTaskOut:
-    """Make the daily report task from its template, or move the one there is."""
-    task = await _tasks().daily_report(
-        channel_uid=body.channel, time=body.time, agent=body.agent, actor=actor
-    )
-    return await _out(await _tasks().view(task.uid))
-
-
 @router.get("/{uid}", response_model=ScheduledTaskOut)
 async def get_task(uid: str) -> ScheduledTaskOut:
     return await _out(await _tasks().view(uid))
@@ -215,10 +166,10 @@ async def get_task(uid: str) -> ScheduledTaskOut:
 async def list_task_runs(
     uid: str, limit: int = Query(default=50, ge=1, le=200)
 ) -> ScheduledRunListOut:
-    if _WIRED.chats is None:
+    if _WIRED.reads is None:
         return ScheduledRunListOut(items=[])
-    runs = await _WIRED.chats.runs_of(uid, limit)
-    found = await _WIRED.chats.conversations({r.conversation_id for r in runs})
+    runs = await _WIRED.reads.runs_of(uid, limit)
+    found = await _WIRED.reads.conversations({r.conversation_id for r in runs})
     return ScheduledRunListOut(
         items=[
             run_out(

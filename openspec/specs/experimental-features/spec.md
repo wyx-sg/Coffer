@@ -337,24 +337,20 @@ turn, whether the feature is on or off
 While `scheduled_tasks` is off, `/api/v1/scheduled-tasks` MUST answer 404
 `FEATURE_DISABLED` and the kind-agnostic resource routes MUST refuse and leave
 out `scheduled_task` resources; the scheduler MUST start no run, Run now
-included; `coffer__schedule_task`, `coffer__scheduled_tasks` and
-`coffer__cancel_scheduled_task` MUST be absent from every turn; `/status` in a
-chat MUST list no task and its Cancel buttons MUST cancel nothing; and the web
-UI MUST hide the Scheduled tasks entry and page and the Daily report card on a
-channel's Overview. Switching it off MUST keep every task and its history;
+included; and the web UI MUST hide the Scheduled tasks entry and page.
+Switching it off MUST keep every task and its history;
 switching it on again MUST bring the scheduler's next pass forward with no
 daemon restart, and a slot that passed while it was off is caught up once or
 skipped and recorded, as any missed slot is ([channels](../channels/spec.md)
 "Catch up a missed run once, within its grace").
 
-#### Scenario: scheduled tasks off closes their routes and tools
+#### Scenario: scheduled tasks off closes their routes
 - **GIVEN** `scheduled_tasks` off
-- **WHEN** a route under `/api/v1/scheduled-tasks` is requested, and a channel turn lists its tools
+- **WHEN** a route under `/api/v1/scheduled-tasks` is requested
 - **THEN** the route answers 404 `FEATURE_DISABLED` naming `scheduled_tasks`
-- **AND** the turn is offered none of the three scheduling tools
 
-#### Scenario: scheduled tasks off runs nothing and lists nothing
+#### Scenario: scheduled tasks off runs nothing
 - **GIVEN** `scheduled_tasks` off and an enabled task whose slot has come
-- **WHEN** the scheduler's pass runs, and `/status` is sent in the task's chat
-- **THEN** no run starts and `/status` lists no task
+- **WHEN** the scheduler's pass runs
+- **THEN** no run starts
 - **AND** once `scheduled_tasks` is switched on, the next pass considers the task again

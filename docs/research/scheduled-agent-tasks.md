@@ -1,6 +1,6 @@
 # Scheduled agent tasks: how other products do it
 
-**Feature**: an agent turn that starts on its own at a time — a recurring task the owner sets up, a follow-up the agent books for itself, a periodic report — and where its answer goes · **Coffer spec**: [channels](../../openspec/specs/channels/spec.md), [daemon](../../openspec/specs/daemon/spec.md) · **Related ADRs**: [scheduled-tasks-are-turns-coffer-starts-in-a-chat](../decisions/scheduled-tasks-are-turns-coffer-starts-in-a-chat.md)
+**Feature**: an agent turn that starts on its own at a time — a recurring task the owner sets up, a follow-up the agent books for itself, a periodic report — and where its answer goes · **Coffer spec**: [channels](../../openspec/specs/channels/spec.md), [daemon](../../openspec/specs/daemon/spec.md) · **Related ADRs**: [automation-is-a-scheduled-prompt](../decisions/automation-is-a-scheduled-prompt.md)
 **Researched**: 2026-10 · **Method**: web research of primary sources (vendor docs, repository docs and source), dated 2026-10-29; re-checked 2026-10-30 for run history, reading a run back and release status, adding Claude Code routines, Cursor Automations and Devin
 
 ## Scope and selection

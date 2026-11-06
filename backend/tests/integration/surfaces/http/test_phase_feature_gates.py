@@ -132,9 +132,12 @@ def test_knowledge_off_re_renders_the_guide_without_its_knowledge_sections(
         assert kind_gates._guide(home) == before
 
 
+@pytest.mark.acceptance(
+    spec="experimental-features", scenario="scheduled tasks off closes their routes"
+)
 def test_scheduled_tasks_off_closes_their_routes(home: pathlib.Path) -> None:
-    """The REST half of spec experimental-features "Close the scheduled tasks
-    feature's surfaces"; the tools half is in the channel tests."""
+    """Spec experimental-features "Close the scheduled tasks feature's
+    surfaces": off, the routes answer feature_disabled; on again, they open."""
     daemon_config.write_feature_setting("scheduled_tasks", False)
     with _client() as c:
         _assert_disabled(c.get("/api/v1/scheduled-tasks"), "scheduled_tasks")

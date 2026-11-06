@@ -1,12 +1,11 @@
-// src/components/scheduled-tasks/TaskDialog.tsx — New task, or edit one: its name, the chat it runs in, when, what the agent is asked, and how it opens.
+// src/components/scheduled-tasks/TaskDialog.tsx — New task, or edit one: its name, when, what the agent is asked, and the agent, model and directory every run opens with.
 //
-// Spec channels "Manage scheduled tasks from the Scheduled tasks page". A
-// task runs in no chat — a new conversation of its own agent, model and
-// directory every time — or in a chat the owner already uses with a bot (the
-// paired chats), where it either carries on that chat's conversation or opens
-// a fresh one with its own agent, model and directory. Catch up runs a slot missed while the Mac slept
-// once, late. A refused save stays in the dialog with the daemon's reason and
-// the primary button becomes Retry.
+// Spec channels "Manage scheduled tasks from the Scheduled tasks page". Every
+// run is a new conversation of its own; what it does with a chat or a report
+// is the prompt's. Catch up runs a slot missed while the Mac slept once, late.
+// The body scrolls between a fixed header and footer, so the buttons stay at
+// the bottom of the dialog however tall the form is. A refused save stays in
+// the dialog with the daemon's reason and the primary button becomes Retry.
 import { CircleAlert } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -23,20 +22,12 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Segmented } from "@/components/ui/segmented";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { translateApiError } from "@/lib/api/errors";
 import type { ScheduledTask } from "@/lib/api/scheduledTasks";
 import { useCreateScheduledTask, useEditScheduledTask } from "@/lib/hooks/useScheduledTasks";
-import {
-  configFrom,
-  formFrom,
-  formValid,
-  NO_CHAT,
-  type TaskForm,
-} from "@/lib/scheduledTasks/format";
-import { TaskChatField } from "./TaskChatField";
+import { configFrom, formFrom, formValid, type TaskForm } from "@/lib/scheduledTasks/format";
 import { TaskScheduleFields } from "./TaskScheduleFields";
 import { TaskSessionFields } from "./TaskSessionFields";
 
@@ -64,7 +55,7 @@ function Form({ onOpenChange, existing, onSaved }: Omit<Props, "open">) {
 
   const submit = () => {
     if (!valid || save.isPending) return;
-    const config = configFrom(form, existing?.config);
+    const config = configFrom(form);
     const done = (uid: string) => {
       onOpenChange(false);
       onSaved?.(uid);
@@ -84,7 +75,7 @@ function Form({ onOpenChange, existing, onSaved }: Omit<Props, "open">) {
 
   return (
     <form
-      className="space-y-4"
+      className="flex min-h-0 flex-col gap-3.5"
       onSubmit={(e) => {
         e.preventDefault();
         submit();
@@ -98,76 +89,55 @@ function Form({ onOpenChange, existing, onSaved }: Omit<Props, "open">) {
         </DialogTitle>
         <DialogDescription>{t("scheduledTasks.dialog.body")}</DialogDescription>
       </DialogHeader>
-      <div className="space-y-1.5">
-        <Label htmlFor="task-name" required={editing}>
-          {t("scheduledTasks.dialog.name")}
-        </Label>
-        <Input
-          id="task-name"
-          value={form.name}
-          autoComplete="off"
-          autoFocus
-          placeholder={t("scheduledTasks.dialog.namePlaceholder")}
-          onChange={(e) => set({ name: e.target.value })}
-        />
-      </div>
-      <TaskChatField form={form} set={set} existing={existing} />
-      <TaskScheduleFields form={form} set={set} />
-      <div className="space-y-1.5">
-        <Label htmlFor="task-prompt" required>
-          {t("scheduledTasks.dialog.prompt")}
-        </Label>
-        <Textarea
-          id="task-prompt"
-          rows={4}
-          value={form.prompt}
-          placeholder={t("scheduledTasks.dialog.promptPlaceholder")}
-          onChange={(e) => set({ prompt: e.target.value })}
-        />
-        <p className="text-xs text-text-muted">
-          {t(
-            form.chat === NO_CHAT
-              ? "scheduledTasks.dialog.promptHintNoChat"
-              : "scheduledTasks.dialog.promptHint",
-          )}
-        </p>
-      </div>
-      {form.chat === NO_CHAT ? (
-        <TaskSessionFields form={form} set={set} />
-      ) : (
+      <div className="-mx-5 min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-1">
         <div className="space-y-1.5">
-          <Label>{t("scheduledTasks.dialog.session")}</Label>
-          <Segmented
-            label={t("scheduledTasks.dialog.session")}
-            value={form.session}
-            onChange={(session) => set({ session })}
-            options={[
-              { value: "fresh", label: t("scheduledTasks.dialog.fresh") },
-              { value: "continue", label: t("scheduledTasks.dialog.continue") },
-            ]}
+          <Label htmlFor="task-name" required={editing}>
+            {t("scheduledTasks.dialog.name")}
+          </Label>
+          <Input
+            id="task-name"
+            value={form.name}
+            autoComplete="off"
+            autoFocus
+            placeholder={t("scheduledTasks.dialog.namePlaceholder")}
+            onChange={(e) => set({ name: e.target.value })}
           />
-          {form.session === "fresh" ? <TaskSessionFields form={form} set={set} /> : null}
         </div>
-      )}
-      <label className="flex items-start justify-between gap-3">
-        <span className="space-y-0.5">
-          <span className="block text-sm text-text">{t("scheduledTasks.dialog.catchUp")}</span>
-          <span className="block text-xs text-text-muted">
-            {t("scheduledTasks.dialog.catchUpHint")}
+        <TaskScheduleFields form={form} set={set} />
+        <div className="space-y-1.5">
+          <Label htmlFor="task-prompt" required>
+            {t("scheduledTasks.dialog.prompt")}
+          </Label>
+          <Textarea
+            id="task-prompt"
+            rows={4}
+            value={form.prompt}
+            placeholder={t("scheduledTasks.dialog.promptPlaceholder")}
+            onChange={(e) => set({ prompt: e.target.value })}
+          />
+          <p className="text-xs text-text-muted">{t("scheduledTasks.dialog.promptHint")}</p>
+        </div>
+        <TaskSessionFields form={form} set={set} />
+        <label className="flex items-start justify-between gap-3">
+          <span className="space-y-0.5">
+            <span className="block text-sm text-text">{t("scheduledTasks.dialog.catchUp")}</span>
+            <span className="block text-xs text-text-muted">
+              {t("scheduledTasks.dialog.catchUpHint")}
+            </span>
           </span>
-        </span>
-        <Switch checked={form.catchUp} onCheckedChange={(catchUp) => set({ catchUp })} />
-      </label>
-      {save.error ? (
-        <Alert variant="error">
-          <CircleAlert aria-hidden />
-          <AlertTitle>
-            {t(editing ? "scheduledTasks.dialog.editFailed" : "scheduledTasks.dialog.addFailed")}
-          </AlertTitle>
-          <AlertDescription>{translateApiError(t, save.error)}</AlertDescription>
-        </Alert>
-      ) : null}
-      <DialogFooter>
+          <Switch checked={form.catchUp} onCheckedChange={(catchUp) => set({ catchUp })} />
+        </label>
+        {save.error ? (
+          <Alert variant="error">
+            <CircleAlert aria-hidden />
+            <AlertTitle>
+              {t(editing ? "scheduledTasks.dialog.editFailed" : "scheduledTasks.dialog.addFailed")}
+            </AlertTitle>
+            <AlertDescription>{translateApiError(t, save.error)}</AlertDescription>
+          </Alert>
+        ) : null}
+      </div>
+      <DialogFooter className="mt-0">
         <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
           {t("common.cancel")}
         </Button>
@@ -184,7 +154,7 @@ function Form({ onOpenChange, existing, onSaved }: Omit<Props, "open">) {
 export function TaskDialog({ open, onOpenChange, existing, onSaved }: Props) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-[540px] overflow-y-auto">
+      <DialogContent className="max-h-[90vh] max-w-[540px] grid-rows-[minmax(0,1fr)]">
         {open ? <Form onOpenChange={onOpenChange} existing={existing} onSaved={onSaved} /> : null}
       </DialogContent>
     </Dialog>
