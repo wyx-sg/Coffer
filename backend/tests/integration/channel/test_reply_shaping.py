@@ -1,10 +1,10 @@
-"""A reply is shaped for what the chat can show before it is delivered (spec
-channels "Shape a reply for what the chat can show")."""
+"""A finished reply goes out as the agent wrote it: Coffer does not rewrite
+tables or move code blocks into files (spec channels "Shape a reply for what
+the chat can show")."""
 
 from __future__ import annotations
 
 import asyncio
-import pathlib
 from typing import Any
 
 import pytest
@@ -35,28 +35,8 @@ async def _run(adapter: FakeChannelAdapter, text: str) -> None:
     await renderer.consume(queue)
 
 
-@pytest.mark.acceptance(
-    spec="channels", scenario="a table's CSV and a long log follow the answer as files"
-)
-async def test_a_big_table_and_a_long_log_go_out_as_files_after_the_answer() -> None:
-    adapter = FakeChannelAdapter(
-        supports_edit=False, renders_tables=False, max_inline_code_lines=30
-    )
-    rows = "\n".join(f"| job{i} | ok |" for i in range(20))
-    log = "\n".join(f"line {i}" for i in range(50))
-
-    await _run(adapter, f"All green.\n\n| job | state |\n|---|---|\n{rows}\n\n```log\n{log}\n```")
-
-    [answer] = adapter.texts()
-    assert "- **job0** · ok" in answer and "|---|" not in answer
-    assert "*… 20 rows in table-1.csv*" in answer
-    assert "*… 50 lines in log-2.log*" in answer
-    names = [pathlib.Path(path).name for _chat, path, _caption, _photo in adapter.media]
-    assert names == ["table-1.csv", "log-2.log"]
-    assert all(photo is False for *_rest, photo in adapter.media)
-
-
-async def test_a_transport_that_shows_tables_gets_them_as_written() -> None:
+@pytest.mark.acceptance(spec="channels", scenario="a table goes out as the agent wrote it")
+async def test_a_table_goes_out_as_the_agent_wrote_it() -> None:
     adapter = FakeChannelAdapter(supports_edit=False)
     table = "| a | b |\n|---|---|\n| 1 | 2 |"
 

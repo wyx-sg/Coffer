@@ -90,7 +90,7 @@ Coffer tells the agent which platform and kind of chat it is in and what renders
 - **Too long for a chat** — a reply of more than 20 lines or 1,500 characters (files and a collapsed Details section not counted) is not sent. Coffer asks the agent, in the same conversation, to say it again in a few lines; that short reply arrives with a **📄 Full report** button, and tapping it asks the agent for the file. Files the long reply sent with `MEDIA:` lines are not lost: they follow the short reply. The short reply takes a little longer, because the agent writes it after the long one. A turn that failed or was stopped sends what it has, as before; so does a turn with another message of yours already waiting behind it.
 
 - **Details** — on Telegram, a `## Details` section arrives collapsed. SeaTalk cannot collapse text, so there the reply arrives whole.
-- **Tables and logs** — SeaTalk cannot show a table, so each row becomes a bullet (`- **checkout** · failed · 3DS timeout`); a table bigger than 12 rows or 4 columns keeps its first five rows and arrives whole as a `.csv` file. A code block longer than 30 lines keeps its first three lines and arrives whole as a file.
+- **Tables and logs** — the reply arrives as the agent wrote it. The agent is told what the chat can show (SeaTalk has no tables, so it writes one bullet per row) and sends a long log as a file itself when that reads better.
 - **Long replies** — are never cut inside a code block, and every message after the first starts with its place, `(2/3)`. On Telegram those continuations arrive silently; only the first one notifies.
 
 ### The system prompt and your reply style {#your-own-system-prompts}

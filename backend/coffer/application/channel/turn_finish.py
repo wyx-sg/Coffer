@@ -15,13 +15,11 @@ from dataclasses import dataclass
 from typing import Any, Literal, Protocol
 
 from coffer.application.channel.ports import ChannelAdapter
-from coffer.application.channel.reply_shape import ReplyFile, shape_reply
 from coffer.application.channel.reply_tracking import ReplyTracker
 from coffer.application.channel.turn_media import (
     MediaFile,
     attachment_lines,
     send_media_files,
-    send_reply_files,
     take_media,
 )
 from coffer.application.channel.turn_status import format_elapsed
@@ -157,20 +155,10 @@ async def _deliver_reply(
     messages, so the mention is in the message that creates the reply.
     """
     media: tuple[MediaFile, ...] = ()
-    files: tuple[ReplyFile, ...] = ()
     if text:
         # The agent's files go out after the reply, so the reply leads.
         text, media = take_media(adapter, text)
-        # What this chat cannot show becomes bullets and files (see "Shape a
-        # reply for what the chat can show").
         caps = adapter.capabilities
-        shaped = shape_reply(
-            text,
-            renders_tables=caps.renders_tables,
-            max_inline_code_lines=caps.max_inline_code_lines,
-            attach=caps.supports_media,
-        )
-        text, files = shaped.body, shaped.files
         if not caps.media_captions and any(f.caption for f in media):
             # A file message here has no caption: the reply names its files
             # rather than a text message following each one.
@@ -221,6 +209,3 @@ async def _deliver_reply(
             await tracker.send(note)
         else:
             await send(note)
-    await send_reply_files(
-        adapter, chat_id, files, thread_id=thread_id, chat_kind=chat_kind, on_sent=on_sent
-    )

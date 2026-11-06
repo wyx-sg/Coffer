@@ -13,12 +13,10 @@ import contextlib
 import os
 import pathlib
 import re
-import tempfile
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from coffer.application.channel.ports import ChannelAdapter
-from coffer.application.channel.reply_shape import ReplyFile
 from coffer.domain.channel.envelopes import SentMessage
 from coffer.domain.chat.attachment import Attachment
 
@@ -166,37 +164,3 @@ async def send_media_files(
         except Exception:
             failed.append(file)
     return tuple(failed)
-
-
-async def send_reply_files(
-    adapter: ChannelAdapter,
-    chat_id: str,
-    files: Sequence[ReplyFile],
-    *,
-    thread_id: str = "",
-    chat_kind: str = "direct",
-    on_sent: OnFileSent | None = None,
-) -> int:
-    """Upload the files a shaped reply carries beside its text (a table's CSV,
-    a long log — see "Shape a reply for what the chat can show"), after the
-    text that points at them. Each is written to a fresh temporary directory
-    under its own name, so the chat shows ``table-1.csv`` rather than a random
-    one. Best-effort: a file that fails is skipped, the reply already landed. The
-    directory is removed once the uploads are done."""
-    if not files or not adapter.capabilities.supports_media:
-        return 0
-    sent = 0
-    with tempfile.TemporaryDirectory(prefix="coffer-reply-") as staged:
-        for file in files:
-            path = pathlib.Path(staged) / file.filename
-            try:
-                path.write_text(file.content, encoding="utf-8")
-                sent_file = await adapter.send_media(
-                    chat_id, str(path), as_photo=False, thread_id=thread_id, chat_kind=chat_kind
-                )
-                if on_sent is not None:
-                    on_sent(sent_file)
-            except Exception:
-                continue
-            sent += 1
-    return sent

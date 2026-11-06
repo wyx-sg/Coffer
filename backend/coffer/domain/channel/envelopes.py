@@ -178,14 +178,10 @@ class ChannelCapabilities:
     # One or two sentences telling the agent what Markdown renders on this
     # transport (see "Tell a channel-driven agent it is on a chat channel").
     render_notes: str = ""
-    # "Shape a reply for what the chat can show": whether a markdown table
-    # renders (False → bullet rows + a CSV), how many lines a code block may
-    # keep inline (0 = any; more → attached as a file), and whether the
-    # transport collapses a ``## Details`` section itself (Telegram). Only such a
+    # "Shape a reply for what the chat can show": whether the transport
+    # collapses a ``## Details`` section itself (Telegram). Only such a
     # transport asks the agent for one ("Tell a channel-driven agent it is on a
     # chat channel"); elsewhere the reply goes out whole.
-    renders_tables: bool = True
-    max_inline_code_lines: int = 0
     collapses_details: bool = False
     # "Withdraw a bot reply on the owner's command": how many hours after it was
     # sent a bot message can still be taken back (Telegram's deleteMessage: 48;

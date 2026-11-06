@@ -93,7 +93,7 @@ class FakeChannelAdapter:
                 if reactions is not None
                 else (TELEGRAM_LIKE_REACTIONS if supports_reactions else ReactionSet())
             ),
-            # Any further capability a test names (renders_tables, …).
+            # Any further capability a test names (collapses_details, …).
             **capabilities,
         )
         # When True, ``set_reaction`` raises — proves the best-effort suppression

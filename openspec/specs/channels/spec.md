@@ -2264,19 +2264,11 @@ nothing.
 - **THEN** the state line reads "⏸ 1 on hold" and the card carries Continue, Discard, Model and Dir
 
 ### Requirement: Shape a reply for what the chat can show
-A finished reply MUST pass one structure pass before the platform renderer,
-driven by the transport's declared capabilities, never its type:
+A finished reply MUST reach the platform renderer as the agent wrote it: Coffer
+does not rewrite tables into bullets or move long code blocks into files, because
+the agent is told what the chat renders (see "Tell a channel-driven agent it is
+on a chat channel") and writes for it. Only two things depend on the transport:
 
-- A transport that does not render tables (`renders_tables` false) receives each
-  table as one bullet per row, `- **checkout** · failed · 3DS timeout`; a table
-  of more than 12 rows or 4 columns keeps its first five rows as bullets and
-  goes out whole as an attached `.csv`.
-- A transport with `max_inline_code_lines` set receives a longer fenced block as
-  its first three lines plus a note, and the whole block as an attached file
-  (`.log`, `.diff`, `.txt` by the fence's language).
-- The files follow the answer, through the transport's ordinary file upload,
-  under their own names. A transport that cannot send files keeps everything in
-  the body instead.
 - A `## Details` section is the transport's to present: one that collapses it
   does so (see each child spec); on any other it goes out as ordinary text in
   the reply, cut into messages like the rest — never behind a card or a button.
@@ -2285,23 +2277,11 @@ driven by the transport's declared capabilities, never its type:
   every message after the first opens with its place, `(2/3)`, so a busy group
   can follow it.
 
-#### Scenario: a table becomes bullet rows where the chat cannot show tables
-- **GIVEN** a transport that does not render tables
-- **WHEN** a reply holds a three-column table of two rows
-- **THEN** it is delivered as two bullet rows, the first cell of each in bold, and
-  no file is attached
-
-#### Scenario: a long log is attached as a file
-- **GIVEN** a transport that keeps at most 30 lines of code inline
-- **WHEN** a reply holds a 40-line `log` block
-- **THEN** the reply keeps its first three lines and names `log-1.log`, which holds
-  all 40 lines
-
-#### Scenario: a table's CSV and a long log follow the answer as files
-- **GIVEN** a transport that renders no tables and keeps 30 lines of code inline
-- **WHEN** a reply holds a 20-row table and a 50-line log
-- **THEN** the answer is delivered first, then `table-1.csv` and `log-2.log` are
-  uploaded as documents
+#### Scenario: a table goes out as the agent wrote it
+- **GIVEN** a transport that does not edit messages
+- **WHEN** a reply is a two-column markdown table
+- **THEN** one text message carries the table exactly as written, and no file is
+  sent
 
 #### Scenario: a code block is never split across messages
 - **GIVEN** a reply longer than one message whose fenced block holds a blank line
