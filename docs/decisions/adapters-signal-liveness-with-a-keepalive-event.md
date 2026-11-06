@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-11-06
 **Deciders**: Yuxing Wu
-**Related**: [A Claude Code Turn Waits for Its Background Sub-Agents](a-claude-code-turn-waits-for-its-background-sub-agents.md), spec chat "idle watchdog"
+**Related**: [A Claude Code Turn Waits for Its Background Sub-Agents](a-claude-code-turn-waits-for-its-background-sub-agents.md), spec chat "Deliver partial output as events when a turn is interrupted or fails"
 
 ## Context
 
