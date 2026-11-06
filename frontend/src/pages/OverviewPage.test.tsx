@@ -590,7 +590,7 @@ describe("each health tile carries the numbers and lines the board shows", () =>
         items: [
           attention("agent", "a-codex", "Codex", "agent_not_connected"),
           attention("channel", "c1", "SeaTalk", "channel_reconnecting", minutes(30)),
-          attention("cli", "gh", "gh", "cli_logged_out"),
+          attention("cli", "gh", "gh", "cli_outdated"),
         ],
       },
     });
@@ -661,7 +661,7 @@ describe("each health tile carries the numbers and lines the board shows", () =>
     await waitFor(() => expect(sync).toHaveTextContent("4 min ago"));
     expect(sync).toHaveTextContent("last round");
     expect(sync).toHaveTextContent("1 behind · 0 ahead");
-    await waitFor(async () => expect(await tile("CLIs")).toHaveTextContent("1 not logged in"));
+    await waitFor(async () => expect(await tile("CLIs")).toHaveTextContent("1 outdated"));
     await waitFor(async () => expect(await tile("Secrets")).toHaveTextContent("1 unused"));
     const usage = await tile("Usage");
     await waitFor(() => expect(usage).toHaveTextContent("2.1M"));

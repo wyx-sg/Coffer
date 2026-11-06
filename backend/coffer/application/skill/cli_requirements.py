@@ -40,14 +40,13 @@ from coffer.domain.skill.cli_status import (
     STATUS_ORDER,
     CliStatus,
     CofferNeed,
-    LoginState,
     ProbeResult,
     RequiredCommand,
     ServerLauncher,
     SkillRequirements,
     aggregate,
-    login_state,
     status_of,
+    version_unverifiable,
 )
 from coffer.domain.skill.requirements_union import requirements_of_skill
 from coffer.domain.skill.tool_state import ToolState, resolve_tools
@@ -59,11 +58,6 @@ class CommandProbePort(Protocol):
     def locate(self, command: str) -> str | None: ...
 
     def version(self, path: str) -> str | None: ...
-
-    def login_ok(self, argv: Sequence[str]) -> bool | None:
-        """Exit 0 → ``True``, any other exit → ``False``, could not run or
-        timed out → ``None``. The check's output is never returned."""
-        ...
 
 
 @dataclass(frozen=True)
@@ -147,6 +141,8 @@ class CliView:
     status: CliStatus
     #: The prompt to hand to an agent; ``None`` for a ready command.
     handoff: str | None = None
+    #: A minimum is asked for but the version could not be read.
+    version_unverifiable: bool = False
 
 
 @dataclass(frozen=True)
@@ -266,38 +262,21 @@ class CliRequirementService:
         return self._view(row)
 
     async def _probe_rows(self, rows: Sequence[RequiredCommand], *, force: bool) -> None:
-        todo = [r for r in rows if force or self._stale(r)]
+        todo = [r for r in rows if force or r.command not in self._cache]
         if not todo:
             return
-        # A login check runs a program with arguments a skill chose, so only an
-        # explicit Check runs one — never the read the attention poll makes.
-        results = await asyncio.gather(
-            *(asyncio.to_thread(self._probe_one, r, run_login=force) for r in todo)
-        )
+        results = await asyncio.gather(*(asyncio.to_thread(self._probe_one, r) for r in todo))
         for row, result in zip(todo, results, strict=True):
             self._cache[row.command] = result
 
-    def _stale(self, row: RequiredCommand) -> bool:
-        cached = self._cache.get(row.command)
-        return cached is None or cached.login_check != row.login_check
-
-    def _probe_one(self, row: RequiredCommand, *, run_login: bool) -> ProbeResult:
+    def _probe_one(self, row: RequiredCommand) -> ProbeResult:
         hint = self._paths.get(row.command) if self._paths else None
         path = self._probe.locate(hint or row.command) or (
             self._probe.locate(row.command) if hint else None
         )
         if path is None:
-            return ProbeResult(None, None, None, self._clock(), row.login_check)
-        version = self._probe.version(path)
-        if row.login_check is None:
-            return ProbeResult(path, version, LoginState.NOT_NEEDED, self._clock(), None)
-        if not run_login:
-            # Declared but not run: not logged out, just not known yet.
-            return ProbeResult(path, version, None, self._clock(), row.login_check)
-        # The located file runs, not whatever else the name resolves to.
-        ok = self._probe.login_ok([path, *row.login_check[1:]])
-        login = login_state(row.login_check, ok)
-        return ProbeResult(path, version, login, self._clock(), row.login_check)
+            return ProbeResult(None, None, self._clock())
+        return ProbeResult(path, self._probe.version(path), self._clock())
 
     def _view(self, row: RequiredCommand) -> CliView:
         probe = self._cache[row.command]
@@ -307,6 +286,7 @@ class CliRequirementService:
             probe=probe,
             status=status,
             handoff=cli_handoff(row, probe, status, self._machine()),
+            version_unverifiable=version_unverifiable(row, probe),
         )
 
 

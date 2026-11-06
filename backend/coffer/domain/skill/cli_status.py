@@ -2,17 +2,17 @@
 
 Rows aggregate every managed skill that declares the command and the tool the
 person added by hand under that name (``DeclaredTool``; no skill needed): the
-minimum is the highest any of them asks for; the title and login check come
-from the hand-added declaration (or, for a tool nobody added, the person's
-edits) first, then from the first skill (by name) that
-declares each, and the login command from the first skill that gives one. The launcher an
+minimum is the highest any of them asks for; the title comes from the
+hand-added declaration (or, for a tool nobody added, the person's edits) first,
+then from the first skill (by name) that declares one. The launcher an
 enabled stdio MCP server starts with is required too — by that server, under
 the command that provides it (``uv`` for ``uvx``, see :func:`launcher_cli`),
-with no minimum and no login. The commands Coffer runs itself
+with no minimum. The commands Coffer runs itself
 (:data:`COFFER_NEEDS`: ``git`` for the vault's history and sync) are required
 by Coffer, so they are listed even when no skill or server asks. The status is
-problem-first — ``missing``, ``outdated``, ``logged_out``, ``ready`` — and a
-version that cannot be read is reported as unknown, never as outdated.
+problem-first — ``missing``, ``outdated``, ``ready`` — and a version that cannot
+be read is reported as unknown, never as outdated. Coffer checks no login: an
+agent that uses the tool finds that out itself.
 """
 
 from __future__ import annotations
@@ -30,19 +30,11 @@ from coffer.domain.versions import at_least, compare_versions
 class CliStatus(StrEnum):
     MISSING = "missing"
     OUTDATED = "outdated"
-    LOGGED_OUT = "logged_out"
     READY = "ready"
 
 
 #: Problem-first order for lists.
 STATUS_ORDER: dict[CliStatus, int] = {s: i for i, s in enumerate(CliStatus)}
-
-
-class LoginState(StrEnum):
-    LOGGED_IN = "logged_in"
-    LOGGED_OUT = "logged_out"
-    #: The command declares no login check.
-    NOT_NEEDED = "not_needed"
 
 
 @dataclass(frozen=True)
@@ -79,8 +71,6 @@ class RequiredCommand:
     command: str
     title: str | None
     min_version: str | None
-    login_check: tuple[str, ...] | None
-    login: str | None
     needed_by: tuple[NeededBy, ...]
     #: The MCP servers started with this command (or a launcher it provides).
     needed_by_servers: tuple[ServerLauncher, ...] = ()
@@ -130,17 +120,12 @@ def launcher_cli(launcher: str) -> str | None:
 
 @dataclass(frozen=True)
 class ProbeResult:
-    """What checking the command found. ``login`` is ``None`` when the command
-    was not found, so its login check could not run, or when it declares one
-    that has not been run (only a Check runs it)."""
+    """What checking the command found: where, and the version ``--version``
+    printed (``None`` when it printed none Coffer can read)."""
 
     path: str | None
     version: str | None
-    login: LoginState | None
     checked_at: datetime
-    #: The login check that produced ``login`` — a changed declaration is
-    #: probed again rather than served from the cache.
-    login_check: tuple[str, ...] | None = None
 
 
 def aggregate(
@@ -153,8 +138,8 @@ def aggregate(
 ) -> list[RequiredCommand]:
     """One :class:`RequiredCommand` per command, sorted by command name.
     ``notes`` are descriptions written for tools nobody added by hand; a
-    hand-added tool's own description wins. ``edits`` are the display name,
-    minimum and login check changed on such a tool: they take the place of a
+    hand-added tool's own description wins. ``edits`` are the display name and
+    minimum changed on such a tool: they take the place of a
     hand-added declaration's, and list no command on their own."""
     notes = notes or {}
     edits = edits or {}
@@ -202,8 +187,6 @@ def _row(
         or (coffer.title if coffer else None)
         or next((r.title for r in reqs if r.title), None),
         min_version=highest_minimum([own.min_version, *(r.min_version for r in reqs)]),
-        login_check=own.login_check or next((r.login_check for r in reqs if r.login_check), None),
-        login=next((r.login for r in reqs if r.login), None),
         needed_by=tuple(
             NeededBy(
                 skill_uid=uid,
@@ -240,17 +223,14 @@ def status_of(required: RequiredCommand, probe: ProbeResult) -> CliStatus:
         and at_least(probe.version, required.min_version) is False
     ):
         return CliStatus.OUTDATED
-    if probe.login is LoginState.LOGGED_OUT:
-        return CliStatus.LOGGED_OUT
     return CliStatus.READY
 
 
-def login_state(required_check: tuple[str, ...] | None, ok: bool | None) -> LoginState:
-    """``ok`` is the login check's answer: ``True`` for exit 0, ``False`` for
-    any other exit, ``None`` for one that could not run or timed out."""
-    if required_check is None:
-        return LoginState.NOT_NEEDED
-    return LoginState.LOGGED_IN if ok else LoginState.LOGGED_OUT
+def version_unverifiable(required: RequiredCommand, probe: ProbeResult) -> bool:
+    """A minimum is asked for, the command was found, and its version could
+    not be read — so whether it is new enough is unknown (``go``, ``kubectl``
+    and ``java`` print no version for ``--version``)."""
+    return required.min_version is not None and probe.path is not None and probe.version is None
 
 
 __all__ = [
@@ -259,7 +239,6 @@ __all__ = [
     "CliStatus",
     "CofferNeed",
     "CofferUse",
-    "LoginState",
     "NeededBy",
     "ProbeResult",
     "RequiredCommand",
@@ -268,6 +247,6 @@ __all__ = [
     "aggregate",
     "highest_minimum",
     "launcher_cli",
-    "login_state",
     "status_of",
+    "version_unverifiable",
 ]

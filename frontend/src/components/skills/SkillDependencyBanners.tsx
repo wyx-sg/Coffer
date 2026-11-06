@@ -40,12 +40,6 @@ function CommandsBanner({
           commands: joinNames(item.missing, lang),
         })
       : null,
-    item.loggedOut.length > 0
-      ? t("skills.banner.requiresLoginPart", {
-          count: item.loggedOut.length,
-          commands: joinNames(item.loggedOut, lang),
-        })
-      : null,
     item.outdated.length > 0
       ? t("skills.banner.requiresOldPart", {
           count: item.outdated.length,
@@ -54,7 +48,7 @@ function CommandsBanner({
       : null,
   ].filter(Boolean);
   // One hand-off for every command that needs the person, as the daemon wrote them.
-  const wanted = new Set([...item.missing, ...item.loggedOut, ...item.outdated]);
+  const wanted = new Set([...item.missing, ...item.outdated]);
   const prompt = clis
     .filter((c) => wanted.has(c.command) && c.handoff)
     .map((c) => c.handoff?.prompt)

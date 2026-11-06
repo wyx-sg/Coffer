@@ -55,4 +55,19 @@ def _merge(first: str, second: str) -> str:
     return os.pathsep.join(seen)
 
 
-__all__ = ["UserPath", "which_on_user_path"]
+def user_path_env() -> dict[str, str]:
+    """``PATH`` set to the agent's real ``PATH``, for an agent Coffer starts.
+
+    The CLIs page checks a command on this ``PATH``, so an agent Coffer starts
+    for a conversation gets the same one: a daemon whose own ``PATH`` is stale
+    (a launchd plist written before the person's shell changed, or a GUI
+    launch whose login-shell probe timed out) would otherwise hand its agents
+    a ``PATH`` on which a command the page calls ready is not found.
+    Empty when the daemon's own ``PATH`` already is that one, so the agent's
+    environment is left as it was. Blocking the first time in a process (it
+    asks the login shell)."""
+    path = UserPath()()
+    return {} if path == os.environ.get("PATH", "") else {"PATH": path}
+
+
+__all__ = ["UserPath", "user_path_env", "which_on_user_path"]

@@ -1,7 +1,7 @@
 // src/components/skills/SkillRequiresTab.test.tsx — a skill's Requires tab lists what its SKILL.md declares, in four groups.
 //
 // Commands · Secrets · Tools · Skills. Each row is name · state · a link to the
-// page that owns the thing; no install or login step of its own and no
+// page that owns the thing; no install step of its own and no
 // hand-off in a row (that is one button in the banner above the tabs). Real
 // QueryClientProvider; only the api module is mocked.
 import { afterEach, describe, expect, test, vi } from "vitest";
@@ -9,7 +9,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
-import { GCLOUD_LOGGED_OUT, JQ_MISSING, UV_READY, cli } from "@/test/cliFixtures";
+import { GCLOUD_UNVERIFIED, JQ_MISSING, UV_READY, cli } from "@/test/cliFixtures";
 import { acceptance } from "@/test/acceptance";
 import type { SkillOut } from "@/lib/api/skills";
 
@@ -84,14 +84,13 @@ describe("SkillRequiresTab", () => {
       ],
     });
     api.list.mockResolvedValue({
-      items: [JQ_MISSING, GCLOUD_LOGGED_OUT, UV_READY, other],
+      items: [JQ_MISSING, GCLOUD_UNVERIFIED, UV_READY, other],
       warnings: [],
     });
     renderTab();
 
     await screen.findByText("Not installed");
-    expect(screen.getByText("Not logged in")).toBeInTheDocument();
-    expect(screen.getByText(/^Found/)).toBeInTheDocument();
+    expect(screen.getAllByText(/^Found/)).toHaveLength(2);
     const rows = screen.getAllByRole("listitem");
     expect(rows).toHaveLength(3);
     expect(screen.queryByText("docker")).toBeNull();
@@ -109,8 +108,8 @@ describe("SkillRequiresTab", () => {
     "web-ui",
     "the requires tab checks the commands again and keeps the hand-off out of its rows",
     async () => {
-      api.list.mockResolvedValue({ items: [JQ_MISSING, GCLOUD_LOGGED_OUT], warnings: [] });
-      api.checkAll.mockResolvedValue({ items: [JQ_MISSING, GCLOUD_LOGGED_OUT], warnings: [] });
+      api.list.mockResolvedValue({ items: [JQ_MISSING, GCLOUD_UNVERIFIED], warnings: [] });
+      api.checkAll.mockResolvedValue({ items: [JQ_MISSING, GCLOUD_UNVERIFIED], warnings: [] });
       renderTab("sk-gh-triage", ["jq", "gcloud"]);
       await screen.findByText("Not installed");
       expect(screen.queryByRole("button", { name: /Install/ })).toBeNull();
@@ -119,7 +118,6 @@ describe("SkillRequiresTab", () => {
           name: "Copy prompt",
         }),
       ).toBeNull();
-      expect(screen.queryByText("gcloud auth login")).toBeNull();
       expect(screen.queryByText(/brew/)).toBeNull();
       fireEvent.click(screen.getByRole("button", { name: "Check" }));
       await waitFor(() => expect(api.checkAll).toHaveBeenCalledTimes(1));

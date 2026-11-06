@@ -330,12 +330,12 @@ carrier: Skill(example-log-search)
 requires:
   commands:
     - command: gh
-      login_check: gh auth status
+      min_version: "2.40"
   secrets: [<id>]
 ---
 ```
 
-An agent picks one profile when it runs, and Coffer cannot know which. So Coffer reads the union of `SKILL.md`'s `requires:` and that of every `profiles/*.md`, each time, and says which profile declared each entry: the **Requires** tab shows "in profile example-org" on the row, and [CLIs](/guides/clis) shows `skill-name · example-org` under **Needed by**. An entry `SKILL.md` itself declares carries no profile. A command, secret or tool declared in several places is one requirement; for a command Coffer keeps the highest minimum version and the first title, `why` and login check. A warning from a profile names its file, `profiles/<name>.md`. Coffer reads only what the files declare and never scans them to guess.
+An agent picks one profile when it runs, and Coffer cannot know which. So Coffer reads the union of `SKILL.md`'s `requires:` and that of every `profiles/*.md`, each time, and says which profile declared each entry: the **Requires** tab shows "in profile example-org" on the row, and [CLIs](/guides/clis) shows `skill-name · example-org` under **Needed by**. An entry `SKILL.md` itself declares carries no profile. A command, secret or tool declared in several places is one requirement; for a command Coffer keeps the highest minimum version and the first title and `why`. A warning from a profile names its file, `profiles/<name>.md`. Coffer reads only what the files declare and never scans them to guess.
 
 ## Declared or not, and checking with an agent {#declared-or-not}
 

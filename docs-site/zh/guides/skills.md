@@ -330,12 +330,12 @@ carrier: Skill(example-log-search)
 requires:
   commands:
     - command: gh
-      login_check: gh auth status
+      min_version: "2.40"
   secrets: [<id>]
 ---
 ```
 
-智能体运行时选定一个 profile，而 Coffer 无从得知选的是哪个。所以 Coffer 每次都读取 `SKILL.md` 的 `requires:` 与每个 `profiles/*.md` 的 `requires:` 的并集，并说明每一项由哪个 profile 声明：**依赖** 标签页在该行显示“in profile example-org”（界面文字），[命令行工具](/zh/guides/clis)的**被谁需要**显示 `skill-name · example-org`。`SKILL.md` 自己声明的项不带 profile。在多处声明的命令、密钥或工具合并为一条依赖；对命令，Coffer 保留最高的最低版本，以及第一个非空的 title、`why` 和登录检查。profile 里的警告会写明它的文件 `profiles/<name>.md`。Coffer 只读取这些文件声明的内容，从不扫描它们去猜测。
+智能体运行时选定一个 profile，而 Coffer 无从得知选的是哪个。所以 Coffer 每次都读取 `SKILL.md` 的 `requires:` 与每个 `profiles/*.md` 的 `requires:` 的并集，并说明每一项由哪个 profile 声明：**依赖** 标签页在该行显示“in profile example-org”（界面文字），[命令行工具](/zh/guides/clis)的**被谁需要**显示 `skill-name · example-org`。`SKILL.md` 自己声明的项不带 profile。在多处声明的命令、密钥或工具合并为一条依赖；对命令，Coffer 保留最高的最低版本，以及第一个非空的 title 和 `why`。profile 里的警告会写明它的文件 `profiles/<name>.md`。Coffer 只读取这些文件声明的内容，从不扫描它们去猜测。
 
 ## 声明与否，以及让智能体检查 {#declared-or-not}
 

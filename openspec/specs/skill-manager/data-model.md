@@ -100,15 +100,14 @@ it never fails a skill.
 | `command`     | `str`                    | required; `^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$`, never a path               |
 | `title`       | `str \| None`            | display name, one line, ≤ 200 chars                                        |
 | `min_version` | `str \| None`            | dotted numbers (`"2.40"`); an unquoted YAML float is refused, since `2.40` reads as `2.4` |
-| `login_check` | `tuple[str, ...] \| None` | argv (a string is split shell-style, never run in a shell); first word MUST equal `command` |
-| `login`       | `str \| None`            | the login command the login hand-off names; never run, never shown on the page |
 | `why`         | `str \| None`            | one line, ≤ 200 chars                                                      |
 | `profiles`    | `tuple[str, ...]`        | the `profiles/<name>.md` files that declared it; empty when SKILL.md did   |
 
 A bare string entry is a command with no conditions. An entry that breaks a
 rule is skipped and reported as a warning (`GET /clis` → `warnings`); a field
 not listed here (such as a `brew:` formula) is ignored with a warning and the
-entry kept; a command named twice in one skill keeps its first entry. The
+entry kept, except `login_check` and `login`, which an older Coffer read and which
+are now dropped without a warning; a command named twice in one skill keeps its first entry. The
 requirements of a skill are the union of its SKILL.md and every
 `profiles/*.md` frontmatter (`requirements_of_skill`): a command several
 sources declare is one entry with the highest minimum and the profiles joined.
@@ -122,13 +121,13 @@ is `SkillOut.requires_declared` (`bool`, always emitted).
 
 `aggregate()` turns every managed skill's requirements into one
 `RequiredCommand` per command: `min_version` is the highest any skill asks
-for; `title`, `login_check` and `login` come from the first skill (by
+for; `title` comes from the first skill (by
 name) that declares each; `needed_by` lists every declaring skill with its own
 minimum and `why`. Every enabled stdio MCP server adds a `ServerLauncher`
 (`server_uid`, `server_name`, `launcher`) to `needed_by_servers` of the command
 `launcher_cli()` maps its launcher to — `uv` for `uvx`, `node` for `npx`, `bun`
 for `bunx`, the launcher itself otherwise, nothing for a path — creating the row
-when no skill declares it (no minimum, no login check). On the wire it is
+when no skill declares it (no minimum). On the wire it is
 `CliOut.needed_by_servers` (`CliServerOut`).
 
 `ProbeResult` is the in-memory check result, one per command, kept by
@@ -139,18 +138,17 @@ table):
 | ------------- | ------------------- | ------------------------------------------------------------------ |
 | `path`        | `str \| None`       | where the agent's `PATH` finds it, symlinks resolved; `None` = missing |
 | `version`     | `str \| None`       | parsed from `--version` (5 s timeout); `None` = unreadable         |
-| `login`       | `LoginState \| None` | `logged_in` / `logged_out` / `not_needed`; `None` when missing     |
 | `checked_at`  | `datetime`          | UTC                                                                |
 
 `status_of()` → `missing` → `outdated` (a readable version below the minimum)
-→ `logged_out` (the login check exited non-zero or ran past 10 s) → `ready`;
-lists sort in that order, then by command. The login check's output is sent to
-`/dev/null` and never read.
+→ `ready`; lists sort in that order, then by command. Coffer runs nothing but
+`--version`. `version_unverifiable()` is true for a found command with a
+minimum whose version could not be read; on the wire it is
+`CliOut.version_unverifiable` (`bool`, always emitted).
 
 ### Hand-off prompt (`application/skill/cli_handoff.py`)
 
-Derived, never stored: every view of a command that is `missing`, `outdated` or
-`logged_out` carries the prompt text for the person's agent, rendered by
+Derived, never stored: every view of a command that is `missing` or `outdated` carries the prompt text for the person's agent, rendered by
 `domain/handoff.py` from the row, the probe result and the machine's
 `machine_label()` (read once per daemon); a `ready` command carries none. On
 the wire it is `CliOut.handoff` (`HandoffOut {prompt}`), and the CLIs page copies it.

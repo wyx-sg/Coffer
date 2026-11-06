@@ -5,8 +5,6 @@ requires:
   - command: gh                 # required; a bare name, no path
     title: GitHub CLI           # optional display name
     min_version: "2.40"         # optional; dotted numbers
-    login_check: gh auth status # optional; argv of the SAME command
-    login: gh auth login        # optional; shown to copy, never run
     why: Opens and labels issues.
   - jq                          # shorthand: a command with no conditions
   - "node>=20.1"                # shorthand: a command and its minimum
@@ -44,15 +42,18 @@ read by :func:`required_skills_from_skill_md`.
 
 Parsed leniently: the frontmatter is third-party, like ``allowed-tools``, so
 an entry that is not understood is skipped and reported as a warning, never a
-reason to refuse the skill. The rules are what keep a declaration from making
-Coffer run anything but the tool it names: the command is a bare name and the
-login check's first word is that command.
+reason to refuse the skill. The command is a bare name, so a declaration can
+make Coffer run only the tool it names, and only as ``<command> --version``.
+
+``login_check`` and ``login`` are accepted and not read: Coffer no longer
+checks a login (an agent that uses the tool finds out itself, ADR
+"agents-check-cli-logins-themselves"), and a skill that still carries them is
+not warned about it.
 """
 
 from __future__ import annotations
 
 import re
-import shlex
 from dataclasses import dataclass, field
 
 from coffer.domain.secrets import is_valid_secret_name
@@ -65,9 +66,9 @@ _TEXT_MAX = 200
 _TOOL_NAME_RE = re.compile(r"^[A-Za-z0-9_.\-]{1,64}$")
 #: The keys the mapping form of ``requires:`` may carry.
 _MAPPING_KEYS = ("commands", "secrets", "tools")
-_KEYS = frozenset(
-    {"command", "name", "title", "min_version", "version", "login_check", "login", "why"}
-)
+_KEYS = frozenset({"command", "name", "title", "min_version", "version", "why"})
+#: Keys an older declaration may carry, accepted without a warning and not read.
+_IGNORED_KEYS = frozenset({"login_check", "login"})
 #: ``gh``, ``gh>=2.40``, ``node == 20.1``, ``python3~=3.12``.
 _SPEC_RE = re.compile(r"^\s*([^\s<>=!~]+)\s*(?:(?:>=|=>|~=|==)\s*([0-9][^\s]*))?\s*$")
 
@@ -79,10 +80,6 @@ class CommandRequirement:
     command: str
     title: str | None = None
     min_version: str | None = None
-    #: The login check's argv; its first word is ``command``.
-    login_check: tuple[str, ...] | None = None
-    #: Shown to the user to copy; Coffer never runs it.
-    login: str | None = None
     why: str | None = None
     #: The profile files (``profiles/<name>.md``) that declared it, by name;
     #: empty when SKILL.md itself did.
@@ -249,17 +246,14 @@ def _entry(entry: object) -> tuple[CommandRequirement, list[str]]:
         raise _SkipEntryError("no command")
     command = _command(entry.get("command", entry.get("name")))
     dropped: list[str] = []
-    unknown = sorted(str(k) for k in entry if k not in _KEYS)
+    unknown = sorted(str(k) for k in entry if k not in _KEYS and k not in _IGNORED_KEYS)
     if unknown:
         dropped.append(f"unknown field(s) {', '.join(unknown)} ignored")
-    login_check = _login_check(command, entry.get("login_check"))
     return (
         CommandRequirement(
             command=command,
             title=_text(entry.get("title"), "title", dropped),
             min_version=_min_version(entry.get("min_version", entry.get("version"))),
-            login_check=login_check,
-            login=_text(entry.get("login"), "login", dropped),
             why=_text(entry.get("why"), "why", dropped),
         ),
         dropped,
@@ -275,27 +269,6 @@ def _command(value: object) -> str:
     if not COMMAND_RE.match(name):
         raise _SkipEntryError(f"command {name!r} is not a command name")
     return name
-
-
-def _login_check(command: str, value: object) -> tuple[str, ...] | None:
-    if value is None:
-        return None
-    if isinstance(value, str):
-        try:
-            argv = shlex.split(value)
-        except ValueError as exc:
-            raise _SkipEntryError(f"login_check cannot be read ({exc})") from None
-    elif isinstance(value, list) and all(isinstance(v, str) for v in value):
-        argv = [str(v) for v in value]
-    else:
-        raise _SkipEntryError("login_check must be a command line")
-    if not argv:
-        raise _SkipEntryError("login_check is empty")
-    if argv[0] != command:
-        raise _SkipEntryError(
-            f"login_check runs {argv[0]!r}, not {command!r}; it may only run the command"
-        )
-    return tuple(argv)
 
 
 def _min_version(value: object) -> str | None:

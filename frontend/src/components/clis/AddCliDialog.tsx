@@ -5,15 +5,14 @@
 // whether the tool is already added or a skill already requires it — so the
 // person sees what Coffer found before saving. A tool that is not on this
 // machine can still be added (it shows as not found). A display name (the
-// wire's `title`), description, minimum version and a login check (a command
-// line starting with the tool) are optional. Editing shows the command locked
+// wire's `title`), description and minimum version are optional. Editing shows the command locked
 // and every field. For a tool only a skill or MCP server requires, the fields
 // open on what the skills say and only the ones changed are sent: they become
 // the person's edits, and a cleared one brings the skills' value back (spec
 // skill-manager "Declare a command-line tool without a skill"). A failed save
 // stays in the dialog and the primary button becomes Retry.
 import { CircleAlert, Lock } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
@@ -33,7 +32,6 @@ import { translateApiError } from "@/lib/api/errors";
 import { useAddCli, useEditCli } from "@/lib/hooks/useClis";
 import { useDebouncedValue } from "@/lib/hooks/useDebouncedValue";
 import { CliFound } from "./CliFound";
-import { loginCheckRefusal } from "./loginCheckRefusal";
 
 /** The daemon's limit (domain/skill/cli_declared.py DESCRIPTION_MAX). */
 const DESCRIPTION_MAX = 1000;
@@ -59,7 +57,6 @@ function Form({ onOpenChange, existing, onSaved }: Omit<Props, "open">) {
   const [title, setTitle] = useState(existing?.title ?? "");
   const [description, setDescription] = useState(existing?.description ?? "");
   const [minVersion, setMinVersion] = useState(existing?.min_version ?? "");
-  const [loginCheck, setLoginCheck] = useState(existing?.login.check?.join(" ") ?? "");
   const looked = useDebouncedValue(command.trim(), 400);
   const valid = command.trim() !== "";
 
@@ -69,7 +66,6 @@ function Form({ onOpenChange, existing, onSaved }: Omit<Props, "open">) {
       title: title.trim() || null,
       description: description.trim() || null,
       min_version: minVersion.trim() || null,
-      login_check: loginCheck.trim() || null,
     };
     const done = (cli: Cli) => {
       onOpenChange(false);
@@ -81,12 +77,6 @@ function Form({ onOpenChange, existing, onSaved }: Omit<Props, "open">) {
   };
 
   const command_ = existing?.command ?? command.trim();
-  const loginRefusal = loginCheckRefusal(save.error);
-  const loginInput = useRef<HTMLInputElement>(null);
-  const refusedFor = loginRefusal?.command;
-  useEffect(() => {
-    if (refusedFor) loginInput.current?.focus();
-  }, [refusedFor]);
   return (
     <form
       className="space-y-4"
@@ -171,32 +161,7 @@ function Form({ onOpenChange, existing, onSaved }: Omit<Props, "open">) {
           onChange={(e) => setDescription(e.target.value)}
         />
       </div>
-      <div className="space-y-1.5">
-        <Label htmlFor="cli-login">{t("clis.add.loginCheck")}</Label>
-        <Input
-          id="cli-login"
-          ref={loginInput}
-          value={loginCheck}
-          placeholder="gh auth status"
-          className="font-mono"
-          aria-invalid={loginRefusal ? true : undefined}
-          aria-describedby={loginRefusal ? "cli-login-error" : "cli-login-hint"}
-          onChange={(e) => {
-            setLoginCheck(e.target.value);
-            if (loginRefusal) save.reset();
-          }}
-        />
-        {loginRefusal ? (
-          <p id="cli-login-error" role="alert" className="text-xs text-danger">
-            {t("clis.add.loginCheckCommand", { command: loginRefusal.command })}
-          </p>
-        ) : (
-          <p id="cli-login-hint" className="text-xs text-text-muted">
-            {t("clis.add.loginCheckHint")}
-          </p>
-        )}
-      </div>
-      {save.error && !loginRefusal ? (
+      {save.error ? (
         <Alert variant="error">
           <CircleAlert aria-hidden />
           <AlertTitle>
@@ -221,7 +186,6 @@ type Fields = {
   title: string | null;
   description: string | null;
   min_version: string | null;
-  login_check: string | null;
 };
 
 /** Only the fields that differ from what the tool reads now. */
@@ -230,7 +194,6 @@ function changedFrom(cli: Cli, fields: Fields): Partial<Fields> {
     title: cli.title ?? null,
     description: cli.description ?? null,
     min_version: cli.min_version ?? null,
-    login_check: cli.login.check?.join(" ") ?? null,
   };
   return Object.fromEntries(
     (Object.keys(fields) as (keyof Fields)[])

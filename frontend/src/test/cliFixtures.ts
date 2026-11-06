@@ -16,7 +16,7 @@ export function cli(overrides: Partial<Cli> & Pick<Cli, "command">): Cli {
     path: `/opt/homebrew/bin/${overrides.command}`,
     version: "1.0.0",
     min_version: null,
-    login: { state: "not_needed", check: null, command: null },
+    version_unverifiable: false,
     handoff: null,
     needed_by: [need("any-skill")],
     needed_by_servers: [],
@@ -26,7 +26,7 @@ export function cli(overrides: Partial<Cli> & Pick<Cli, "command">): Cli {
   };
 }
 
-/** gh too old, gcloud not logged in, jq missing (each with a hand-off prompt), uv ready. */
+/** gh too old and jq missing (each with a hand-off prompt), uv ready. */
 export const GH_OUTDATED = cli({
   command: "gh",
   title: "GitHub CLI",
@@ -37,27 +37,12 @@ export const GH_OUTDATED = cli({
   needed_by: [need("gh-triage", "2.40", "Opens and labels issues."), need("release-notes")],
 });
 
-export const GCLOUD_LOGGED_OUT = cli({
-  command: "gcloud",
-  title: "Google Cloud CLI",
-  status: "logged_out",
-  version: "480.0.0",
-  login: {
-    state: "logged_out",
-    check: ["gcloud", "auth", "print-access-token"],
-    command: "gcloud auth login",
-  },
-  handoff: { prompt: "Help me log gcloud in on this machine." },
-  needed_by: [need("gh-triage")],
-});
-
 export const JQ_MISSING = cli({
   command: "jq",
   status: "missing",
   path: null,
   version: null,
   min_version: "1.6",
-  login: { state: null, check: null, command: null },
   handoff: { prompt: "Install jq 1.6 or newer on this machine." },
   needed_by: [
     need("gh-triage", "1.6", "The skill filters issue JSON with it."),
@@ -72,6 +57,15 @@ export const UV_READY = cli({
   needed_by: [need("gh-triage", "0.4")],
 });
 
+/** gcloud found, but its version can't be read, so its minimum can't be compared. */
+export const GCLOUD_UNVERIFIED = cli({
+  command: "gcloud",
+  version: null,
+  min_version: "400",
+  version_unverifiable: true,
+  needed_by: [need("gh-triage", "400")],
+});
+
 /** uv missing, needed by the MCP server duckdb (started with uvx) and a skill. */
 export const UV_MISSING_FOR_SERVER = cli({
   command: "uv",
@@ -79,7 +73,6 @@ export const UV_MISSING_FOR_SERVER = cli({
   path: null,
   version: null,
   min_version: "0.4",
-  login: { state: null, check: null, command: null },
   handoff: { prompt: "Install uv on this machine so Coffer can start duckdb." },
   needed_by: [need("data-profiling", "0.4")],
   needed_by_servers: [{ server_uid: "srv-duckdb", server_name: "duckdb", launcher: "uvx" }],
@@ -92,7 +85,6 @@ export const GIT_MISSING_FOR_COFFER = cli({
   status: "missing",
   path: null,
   version: null,
-  login: { state: null, check: null, command: null },
   handoff: { prompt: "Install git on this machine." },
   needed_by: [],
   needed_by_coffer: ["vault_history", "sync"],

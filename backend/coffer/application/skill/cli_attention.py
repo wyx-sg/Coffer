@@ -1,18 +1,16 @@
 """What about the commands skills require, and Coffer itself runs, needs a
 person (the Overview list).
 
-One item per command that is ``missing``, ``outdated`` or ``logged_out``
-(reason codes ``cli_missing``, ``cli_outdated``, ``cli_logged_out``), kind
+One item per command that is ``missing`` or ``outdated`` (reason codes
+``cli_missing``, ``cli_outdated``), kind
 ``cli`` with the command as the uid, for a command a skill requires or one
 Coffer itself runs (``git``, for the vault's history and sync): the reason
 says what Coffer cannot do without it, and a missing one is an error because
 the vault's history stops. Every other item is a warning. The action is ``check``
-— the CLIs page's own Check — and the CLIs page's hand-off prompt
-(which names the login command for a command that is not logged in, so the
-reason names none). A command only MCP servers need (a stdio launcher no
-skill declares) raises no item here: the server's own ``mcp_missing_launcher``
-item already names it. It reads the service's cache, probing only
-commands nothing was checked for yet.
+— the CLIs page's own Check — and the CLIs page's hand-off prompt. A command
+only MCP servers need (a stdio launcher no skill declares) raises no item
+here: the server's own ``mcp_missing_launcher`` item already names it. It
+reads the service's cache, probing only commands nothing was checked for yet.
 
 A skill with a secret it requires that is not set raises one item naming every
 such secret: kind ``skill`` with the skill's uid, reason
@@ -53,9 +51,7 @@ def _reason(view: CliView) -> str:
     needs = _needs(row)
     if view.status is CliStatus.MISSING:
         return f"{row.command} is not on the agent's PATH; {needs}."
-    if view.status is CliStatus.OUTDATED:
-        return f"{row.command} {probe.version} is older than {row.min_version}; {needs}."
-    return f"{row.command} is not logged in; {needs}."
+    return f"{row.command} {probe.version} is older than {row.min_version}; {needs}."
 
 
 def _severity(view: CliView) -> Severity:

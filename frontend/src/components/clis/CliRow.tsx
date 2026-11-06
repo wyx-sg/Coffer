@@ -2,9 +2,8 @@
 //
 // The status line says what is wrong, in the problem's colour ("Not found · 2
 // skills need it", "Not found · duckdb can't start" for a launcher an MCP
-// server starts with, "24.0.2 · needs ≥ 25.0", "Not logged in · 3 skills need
-// it") or, when ready, in grey: the version, "logged in" where a login is
-// declared, and who needs it — or "added by you" for a tool nothing needs.
+// server starts with, "24.0.2 · needs ≥ 25.0") or, when ready, in grey: the
+// version and who needs it — or "added by you" for a tool nothing needs.
 import { useTranslation } from "react-i18next";
 
 import type { Cli } from "@/lib/api/clis";
@@ -34,23 +33,14 @@ function useStatusLine(cli: Cli): string {
         : needIt(t("clis.status.missing"));
     case "outdated":
       return t("clis.list.outdatedLine", { version, min: cli.min_version ?? "" });
-    case "logged_out":
-      return needIt(t("clis.status.logged_out"));
     case "ready":
-      return [
-        version,
-        cli.login.state === "logged_in" ? t("clis.list.loggedIn") : null,
-        count > 0 ? who : t("clis.list.addedByYou"),
-      ]
-        .filter(Boolean)
-        .join(" · ");
+      return [version, count > 0 ? who : t("clis.list.addedByYou")].join(" · ");
   }
 }
 
 const TONE = {
   missing: "text-danger",
   outdated: "text-warning",
-  logged_out: "text-warning",
   ready: "text-success",
 } as const;
 

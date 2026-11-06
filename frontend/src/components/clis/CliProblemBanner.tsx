@@ -2,10 +2,9 @@
 //
 // Title, a plain sentence naming the MCP servers that can't start and the
 // skills that fail at the step calling the command (too old: the minimum it
-// needs; not logged in: the login check and when it failed), and the fix in the
-// banner: Check again (re-probes this one command), then [Hand off to <Agent> ▾] and
-// its "?" with the daemon's hand-off prompt — Coffer never installs, updates
-// or logs in for the person. A ready command has no banner.
+// needs), and the fix in the banner: Check again (re-probes this one command),
+// then [Hand off to <Agent> ▾] and its "?" with the daemon's hand-off prompt —
+// Coffer never installs or updates for the person. A ready command has no banner.
 import { CircleAlert, RefreshCw, TriangleAlert } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -42,15 +41,6 @@ function useBody(cli: Cli): string {
     reason = t("clis.banner.bothBody", { servers: serverNames(cli), skills, command, count });
   }
   if (coffer && reason !== coffer) reason = `${coffer} ${reason}`;
-  const check = cli.login.check?.join(" ");
-  if (cli.status === "logged_out" && check) {
-    const time = new Date(cli.checked_at).toLocaleTimeString(i18n.language, {
-      hour: "2-digit",
-      minute: "2-digit",
-      hourCycle: "h23",
-    });
-    reason += ` ${t("clis.banner.loginFailed", { check, time })}`;
-  }
   return `${reason} ${t(`clis.banner.hand.${cli.status}`)}`;
 }
 

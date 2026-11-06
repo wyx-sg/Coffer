@@ -69,28 +69,15 @@ async def test_results_are_cached_until_checked_again() -> None:
     assert probe.located == ["gh", "gh", "gh"]
 
 
-async def test_login_check_runs_the_located_file_and_logged_out_is_reported() -> None:
-    probe = FakeCommandProbe({"gh": FakeCommand("2.41", logged_in=False, printed="octocat")})
-    doc = _md("s", "  - command: gh\n    login_check: gh auth status\n")
-    view = await _service({"s": doc}, probe).check("gh")
-    assert view.status.value == "logged_out"
-    assert probe.login_calls == [("/fake/bin/gh", "auth", "status")]
-    assert view.handoff is not None and "octocat" not in view.handoff
-
-
-@pytest.mark.acceptance(spec="skill-manager", scenario="a login check runs only when someone asks")
-async def test_a_read_never_runs_a_login_check() -> None:
-    """A login check runs a program with arguments a skill chose: the reads the
-    attention poll makes probe the version and leave the login unknown."""
-    probe = FakeCommandProbe({"gh": FakeCommand("2.41", logged_in=False)})
-    doc = _md("s", "  - command: gh\n    login_check: gh auth status\n")
-    svc = _service({"s": doc}, probe)
-
-    listed = await svc.listing()
-    got = await svc.get("gh")
-
-    assert probe.login_calls == []
-    assert listed.items[0].probe.login is None and got.status.value == "ready"
+@pytest.mark.acceptance(
+    spec="skill-manager", scenario="a version Coffer cannot read leaves the minimum unverified"
+)
+async def test_an_unreadable_version_is_ready_but_unverified() -> None:
+    probe = FakeCommandProbe({"go": FakeCommand(None)})
+    view = await _service({"s": _md("s", "  - go>=1.22\n")}, probe).check("go")
+    assert view.status.value == "ready"
+    assert view.version_unverifiable is True
+    assert view.handoff is None
 
 
 async def test_an_unknown_command_is_not_required() -> None:
@@ -105,7 +92,9 @@ async def test_every_problem_carries_a_prompt_and_ready_carries_none() -> None:
     assert jq is not None and jq.startswith("Please install the command-line tool `jq`")
     assert "- Needed by the Coffer skills: a-skill, b-skill." in jq
     assert f"- This machine: {FAKE_MACHINE}." in jq
-    assert "run `jq --version`" in jq
+    # The agent confirms the tool its own way and asks Coffer to look again.
+    assert "--version" not in jq
+    assert "run `coffer cli check jq` so Coffer sees it" in jq
     assert gh is not None and gh.startswith("Please update the command-line tool `gh`")
     assert "a-skill (version 2.40 or newer)" in gh
     assert uv is None
@@ -299,9 +288,6 @@ async def test_a_profile_declared_command_is_needed_by_the_skill_with_its_profil
             return None
 
         def version(self, path: str) -> str | None:
-            return None
-
-        def login_ok(self, argv: Sequence[str]) -> bool | None:
             return None
 
     service = CliRequirementService(skills=Docs(), probe=Probe(), machine=lambda: "m")

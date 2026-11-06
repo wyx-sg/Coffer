@@ -2982,7 +2982,6 @@
       "unknown": "尚未检查",
       "state": {
         "missing": "未安装",
-        "logged_out": "未登录",
         "ready": "已找到",
         "outdated": "版本太旧"
       },
@@ -3048,7 +3047,6 @@
       "masterMissing": "主文件夹不见了",
       "folderInWay": "{{agent}} 中有文件夹挡住",
       "needsMissing": "需要 {{command}} · 未安装",
-      "needsLogin": "需要 {{command}} · 未登录",
       "needsNewer": "需要更新版本的 {{command}}",
       "needsSecret": "需要密钥 {{name}} · 未设置",
       "needsTool": "需要 {{name}} · {{state}}",
@@ -3088,8 +3086,6 @@
       "folderBody": "Coffer 在 {{path}} 发现了一个文件夹，那里本应是 {{name}} 的链接。比较两边，选择保留哪一个。",
       "requiresMissingPart_one": "{{commands}} 未安装",
       "requiresMissingPart_other": "{{commands}} 未安装",
-      "requiresLoginPart_one": "{{commands}} 未登录",
-      "requiresLoginPart_other": "{{commands}} 未登录",
       "requiresOldPart_one": "{{commands}} 版本低于技能要求",
       "requiresOldPart_other": "{{commands}} 版本低于技能要求",
       "secretsTitle_one": "这个技能需要的 {{count}} 个密钥未设置",
@@ -3102,7 +3098,7 @@
       "defaultBranch": "默认分支",
       "repoTop": "仓库",
       "masterBody": "{{path}} 在 Coffer 之外被删除了。它的范围还在，可以让智能体找一份副本放回去。",
-      "requiresBody": "{{name}} 仍会投递，但它的步骤会在第一个未就绪的命令处停下。把安装和登录交给智能体，然后再检查。",
+      "requiresBody": "{{name}} 仍会投递，但它的步骤会在第一个未就绪的命令处停下。把安装交给智能体，然后再检查。",
       "tool": {
         "off": "{{tool}} 已关闭，所以 {{name}} 无法调用它",
         "failing": "{{tool}} 出错，所以 {{name}} 无法依赖它"
@@ -5128,8 +5124,6 @@
       },
       "clis": {
         "ok": "全部就绪",
-        "notLoggedIn_one": "{{count}} 个未登录",
-        "notLoggedIn_other": "{{count}} 个未登录",
         "outdated_one": "{{count}} 个版本过旧",
         "outdated_other": "{{count}} 个版本过旧",
         "missing_one": "{{count}} 个缺失",
@@ -5741,27 +5735,22 @@
     }
   },
   "clis": {
-    "subtitle": "技能和 MCP 服务器需要的命令行工具。Coffer 负责检查，安装和登录交给智能体。",
+    "subtitle": "技能和 MCP 服务器需要的命令行工具。Coffer 负责检查，安装交给智能体。",
     "title": "命令行工具",
     "addTool": "添加命令行工具",
     "check": "检查",
-    "checkHint": "重新探测每个工具：是否找到、版本、是否登录",
+    "checkHint": "重新探测每个工具：是否找到，以及版本",
     "checking": "正在检查…",
     "status": {
       "missing": "未找到",
       "outdated": "版本过旧",
-      "logged_out": "未登录",
       "ready": "就绪"
     },
     "search": "筛选命令行工具",
     "notOnPath": "不在 PATH 上",
     "needs": "要求 ≥ {{version}}",
+    "versionUnverifiable": "要求 ≥ {{version}} · 读不出版本，没法核对",
     "unknownVersion": "版本未知",
-    "login": {
-      "logged_in": "已登录",
-      "logged_out": "未登录",
-      "not_needed": "无需登录"
-    },
     "skillCount_one": "{{count}} 个技能",
     "skillCount_other": "{{count}} 个技能",
     "warnings": {
@@ -5786,8 +5775,6 @@
       "onDate": "{{date}} {{time}}",
       "foundAt": "位置",
       "version": "版本",
-      "login": "登录",
-      "checkedWith": "· 检查命令",
       "neededByNote": "调用它的 Coffer 自身、技能和 MCP 服务器。打开技能或服务器可以看原因。",
       "neededByNothing": "没有技能或 MCP 服务器要求它——它是你手动添加的，会一直留在列表里，直到你移除。",
       "cols": {
@@ -5824,9 +5811,6 @@
       "minVersion": "最低版本",
       "description": "描述",
       "descriptionPlaceholder": "用一句话说明用途",
-      "loginCheck": "登录检查",
-      "loginCheckHint": "以命令名开头（例如 /opt/bin/gh 写 gh），已登录时退出码为 0。点「检查」时运行。",
-      "loginCheckCommand": "登录检查必须以命令名 {{command}} 开头，不能写路径或其他程序。它运行的是你添加的这个工具。",
       "submit": "添加",
       "addFailed": "无法添加 {{command}}",
       "editFailed": "无法保存 {{command}}"
@@ -5847,7 +5831,6 @@
       "outdated_other": "{{command}} {{found}} 低于 {{skills}} 的要求",
       "body": "{{skills}} 会在调用 {{command}} 的那一步失败。",
       "missing": "这台机器上找不到 {{command}}",
-      "logged_out": "{{command}} 未登录",
       "outdatedBody_one": "{{skills}} 需要 {{command}} ≥ {{version}}，会在调用它的那一步失败。",
       "outdatedBody_other": "{{skills}} 需要 {{command}} ≥ {{version}}，会在调用它的那一步失败。",
       "skillsBody_one": "{{skills}} 会在调用 {{command}} 的那一步失败。",
@@ -5855,11 +5838,9 @@
       "serversBody": "{{servers}} 无法启动。",
       "bothBody_one": "{{servers}} 无法启动，{{skills}} 会在调用 {{command}} 的那一步失败。",
       "bothBody_other": "{{servers}} 无法启动，{{skills}} 会在调用 {{command}} 的那一步失败。",
-      "loginFailed": "{{check}} 在 {{time}} 未通过。",
       "hand": {
         "missing": "把安装交给智能体，然后点「检查」。",
-        "outdated": "把更新交给智能体，然后点「检查」。",
-        "logged_out": "把登录交给智能体，然后点「检查」。"
+        "outdated": "把更新交给智能体，然后点「检查」。"
       },
       "cofferBody": "Coffer 无法{{uses}}。"
     },
@@ -5868,8 +5849,6 @@
       "needsAttention": "需要处理",
       "ready": "就绪",
       "outdatedLine": "{{version}} · 要求 ≥ {{min}}",
-      "loggedInLine": "{{version}} · 已登录",
-      "loggedIn": "已登录",
       "addedByYou": "你添加的",
       "needLine_one": "{{lead}} · {{who}}需要它",
       "needLine_other": "{{lead}} · {{who}}需要它",
@@ -6375,7 +6354,6 @@
       "missing": "缺失",
       "notFound": "未找到",
       "outdated": "版本过旧",
-      "loggedOut": "未登录",
       "running": "运行中"
     }
   },

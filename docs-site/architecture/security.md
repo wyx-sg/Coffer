@@ -349,7 +349,7 @@ The guard resolves DNS at validation time and the HTTP client resolves again whe
 
 ## Commands Coffer runs for skill requirements
 
-A skill can declare the command-line tools it needs ([Skill requirements](/architecture/skill-requirements)), and checking them runs two things on your machine: `<command> --version`, and the skill's login check. Both are held to the command the skill names — a bare name looked up on your `PATH`, and a login check whose first word must be that same command — and run as argv, never through a shell, with `stdin` closed and a timeout. A login check's output is discarded unread, so an account name or token it prints is never captured, logged or shown; only its exit status counts. Coffer runs no installer and no login command: installing is handed to your agent as a prompt ([the agent hand-off](/architecture/skill-requirements#the-agent-hand-off)), which asks it to check with you before anything that needs `sudo` and to leave logging in to you.
+A skill can declare the command-line tools it needs ([Skill requirements](/architecture/skill-requirements)), and checking them runs one thing on your machine: `<command> --version`, for a bare name looked up on your `PATH` (or a path you added by hand), as argv, never through a shell, with `stdin` closed and a timeout. Coffer checks no login, so it never runs a command that could print an account name or token. It runs no installer and no login command either: installing is handed to your agent as a prompt ([the agent hand-off](/architecture/skill-requirements#the-agent-hand-off)), which asks it to check with you before anything that needs `sudo` and to leave logging in to you.
 
 ## Agent identity
 

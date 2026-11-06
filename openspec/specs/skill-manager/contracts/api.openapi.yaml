@@ -389,7 +389,7 @@ paths:
       description: |-
         Add a command-line tool by hand, with no skill. 409 ``CLI_TOOL_EXISTS``
         when it was already added; 400 ``CLI_TOOL_INVALID`` for a bad name, path,
-        version or login check.
+        or version.
       operationId: add_cli_api_v1_clis_post
       parameters:
       - in: header
@@ -2077,8 +2077,7 @@ components:
       description: |-
         Declare a tool by hand. ``command`` is a command name (``jq``) or the
         absolute path of an executable (``/opt/tools/bin/jq``; the file name is
-        the command). ``login_check`` is a command line that starts with the tool,
-        like ``gh auth status``.
+        the command).
       properties:
         command:
           maxLength: 512
@@ -2090,11 +2089,6 @@ components:
           - type: string
           - type: 'null'
           title: Description
-        login_check:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Login Check
         min_version:
           anyOf:
           - type: string
@@ -2120,11 +2114,6 @@ components:
           - type: string
           - type: 'null'
           title: Description
-        login_check:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Login Check
         min_version:
           anyOf:
           - type: string
@@ -2153,40 +2142,6 @@ components:
       - items
       - warnings
       title: CliListOut
-      type: object
-    CliLoginOut:
-      description: |-
-        ``state`` is ``None`` when the command was not found, so its login check
-        could not run, or when the check has not been run yet (only a Check runs
-        it). ``command`` is the login command to copy — Coffer never runs it.
-        ``check`` is the declared login check.
-      properties:
-        check:
-          anyOf:
-          - items:
-              type: string
-            type: array
-          - type: 'null'
-          title: Check
-        command:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Command
-        state:
-          anyOf:
-          - enum:
-            - logged_in
-            - logged_out
-            - not_needed
-            type: string
-          - type: 'null'
-          title: State
-      required:
-      - state
-      - check
-      - command
-      title: CliLoginOut
       type: object
     CliNeededByOut:
       description: One skill that requires the command, with what it asked for.
@@ -2241,8 +2196,6 @@ components:
           anyOf:
           - $ref: '#/components/schemas/HandoffOut'
           - type: 'null'
-        login:
-          $ref: '#/components/schemas/CliLoginOut'
         min_version:
           anyOf:
           - type: string
@@ -2275,7 +2228,6 @@ components:
           enum:
           - missing
           - outdated
-          - logged_out
           - ready
           title: Status
           type: string
@@ -2289,6 +2241,9 @@ components:
           - type: string
           - type: 'null'
           title: Version
+        version_unverifiable:
+          title: Version Unverifiable
+          type: boolean
       required:
       - command
       - title
@@ -2298,7 +2253,7 @@ components:
       - path
       - version
       - min_version
-      - login
+      - version_unverifiable
       - handoff
       - needed_by
       - needed_by_servers

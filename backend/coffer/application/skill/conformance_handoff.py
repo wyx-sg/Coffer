@@ -49,8 +49,7 @@ _STEPS = (
     "skill needs. If you suggest one, put it under a top-level `requires:` in SKILL.md "
     "(or in an existing profile file's frontmatter for a need that belongs to one "
     "environment), listing only what the skill itself uses: the commands it runs "
-    "(`command`, with `min_version`, `login_check` — a subcommand of the same command that "
-    "exits 0 when logged in — `login` and `why` where they help), the Coffer secrets it "
+    "(`command`, with `min_version` and `why` where they help), the Coffer secrets it "
     "uses, by id (`coffer secret list --json` lists them), and the MCP servers and tool "
     "groups it calls, by their Coffer name.",
     "Do not declare on behalf of another skill it delegates to, Coffer-managed or external; "

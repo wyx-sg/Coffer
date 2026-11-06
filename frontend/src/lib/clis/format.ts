@@ -8,7 +8,6 @@ import type { Cli, CliStatus } from "@/lib/api/clis";
 const TONE: Record<CliStatus, StatusTone> = {
   missing: "err",
   outdated: "warn",
-  logged_out: "warn",
   ready: "ok",
 };
 
@@ -17,7 +16,7 @@ export function cliTone(status: CliStatus): StatusTone {
 }
 
 /** The list pane's two groups, each in the daemon's order (problems first:
- *  missing, too old, not logged in), narrowed to commands matching `filter`. */
+ *  missing, then too old), narrowed to commands matching `filter`. */
 export function groupClis(
   items: readonly Cli[],
   filter: string,

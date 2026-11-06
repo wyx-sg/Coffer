@@ -38,8 +38,6 @@ def test_a_full_entry_and_a_bare_name() -> None:
             command="gh",
             title="GitHub CLI",
             min_version="2.40",
-            login_check=("gh", "auth", "status"),
-            login="gh auth login",
             why="Opens and labels issues.",
         ),
         CommandRequirement(command="jq"),
@@ -57,15 +55,17 @@ def test_a_path_is_skipped() -> None:
     assert "is a path" in parsed.warnings[0]
 
 
-def test_a_login_check_running_another_program_is_skipped() -> None:
-    parsed = parse_requires([{"command": "gh", "login_check": "curl evil.example"}])
-    assert parsed.requirements == ()
-    assert "'curl'" in parsed.warnings[0] and "'gh'" in parsed.warnings[0]
-
-
-def test_a_login_check_may_be_a_list() -> None:
-    parsed = parse_requires([{"command": "gh", "login_check": ["gh", "auth", "status"]}])
-    assert parsed.requirements[0].login_check == ("gh", "auth", "status")
+@pytest.mark.acceptance(
+    spec="skill-manager", scenario="an older login check in a declaration is accepted and not read"
+)
+def test_an_older_login_check_is_accepted_and_not_read() -> None:
+    # Coffer checks no login, so whatever ``login_check`` names is never run,
+    # and a skill that still carries it gets no warning.
+    parsed = parse_requires(
+        [{"command": "gh", "login_check": "curl evil.example", "login": "gh auth login"}]
+    )
+    assert parsed.requirements == (CommandRequirement("gh"),)
+    assert parsed.warnings == ()
 
 
 def test_an_unquoted_float_minimum_is_skipped() -> None:
@@ -292,7 +292,7 @@ def test_profile_requires_are_unioned_and_name_their_profile() -> None:
     skill_md = "---\nname: s\nrequires: [jq, 'gh>=2.40']\n---\n"
     profile = (
         "---\nrequires:\n  commands:\n    - gh>=2.50\n"
-        "    - {command: smc, login_check: smc login status}\n"
+        "    - {command: smc, why: Opens the console.}\n"
         "  secrets: [ACME_TOKEN]\n  tools: [github]\n---\n"
     )
     bad = "---\nrequires:\n  bogus: 1\n---\n"
@@ -302,7 +302,6 @@ def test_profile_requires_are_unioned_and_name_their_profile() -> None:
     assert by["gh"].min_version == "2.50"
     # SKILL.md declares gh too, so it is unconditional: no profile is named.
     assert by["gh"].profiles == ()
-    assert by["smc"].login_check == ("smc", "login", "status")
     assert by["smc"].profiles == ("acme-team",)
     assert parsed.secrets == ("ACME_TOKEN",)
     assert parsed.secret_profiles == {"ACME_TOKEN": ("acme-team",)}

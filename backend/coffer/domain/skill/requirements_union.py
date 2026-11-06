@@ -92,8 +92,6 @@ def _merge_command(
         command=have.command,
         title=have.title or req.title,
         min_version=best,
-        login_check=have.login_check or req.login_check,
-        login=have.login or req.login,
         why=have.why or req.why,
         profiles=_join(have.profiles, tag),
     )

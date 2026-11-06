@@ -121,7 +121,7 @@ export interface paths {
          * Add Cli
          * @description Add a command-line tool by hand, with no skill. 409 ``CLI_TOOL_EXISTS``
          *     when it was already added; 400 ``CLI_TOOL_INVALID`` for a bad name, path,
-         *     version or login check.
+         *     or version.
          */
         post: operations["add_cli_api_v1_clis_post"];
         delete?: never;
@@ -789,16 +789,13 @@ export interface components {
          * CliAddIn
          * @description Declare a tool by hand. ``command`` is a command name (``jq``) or the
          *     absolute path of an executable (``/opt/tools/bin/jq``; the file name is
-         *     the command). ``login_check`` is a command line that starts with the tool,
-         *     like ``gh auth status``.
+         *     the command).
          */
         CliAddIn: {
             /** Command */
             command: string;
             /** Description */
             description?: string | null;
-            /** Login Check */
-            login_check?: string | null;
             /** Min Version */
             min_version?: string | null;
             /** Title */
@@ -813,8 +810,6 @@ export interface components {
         CliEditIn: {
             /** Description */
             description?: string | null;
-            /** Login Check */
-            login_check?: string | null;
             /** Min Version */
             min_version?: string | null;
             /** Title */
@@ -826,21 +821,6 @@ export interface components {
             items: components["schemas"]["CliOut"][];
             /** Warnings */
             warnings: components["schemas"]["CliWarningOut"][];
-        };
-        /**
-         * CliLoginOut
-         * @description ``state`` is ``None`` when the command was not found, so its login check
-         *     could not run, or when the check has not been run yet (only a Check runs
-         *     it). ``command`` is the login command to copy — Coffer never runs it.
-         *     ``check`` is the declared login check.
-         */
-        CliLoginOut: {
-            /** Check */
-            check: string[] | null;
-            /** Command */
-            command: string | null;
-            /** State */
-            state: ("logged_in" | "logged_out" | "not_needed") | null;
         };
         /**
          * CliNeededByOut
@@ -872,7 +852,6 @@ export interface components {
             /** Description */
             description: string | null;
             handoff: components["schemas"]["HandoffOut"] | null;
-            login: components["schemas"]["CliLoginOut"];
             /** Min Version */
             min_version: string | null;
             /** Needed By */
@@ -887,11 +866,13 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "missing" | "outdated" | "logged_out" | "ready";
+            status: "missing" | "outdated" | "ready";
             /** Title */
             title: string | null;
             /** Version */
             version: string | null;
+            /** Version Unverifiable */
+            version_unverifiable: boolean;
         };
         /** CliPreviewIn */
         CliPreviewIn: {

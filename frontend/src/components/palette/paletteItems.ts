@@ -42,7 +42,6 @@ export interface PaletteStatus {
     | "missing"
     | "notFound"
     | "outdated"
-    | "loggedOut"
     | "running";
   tone: "muted" | "warn" | "error";
 }

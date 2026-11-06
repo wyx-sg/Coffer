@@ -59,13 +59,12 @@ async def add_cli(
 ) -> CliOut:
     """Add a command-line tool by hand, with no skill. 409 ``CLI_TOOL_EXISTS``
     when it was already added; 400 ``CLI_TOOL_INVALID`` for a bad name, path,
-    version or login check."""
+    or version."""
     view = await tools.add(
         body.command,
         title=body.title,
         description=body.description,
         min_version=body.min_version,
-        login_check=body.login_check,
         actor=actor,
     )
     return cli_out(view)

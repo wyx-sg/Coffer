@@ -2,9 +2,9 @@
 
 The CLIs page is where a person manages them; this is the one read an agent
 makes instead, because it has no page (spec skill-manager "Serve required
-commands on REST and the web"). The coffer-guide skill names it. It reads what
-Coffer last found — ``GET /api/v1/clis`` — and never runs a check, so it starts
-no program and runs no login check.
+commands on REST and the web"). It reads ``GET /api/v1/clis``: what Coffer
+found at its last check, and, for a command nothing has checked since the
+daemon started, a fresh look (where it is, and ``--version``).
 """
 
 from __future__ import annotations
@@ -50,10 +50,10 @@ def list_clis(
 
     The tools Coffer runs itself (git), the tools skills require, the
     launchers MCP servers start with, and the tools the developer added by
-    hand: what each is for, who needs it, and whether it is ready, missing,
-    outdated or logged out on this machine as of Coffer's last check. --json
-    carries the full rows, including the prompt for an agent to install,
-    update or log in to one that needs it.
+    hand: what each is for, who needs it, and whether it is ready, missing
+    or outdated on this machine as of Coffer's last check. --json carries the
+    full rows, including the prompt for an agent to install or update one that
+    needs it.
     """
     verbose = (ctx.obj or {}).get("verbose", False)
     with _io.client(as_json=output_json) as c:

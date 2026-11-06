@@ -16,7 +16,6 @@ import { CliActions } from "./CliActions";
 const TILE: Record<Cli["status"], { icon: LucideIcon; className: string }> = {
   missing: { icon: CircleAlert, className: "bg-danger-soft text-danger" },
   outdated: { icon: TriangleAlert, className: "bg-warning-soft text-warning" },
-  logged_out: { icon: TriangleAlert, className: "bg-warning-soft text-warning" },
   ready: {
     icon: Terminal,
     className: "border border-border-subtle bg-surface-sunken text-text-muted",

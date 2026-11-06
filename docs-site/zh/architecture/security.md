@@ -349,7 +349,7 @@ SSRF 防护会解析 URL 的主机，只要解析出的任一地址是回环、�
 
 ## Coffer 为技能依赖运行的命令 {#commands-coffer-runs-for-skill-requirements}
 
-技能可以声明它需要的命令行工具（见[技能依赖](/zh/architecture/skill-requirements)），而检查这些依赖会在你的机器上运行两样东西：`<command> --version`，以及技能的登录检查。两者都限定在技能指定的那个命令上——一个在你的 `PATH` 上查找的裸名字，以及第一个词必须是同一个命令的登录检查——并以 argv 方式运行，从不经过 shell，`stdin` 关闭，带超时。登录检查的输出不读直接丢弃，所以它打印出的账号名或令牌从不会被捕获、记日志或显示；只看退出码。Coffer 不运行任何安装程序或登录命令：安装以提示词的形式交给你的智能体（[智能体交接](/zh/architecture/skill-requirements#the-agent-hand-off)），提示词会要求它在做任何需要 `sudo` 的事之前先问你，并把登录留给你。
+技能可以声明它需要的命令行工具（见[技能依赖](/zh/architecture/skill-requirements)），而检查这些依赖只会在你的机器上运行一样东西：`<command> --version`，对象是在你的 `PATH` 上查找的裸名字（或你手动添加的路径），以 argv 方式运行，从不经过 shell，`stdin` 关闭，带超时。Coffer 不检查登录，所以从不运行可能打印账号名或令牌的命令。它也不运行任何安装程序或登录命令：安装以提示词的形式交给你的智能体（[智能体交接](/zh/architecture/skill-requirements#the-agent-hand-off)），提示词会要求它在做任何需要 `sudo` 的事之前先问你，并把登录留给你。
 
 ## 智能体身份 {#agent-identity}
 

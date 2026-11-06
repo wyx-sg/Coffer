@@ -2,8 +2,8 @@
 skill-manager "Declare a command-line tool without a skill").
 
 A tool a skill or MCP server requires is not the person's to declare, but
-they may change any of its fields: its description, display name, minimum
-version and login check are kept beside the declarations and take the place
+they may change any of its fields: its description, display name and minimum
+version are kept beside the declarations and take the place
 of what the skills say, as a hand-added declaration's would (the minimum is
 still the highest anyone asks for). Such a tool stays not added by hand.
 
@@ -30,7 +30,6 @@ from coffer.domain.skill.cli_declared import (
     CliToolInvalid,
     CliToolNotDeclared,
     DeclaredTool,
-    clean_login_check,
     clean_min_version,
     clean_text,
     command_name,
@@ -125,7 +124,6 @@ class CliToolService:
         title: str | None = None,
         description: str | None = None,
         min_version: str | None = None,
-        login_check: str | None = None,
         actor: str = "api",
     ) -> CliView:
         command = command_name(raw)
@@ -141,7 +139,6 @@ class CliToolService:
             clean_text(title, "title"),
             clean_text(description, "description", DESCRIPTION_MAX),
             clean_min_version(min_version),
-            clean_login_check(command, login_check),
         )
         if is_path(raw):
             await asyncio.to_thread(self._paths.set, command, raw.strip())
@@ -234,7 +231,6 @@ def _fields(tool: DeclaredTool) -> dict[str, Any]:
         "title": tool.title,
         "description": tool.description,
         "min_version": tool.min_version,
-        "login_check": list(tool.login_check) if tool.login_check is not None else None,
     }
 
 
@@ -247,7 +243,6 @@ def _diff(before: DeclaredTool, after: DeclaredTool) -> dict[str, Any]:
 
 def _apply(tool: DeclaredTool, changes: dict[str, Any]) -> DeclaredTool:
     """``tool`` with the fields ``changes`` carries cleaned and set; ``None`` clears one."""
-    command = tool.command
     if "title" in changes:
         tool = replace(tool, title=clean_text(changes["title"], "title"))
     if "description" in changes:
@@ -256,8 +251,6 @@ def _apply(tool: DeclaredTool, changes: dict[str, Any]) -> DeclaredTool:
         )
     if "min_version" in changes:
         tool = replace(tool, min_version=clean_min_version(changes["min_version"]))
-    if "login_check" in changes:
-        tool = replace(tool, login_check=clean_login_check(command, changes["login_check"]))
     return tool
 
 

@@ -21,7 +21,7 @@ export type SkillToolState = SkillOut["requires_tools"][number];
 export type SkillAttention =
   | { kind: "masterMissing" }
   | { kind: "folderInWay"; agentName: string; entry: SkillDriftEntry }
-  | { kind: "requires"; missing: string[]; loggedOut: string[]; outdated: string[] }
+  | { kind: "requires"; missing: string[]; outdated: string[] }
   | { kind: "toolOff"; tools: SkillToolState[] }
   | { kind: "secrets"; missing: string[] }
   | { kind: "sourceUnreachable" }
@@ -39,15 +39,13 @@ function findingsFor(
 function requireProblems(skill: Pick<SkillOut, "requires">, clis: readonly Cli[]) {
   const byCommand = new Map(clis.map((c) => [c.command, c]));
   const missing: string[] = [];
-  const loggedOut: string[] = [];
   const outdated: string[] = [];
   for (const req of skill.requires) {
     const cli = byCommand.get(req.command);
     if (cli?.status === "missing") missing.push(req.command);
-    else if (cli?.status === "logged_out") loggedOut.push(req.command);
     else if (cli?.status === "outdated") outdated.push(req.command);
   }
-  return { missing, loggedOut, outdated };
+  return { missing, outdated };
 }
 
 /** Every attention item for the skill, most urgent first. */
@@ -67,7 +65,7 @@ export function skillAttention(
     }
   }
   const problems = requireProblems(skill, clis);
-  if (problems.missing.length + problems.loggedOut.length + problems.outdated.length > 0) {
+  if (problems.missing.length + problems.outdated.length > 0) {
     out.push({ kind: "requires", ...problems });
   }
   const sick = (skill.requires_tools ?? []).filter((tool) => tool.status !== "healthy");

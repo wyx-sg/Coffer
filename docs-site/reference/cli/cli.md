@@ -19,7 +19,7 @@ This page matches what `coffer cli --help` prints. Add `--help` to any command b
 | Command | What it does |
 | --- | --- |
 | [`cli list`](#cli-list) | List every command-line tool Coffer manages, problems first. |
-| [`cli show`](#cli-show) | One tool: where it is found, its version, its login state, who needs it. |
+| [`cli show`](#cli-show) | One tool: where it is found, its version, who needs it. |
 | [`cli add`](#cli-add) | Add a tool by hand. |
 | [`cli preview`](#cli-preview) | What Coffer finds for a command before it is added. |
 | [`cli update`](#cli-update) | Change a tool. |
@@ -31,7 +31,7 @@ This page matches what `coffer cli --help` prints. Add `--help` to any command b
 
 List every command-line tool Coffer manages, problems first.
 
-The tools Coffer runs itself (git), the tools skills require, the launchers MCP servers start with, and the tools the developer added by hand: what each is for, who needs it, and whether it is ready, missing, outdated or logged out on this machine as of Coffer's last check. --json carries the full rows, including the prompt for an agent to install, update or log in to one that needs it.
+The tools Coffer runs itself (git), the tools skills require, the launchers MCP servers start with, and the tools the developer added by hand: what each is for, who needs it, and whether it is ready, missing or outdated on this machine as of Coffer's last check. --json carries the full rows, including the prompt for an agent to install or update one that needs it.
 
 <p class="cli-label">Synopsis</p>
 
@@ -47,7 +47,7 @@ coffer cli list [OPTIONS]
 
 ## cli show
 
-One tool: where it is found, its version, its login state, who needs it.
+One tool: where it is found, its version, who needs it.
 
 <p class="cli-label">Synopsis</p>
 
@@ -64,7 +64,7 @@ coffer cli show [OPTIONS] COMMAND
 
 ## cli add
 
-Add a tool by hand. Body: command, title, description, min_version, login_check.
+Add a tool by hand. Body: command, title, description, min_version.
 
 <p class="cli-label">Synopsis</p>
 
@@ -100,7 +100,7 @@ coffer cli preview [OPTIONS]
 
 ## cli update
 
-Change a tool. Body: title, description, min_version, login_check.
+Change a tool. Body: title, description, min_version.
 
 <p class="cli-label">Synopsis</p>
 

@@ -2982,7 +2982,6 @@
       "unknown": "Not checked yet",
       "state": {
         "missing": "Not installed",
-        "logged_out": "Not logged in",
         "ready": "Found",
         "outdated": "Too old"
       },
@@ -3048,7 +3047,6 @@
       "masterMissing": "Master missing",
       "folderInWay": "Folder in the way in {{agent}}",
       "needsMissing": "Needs {{command}} · not installed",
-      "needsLogin": "Needs {{command}} · not logged in",
       "needsNewer": "Needs a newer {{command}}",
       "needsSecret": "Needs secret {{name}} · not set",
       "needsTool": "Needs {{name}} · {{state}}",
@@ -3088,8 +3086,6 @@
       "folderBody": "Coffer found a folder at {{path}} where {{name}}'s link should be. Compare the two and choose which one to keep.",
       "requiresMissingPart_one": "{{commands}} isn’t installed",
       "requiresMissingPart_other": "{{commands}} aren’t installed",
-      "requiresLoginPart_one": "{{commands}} isn't logged in",
-      "requiresLoginPart_other": "{{commands}} aren't logged in",
       "requiresOldPart_one": "{{commands}} is older than the skill needs",
       "requiresOldPart_other": "{{commands}} are older than the skill needs",
       "secretsTitle_one": "{{count}} secret this skill needs is not set",
@@ -3102,7 +3098,7 @@
       "defaultBranch": "The default branch",
       "repoTop": "the repository",
       "masterBody": "{{path}} was removed outside Coffer. Its reach is still here; an agent can look for a copy to put back.",
-      "requiresBody": "{{name}} is still delivered, but its steps stop at the first call to a command that isn’t ready. Hand the install and the login to an agent, then check again.",
+      "requiresBody": "{{name}} is still delivered, but its steps stop at the first call to a command that isn’t ready. Hand the install to an agent, then check again.",
       "tool": {
         "off": "{{tool}} is off, so {{name}} can’t call it",
         "failing": "{{tool}} is failing, so {{name}} can’t rely on it"
@@ -5128,8 +5124,6 @@
       },
       "clis": {
         "ok": "All ready",
-        "notLoggedIn_one": "{{count}} not logged in",
-        "notLoggedIn_other": "{{count}} not logged in",
         "outdated_one": "{{count}} outdated",
         "outdated_other": "{{count}} outdated",
         "missing_one": "{{count}} missing",
@@ -5741,27 +5735,22 @@
     }
   },
   "clis": {
-    "subtitle": "Command-line tools your skills and MCP servers need. Coffer checks them; an agent installs them and logs them in.",
+    "subtitle": "Command-line tools your skills and MCP servers need. Coffer checks them; an agent installs them.",
     "title": "CLIs",
     "addTool": "Add CLI",
     "check": "Check",
-    "checkHint": "Probe every tool again: found, version, logged in",
+    "checkHint": "Probe every tool again: found, and its version",
     "checking": "Checking…",
     "status": {
       "missing": "Not found",
       "outdated": "Too old",
-      "logged_out": "Not logged in",
       "ready": "Ready"
     },
     "search": "Filter CLIs",
     "notOnPath": "Not on PATH",
     "needs": "needs ≥ {{version}}",
+    "versionUnverifiable": "needs ≥ {{version}} · its version can’t be read, so Coffer can’t compare",
     "unknownVersion": "Unknown version",
-    "login": {
-      "logged_in": "Logged in",
-      "logged_out": "Not logged in",
-      "not_needed": "No login needed"
-    },
     "skillCount_one": "{{count}} skill",
     "skillCount_other": "{{count}} skills",
     "warnings": {
@@ -5786,8 +5775,6 @@
       "onDate": "{{date}} at {{time}}",
       "foundAt": "Found at",
       "version": "Version",
-      "login": "Login",
-      "checkedWith": "· checked with",
       "neededByNote": "What calls it: Coffer itself, skills and MCP servers. Open a skill or server to see why.",
       "neededByNothing": "No skill or MCP server requires it — you added it by hand, so it stays listed until you remove it.",
       "cols": {
@@ -5824,9 +5811,6 @@
       "minVersion": "Minimum version",
       "description": "Description",
       "descriptionPlaceholder": "What it’s for, in a sentence",
-      "loginCheck": "Login check",
-      "loginCheckHint": "Starts with the command name (for /opt/bin/gh, gh) and exits 0 when you’re logged in. Runs when you press Check.",
-      "loginCheckCommand": "The login check must start with the command name {{command}}, not a path or another program. It runs the tool you added.",
       "submit": "Add",
       "addFailed": "Couldn’t add {{command}}",
       "editFailed": "Couldn’t save {{command}}"
@@ -5847,7 +5831,6 @@
       "outdated_other": "{{command}} {{found}} is older than {{skills}} need",
       "body": "{{skills}} will fail at the step that calls {{command}}.",
       "missing": "{{command}} isn’t found on this machine",
-      "logged_out": "{{command}} isn’t logged in",
       "outdatedBody_one": "{{skills}} needs {{command}} ≥ {{version}} and fails at the step that calls it.",
       "outdatedBody_other": "{{skills}} need {{command}} ≥ {{version}} and fail at the step that calls it.",
       "skillsBody_one": "{{skills}} fails at the step that calls {{command}}.",
@@ -5855,11 +5838,9 @@
       "serversBody": "{{servers}} can’t start.",
       "bothBody_one": "{{servers}} can’t start, and {{skills}} fails at the step that calls {{command}}.",
       "bothBody_other": "{{servers}} can’t start, and {{skills}} fail at the step that calls {{command}}.",
-      "loginFailed": "{{check}} didn’t succeed at {{time}}.",
       "hand": {
         "missing": "Hand the install to an agent, then press Check.",
-        "outdated": "Hand the update to an agent, then press Check.",
-        "logged_out": "Hand the login to an agent, then press Check."
+        "outdated": "Hand the update to an agent, then press Check."
       },
       "cofferBody": "Coffer can’t {{uses}}."
     },
@@ -5868,8 +5849,6 @@
       "needsAttention": "Needs attention",
       "ready": "Ready",
       "outdatedLine": "{{version}} · needs ≥ {{min}}",
-      "loggedInLine": "{{version}} · logged in",
-      "loggedIn": "logged in",
       "addedByYou": "added by you",
       "needLine_one": "{{lead}} · {{who}} needs it",
       "needLine_other": "{{lead}} · {{who}} need it",
@@ -6375,7 +6354,6 @@
       "missing": "Missing",
       "notFound": "Not found",
       "outdated": "Too old",
-      "loggedOut": "Not logged in",
       "running": "Running"
     }
   },
