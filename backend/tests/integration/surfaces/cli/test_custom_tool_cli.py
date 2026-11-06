@@ -130,7 +130,7 @@ def test_a_denied_answer_fails_the_test_by_the_groups_rule(
     }
     coffer(
         "custom-tool", "group", "create", "quota", "--base-url", api.base_url,
-        "--response", json.dumps({"diagnostic_headers": [], "rules": [rule]}),
+        "--response", json.dumps({"rules": [rule]}),
     )  # fmt: skip
     coffer("custom-tool", "tool", "add", "quota", "--name", "deny", "--path", "/deny")
     coffer("custom-tool", "group", "reach", "quota", "--all")
@@ -152,13 +152,13 @@ def test_a_denied_answer_fails_the_test_by_the_groups_rule(
     assert as_json("custom-tool", "tool", "test", "quota", "deny")["ok"] is True
     coffer("custom-tool", "tool", "update", "quota", "deny", "--response-rules", "group")
     assert as_json("custom-tool", "group", "show", "quota")["tools"][0]["response_rules"] is None
-    # A header that carries cookies can never be named.
+    # A rule may not read a header that carries cookies.
     refused = coffer(
-        "custom-tool", "group", "update", "quota", "--json",
-        "--response", '{"diagnostic_headers": ["Set-Cookie"], "rules": []}',
+        "custom-tool", "group", "update", "quota", "--json", "--response",
+        json.dumps({"rules": [{**rule, "name": "Set-Cookie", "message": None}]}),
         code=6,
     )  # fmt: skip
-    assert "Set-Cookie" in refused.stderr or "set-cookie" in refused.stderr.lower()
+    assert "set-cookie" in refused.stderr.lower()
 
 
 @pytest.mark.acceptance(

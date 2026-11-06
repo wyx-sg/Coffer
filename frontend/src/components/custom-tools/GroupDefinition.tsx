@@ -15,7 +15,6 @@ interface Props {
 
 export function GroupDefinition({ group }: Props) {
   const { t } = useTranslation();
-  const diagnostic = group.response?.diagnostic_headers ?? [];
   const rules = group.response?.rules ?? [];
   const statusOnly = t("customTools.definition.statusOnly");
 
@@ -39,12 +38,6 @@ export function GroupDefinition({ group }: Props) {
         <DefinitionRow
           label={t("customTools.definition.timeout")}
           value={t("customTools.definition.timeoutValue", { seconds: group.timeout_seconds })}
-          copyable={false}
-        />
-        <DefinitionRow
-          label={t("customTools.definition.diagnosticHeaders")}
-          value={diagnostic.length > 0 ? diagnostic.join(", ") : t("customTools.definition.none")}
-          mono={diagnostic.length > 0}
           copyable={false}
         />
         <DefinitionRow

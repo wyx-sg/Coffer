@@ -91,9 +91,7 @@ def _rule_line(rule: dict[str, Any]) -> str:
 
 def _show_response(group: dict[str, Any]) -> None:
     response = group.get("response") or {}
-    headers = response.get("diagnostic_headers") or []
     rules = response.get("rules") or []
-    typer.echo(f"  response: diagnostic headers: {', '.join(headers) if headers else 'none'}")
     typer.echo("  response rules:" + ("" if rules else " none"))
     for rule in rules:
         typer.echo(f"    {_rule_line(rule)}")

@@ -1,4 +1,4 @@
-"""A custom tool's request preview (dry run) and a test's diagnostic headers, against a real daemon.
+"""A custom tool's request preview (dry run) and a test's response headers, against a real daemon.
 
 Spec mcp-gateway "Preview a custom tool's request without sending it" and
 "Report what a custom tool's test reached". The upstream is a real socket that
@@ -176,9 +176,9 @@ def test_a_dry_run_refuses_what_a_call_would(
 
 
 @pytest.mark.acceptance(
-    spec="mcp-gateway", scenario="a test reports the request id but no cookie or credential"
+    spec="mcp-gateway", scenario="a test reports every response header, a cookie's value masked"
 )
-def test_a_test_reports_allow_listed_response_headers(
+def test_a_test_reports_every_response_header(
     daemon: BoundaryDaemon, api: FakeHttpApi
 ) -> None:
     _two_envs(daemon, api)
@@ -198,7 +198,7 @@ def test_a_test_reports_allow_listed_response_headers(
     seen = result["response_headers"]
     assert seen["x-request-id"] == "req-123"
     assert seen["x-trace-id"] == "trace-***"
-    assert "server" in seen and "date" in seen
-    for left_out in ("set-cookie", "www-authenticate", "x-internal-node"):
-        assert left_out not in seen
+    assert "server" in seen and "date" in seen and "x-internal-node" in seen
+    assert seen["set-cookie"] == "***"
+    assert "www-authenticate" in seen
     assert TEST_TOKEN not in r.text and "s3cr3t-cookie" not in r.text

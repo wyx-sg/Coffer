@@ -25,31 +25,12 @@ from coffer.domain.mcp.http_api_response import (
 #: The most of a response body a tool returns (spec: "read at most 1 MiB").
 MAX_RESPONSE_BYTES = 1024 * 1024
 MASK = "***"
-#: The response headers a test reports (spec mcp-gateway "Report what a custom
-#: tool's test reached"): ids that name the request on the API's side, and who
-#: answered when. Every other header — cookies, auth challenges, anything
-#: unknown — is left out.
-DIAGNOSTIC_HEADERS = frozenset(
-    {
-        "date",
-        "server",
-        "via",
-        "retry-after",
-        "x-request-id",
-        "request-id",
-        "x-correlation-id",
-        "x-trace-id",
-        "traceparent",
-        "x-b3-traceid",
-        "x-amzn-requestid",
-        "x-amzn-trace-id",
-        "x-amz-request-id",
-        "x-amz-cf-id",
-        "cf-ray",
-    }
-)
-#: The longest diagnostic header value kept.
-DIAGNOSTIC_VALUE_MAX = 256
+#: The longest response header value kept.
+HEADER_VALUE_MAX = 256
+#: Response headers whose value is a credential or a cookie: reported by name
+#: with ``***`` as the value. An auth challenge (``WWW-Authenticate``) is not a
+#: credential and is shown, since it says why a key was refused.
+MASKED_RESPONSE_HEADERS = SENSITIVE_HEADERS - {"www-authenticate", "proxy-authenticate"}
 
 
 @dataclass(frozen=True)
@@ -57,22 +38,19 @@ class ResponseCheck:
     """How one tool's answers are judged and which headers its result names."""
 
     rules: list[ResponseRule] = field(default_factory=list)
-    #: The headers the group asked to see and the ones its rules read: reported
-    #: by a test and named in every tool result.
+    #: The headers its rules read: named in every tool result.
     headers: frozenset[str] = frozenset()
 
 
 def response_check(transport: HttpApiTransport, tool: HttpApiTool) -> ResponseCheck:
     rules = transport.rules_for(tool)
-    named = set(transport.response.diagnostic_headers) | rule_headers(rules)
-    return ResponseCheck(rules=list(rules), headers=frozenset(named - SENSITIVE_HEADERS))
+    return ResponseCheck(rules=list(rules), headers=frozenset(rule_headers(rules) - SENSITIVE_HEADERS))
 
 
 class HttpCallOutcome:
     """What one request returned, before it is shaped into a tool result."""
 
     __slots__ = (
-        "all_headers",
         "body",
         "body_bytes",
         "content_type",
@@ -100,18 +78,16 @@ class HttpCallOutcome:
         body_bytes: int = 0,
         rule_failure: RuleFailure | None = None,
         named: frozenset[str] = frozenset(),
-        all_headers: dict[str, str] | None = None,
     ) -> None:
         self.url = url
-        #: Every response header, masked: what the call's record keeps.
-        self.all_headers = all_headers or {}
-        #: The reported response headers (:func:`diagnostic_headers`).
+        #: Every response header, masked (:func:`response_headers`): what a
+        #: test reports and the call's record keeps.
         self.headers = headers or {}
         #: The bytes of body read (at most :data:`MAX_RESPONSE_BYTES`).
         self.body_bytes = body_bytes
         #: The first response rule the answer broke; ``None`` when all held.
         self.rule_failure = rule_failure
-        #: The headers the group asked to see (:attr:`ResponseCheck.headers`).
+        #: The headers the group's rules read (:attr:`ResponseCheck.headers`).
         self.named = named
         self.status = status
         self.body = body
@@ -133,7 +109,7 @@ class HttpCallOutcome:
 
     def as_text(self) -> str:
         """The tool result: the status line, the headers worth seeing — the
-        ones the group named, every diagnostic one when the call failed — the
+        ones the group's rules read, every one when the call failed — the
         failed rule, then the body (or a note that there was none)."""
         parts = [self.status_line()]
         if self.location is not None:
@@ -163,30 +139,29 @@ def mask_secrets(text: str, secrets: list[str]) -> str:
     return text
 
 
-def diagnostic_headers(
-    headers: httpx.Headers, secrets: list[str], named: frozenset[str] = frozenset()
-) -> dict[str, str]:
-    """The built-in diagnostic headers and the ``named`` ones, names
-    lower-cased, each value masked and cut to :data:`DIAGNOSTIC_VALUE_MAX`
-    characters. A credential or cookie header is never reported."""
+def response_headers(headers: httpx.Headers, secrets: list[str]) -> dict[str, str]:
+    """Every response header, names lower-cased: a credential or cookie
+    header (:data:`MASKED_RESPONSE_HEADERS`) as ``***``, any other value with
+    the call's secrets masked and cut to :data:`HEADER_VALUE_MAX` characters."""
     out: dict[str, str] = {}
     for name, value in headers.items():
         key = name.lower()
-        if key in SENSITIVE_HEADERS:
-            continue
-        if key in DIAGNOSTIC_HEADERS or key in named:
-            out[key] = mask_secrets(value, secrets)[:DIAGNOSTIC_VALUE_MAX]
+        out[key] = (
+            MASK
+            if key in MASKED_RESPONSE_HEADERS
+            else mask_secrets(value, secrets)[:HEADER_VALUE_MAX]
+        )
     return out
 
 
 __all__ = [
-    "DIAGNOSTIC_HEADERS",
-    "DIAGNOSTIC_VALUE_MAX",
+    "HEADER_VALUE_MAX",
     "MASK",
+    "MASKED_RESPONSE_HEADERS",
     "MAX_RESPONSE_BYTES",
     "HttpCallOutcome",
     "ResponseCheck",
-    "diagnostic_headers",
     "mask_secrets",
+    "response_headers",
     "response_check",
 ]

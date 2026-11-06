@@ -56,13 +56,12 @@ from coffer.domain.mcp.http_api_response import SENSITIVE_HEADERS, judge
 from coffer.domain.secret_errors import SecretBindingPending
 from coffer.infrastructure.mcp.http_api_exchange import request_record, response_record
 from coffer.infrastructure.mcp.http_api_outcome import (
-    DIAGNOSTIC_HEADERS,
     MAX_RESPONSE_BYTES,
     HttpCallOutcome,
     ResponseCheck,
-    diagnostic_headers,
     mask_secrets,
     response_check,
+    response_headers,
 )
 
 NotificationCallback = Callable[[Any], Awaitable[None]]
@@ -184,11 +183,10 @@ async def send_request(
                 duration_ms=int((time.monotonic() - started) * 1000),
                 content_type=response.headers.get("content-type"),
                 location=mask_secrets(location, secrets) if location else None,
-                headers=diagnostic_headers(response.headers, secrets, check.headers),
+                headers=response_headers(response.headers, secrets),
                 body_bytes=len(raw),
                 rule_failure=failure,
                 named=check.headers,
-                all_headers={k: mask_secrets(v, secrets) for k, v in response.headers.items()},
             )
     except httpx.TimeoutException as e:
         raise UpstreamTimeout(f"request timed out after {timeout_seconds:g}s") from e
@@ -303,14 +301,12 @@ class HttpApiUpstreamConnection:
 
 
 __all__ = [
-    "DIAGNOSTIC_HEADERS",
     "MAX_RESPONSE_BYTES",
     "EnvSecrets",
     "HttpApiUpstreamConnection",
     "HttpCallOutcome",
     "ResponseCheck",
     "build_request",
-    "diagnostic_headers",
     "list_tools_result",
     "mask_secrets",
     "overlay_for",

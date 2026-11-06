@@ -1102,8 +1102,6 @@ export interface components {
          * @description A group's response settings.
          */
         CustomToolResponse: {
-            /** Diagnostic Headers */
-            diagnostic_headers?: string[];
             /** Rules */
             rules?: components["schemas"]["CustomToolResponseRule"][];
         };

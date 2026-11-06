@@ -2806,11 +2806,6 @@ components:
     CustomToolResponse:
       description: A group's response settings.
       properties:
-        diagnostic_headers:
-          items:
-            type: string
-          title: Diagnostic Headers
-          type: array
         rules:
           items:
             $ref: '#/components/schemas/CustomToolResponseRule'

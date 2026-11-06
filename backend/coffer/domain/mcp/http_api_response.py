@@ -8,9 +8,7 @@ of a 200 answer; a group (or one tool) declares where to look with
 or a JSON Pointer into the body, and name the values that mean success. Nothing
 here knows any API: every header name, pointer and value comes from the rows.
 
-A group may also name extra response headers to report (beside the built-in
-request and trace ids). A header that carries credentials or cookies can never
-be named, as a diagnostic header or by a rule.
+A header that carries credentials or cookies can never be read by a rule.
 
 Pure: Pydantic and the standard library only.
 """
@@ -26,8 +24,8 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from coffer.domain.mcp.http_api_headers import HEADER_NAME_RE
 
-#: Response headers that are never reported nor read by a rule: they carry
-#: credentials, cookies or auth challenges.
+#: Response headers no rule may read: they carry credentials, cookies or auth
+#: challenges. A test reports them by name, a credential's value masked.
 SENSITIVE_HEADERS = frozenset(
     {
         "authorization",
@@ -41,9 +39,8 @@ SENSITIVE_HEADERS = frozenset(
         "api-key",
     }
 )
-#: The most rules, diagnostic headers and success values one place holds.
+#: The most rules and success values one place holds.
 MAX_RULES = 10
-MAX_DIAGNOSTIC_HEADERS = 20
 MAX_OK_VALUES = 20
 #: The longest success value, JSON Pointer, and reported value or message.
 MAX_VALUE_LENGTH = 200
@@ -132,22 +129,11 @@ def _is_status(value: str) -> bool:
 
 
 class HttpApiResponse(BaseModel):
-    """A group's response settings: extra headers to report and its rules."""
+    """A group's response settings: its rules. (A ``diagnostic_headers`` list
+    older builds stored is ignored: a test now reports every header.)"""
 
-    #: Response headers reported beside the built-in request and trace ids.
-    diagnostic_headers: list[str] = Field(default_factory=list, max_length=MAX_DIAGNOSTIC_HEADERS)
     #: Every rule must hold for an answer to count as a success.
     rules: list[ResponseRule] = Field(default_factory=list, max_length=MAX_RULES)
-
-    @field_validator("diagnostic_headers")
-    @classmethod
-    def _headers(cls, v: list[str]) -> list[str]:
-        out: list[str] = []
-        for name in v:
-            checked = _header_name(name)
-            if checked not in out:
-                out.append(checked)
-        return out
 
 
 def rule_headers(rules: list[ResponseRule]) -> set[str]:
@@ -271,7 +257,6 @@ def judge(
 
 
 __all__ = [
-    "MAX_DIAGNOSTIC_HEADERS",
     "MAX_RULES",
     "SENSITIVE_HEADERS",
     "HttpApiResponse",

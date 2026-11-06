@@ -2,7 +2,6 @@ import { describe, expect, test } from "vitest";
 
 import {
   describeRule,
-  diagnosticHeadersProblem,
   emptyRule,
   headerProblem,
   messageProblem,
@@ -53,11 +52,6 @@ describe("responseRules", () => {
     expect(rulesValid(Array.from({ length: 11 }, () => ok))).toBe(false);
   });
 
-  test("diagnostic headers refuse credentials", () => {
-    expect(diagnosticHeadersProblem(["X-Request-Id"])).toBeNull();
-    expect(diagnosticHeadersProblem(["Cookie"])).toBe("refused");
-    expect(headerProblem("API-Key")).toBe("refused");
-  });
 
   test("describeRule reads on one line", () => {
     expect(
@@ -73,5 +67,9 @@ describe("responseRules", () => {
       describeRule({ source: "json", name: "/code", ok_values: ["0", "1"], missing: "error" }),
     ).toBe("json /code ∈ 0, 1 · missing: failure");
     expect(describeRule({ source: "status", ok_values: ["200"] })).toBe("status ∈ 200");
+  });
+  test("a credential header cannot be read by a rule", () => {
+    expect(headerProblem("API-Key")).toBe("refused");
+    expect(headerProblem("X-Request-Id")).toBeNull();
   });
 });

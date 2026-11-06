@@ -119,7 +119,7 @@ coffer custom-tool group create [OPTIONS] NAME
 | `--description` <span class="cli-chip">option</span> | text |  | What the API is for |
 | `--timeout` <span class="cli-chip">option</span> | integer |  | Seconds per request (1-300) |
 | `--agent` <span class="cli-chip">option</span> | text (repeatable) |  | Reach only this agent (name or uid); repeat. Default: every agent |
-| `--response` <span class="cli-chip">option</span> | text |  | Response settings as JSON {"diagnostic_headers": [...], "rules": [...]}: text, @file or - |
+| `--response` <span class="cli-chip">option</span> | text |  | Response settings as JSON {"rules": [...]}: text, @file or - |
 | `--data, -d` <span class="cli-chip">option</span> | text |  | The whole group as JSON (text, @file or -) |
 | `--set` <span class="cli-chip">option</span> | text (repeatable) |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
 | `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
@@ -141,7 +141,7 @@ coffer custom-tool group update [OPTIONS] NAME
 | `NAME` <span class="cli-chip">argument</span> | text | required | The group's name |
 | `--description` <span class="cli-chip">option</span> | text |  |  |
 | `--timeout` <span class="cli-chip">option</span> | integer |  | The group's seconds per request |
-| `--response` <span class="cli-chip">option</span> | text |  | Response settings as JSON {"diagnostic_headers": [...], "rules": [...]}: text, @file or - |
+| `--response` <span class="cli-chip">option</span> | text |  | Response settings as JSON {"rules": [...]}: text, @file or - |
 | `--data, -d` <span class="cli-chip">option</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
 | `--set` <span class="cli-chip">option</span> | text (repeatable) |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
 | `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |

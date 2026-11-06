@@ -5283,10 +5283,8 @@
       "agentsSee": "Agents see",
       "timeout": "Timeout",
       "timeoutValue": "{{seconds}} s per call",
-      "diagnosticHeaders": "Diagnostic headers",
       "responseRules": "Response rules",
-      "statusOnly": "HTTP status only",
-      "none": "None"
+      "statusOnly": "HTTP status only"
     },
     "tools": {
       "switch": "On",
@@ -5464,13 +5462,6 @@
       "descriptionHelp": "Agents read it when they search for a tool, so say what this API is for.",
       "descriptionPlaceholder": "e.g. Invoices and payments in the billing system",
       "environmentsNote": "Base URLs, headers, secrets and variables belong to the environments; edit them on the Environments tab.",
-      "diagnosticHeaders": "Diagnostic headers",
-      "diagnosticHeadersHelp": "Comma-separated response header names. Reported in tests and agent results beside the request and trace ids. Credentials and cookies can't be named.",
-      "diagnosticProblem": {
-        "refused": "A header that carries credentials or cookies can't be named.",
-        "invalid": "Use plain header names, separated by commas.",
-        "many": "At most 20 headers."
-      },
       "responseRules": "Response rules",
       "responseRulesHelp": "Every rule must hold for a call to succeed. With none, a call fails only on HTTP 400 and above.",
       "basics": "Basics",

@@ -1,6 +1,6 @@
 // src/pages/CustomToolsPage.test.tsx — the Custom tools page: groups by health, one Add custom tool action,
 // the group page's Overview · Tools tabs (exposure included), the tool drawer over it, and a hand-made request into an existing or a
-// new group (import and re-import: CustomToolsImport.test.tsx).
+// new group.
 import { beforeEach, describe, expect, vi } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 

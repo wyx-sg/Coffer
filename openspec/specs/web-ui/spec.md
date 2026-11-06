@@ -753,7 +753,7 @@ entries in the agents' own config files: that is done on each agent's MCP
 servers tab ([agent-registry](../agent-registry/spec.md) "Adopt a direct MCP entry into Coffer"). While no
 server is registered, the page's welcome MAY list those entries per agent, each
 row opening that agent's MCP servers tab. The dialog adds MCP servers only: it offers no
-custom tool (an HTTP API imported from an OpenAPI document or defined by hand),
+custom tool (an HTTP API request defined in a group),
 which is added on the Custom tools page (see "Manage custom tool groups on their
 own page").
 
@@ -823,7 +823,7 @@ the dialog MUST NOT send that server's registration until the name is shortened.
 - **GIVEN** the MCP servers page, and an agent whose own config file holds a direct MCP entry
 - **WHEN** it renders and the user opens Add server
 - **THEN** the page carries one Add server action and no separate paste-JSON action, and the dialog carries no Import from agents link
-- **AND** the dialog offers no custom tool, neither an OpenAPI import nor a hand-made HTTP request
+- **AND** the dialog offers no custom tool, no hand-made HTTP request
 
 ### Requirement: Explain unreadable pasted input in the dialog
 Input the paste box cannot read as any of the recognised forms — malformed
@@ -2738,29 +2738,13 @@ ones first, each showing what is wrong in place of its tools — when nothing is
 its one environment's host or, with several, how many environments it has and
 its tool count — and an Off group leaves its reach column empty. Its header MUST carry one action, **Add custom tool**,
 whose flow asks first for the group, in a select you can type into that starts
-on **New group** and lists every existing group with its source, tool count and
-description. An existing group MUST only take a request
-added by hand, which runs in that group's environments, each with its own base
-URL and secret; only a **new** group
-offers the two ways in:
-
-- **Import an OpenAPI spec** — from a URL or a file, into the new group; the user
-  ticks which operations become tools, reads ticked and operations that change
-  data unticked, and a review lists the ticked ones as the tools to create and the
-  rest as **Skipped** before **Create group with N tools**. A spec that cannot
-  be read says where: an unparseable file shows the lines around the failure, and a
-  URL that does not answer names the reason (not found, refused, timed out), keeps
-  **Review tools** off and offers Retry and the daemon's hand-off. A group made by
-  an import MUST offer **Re-import**, which reads the spec again and lists the
-  change first — operations it would add (reads become tools, switched on;
-  operations that change data are listed but not ticked), tools whose request
-  the spec changed (each with the operation's old and new text), and tools it
-  would remove — before anything changes;
-  applying keeps every unchanged tool's switch as it was. The spec's own
-  description starts the new group's description, which the user can change.
-- **Add one request by hand** — the new group's name, description, base URL,
-  header rows and reach, then its first request: method, path, headers, body template
-  and inputs.
+on **New group** and lists every existing group with its tool count and
+description. An existing group MUST take a request added by hand, which runs in
+that group's environments, each with its own base URL and secret. A **new**
+group is made by hand: its name, description, base URL, header rows and reach,
+then its first request: method, path, headers, body template and inputs. The
+page offers no OpenAPI import: an agent turns an API document into a group with
+the `coffer custom-tool` commands ([mcp-gateway](../mcp-gateway/spec.md) Purpose).
 
 Every request form — the tool drawer and Add a request alike — MUST be the same
 **tool editor**: five tabs at the full width of the drawer or dialog.
@@ -2790,7 +2774,7 @@ rules, shown one per line, or has rules of its own — edited with the same rule
 editor as the group's, where an empty list judges by the HTTP status alone
 ([mcp-gateway](../mcp-gateway/spec.md) "Judge a custom tool's answer by its
 group's response rules") — and what the agent gets: the status line, the
-headers the group names, the broken rule if any, and the body or a note that it
+headers the rules read, the broken rule if any, and the body or a note that it
 was empty, cut at 1 MiB) and **Test**. A new tool opens on General, a saved one
 on Request. **Test** stacks, top to bottom, its environment picker and **Run**,
 a sample value per input, the **request to send** with those values filled in
@@ -2819,17 +2803,15 @@ off (Turn on), a secret missing (Add secret, Choose another, no hand-off) and a
 secret waiting for approval (Open approvals, the only button) and a secret
 whose approval a person refused (Ask again, the only button: in the desktop app
 it asks for Touch ID at once and approves, elsewhere the request goes back on
-the approvals list). Re-import is a
-button in the definition of an imported group.
+the approvals list).
 
 A group's detail page (`/custom-tools/<group>/<tab>`) MUST carry, under its
 header — its **reach** and a one-line summary of the last 24 hours (calls and
 failures) — three tabs, in this order: Overview, Environments, Tools, laid out
 like every other detail page's. **Overview** (the
 default, at the bare `/custom-tools/<group>`) stacks the group's **definition**
-(its description, the name agents see, its timeout, its diagnostic headers and
-response rules — "HTTP status only" when it has none — and, for an imported group,
-its spec), then
+(its description, the name agents see, its timeout and its
+response rules — "HTTP status only" when it has none), then
 what an MCP server's Overview shows ("Open an MCP server on its Overview"):
 **Last 24 hours** — the group's calls and errors with a table of the agents that
 made them, and for a group that is on a View in Activity link to Activity's Tool
@@ -2868,7 +2850,7 @@ never a value) and its variables. Edit opens the environment's dialog, whose
 header and variable rows carry Name and Value column heads. **Edit group** edits,
 in two parts, Basics — the group's description, in a box that grows with its
 text, and its timeout — and Judging the response — its response
-settings — the **diagnostic headers** to report and the **response rules**, one
+settings — the **response rules**, one
 card per rule (read the HTTP status, a response header or a JSON field; the
 success values; what a missing value means; where the API's error message is),
 whose mistakes are named under the field and keep Save off:
@@ -2879,35 +2861,22 @@ How the gateway runs an HTTP API tool is mcp-gateway's ([mcp-gateway](../mcp-gat
 "Serve an HTTP API as a group of custom tools", "Make a custom tool's request in
 the gateway").
 
-#### Scenario: importing an OpenAPI spec creates a group with the chosen operations
-- **GIVEN** an OpenAPI document with five operations, three that read data and two that change it
-- **WHEN** the user chooses Add custom tool and New group, imports the document as the group `invoices`, unticks one read, ticks one operation that changes data, and reviews
-- **THEN** the reads started ticked and the operations that change data unticked, and the review lists the three ticked as the tools to create and the other two as Skipped
-- **AND** nothing is created until Create group with 3 tools, which creates `invoices` with only those three and the spec's description, and opens its page
-
-#### Scenario: re-importing a spec previews the operations it adds and removes
-- **GIVEN** the `billing` group imported with three operations, one of them switched off
-- **WHEN** the spec now has one of those operations removed and a new one added, and the user chooses Re-import
-- **THEN** a preview lists the operation to add and the tool to remove, and nothing changes until the user confirms
-- **AND** after confirming, the kept tools keep their switch
-- **AND** an added operation that reads data becomes a tool, while one that changes data is listed but not added
-
 #### Scenario: a hand-made request joins an existing group
 - **GIVEN** the `billing` group
 - **WHEN** the user chooses Add custom tool, defines one request by hand and picks `billing` as its group
 - **THEN** the tool is added to `billing`, using its environments' base URLs and auth headers
-- **AND** the flow offers no Import an OpenAPI spec for `billing`, only for a new group
+- **AND** the flow offers no way to import an API document
 
 #### Scenario: a new group made by hand is saved with its first request
 - **GIVEN** no group named `search-api`
-- **WHEN** the user chooses Add custom tool, keeps New group and picks By hand, fills in `search-api`, its description and its base URL, chooses Create group, then fills in the first tool's name and description on General and its path on Request, and tries it
+- **WHEN** the user chooses Add custom tool, keeps New group and continues, fills in `search-api`, its description and its base URL, chooses Create group, then fills in the first tool's name and description on General and its path on Request, and tries it
 - **THEN** nothing is saved until the user chooses Add to search-api, which creates `search-api` with its description and that one tool
 - **AND** the test ran without the group's secret
 
 #### Scenario: the custom tools page with no group shows the first-run panel
 - **GIVEN** no custom-tool group
 - **WHEN** the user opens `/custom-tools`
-- **THEN** the page shows no group list, only a first-run panel with Import an OpenAPI spec and Add one request by hand, and Add custom tool in the header and the panel
+- **THEN** the page shows no group list, only a first-run panel that explains custom tools and offers Add one request by hand, and Add custom tool in the header and the panel
 
 #### Scenario: an agent sees the group name as the tool prefix
 - **GIVEN** the `billing` group with a tool named `list_invoices`, reaching Claude Code
@@ -2923,7 +2892,7 @@ the gateway").
 #### Scenario: the custom tools page lists groups by health
 - **GIVEN** one group whose last call failed and two healthy groups
 - **WHEN** the user opens `/custom-tools`
-- **THEN** the failing group is listed first with its tools, and the page header carries one Add custom tool action whose flow asks for the group in a select that starts on New group and narrows the groups as the user types, and offers Import an OpenAPI spec and Add one request by hand, and no Script type
+- **THEN** the failing group is listed first with its tools, and the page header carries one Add custom tool action whose flow asks for the group in a select that starts on New group and narrows the groups as the user types, and continues to Add one request by hand, and no Script type
 
 #### Scenario: a refused secret on a group's page offers Ask again
 - **GIVEN** a group whose secret's approval a person refused
@@ -2988,8 +2957,8 @@ the gateway").
 
 #### Scenario: a response rule is added to a group and a refused header keeps Save off
 - **GIVEN** the `billing` group with no response rules
-- **WHEN** the user opens Edit group, names `X-Trace-Id` as a diagnostic header, adds a rule reading the header `X-Result-Code` with the success values `OK, 0`, and saves; then adds a rule reading `Set-Cookie`
-- **THEN** the group is saved with that diagnostic header and that rule
+- **WHEN** the user opens Edit group, adds a rule reading the header `X-Result-Code` with the success values `OK, 0`, and saves; then adds a rule reading `Set-Cookie`
+- **THEN** the group is saved with that rule
 - **AND** the rule on `Set-Cookie` is named as a header that carries credentials or cookies, and Save is off
 
 #### Scenario: a tool follows its group's response rules or sets its own
@@ -3009,7 +2978,7 @@ the gateway").
 - **AND** a template missing a value after a key names the line where the JSON breaks
 
 ### Requirement: Draw every diff in the web UI with one renderer
-Every diff the web UI shows of a file's changed lines — a change preview of a write Coffer is about to make, a version on a History tab, a skill's copy or folder-in-the-way review, and a custom-tool group's re-import — MUST be drawn by one renderer: old and new line numbers, a sign, additions and deletions on their colour, hunk headers muted, and a long line wrapped at a word boundary with a ↳ on its continuation rows, never cut off. Each file is shown under its path, operation and line counts.
+Every diff the web UI shows of a file's changed lines — a change preview of a write Coffer is about to make, a version on a History tab, and a skill's copy or folder-in-the-way review — MUST be drawn by one renderer: old and new line numbers, a sign, additions and deletions on their colour, hunk headers muted, and a long line wrapped at a word boundary with a ↳ on its continuation rows, never cut off. Each file is shown under its path, operation and line counts.
 
 #### Scenario: a long changed line wraps instead of being cut off
 - **GIVEN** a change preview whose file adds a line longer than the diff is wide
@@ -3216,7 +3185,7 @@ its place.
 - **GIVEN** a group with environments `test` (a secret header, a plain header, `region=eu-1`) and `live` (a different base URL and plain header, no secret header, `region=us-1`), the group's timeout 30 s, and a tool `GET /v1/{env:region}/items/{id}`
 - **WHEN** the person opens the tool, reads the request to send, picks `live` on the Test tab and runs it
 - **THEN** the help, headers and preview first show `test`'s base URL, headers, secret and 30 s, then `live`'s base URL with `us-1`, its header and the same 30 s, and no secret of `test` anywhere
-- **AND** the run names `live`, its result shows the allow-listed response headers, and nothing about the group is saved
+- **AND** the run names `live`, its result shows the response headers, and nothing about the group is saved
 
 #### Scenario: a tool form never runs in an environment that is off or gone
 - **GIVEN** a tool drawer open on environment `test`

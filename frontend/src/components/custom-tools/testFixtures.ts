@@ -61,7 +61,7 @@ export function makeGroup(overrides: Partial<CustomToolGroup> = {}): CustomToolG
       },
     ],
     timeout_seconds: 30,
-    response: { diagnostic_headers: [], rules: [] },
+    response: { rules: [] },
     scope: null,
     health: "healthy",
     health_reason: null,

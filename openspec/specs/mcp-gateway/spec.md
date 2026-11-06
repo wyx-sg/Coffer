@@ -664,8 +664,8 @@ more MUST be returned as an in-band tool error, and so MUST an answer that
 breaks one of the tool's response rules ("Judge a custom tool's answer by its
 group's response rules"); a redirect MUST be returned, not followed; a timeout
 MUST be recorded as `timeout`. After the status line the result MUST name the
-response headers the group asks to see ("Report what a custom tool's test
-reached") — every reported header when the call failed — then the broken rule,
+response headers the group's rules read — every reported header ("Report what a
+custom tool's test reached") when the call failed — then the broken rule,
 if any, and then the body, or `(empty body)` when the answer had none. The secret's value MUST NOT
 appear in the result, the tool's description or schema, or any log, invocation
 or audit record: an occurrence in the response is masked as `***`. Every call
@@ -1176,8 +1176,9 @@ ids stay ordinary arguments of the tool.
 
 ### Requirement: Validate a custom tool's arguments before any request
 A custom tool's argument schema MUST be checked as a JSON Schema when the tool is
-saved — its keywords well formed, its patterns valid regular expressions, its
-local `$ref`s resolvable — and a malformed schema refused with nothing saved.
+saved — valid against the draft 2020-12 meta-schema, its patterns valid
+regular expressions, its `$ref`s local and resolvable (a remote one is refused
+and never fetched) — and a malformed schema refused with nothing saved.
 Every request of a custom tool MUST validate its arguments against that schema
 before anything is sent, covering at least `type` (including OpenAPI 3.0
 `nullable`), `enum` and `const`, numeric bounds and `multipleOf`, string length
@@ -1283,36 +1284,30 @@ prints the preview object as the route answers it.
 
 ### Requirement: Report what a custom tool's test reached
 A test of a custom tool — saved, draft or of a group not saved yet — MUST
-return, beside the status, URL, body and environment, the response headers that
-help find the request on the API's side: `date`, `server`, `via`,
-`retry-after` and the request and trace ids (`x-request-id`, `request-id`,
-`x-correlation-id`, `x-trace-id`, `traceparent`, `x-b3-traceid`,
-`x-amzn-requestid`, `x-amzn-trace-id`, `x-amz-request-id`, `x-amz-cf-id`,
-`cf-ray`), names lower-cased, each value with the environment's secret values
-masked and cut at 256 characters. A group MAY name further headers to report
-(its **diagnostic headers**, at most 20), and every header a response rule reads
-is reported too; a header that carries credentials or cookies
+return, beside the status, URL, body and environment, every response header,
+names lower-cased. A header whose value is a credential or a cookie
 (`authorization`, `proxy-authorization`, `cookie`, `set-cookie`, `set-cookie2`,
-`www-authenticate`, `proxy-authenticate`, `x-api-key`, `api-key`) MUST be
-refused when it is named and MUST never be reported. Every other header — a
-cookie, an auth challenge, anything neither listed nor named — MUST be left out.
-A test MUST also return the number of body bytes read. A test that got no answer
-returns no headers. The command line prints them after the status, and the
-Custom tools page shows them in the test's result. An agent's tool result names
-the group's diagnostic headers and the headers its rules read, and every
-reported header when the call failed.
+`x-api-key`, `api-key`) MUST be reported by name with `***` as its value; every
+other value MUST have the environment's secret values masked and be cut at 256
+characters. An auth challenge (`www-authenticate`, `proxy-authenticate`) is not
+a credential and is reported as sent. A test MUST also return the number of body
+bytes read. A test that got no answer returns no headers. The command line
+prints them after the status, and the Custom tools page shows them in the
+test's result. An agent's tool result names the headers its group's rules read,
+and every reported header when the call failed. A `diagnostic_headers` list in a
+group's response settings, which older builds stored, MUST be ignored.
 
-#### Scenario: a test reports the request id but no cookie or credential
+#### Scenario: a test reports every response header, a cookie's value masked
 - **GIVEN** an environment with a secret header, and an API that answers `403` with an HTML body, `X-Request-Id`, an `X-Trace-Id` that contains the secret's value, `Set-Cookie`, `WWW-Authenticate` and an unknown header
 - **WHEN** a draft tool is tested in that environment
-- **THEN** the result carries `x-request-id`, `x-trace-id` with the value masked, `server` and `date`
-- **AND** it carries no `set-cookie`, `www-authenticate` or unknown header, and neither the secret's value nor the cookie appears anywhere in it
+- **THEN** the result carries `x-request-id`, `x-trace-id` with the value masked, `server`, `date`, `www-authenticate` and the unknown header
+- **AND** it carries `set-cookie` as `***`, and neither the secret's value nor the cookie appears anywhere in it
 
-#### Scenario: a group's named headers reach the agent and a credential header cannot be named
-- **GIVEN** a group whose diagnostic headers name `X-Backend-Region`, and an API that answers `200` with `X-Backend-Region`, `Server` and a JSON body
-- **WHEN** an agent calls a tool, and a person then tries to add `Set-Cookie` to the group's diagnostic headers
-- **THEN** the agent's result names `x-backend-region` and not `server`, and a test reports both
-- **AND** the change naming `Set-Cookie` is refused as a validation error, and the group is unchanged
+#### Scenario: a successful call names only the headers its rules read
+- **GIVEN** a group with no response rules, and an API that answers `200` with `X-Backend-Region` (containing the secret's value), `Server`, `Set-Cookie`, `WWW-Authenticate` and a JSON body
+- **WHEN** an agent calls a tool, a test runs it, and a group saved with an old `diagnostic_headers` list is read
+- **THEN** the agent's result names no response header, and the test reports every one with the secret and the cookie masked
+- **AND** the old list is dropped and the group's response settings are its rules alone
 
 ### Requirement: Preview a resource or a prompt from the server page
 The daemon MUST read one of a registered server's resources, and fill one of its prompts with given arguments, for the server page's row details: `POST /resources/mcp_server/{uid}/resources/read` (a `uri`) and `POST /resources/mcp_server/{uid}/prompts/get` (a `name` and its `arguments`), over the same connection the capability listings use. A text body MUST be cut at 64 KB and marked cut; a binary body MUST be described by its MIME type and size and its bytes not sent. An error the server answers with MUST come back in the body's `error`, named by its JSON-RPC code and never by the server's own text (which can echo a credential), with no contents, and MUST NOT close the connection; a server that cannot be reached is `UPSTREAM_UNAVAILABLE`. A preview is the owner looking, not an agent calling: it MUST NOT be recorded as an invocation, and it works on a row that is switched off. `coffer mcp resource read` and `coffer mcp prompt get` call the same routes.
@@ -1566,7 +1561,7 @@ group or tool whose rule is malformed — more than 10 rules, no success value, 
 status rule naming a header or a non-status value, a header rule naming a
 credential or cookie header ("Report what a custom tool's test reached"), a JSON
 rule whose name is not a JSON Pointer — MUST be refused when it is saved, with
-nothing persisted. The group's rules and diagnostic headers MUST be read and set
+nothing persisted. The group's rules MUST be read and set
 through the group's routes and `coffer custom-tool group create|update
 --response`, a tool's through the tool's routes and `coffer custom-tool tool
 add|update --response-rules`, and on the Custom tools page.

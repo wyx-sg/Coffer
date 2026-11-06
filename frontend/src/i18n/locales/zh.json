@@ -5283,10 +5283,8 @@
       "agentsSee": "智能体看到",
       "timeout": "超时",
       "timeoutValue": "每次调用 {{seconds}} 秒",
-      "diagnosticHeaders": "诊断响应头",
       "responseRules": "响应规则",
-      "statusOnly": "仅看 HTTP 状态码",
-      "none": "无"
+      "statusOnly": "仅看 HTTP 状态码"
     },
     "tools": {
       "switch": "开关",
@@ -5464,13 +5462,6 @@
       "descriptionHelp": "智能体搜索工具时会读到它，写清这组 API 是做什么的。",
       "descriptionPlaceholder": "例如：计费系统的发票和付款",
       "environmentsNote": "基础 URL、请求头、密钥和变量属于各个环境，在「环境」标签里编辑。",
-      "diagnosticHeaders": "诊断响应头",
-      "diagnosticHeadersHelp": "用逗号分隔的响应头名称。测试和智能体收到的结果里会与请求 id、追踪 id 一起报告。不能指定携带凭据或 Cookie 的响应头。",
-      "diagnosticProblem": {
-        "refused": "不能指定携带凭据或 Cookie 的响应头。",
-        "invalid": "请使用普通的响应头名称，并用逗号分隔。",
-        "many": "最多 20 个响应头。"
-      },
       "responseRules": "响应规则",
       "responseRulesHelp": "每条规则都满足，调用才算成功。没有规则时，只有 HTTP 400 及以上才算失败。",
       "basics": "基本",
