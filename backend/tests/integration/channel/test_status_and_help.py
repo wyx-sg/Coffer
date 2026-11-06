@@ -39,11 +39,12 @@ async def test_status_shows_names_not_ids_with_action_buttons(env: ChannelEnv, t
 
     (_chat, text, buttons) = adapter.cards[-1]
     assert adapter.card_titles[-1] == "Status"
+    # The conversation's own title is not shown.
     assert text.splitlines() == [
-        "deploy check",
         "Claude_Code · Opus 4.8 · Default directory",
         "Idle",
     ]
+    assert "deploy check" not in text
     assert conversation_id not in text
     assert "claude_code" not in text
     # Nothing runs, so there is no Stop.

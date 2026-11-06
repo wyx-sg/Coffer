@@ -9,6 +9,7 @@ normally.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal, Protocol
@@ -27,6 +28,8 @@ from coffer.application.channel.turn_status import format_elapsed
 from coffer.application.channel.turn_surface import TurnSurface
 from coffer.domain.channel.envelopes import ChoiceButton, SentMessage
 from coffer.domain.chat.events import SESSION_IN_USE, TurnError
+
+_logger = logging.getLogger(__name__)
 
 __all__ = [
     "SendCard",
@@ -190,7 +193,12 @@ async def _deliver_reply(
         # The uploaded file(s) are the reply — no placeholder text.
         body = ""
     else:
-        # An agent that wrote nothing has nothing to say: no placeholder.
+        # An agent that wrote nothing has nothing to say: no placeholder. The log
+        # line is the only trace of it, so an empty turn can still be found.
+        if not text:
+            _logger.warning(
+                "channel.turn.empty_reply", extra={"channel": adapter.__class__.__name__}
+            )
         body = text
     if body:
         leftover = await surface.close(mention(body))

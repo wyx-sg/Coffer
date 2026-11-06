@@ -1,8 +1,8 @@
 """`/status` and `/help` (spec channels "Report the chat's state as a status
 card" and "List the commands with /help").
 
-`/status` names things, never ids: the conversation's title (or a parallel
-thread's mark), then one line with the agent, model and directory by
+`/status` names things, never ids: a parallel thread's mark when asked in one,
+then one line with the agent, model and directory by
 the names a person reads, and whether a turn is running, how many messages wait,
 or how many a stop left on hold, then the chat's parallel threads (spec channels
 "Open parallel conversations beside a direct chat"), the open ones only; in a
@@ -55,12 +55,7 @@ async def cmd_status(ctx: CommandContext, _text: str = "") -> None:
     settings = await ctx.settings()
     row = await ctx.commands._threads.get(ctx.resource_uid, ctx.chat_id, ctx.conversation_thread_id)
     bound = row.active_conversation_id if row is not None else None
-    conversation = settings.conversation
     mark = row.parallel_mark if row is not None else None
-    title = mark or (str(conversation.title).strip() if conversation is not None else "")
-    title = title or (
-        "Untitled conversation" if conversation is not None else "No conversation yet"
-    )
     running = ctx.session is not None and ctx.session.running_conversation_id is not None
     # The queue is the conversation's own (spec chat "Queue messages sent during
     # a turn") — the same one the web's pending chips show.
@@ -70,8 +65,10 @@ async def cmd_status(ctx: CommandContext, _text: str = "") -> None:
     # A closed parallel thread runs nothing more (see "Open parallel
     # conversations beside a direct chat"), so its state is just that.
     closed = row is not None and row.parallel_closed
+    # A conversation's own title is its first message, not something to read here;
+    # only a parallel thread's mark says which chat this is.
     lines = [
-        title,
+        *([mark] if mark else []),
         await settings_line(ctx.commands, settings),
         "Closed" if closed else _state(running, queued, held),
     ]

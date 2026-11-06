@@ -27,6 +27,7 @@ from coffer.infrastructure.chat.adapter_support import (
     require_managed,
 )
 from coffer.infrastructure.chat.claude_sdk_agent import (
+    DISABLE_BACKGROUND_TASKS_ENV,
     ClaudeSdkAgentAdapter,
     SdkSessionFactory,
     default_session_factory,
@@ -147,6 +148,12 @@ class ClaudeSdkProvider:
         # The turn's token: the shim in the agent's MCP entry forwards it, so the
         # gateway offers this turn's turn-scoped tools.
         home_env.update(turn_tokens.turn_env(conversation_id))
+        if conv.channel_uid:
+            # A chat has no use for work that outlives the turn: nobody sees it
+            # run and its result only arrives after the reply. The agent can
+            # still run sub-agents in the foreground (spec chat "Wait for a
+            # Claude Code turn's background sub-agents").
+            home_env[DISABLE_BACKGROUND_TASKS_ENV] = "1"
 
         return ClaudeSdkAgentAdapter(
             cwd=config.cwd,

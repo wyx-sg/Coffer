@@ -158,10 +158,21 @@ the turn. The adapter MUST raise the CLI's wait for background work from its
 10-minute default to four hours, unless the environment already sets
 `CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS`.
 
+A Claude Code turn of a channel's conversation MUST run without background
+tasks (`CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1`): nobody sees them run in a chat
+and their result would arrive after the reply. The agent can still run
+sub-agents in the foreground, which the turn waits for like any tool. A
+conversation with no channel keeps background tasks.
+
 #### Scenario: a result held while a sub-agent runs ends with the follow-up turn
 - **GIVEN** a Claude Code turn that starts a background sub-agent and ends its own turn without writing text
 - **WHEN** the sub-agent finishes and the agent writes its answer in a follow-up turn
 - **THEN** the turn ends once, after the follow-up's result, and the answer is in the reply
+
+#### Scenario: a channel conversation runs without background tasks
+- **GIVEN** a Claude Code conversation that belongs to a channel
+- **WHEN** its turn starts
+- **THEN** the agent's environment sets `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1`
 
 #### Scenario: a stream that ends while a result is held ends the turn with it
 - **GIVEN** a Claude Code turn whose result arrived while a sub-agent was running

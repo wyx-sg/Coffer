@@ -137,6 +137,6 @@ async def test_status_counts_the_held_messages_and_offers_to_settle_them(
     await env.processor.on_message(inbound("tg", "owner", "/status"))
 
     _chat, text, buttons = adapter.cards[-1]
-    assert text.splitlines()[2] == "⏸ 1 on hold"
+    assert text.splitlines()[1] == "⏸ 1 on hold"
     assert [b.label for b in buttons] == ["▶ Continue", "Discard", "Model", "Dir"]
     assert buttons[1].value == f"held:drop:{conversation_id}"

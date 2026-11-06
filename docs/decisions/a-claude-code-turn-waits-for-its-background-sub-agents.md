@@ -47,13 +47,14 @@ the held result ends the turn.
 - ❌ The owner still loses the review: the sub-agent is stopped and only the
   explanation arrives. This is the failure that was reported.
 
-### Option C — Forbid background sub-agents in channel turns
+### Option C — Forbid background tasks in channel turns, instead of waiting
 
-Disallow the background mode for the sub-agent tool in channel conversations.
+Set `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1` for channel conversations and wait for nothing.
 
-- ✅ Removes the case at its source; every turn is one result.
-- ❌ Takes a capability away from the owner's agent in the chat that is most
-  often away from the desk, and does not cover background workflows.
+- ✅ Removes the case at its source; every channel turn is one result.
+- ✅ In a chat nobody sees a background task run, and its result would only come after the reply.
+- ❌ Alone, it leaves the other conversations, and any task type the switch does
+  not cover, ending early. Kept as a complement to A, not instead of it: see Decision.
 
 ### Option D — Ask the agent for a summary when a turn ends with no text
 
@@ -65,9 +66,12 @@ After an empty result, send the same session a "please summarise" turn.
 
 ## Decision
 
-Option A. The owner's rule (2026-11-06): Coffer waits for background work to
-finish, and where there is nothing to say it says nothing. The second half is
-channels: a turn whose agent wrote no text sends no reply, with no placeholder.
+Option A, with the switch of option C for channel conversations. The owner's
+rule (2026-11-06): Coffer waits for background work to finish, and where there
+is nothing to say it says nothing; later the same day the owner agreed that a
+chat should not start background work at all, and the sub-agents the agent runs
+in the foreground stay. The second half is channels: a turn whose agent wrote no
+text sends no reply, with no placeholder, and logs `channel.turn.empty_reply`.
 
 ## Consequences
 
@@ -75,6 +79,9 @@ channels: a turn whose agent wrote no text sends no reply, with no placeholder.
   holds a successful result while any runs; `claude_sdk_agent` sends the held
   result if the stream ends first and sets the CLI's wait to four hours unless the
   environment already sets it.
+- A channel conversation's turn sets `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1`
+  (the switch exists in the bundled CLI; its effect on a real turn is not yet
+  confirmed on the owner's Mac).
 - A background shell command is not waited for: it does not wake the agent and
   may never end.
 - A turn can now run past four hours of wall-clock only through the agent's own work.
