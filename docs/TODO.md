@@ -58,6 +58,7 @@ threads appending at once rarely conflict:
 - **Sketch:** first check how Codex parses `model_catalog_json` (whether the
   fields may be omitted so Codex uses its own defaults), then write what the
   provider reports and leave the rest to Codex.
+
 ## Channels and conversations
 
 ### Continue a terminal session from the phone
