@@ -42,28 +42,6 @@ threads appending at once rarely conflict:
   reusing the session takeover from #697. Comparable: Claude Code Remote Control,
   Happy.
 
-### Let an agent notify the owner's chat
-
-- **Added:** 2026-11-06, from the thread "梳理对话与消息渠道的缺口和缺陷"
-- **What:** an agent in a terminal, or in its own scheduled task, sends the owner a
-  message (optionally with a file) on their phone when it finishes.
-- **Why later:** only REST `POST /channels/{uid}/notify` exists; an agent has no
-  tool for it. Not needed yet.
-- **Sketch:** an MCP tool `coffer__channel_notify`, owner's direct chat only,
-  rate-limited, on top of the existing notify route. This is also how an agent's
-  own scheduled tasks would reach the phone, instead of Coffer running schedules.
-  Comparable: cc-connect `send`, Claude Code Channels `reply`.
-
-### Show a running turn's progress in /status
-
-- **Added:** 2026-11-06, from the thread "梳理对话与消息渠道的缺口和缺陷"
-- **What:** `/status` on a running turn says how long it has run, how many steps,
-  the current tool and the agent's last line.
-- **Why later:** on SeaTalk a long turn shows only typing; the live-surface ADR
-  rejected pushing progress into the chat, so this answers only when asked.
-- **Sketch:** text only, from the turn status Coffer already tracks for
-  Telegram's live preview.
-
 ### Steer a running turn
 
 - **Added:** 2026-11-06, from the thread "梳理对话与消息渠道的缺口和缺陷"

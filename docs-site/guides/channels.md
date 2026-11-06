@@ -88,7 +88,7 @@ Send the bot a message. The first message opens a conversation on the channel's 
 
 Coffer tells the agent which platform and kind of chat it is in and what renders there, and asks it to write the way a person texts a colleague: the answer first, in one or two plain sentences (the first line is what the notification shows), no step-by-step narration or list of caveats, a few lines at most, the whole answer after its last tool call, and diagrams as images. A full report arrives as a Markdown file only when you ask for one; the agent does not end its replies by offering it. Where the chat can collapse text, it is also asked to put anything long under a `## Details` heading. Coffer then fits the reply to the chat:
 
-- **Too long for a chat** — a reply of more than 20 lines or 1,500 characters (files and a collapsed Details section not counted) is not sent. Coffer asks the agent, in the same conversation, to say it again in a few lines; that short reply arrives with a **📄 Full report** button, and tapping it asks the agent for the file. The short reply takes a little longer, because the agent writes it after the long one. A turn that failed or was stopped sends what it has, as before; so does a turn with another message of yours already waiting behind it.
+- **Too long for a chat** — a reply of more than 20 lines or 1,500 characters (files and a collapsed Details section not counted) is not sent. Coffer asks the agent, in the same conversation, to say it again in a few lines; that short reply arrives with a **📄 Full report** button, and tapping it asks the agent for the file. Files the long reply sent with `MEDIA:` lines are not lost: they follow the short reply. The short reply takes a little longer, because the agent writes it after the long one. A turn that failed or was stopped sends what it has, as before; so does a turn with another message of yours already waiting behind it.
 
 - **Details** — on Telegram, a `## Details` section arrives collapsed. SeaTalk cannot collapse text, so there the reply arrives whole.
 - **Tables and logs** — SeaTalk cannot show a table, so each row becomes a bullet (`- **checkout** · failed · 3DS timeout`); a table bigger than 12 rows or 4 columns keeps its first five rows and arrives whole as a `.csv` file. A code block longer than 30 lines keeps its first three lines and arrives whole as a file.
@@ -316,6 +316,8 @@ The line must start with `MEDIA:` followed by an absolute path, optionally with 
 ## Notifications
 
 Coffer can push a message to the paired owner with no inbound message, through `POST /api/v1/channels/{uid}/notify`. The request goes to the owner's direct chat unless it names another paired chat, such as a group; a chat the channel is not paired to is refused. On the channel's page, **Send test** sends a test message — editable, **Test message from Coffer** by default — to the owner's direct chat; it starts no turn. Notifying a channel with no paired owner fails and sends nothing.
+
+An agent can do the same itself with the built-in tool [`coffer__channel_notify`](/reference/mcp-tools#coffer-channel-notify): it sends a message, and files, to the owner's direct chat, never a group. It is meant for an agent working in your terminal or in its own scheduled task, so you can ask it to "tell me on my phone when it's done". If you have more than one channel running and paired, the agent names the one to use.
 
 ## Manage channels
 

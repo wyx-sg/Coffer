@@ -34,7 +34,12 @@ from typing import Any
 
 from coffer.application.channel.held_queue import held_buttons
 from coffer.application.channel.ports import ChannelAdapter
-from coffer.application.channel.reply_rewrite import full_report_button, measure, too_long
+from coffer.application.channel.reply_rewrite import (
+    full_report_button,
+    measure,
+    media_lines,
+    too_long,
+)
 from coffer.application.channel.reply_tracking import ReplyTracker
 from coffer.application.channel.stop_notice import take as take_stop_notice
 from coffer.application.channel.turn_finish import (
@@ -112,9 +117,11 @@ class TurnRenderer:
     #: count: starts the follow-up turn that says it again short and returns
     #: whether it did. The long reply is then not sent (see ``reply_rewrite``).
     #: ``None`` sends every reply as it is — the follow-up turn's own renderer.
-    rewrite: Callable[[int], Awaitable[bool]] | None = None
+    rewrite: Callable[[int, str], Awaitable[bool]] | None = None
     #: This turn IS that follow-up: its reply carries the full-report button.
     offer_full_report: bool = False
+    #: The long reply's ``MEDIA:`` lines, which this follow-up's reply sends.
+    carried_media: str = ""
     heartbeat_seconds: float = _TYPING_HEARTBEAT_SECONDS
     tick_seconds: float = _STATUS_TICK_SECONDS
     _status: TurnStatus = field(init=False)
@@ -126,6 +133,12 @@ class TurnRenderer:
     _clock: float = field(init=False, default=0.0)
     #: The held line and its Continue and Discard, owed after the reply.
     _held_card: tuple[str, list[ChoiceButton]] | None = field(init=False, default=None)
+
+    def progress(self) -> str:
+        """What the turn is doing now, for ``/status``: the status header, the
+        agent's latest words and the step in hand; "" before the turn starts."""
+        status: TurnStatus | None = getattr(self, "_status", None)
+        return "" if status is None else status.summary(self.now())
 
     async def consume(self, queue: asyncio.Queue[Any]) -> TurnOutcome:
         """Render the turn; return how it ended (``done`` / ``failed`` /
@@ -188,6 +201,11 @@ class TurnRenderer:
                 await ticker
         end = TurnEnd(stop_reason, error, len(tool_ids), self.now() - started, tokens)
         answer = self._reply.answer()
+        # The long reply's files ride on its short version — once, should the
+        # agent have repeated a MEDIA: line itself.
+        carried = [m for m in self.carried_media.splitlines() if m and m not in answer]
+        if carried:
+            answer = "\n\n".join(part for part in (answer, "\n".join(carried)) if part)
         if await self._shortened(answer, end):
             return end.outcome
         if self.offer_full_report and self.tracker is not None:
@@ -224,7 +242,7 @@ class TurnRenderer:
             return False
         lines, _ = measure(answer, collapses_details=collapses)
         try:
-            taken = await self.rewrite(lines)
+            taken = await self.rewrite(lines, media_lines(answer))
         except Exception:
             return False
         if taken:
