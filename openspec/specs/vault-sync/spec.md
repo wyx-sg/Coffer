@@ -1110,7 +1110,11 @@ The remote's `manifest.json` carries the vault layout's `schema_version`. A
 round or a join SHALL refuse a remote at a newer layout (`remote_too_new`),
 leaving this vault untouched: the person upgrades this machine. A round or a
 join that meets a remote at an older layout SHALL replace it with this vault,
-joined or not — never convert it. The push is a fast-forward of one commit
+joined or not — never convert it — except that a **joined** machine whose vault
+has not merged the remote's tip (another machine pushed since this one last
+pulled) SHALL NOT replace it: the round ends `older_remote_has_changes`, naming
+the machine that pushed last, with this vault and the remote untouched, so that
+machine upgrades and syncs first and the two then merge at the new layout. The push is a fast-forward of one commit
 whose tree is exactly this machine's content, with this machine's commit and
 the old tip as parents, so the old history stays reachable in git. The files
 only the old remote had go away on purpose, so the outgoing deletion breaker
@@ -1133,6 +1137,12 @@ older layout must upgrade.
 - **THEN** the round ends `pushed` with `join: "replace"`, and the new remote tip has the old tip as an ancestor
 - **AND** the file only the old remote had is gone from the new tip and listed as removed, this vault's files are on it, and the machine is joined
 - **AND** the next round has nothing to do
+
+#### Scenario: an older remote with changes this machine has not pulled is not replaced
+- **GIVEN** a joined machine on the upgraded build, and a remote at an older layout that another machine pushed to after this one last pulled
+- **WHEN** its round runs
+- **THEN** the round ends `older_remote_has_changes`, saying to upgrade that machine and let it sync first
+- **AND** the remote keeps its tip and this vault's `HEAD` is unchanged, while a joined machine that had merged the remote's tip replaces it as before
 
 #### Scenario: the join preview of an older remote lists what goes away
 - **GIVEN** a remote at an older layout and a machine that has not joined

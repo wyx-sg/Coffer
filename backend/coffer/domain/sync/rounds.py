@@ -41,6 +41,10 @@ class RoundStatus(StrEnum):
     PAUSED_CLOUD_FOLDER = "paused_cloud_folder"
     #: The remote was written by a newer Coffer's layout.
     REMOTE_TOO_NEW = "remote_too_new"
+    #: The remote is at an older layout and holds commits this machine never
+    #: pulled: replacing it would drop them, so the machine that pushed them
+    #: upgrades and syncs first.
+    OLDER_REMOTE_HAS_CHANGES = "older_remote_has_changes"
     #: A file the push would publish holds a plaintext secret: nothing pushed.
     PLAINTEXT_FOUND = "plaintext_found"
     ROLLED_BACK = "rolled_back"
@@ -57,6 +61,7 @@ NEEDS_PERSON = frozenset(
         RoundStatus.AUTH_FAILED,
         RoundStatus.PAUSED_CLOUD_FOLDER,
         RoundStatus.REMOTE_TOO_NEW,
+        RoundStatus.OLDER_REMOTE_HAS_CHANGES,
         RoundStatus.PLAINTEXT_FOUND,
     }
 )

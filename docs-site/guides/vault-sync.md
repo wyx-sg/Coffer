@@ -227,6 +227,7 @@ The **Machines** tab lists every machine with when it was last seen, its last ro
 | `git missing` | No `git` on the PATH the daemon uses. | Install git the way that fits the machine (**Hand off to &lt;Agent&gt;** on the card), then press **Check again**. |
 | `paused (cloud folder)` | The vault is inside a folder Dropbox, iCloud Drive, Syncthing or similar also syncs. | Press **Move the vault…** on the Status tab: Coffer pauses rounds and agent writes, moves the folder (to `~/.coffer/vault` unless you choose another place outside any synchronised folder), checks the git repository there and resumes. The old folder is left empty; delete it yourself. |
 | `remote too new` | Another machine runs a newer Coffer. | Upgrade this machine. |
+| `older remote has changes` | This machine runs a newer Coffer than the remote's, and another machine pushed changes this one never pulled. Replacing the remote now would lose them. | Upgrade Coffer on the machine the message names and let it sync; this machine then syncs on its own. |
 | `waiting on an edit` | You have an unsaved or invalid edit on a file the round would change. | Finish or fix the edit (`coffer vault problems` lists invalid ones); the next round continues. |
 | A held round after reinstalling Coffer | The empty vault would push its loss. | **Keep the files** in **Review deletions** on the **Status** tab. |
 | Secrets cannot be decrypted | This machine lacks the master key they were encrypted with. | **Import a master key** on **Settings › Security**, with the key from a machine that has it. |

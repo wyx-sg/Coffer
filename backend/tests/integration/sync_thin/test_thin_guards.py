@@ -209,6 +209,39 @@ def test_a_round_replaces_a_remote_at_an_older_layout(pair: tuple[Machine, Machi
 
 
 @pytest.mark.acceptance(
+    spec="vault-sync",
+    scenario="an older remote with changes this machine has not pulled is not replaced",
+)
+def test_a_joined_machine_does_not_replace_an_older_remote_it_has_not_pulled(
+    pair: tuple[Machine, Machine],
+) -> None:
+    mac, mini = pair
+    old_tip = _old_layout_remote(mac)
+    head = mini.repo.head()
+    got = mini.round()
+    assert got.status is RoundStatus.OLDER_REMOTE_HAS_CHANGES
+    assert got.detail and "upgrade Coffer on that machine" in got.detail
+    assert remote_ref(mini.remote) == old_tip
+    assert mini.repo.head() == head
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync",
+    scenario="an older remote with changes this machine has not pulled is not replaced",
+)
+def test_a_joined_machine_replaces_an_older_remote_it_already_merged(
+    pair: tuple[Machine, Machine],
+) -> None:
+    _mac, mini = pair
+    mini.put("manifest.json", '{\n  "schema_version": 2\n}\n')
+    assert mini.round().status is RoundStatus.PUSHED
+    old_tip = remote_ref(mini.remote) or ""
+    got = mini.round()
+    assert got.status is RoundStatus.PUSHED and got.join == "replace"
+    assert mini.git.is_ancestor(old_tip, remote_ref(mini.remote) or "")
+
+
+@pytest.mark.acceptance(
     spec="vault-sync", scenario="the join preview of an older remote lists what goes away"
 )
 def test_the_join_preview_reports_the_replace_and_the_join_does_it(
@@ -243,6 +276,7 @@ def test_replacing_an_older_remote_still_refuses_a_plaintext_secret(
         + "".join(random.Random(5).choices(string.ascii_letters + string.digits, k=28))
     )
     mini.put("knowledge/notes/leak.md", f"api_key = {key}\n")
+    mini.state.set_joined(False)  # a joined mini would wait for mac's unpulled commits
     got = mini.round()
     assert got.status is RoundStatus.PLAINTEXT_FOUND
     assert remote_ref(mini.remote) == old_tip

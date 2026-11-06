@@ -14,6 +14,10 @@ are argued in the 2026-11-06 addendum to ADR `sync-deletion-breaker`.
 - A "delete" answer is remembered by file while the remote tip is unchanged.
 - The `sync.round` / `sync.continue` log lines carry the round's detail, path,
   hold direction and counts.
+- A joined machine no longer replaces an older-layout remote that holds commits
+  it never pulled: the round ends `older_remote_has_changes` and the machine
+  that pushed them upgrades and syncs first (ADR
+  `every-vault-file-carries-its-format-version`, addendum 2026-11-06).
 - Docs: the guide no longer says both that secret ciphertext never conflicts and
   that it offers two choices (the second is a join's differing file).
 

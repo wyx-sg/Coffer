@@ -917,6 +917,7 @@
       "sync_run_authFailed": "同步已停止：远端拒绝了这个密钥",
       "sync_run_pausedCloudFolder": "同步已暂停：保险库位于另一个工具同步的文件夹中",
       "sync_run_remoteTooNew": "同步已停止：远端由更新版本的 Coffer 写入",
+      "sync_run_olderRemoteHasChanges": "同步已停止：旧版远端有这台 Mac 还没拉取的改动",
       "sync_run_plaintextFound": "同步未推送任何内容：有文件含明文密钥",
       "sync_run_failed": "同步失败",
       "token_rotated": "已轮换访问令牌",
@@ -4409,6 +4410,7 @@
         "auth_failed": "登录被拒",
         "paused_cloud_folder": "已暂停（云同步文件夹）",
         "remote_too_new": "远端版本过新",
+        "older_remote_has_changes": "旧版远端有未拉取的改动",
         "rolled_back": "已回滚",
         "failed": "失败"
       }
@@ -4854,6 +4856,7 @@
         "auth_failed": "登录失败",
         "paused_cloud_folder": "已暂停（云同步文件夹）",
         "remote_too_new": "远端版本过新",
+        "older_remote_has_changes": "旧版远端有未拉取的改动",
         "rolled_back": "已回滚",
         "failed": "失败",
         "pulledPushFailed": "已拉取，推送失败",

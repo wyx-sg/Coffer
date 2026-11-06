@@ -1283,7 +1283,7 @@ export interface components {
          * RoundStatus
          * @enum {string}
          */
-        RoundStatus: "nothing_to_do" | "pulled" | "pushed" | "pulled_and_pushed" | "push_failed" | "stopped" | "held" | "waiting_on_edit" | "join_required" | "joined" | "unreachable" | "auth_failed" | "paused_cloud_folder" | "remote_too_new" | "plaintext_found" | "rolled_back" | "failed";
+        RoundStatus: "nothing_to_do" | "pulled" | "pushed" | "pulled_and_pushed" | "push_failed" | "stopped" | "held" | "waiting_on_edit" | "join_required" | "joined" | "unreachable" | "auth_failed" | "paused_cloud_folder" | "remote_too_new" | "older_remote_has_changes" | "plaintext_found" | "rolled_back" | "failed";
         /** StopStateOut */
         StopStateOut: {
             round: components["schemas"]["StoppedRoundOut"] | null;

@@ -917,6 +917,7 @@
       "sync_run_authFailed": "Sync stopped: the remote refused the secret",
       "sync_run_pausedCloudFolder": "Sync paused: the vault is inside a folder another tool syncs",
       "sync_run_remoteTooNew": "Sync stopped: a newer Coffer wrote the remote",
+      "sync_run_olderRemoteHasChanges": "Sync stopped: the older remote has changes this Mac has not pulled",
       "sync_run_plaintextFound": "Sync pushed nothing: a file holds a plaintext secret",
       "sync_run_failed": "Sync round failed",
       "token_rotated": "Access token rotated",
@@ -4409,6 +4410,7 @@
         "auth_failed": "sign-in refused",
         "paused_cloud_folder": "paused (cloud folder)",
         "remote_too_new": "remote too new",
+        "older_remote_has_changes": "older remote has changes",
         "rolled_back": "rolled back",
         "failed": "failed"
       }
@@ -4854,6 +4856,7 @@
         "auth_failed": "Sign-in failed",
         "paused_cloud_folder": "Paused (cloud folder)",
         "remote_too_new": "Remote too new",
+        "older_remote_has_changes": "Older remote has changes",
         "rolled_back": "Rolled back",
         "failed": "Failed",
         "pulledPushFailed": "Pulled, push failed",

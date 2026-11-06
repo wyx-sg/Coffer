@@ -240,7 +240,7 @@ def _problem_item(last: RoundRecord, remote: SyncRemote) -> AttentionItem | None
             last.finished_at,
             uid=uid,
         )
-    if last.status is RoundStatus.REMOTE_TOO_NEW:
+    if last.status in (RoundStatus.REMOTE_TOO_NEW, RoundStatus.OLDER_REMOTE_HAS_CHANGES):
         return _item(
             "sync_layout",
             detail,

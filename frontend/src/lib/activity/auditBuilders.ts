@@ -124,6 +124,7 @@ const SYNC_FAILURES: Record<string, string> = {
   auth_failed: "authFailed",
   paused_cloud_folder: "pausedCloudFolder",
   remote_too_new: "remoteTooNew",
+  older_remote_has_changes: "olderRemoteHasChanges",
   plaintext_found: "plaintextFound",
   failed: "failed",
   push_failed: "pushFailed",
