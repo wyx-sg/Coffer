@@ -145,25 +145,12 @@ export const agentsApi = {
         body: { location: loc(location), name: options.name, reach: options.reach },
       }),
     ),
-  // Read-only preview of one unmanaged folder (spec skill-manager "Preview an
-  // unmanaged skill read-only") — the same tree/content shapes as a managed
-  // skill's Files tab, addressed by folder name + scan location.
-  unmanagedSkill: (uid: string, skill: string, location: string) =>
-    unwrap(
-      getApiClient().GET("/agents/{uid}/unmanaged-skills/{skill}", {
-        params: { path: { uid, skill }, query: { location: loc(location) } },
-      }),
-    ),
+  // An unmanaged folder's file tree, for the Adopt and Delete dialogs to name
+  // the files they act on.
   unmanagedSkillFiles: (uid: string, skill: string, location: string) =>
     unwrap(
       getApiClient().GET("/agents/{uid}/unmanaged-skills/{skill}/files", {
         params: { path: { uid, skill }, query: { location: loc(location) } },
-      }),
-    ),
-  unmanagedSkillFileContent: (uid: string, skill: string, location: string, path: string) =>
-    unwrap(
-      getApiClient().GET("/agents/{uid}/unmanaged-skills/{skill}/files/content", {
-        params: { path: { uid, skill }, query: { location: loc(location), path } },
       }),
     ),
   deleteUnmanagedSkill: (uid: string, skill: string, location: string) =>

@@ -43,6 +43,7 @@ async def start_rewrite[Item](
     conversation_id: str,
     item: Item,
     lines: int,
+    media: str = "",
     *,
     render: Callable[[Item, str, asyncio.Queue[Any]], None],
 ) -> bool:
@@ -51,12 +52,14 @@ async def start_rewrite[Item](
     lines, rendered by ``render`` into the same place; ``True`` when it was
     taken. A message the owner sent meanwhile would run first and make "your
     last reply" mean something else, so with anything waiting nothing is queued
-    and the long reply is sent as it is instead."""
+    and the long reply is sent as it is instead. ``media`` is the long reply's
+    ``MEDIA:`` lines: the follow-up's reply carries them, so its files still
+    go out."""
     if turns.pending(conversation_id):
         return False
     text = rewrite_prompt(lines)
     again = dataclasses.replace(  # type: ignore[type-var]
-        item, text=text, attachments=(), title_hint="", rewrite=True
+        item, text=text, attachments=(), title_hint="", rewrite=True, carried_media=media
     )
     try:
         # An empty hint: Coffer's note never names the conversation.

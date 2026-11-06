@@ -123,7 +123,7 @@ describe("AgentSkillsTab — bulk", () => {
         .mockRejectedValueOnce(new ApiError("SKILL_ALREADY_EXISTS", "name taken"))
         .mockResolvedValueOnce({ uid: "s-3", name: "gamma" });
       renderTab();
-      await screen.findByRole("link", { name: "alpha" });
+      await screen.findByText("alpha", { selector: '[data-testid="own-skill-name"]' });
       for (const name of ["alpha", "beta", "gamma", "pdf"]) tick(name);
       expect(within(bar()).getByText("4 of 4 selected")).toBeInTheDocument();
       expect(screen.queryByLabelText("Search skills")).toBeNull();
@@ -159,7 +159,7 @@ describe("AgentSkillsTab — bulk", () => {
       new ApiError("SKILL_ALREADY_EXISTS", "name taken"),
     );
     renderTab();
-    await screen.findByRole("link", { name: "alpha" });
+    await screen.findByText("alpha", { selector: '[data-testid="own-skill-name"]' });
     tick("alpha");
     tick("beta");
     fireEvent.click(within(bar()).getByRole("button", { name: "Adopt" }));
@@ -174,7 +174,7 @@ describe("AgentSkillsTab — bulk", () => {
   test("Delete… deletes every ticked folder, one request each, after one confirmation", async () => {
     stub();
     renderTab();
-    await screen.findByRole("link", { name: "alpha" });
+    await screen.findByText("alpha", { selector: '[data-testid="own-skill-name"]' });
     tick("beta");
     tick("pdf");
     fireEvent.click(within(bar()).getByRole("button", { name: "Delete…" }));
@@ -193,7 +193,7 @@ describe("AgentSkillsTab — bulk", () => {
   test("Adopt is disabled with a reason when no ticked row is unmanaged", async () => {
     stub();
     renderTab();
-    await screen.findByRole("link", { name: "alpha" });
+    await screen.findByText("alpha", { selector: '[data-testid="own-skill-name"]' });
     tick("pdf");
     const adopt = within(bar()).getByRole("button", { name: "Adopt" });
     expect(adopt).toBeDisabled();
@@ -203,7 +203,7 @@ describe("AgentSkillsTab — bulk", () => {
   test("Esc and Clear empty the selection; the single-row buttons are unchanged", async () => {
     stub();
     renderTab();
-    await screen.findByRole("link", { name: "alpha" });
+    await screen.findByText("alpha", { selector: '[data-testid="own-skill-name"]' });
     expect(screen.getAllByRole("button", { name: /^Adopt:/ })).toHaveLength(3);
     tick("alpha");
     expect(within(bar()).getByText("1 of 4 selected")).toBeInTheDocument();
@@ -217,7 +217,7 @@ describe("AgentSkillsTab — bulk", () => {
   test("select-all reaches only what the search shows", async () => {
     stub();
     renderTab();
-    await screen.findByRole("link", { name: "alpha" });
+    await screen.findByText("alpha", { selector: '[data-testid="own-skill-name"]' });
     // "ta" matches beta only.
     fireEvent.change(screen.getByLabelText("Search skills"), { target: { value: "ta" } });
     fireEvent.click(screen.getByRole("checkbox", { name: "Select all" }));

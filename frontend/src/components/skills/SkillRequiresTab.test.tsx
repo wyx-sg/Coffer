@@ -41,7 +41,7 @@ function renderTab(
 ) {
   const skill = {
     uid: skillUid,
-    requires: requires.map((command) => ({ command, profiles: [] })),
+    requires: requires.map((command) => ({ command })),
     requires_declared: true,
     requires_secrets: requiresSecrets,
     requires_tools: [],
@@ -65,21 +65,10 @@ function renderTab(
 afterEach(() => vi.clearAllMocks());
 
 describe("SkillRequiresTab", () => {
-  test("a requirement a profile declares names that profile", async () => {
-    api.list.mockResolvedValue({ items: [JQ_MISSING], warnings: [] });
-    renderTab("sk-gh-triage", [], [], {
-      requires: [{ command: "jq", profiles: ["shopee-account"] }],
-      requires_secrets: [{ name: "ACME_TOKEN", is_set: true, profiles: ["shopee-account"] }],
-    });
-    await screen.findByText("Not installed");
-    // The command's row and the secret's row each name the profile.
-    expect(screen.getAllByText("in profile shopee-account")).toHaveLength(2);
-  });
-
   acceptance("web-ui", "a skill's requirement links to its CLI", async () => {
     const other = cli({
       command: "docker",
-      needed_by: [{ skill_uid: "sk-other", skill_name: "other", why: null, profiles: [] }],
+      needed_by: [{ skill_uid: "sk-other", skill_name: "other", why: null }],
     });
     api.list.mockResolvedValue({
       items: [JQ_MISSING, GH_READY, UV_READY, other],
@@ -131,8 +120,8 @@ describe("SkillRequiresTab", () => {
         "sk-gh-triage",
         ["jq"],
         [
-          { name: "GITHUB_TOKEN", is_set: true, profiles: [] },
-          { name: "NPM_TOKEN", is_set: false, profiles: [] },
+          { name: "GITHUB_TOKEN", is_set: true },
+          { name: "NPM_TOKEN", is_set: false },
         ],
       );
       await screen.findByText("Not installed");
@@ -155,7 +144,7 @@ describe("SkillRequiresTab", () => {
     vi.mocked(secretsApi.list).mockResolvedValue({
       refs: [{ ref: "secret/s-1a2b", label: "Shopee account" }],
     } as never);
-    renderTab("sk-named", [], [{ name: "s-1a2b", is_set: true, profiles: [] }]);
+    renderTab("sk-named", [], [{ name: "s-1a2b", is_set: true }]);
     expect(await screen.findByText("Shopee account")).toBeInTheDocument();
     expect(screen.queryByText("s-1a2b")).toBeNull();
     fireEvent.click(screen.getByRole("link", { name: "View in Secrets" }));
@@ -164,7 +153,7 @@ describe("SkillRequiresTab", () => {
 
   test("a skill that declares only secrets lists them without an empty state", async () => {
     api.list.mockResolvedValue({ items: [], warnings: [] });
-    renderTab("sk-secrets-only", [], [{ name: "API_KEY", is_set: false, profiles: [] }]);
+    renderTab("sk-secrets-only", [], [{ name: "API_KEY", is_set: false }]);
     expect(await screen.findByText("secret API_KEY is not set")).toBeInTheDocument();
     expect(screen.queryByText("Nothing required")).toBeNull();
   });
@@ -173,14 +162,13 @@ describe("SkillRequiresTab", () => {
     api.list.mockResolvedValue({ items: [], warnings: [] });
     renderTab("sk-tools", [], [], {
       requires_tools: [
-        { name: "github", uid: "t-1", kind: "mcp_server", status: "off", why: null, profiles: [] },
+        { name: "github", uid: "t-1", kind: "mcp_server", status: "off", why: null },
         {
           name: "billing-api",
           uid: "t-2",
           kind: "custom_tools",
           status: "failing",
           why: "401",
-          profiles: [],
         },
         {
           name: "linear",
@@ -188,7 +176,6 @@ describe("SkillRequiresTab", () => {
           kind: "mcp_server",
           status: "healthy",
           why: null,
-          profiles: [],
         },
       ],
     });

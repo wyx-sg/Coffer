@@ -279,57 +279,18 @@ def test_skill_md_without_a_readable_requires_declares_nothing(text: str) -> Non
     assert _md_commands(text) == []
 
 
-@pytest.mark.acceptance(spec="skill-manager", scenario="a profile's requires joins the skill's")
-def test_profile_requires_are_unioned_and_name_their_profile() -> None:
-    from coffer.domain.skill.requirements_union import requirements_of_skill
-
-    skill_md = "---\nname: s\nrequires: [jq, 'gh>=2.40']\n---\n"
-    profile = (
-        "---\nrequires:\n  commands:\n    - gh>=2.50\n"
-        "    - {command: smc, why: Opens the console.}\n"
-        "  secrets: [ACME_TOKEN]\n  tools: [github]\n---\n"
-    )
-    bad = "---\nrequires:\n  bogus: 1\n---\n"
-    parsed = requirements_of_skill(skill_md, [("acme-team", profile), ("x", bad)])
-    by = {r.command: r for r in parsed.requirements}
-    assert by["jq"].profiles == ()
-    # SKILL.md declares gh too, so it is unconditional: no profile is named.
-    assert by["gh"].profiles == ()
-    assert by["smc"].profiles == ("acme-team",)
-    assert parsed.secrets == ("ACME_TOKEN",)
-    assert parsed.secret_profiles == {"ACME_TOKEN": ("acme-team",)}
-    assert parsed.tools == (ToolRequirement("github", None, ("acme-team",)),)
-    assert parsed.warnings and parsed.warnings[0].startswith("profiles/x.md: ")
-
-
 @pytest.mark.acceptance(
     spec="skill-manager", scenario="a skill with no requires key has not declared"
 )
 def test_a_skill_with_no_requires_key_has_not_declared() -> None:
-    from coffer.domain.skill.requirements_union import requirements_of_skill
-
-    parsed = requirements_of_skill("---\nname: s\n---\n", [("p", "---\nnote: x\n---\n")])
+    parsed = requirements_from_skill_md("---\nname: s\n---\n")
     assert parsed.declared is False
-    assert requirements_of_skill("no frontmatter", []).declared is False
+    assert requirements_from_skill_md("no frontmatter").declared is False
 
 
 @pytest.mark.acceptance(spec="skill-manager", scenario="an empty requires is a declaration")
 @pytest.mark.parametrize("empty", ["[]", "{}"])
 def test_an_explicit_empty_requires_is_declared(empty: str) -> None:
-    from coffer.domain.skill.requirements_union import requirements_of_skill
-
-    parsed = requirements_of_skill(f"---\nname: s\nrequires: {empty}\n---\n", [])
+    parsed = requirements_from_skill_md(f"---\nname: s\nrequires: {empty}\n---\n")
     assert parsed.declared is True
     assert parsed.requirements == ()
-
-
-@pytest.mark.acceptance(
-    spec="skill-manager", scenario="a profile's requires key makes the skill declared"
-)
-def test_a_profile_requires_key_makes_the_skill_declared() -> None:
-    from coffer.domain.skill.requirements_union import requirements_of_skill
-
-    parsed = requirements_of_skill(
-        "---\nname: s\n---\n", [("a", "---\n---\n"), ("b", "---\nrequires: []\n---\n")]
-    )
-    assert parsed.declared is True

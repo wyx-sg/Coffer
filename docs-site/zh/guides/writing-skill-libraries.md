@@ -101,22 +101,9 @@ The organisation's log platform, reached through its own skill.
 
 更长的设计理由——某个键为什么存在、为什么要和另一个拆开——属于本指南或该领域的设计记录，而不是一个智能体每次运行都要读的文件。
 
-### profile 声明的依赖 {#requirements-a-profile-declares}
+### 依赖与 profile {#requirements-and-profiles}
 
-profile 的 frontmatter 可以带一个 `requires:`，形状和技能的一样（命令、密钥、工具）。用它写技能本身在该环境中运行或使用的东西：profile 的载体就是的那个 CLI、它的命令读取的密钥。技能只声明自己运行的内容，绝不替它委托的其他技能声明：调用 `Skill(<carrier>)` 的领域不声明该载体的 CLI，因为由载体自己声明。例如，`carrier` 为裸命令 `gh` 的 profile 声明 `gh`；脚本加载另一个技能的认证模块的载体，声明该模块需要的东西。
-
-```markdown
----
-remote_hosts: [git.example.com]
-carrier: gh
-requires:
-  commands:
-    - command: gh
-      why: The carrier for this organisation's review requests.
----
-```
-
-智能体在运行时选定一个 profile，而 Coffer 无从得知选的是哪个。所以 Coffer 读取 `SKILL.md` 的 `requires:` 与每个 `profiles/*.md` 的 `requires:` 的并集，技能的**依赖**标签页和命令行工具页的**被谁需要**会写出声明每一项的 profile，例如 `coffer-investigating-logs · example-org`。多个来源都声明的命令合并为一条依赖。每个环境都需要的通用命令留在 `SKILL.md`；只有环境专属的才写进 profile。见[命令行工具](/zh/guides/clis)和[技能](/zh/guides/skills#profile-declared-requirements)。
+Coffer 只从 `SKILL.md` 读取 `requires:`，从不读 profile。把技能本身在任何环境中运行或使用的命令、密钥和工具都列在那里：profile 的载体就是的那个 CLI、它的命令读取的密钥。只有某个环境才用的命令也会在每台机器上显示出来，这是如实的结果，因为 Coffer 无从得知智能体会选哪个 profile。技能只声明自己运行的内容，绝不替它委托的其他技能声明：调用 `Skill(<carrier>)` 的领域不声明该载体的 CLI，因为由载体自己声明。例如，某个 profile 把裸命令 `gh` 作为载体的领域，在 `SKILL.md` 里声明 `gh`；脚本加载另一个技能的认证模块的载体，声明该模块需要的东西。
 
 ### profile 里放什么，绝不放什么 {#what-a-profile-holds-and-what-it-never-does}
 
@@ -330,7 +317,7 @@ cd ~/src/skills/<domain>
 6. **你用到的每个环境写一个文件。** 每个文件自身都是完整的；只有真的出现第二个环境时，才添加同级文件。
 7. **把共享的方法提取成基础技能。** 如果另一个领域已经有同样的规则，就把它们提取出来，按名称加载，并声明 `metadata.requires`。
 8. **写主体。** `SKILL.md` 只放 Profile 段落、路由和边界。加上运行时规则：先尝试载体再宣称它缺失、引用证据、写出没能解析的东西。
-9. **声明 Coffer 该看到的内容。** 把该领域自己运行的命令、密钥和工具列在顶层 `requires:` 下，把环境专属的列在各 profile 的 `requires:` 下。绝不列它委托的载体运行的内容。如果它确实什么都不需要，就写 `requires: []`：任何地方都没有 `requires:` 键的技能，在**依赖**标签页上显示为依赖未知，显式写空则显示为不需要任何东西。技能页面可以把技能交给智能体检查，见[声明与否](/zh/guides/skills#declared-or-not)。
+9. **声明 Coffer 该看到的内容。** 把该领域在任何环境中自己运行的命令、密钥和工具，都列在 `SKILL.md` 的顶层 `requires:` 下。绝不列它委托的载体运行的内容。如果它确实什么都不需要，就写 `requires: []`：`SKILL.md` 里没有 `requires:` 键的技能，在**依赖**标签页上显示为依赖未知，显式写空则显示为不需要任何东西。技能页面可以把技能交给智能体检查，见[声明与否](/zh/guides/skills#declared-or-not)。
 10. **检查。** 测试通过，`profiles/` 之外没有任何组织相关的内容，每个环境文件合并到 `default.md` 之上后得到你期望的值，文件夹里没有 venv、缓存或密钥，必需的基础技能的生效范围覆盖同样的智能体。然后导入并校验。
 
 ## 相关 {#related}

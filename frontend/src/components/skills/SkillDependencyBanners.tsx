@@ -12,6 +12,7 @@ import { useTranslation } from "react-i18next";
 import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { SkillBannerFrame } from "@/components/skills/SkillBannerFrame";
 import { Button } from "@/components/ui/button";
+import { agentTypeLabel } from "@/lib/agents/display";
 import type { SkillOut } from "@/lib/api/skills";
 import { useClis } from "@/lib/hooks/useClis";
 import type { SkillAttention } from "@/lib/skills/attention";
@@ -89,6 +90,29 @@ export function SkillDependencyBanners({ skill, items }: Props) {
                       name: skill.name,
                     },
                   )}
+            </SkillBannerFrame>
+          ));
+        }
+        if (item.kind === "skillNotShared") {
+          return item.skills.map((dep) => (
+            <SkillBannerFrame
+              key={`skill:${dep.name}`}
+              tone="warning"
+              testId="skill-banner-skill"
+              title={t("skills.banner.skillNotShared", {
+                dep: dep.name,
+                name: skill.name,
+                agents: dep.missing_agent_names.map(agentTypeLabel).join(", "),
+              })}
+              actions={
+                <Button asChild variant="outline" size="sm">
+                  <Link to={`/skills/${encodeURIComponent(dep.name)}`}>
+                    {t("skills.banner.openSkill", { name: dep.name })}
+                  </Link>
+                </Button>
+              }
+            >
+              {t("skills.banner.skillNotSharedBody", { dep: dep.name, name: skill.name })}
             </SkillBannerFrame>
           ));
         }

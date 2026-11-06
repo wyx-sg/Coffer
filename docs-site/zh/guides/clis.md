@@ -33,7 +33,7 @@ requires:
 
 Coffer 不检查工具版本够不够新、有没有登录：智能体运行工具时自己就会发现，和在终端里一样（例如用 `gh --version` 或 `gh auth status`），需要哪个版本可以由技能在正文里写明。为旧版 Coffer 写的技能可能还带着 `min_version`、`version`、`login_check` 或 `login`，或写成 `gh>=2.40`；它们会被接受并忽略（`gh>=2.40` 按 `gh` 读取）。
 
-按环境保存 profile（`profiles/<name>.md`）的技能，也可以在 profile 的 frontmatter 里用同样的形状声明命令。智能体在运行时选定一个 profile，而 Coffer 无从得知选的是哪个，所以 Coffer 读取 `SKILL.md` 与每个 profile 的并集。**被谁需要**会在技能名后写出 profile，例如 `example-log-search · example-org`；多个来源都声明的命令合并为一条。见[profile 声明的依赖](/zh/guides/skills#profile-declared-requirements)。
+Coffer 只从 `SKILL.md` 读取 `requires:`；profile 文件的 frontmatter 由技能自己处理。
 
 裸名称（`- uv`）表示一个只有名字的命令；`requires: [jq, gh]` 和 `requires: {commands: [...]}` 也按同样的方式读取。Coffer 用不了的条目——写的是路径而不是名称，或者根本没写命令——会被跳过，并在命令行工具页面上显示警告，`tools:` 里不匹配任何 MCP 服务器或自定义工具分组的名字也一样（见[技能需要的工具](/zh/guides/skills#tools-a-skill-needs)）；它永远不会阻止技能被导入或投递。
 

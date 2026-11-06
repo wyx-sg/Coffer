@@ -41,7 +41,7 @@ interface Props {
 }
 
 /** The attention kinds this pane draws itself; SkillBanners draws the rest. */
-const OWN_KINDS = new Set(["masterMissing", "requires", "toolOff", "secrets"]);
+const OWN_KINDS = new Set(["masterMissing", "requires", "toolOff", "skillNotShared", "secrets"]);
 
 export function SkillDetailPane({ skill, tab, onTabChange, onDeleted }: Props) {
   const { t } = useTranslation();

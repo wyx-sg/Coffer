@@ -28,6 +28,11 @@ _logger = logging.getLogger(__name__)
 
 _TOKEN_SLACK_SECONDS = 60
 _RATE_BACKOFF = (1.0, 3.0, 9.0)
+#: Waits before resending a request that never reached SeaTalk: a dropped
+#: connection or a connect timeout. The request was not sent, so a resend cannot
+#: duplicate it (spec channels "Render replies by the adapter's declared
+#: capabilities").
+_CONNECT_BACKOFF = (1.0, 3.0)
 
 
 def _detail(payload: Any) -> str:
@@ -137,6 +142,7 @@ class SeaTalkTransport:
         """One authenticated call with the shared token-refresh / rate-limit /
         non-JSON handling — POST carries a JSON body, GET query params."""
         attempt = 0
+        unreached = 0
         while True:
             token = await self.ensure_token()
             try:
@@ -147,6 +153,14 @@ class SeaTalkTransport:
                     params=params,
                     headers={"Authorization": f"Bearer {token}"},
                 )
+            except (httpx.ConnectError, httpx.ConnectTimeout) as e:
+                if unreached >= len(_CONNECT_BACKOFF):
+                    raise ChannelSendFailed(self._name, f"{path}: {type(e).__name__}") from e
+                delay = _CONNECT_BACKOFF[unreached]
+                unreached += 1
+                _logger.warning("seatalk.unreached", extra={"channel": self._name, "delay": delay})
+                await asyncio.sleep(delay)
+                continue
             except httpx.HTTPError as e:
                 raise ChannelSendFailed(self._name, f"{path}: {type(e).__name__}") from e
             try:

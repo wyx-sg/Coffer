@@ -51,8 +51,6 @@ class NeededBy:
     skill_uid: str
     skill_name: str
     why: str | None
-    #: Profiles that declared it; empty when SKILL.md itself did.
-    profiles: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -187,7 +185,6 @@ def _row(
                 skill_uid=uid,
                 skill_name=name,
                 why=r.why,
-                profiles=r.profiles,
             )
             for uid, name, r in entries
         ),

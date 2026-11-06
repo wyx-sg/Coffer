@@ -156,15 +156,20 @@ def test_an_archive_skill_is_found_at_the_top_or_one_down(
     assert stage_dirs(get_skill_source_service()) == []
 
 
-@pytest.mark.acceptance(spec="skill-manager", scenario="an archive with no SKILL.md is rejected")
-def test_an_archive_with_skill_md_two_down_is_rejected(c: TestClient) -> None:
+def test_an_archive_with_skill_md_two_down_finds_it(c: TestClient) -> None:
     r = _upload(c, zip_bytes({"pack/review/SKILL.md": skill_md("review")}), "deep.zip")
+    assert r.status_code == 201, r.text
+    assert [(s["folder"], s["name"]) for s in r.json()["skills"]] == [("pack/review", "review")]
+
+
+@pytest.mark.acceptance(spec="skill-manager", scenario="an archive with no SKILL.md is rejected")
+def test_an_archive_with_no_skill_md_is_rejected(c: TestClient) -> None:
+    r = _upload(c, zip_bytes({"pack/notes/README.md": "no skill here"}), "deep.zip")
     assert r.status_code == 422, r.text
     err = r.json()["error"]
     assert err["code"] == "SKILL_INVALID"
     assert err["details"]["reason"] == "skill_md_not_found"
-    assert err["details"]["looked_in"] == ["deep.zip/SKILL.md", "deep.zip/<folder>/SKILL.md"]
-    assert "top or one folder down" in err["message"]
+    assert err["details"]["looked_in"] == ["deep.zip/SKILL.md", "deep.zip/**/SKILL.md"]
     _nothing_written(c)
 
 

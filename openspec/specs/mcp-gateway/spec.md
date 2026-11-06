@@ -73,7 +73,8 @@ list-changed notifications) between clients and upstream MCP servers.
   prompts: the per-server capability view and the aggregate lists return that server's tools with an empty
   resources/prompts set (HTTP 200), not an error.
 - **Built-in tools.** Coffer's own built-in tools under the reserved `coffer__` prefix MUST be exactly
-  `coffer__search_tools`, which MUST always be advertised in
+  `coffer__search_tools` and `coffer__channel_notify` ([channels](../channels/spec.md) "Let an agent
+  message the owner's direct chat"), which MUST always be advertised in
   `tools/list`, plus — only for a session whose requests carry the `X-Coffer-Turn` token of a turn
   Coffer is running (see "Offer turn-scoped tools only inside a Coffer turn") — the turn-scoped
   `coffer__channel_read_thread` ([channels](../channels/spec.md) "Read a thread's earlier messages on demand").
@@ -133,10 +134,10 @@ list-changed notifications) between clients and upstream MCP servers.
 - **WHEN** an agent calls `coffer__search_tools` with an intent query and a `top_k`,
 - **THEN** it receives at most `top_k` ranked real upstream tool schemas (upstream-only, with Coffer's own `coffer__` built-ins excluded), each named `<server>__<tool>`, the response reports `total_searched`, and the gateway records the invocation.
 
-#### Scenario: advertise coffer__search_tools as the one built-in tool
+#### Scenario: advertise only Coffer's own built-in tools
 - **GIVEN** a client connected through coffer
 - **WHEN** it lists tools, and calls `coffer__recall`, `coffer__diagnose` and the former write tool
-- **THEN** the `coffer__` tools listed are exactly `coffer__search_tools`
+- **THEN** the `coffer__` tools listed are exactly `coffer__search_tools` and `coffer__channel_notify`
 - **AND** all three calls are answered as unknown tools
 
 #### Scenario: a server's page reads its tiering split

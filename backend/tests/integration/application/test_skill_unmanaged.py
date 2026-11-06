@@ -18,6 +18,7 @@ import pytest
 
 from coffer.application.agent.service import AgentService
 from coffer.application.skill.service import SkillService
+from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import ResourceAlreadyExists, ResourceNotFound
@@ -45,7 +46,9 @@ def _write_skill_folder(folder: pathlib.Path, *, name: str, body: str = "hello")
 
 
 async def _setup(tmp_path: pathlib.Path):
-    fake_home = tmp_path / "home"  # codex secondary location lives under here
+    # The throwaway HOME this test runs under: Codex's skills go to
+    # ~/.agents/skills, read from HOME, so the scan reads the same home.
+    fake_home = pathlib.Path(os.environ["HOME"])
     graph = await build_skill_graph(tmp_path, scan_home=fake_home)
     return graph.skills, graph.agents, graph.audit, graph.store, fake_home, graph
 
@@ -74,7 +77,7 @@ async def _register_agent(
         config_dir=str(config_dir),
         actor="cli",
     )
-    return agent, config_dir / "skills"
+    return agent, AgentConfig.model_validate(agent.config).resolved_skill_dir()
 
 
 # ----- list -----
@@ -119,8 +122,10 @@ async def test_list_unmanaged_labels_codex_second_location(tmp_path):
     agent, skill_dir = await _register_agent(
         agent_svc, tmp_path, name="cdx", agent_type=AgentType.CODEX
     )
-    _write_skill_folder(skill_dir / "primary-one", name="primary-one")
+    legacy = pathlib.Path(AgentConfig.model_validate(agent.config).resolved_config_dir()) / "skills"
+    _write_skill_folder(legacy / "primary-one", name="primary-one")
     agents_dir = fake_home / ".agents" / "skills"
+    assert skill_dir == agents_dir
     _write_skill_folder(agents_dir / "secondary-one", name="secondary-one")
 
     views = await skill_svc.list_unmanaged(agent.uid)
@@ -253,20 +258,21 @@ async def test_adopt_foreign_link_raises(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_adopt_from_codex_agents_dir(tmp_path):
-    """Adopting from the secondary location: the original is removed there
-    and the managed link is delivered to <config_dir>/skills (the delivery pass
-    already succeeded for the free primary path; adoption's link is idempotent)."""
+async def test_adopt_from_codex_legacy_dir(tmp_path):
+    """Adopting from Codex's older location: the original is removed from
+    <config_dir>/skills and the managed link is delivered to ~/.agents/skills,
+    where Coffer delivers Codex's skills."""
     skill_svc, agent_svc, _, store, fake_home, graph = await _setup(tmp_path)
     agent, skill_dir = await _register_agent(
         agent_svc, tmp_path, name="cdx", agent_type=AgentType.CODEX
     )
-    agents_dir = fake_home / ".agents" / "skills"
-    original = agents_dir / "side-skill"
+    assert skill_dir == fake_home / ".agents" / "skills"
+    legacy = pathlib.Path(AgentConfig.model_validate(agent.config).resolved_config_dir()) / "skills"
+    original = legacy / "side-skill"
     _write_skill_folder(original, name="side-skill")
 
     await skill_svc.adopt_unmanaged(
-        agent_uid=agent.uid, skill_name="side-skill", location="agents_dir", actor="cli"
+        agent_uid=agent.uid, skill_name="side-skill", location="skills", actor="cli"
     )
     assert not original.exists()
     delivered = skill_dir / "side-skill"

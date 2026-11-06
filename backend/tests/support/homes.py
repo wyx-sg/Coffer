@@ -147,7 +147,8 @@ class FakeAgentDir:
 
     @property
     def skills_dir(self) -> pathlib.Path:
-        return self.config_dir / self.descriptor.skill_subpath
+        with _home_as(self.home.root):
+            return self.descriptor.skill_dir_for(self.config_dir)
 
     def path(self, key: str) -> pathlib.Path:
         """Where the agent keeps the allowlisted file ``key`` (``settings``,
@@ -196,6 +197,7 @@ def fake_agent_dir(
         descriptor=descriptor,
         config_dir=config_dir or home.root / descriptor.config_subpath,
     )
+    agent.config_dir.mkdir(parents=True, exist_ok=True)
     agent.skills_dir.mkdir(parents=True, exist_ok=True)
     for key, content in (files or {}).items():
         agent.write(key, content)

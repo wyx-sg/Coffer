@@ -234,7 +234,12 @@ delivered selection card via `supports_card_update`, interactive
 buttons via `supports_buttons`, a typing indicator — and the core picks
 rendering strategies from it. When the platform rejects a formatted message the
 channel retries the same content as plain text before reporting failure, and
-when the platform rate-limits outbound sends, sends back off and retry.
+when the platform rate-limits outbound sends, sends back off and retry. A send
+whose connection never opened (a dropped network, a connect timeout) MUST be
+resent after a short backoff, a bounded number of times: the request never
+reached the platform, so a resend cannot duplicate it. A failure after the
+request went out (a read timeout) is not resent, since the message may have
+been delivered.
 
 #### Scenario: a long reply is chunked for the platform
 - **GIVEN** a scripted agent reply longer than the platform limit
@@ -247,6 +252,14 @@ when the platform rate-limits outbound sends, sends back off and retry.
 - **WHEN** the channel sends a reply
 - **THEN** it waits that long and sends again, a bounded number of times, and
   reports the failure only if the platform keeps refusing
+
+#### Scenario: a send whose connection never opened is resent
+- **GIVEN** a platform the channel cannot connect to for a moment
+- **WHEN** the channel sends a reply and the connection fails before the
+  request goes out
+- **THEN** it waits and sends again, a bounded number of times, and the reply
+  arrives once the connection opens
+- **AND** a send that timed out after the request went out is not sent again
 
 #### Scenario: markdown rendering degrades by channel capability
 - **GIVEN** the same markdown reply
@@ -460,6 +473,29 @@ reuses.
 - **GIVEN** a channel with no paired peer
 - **WHEN** notify is called
 - **THEN** the call fails with a clear error and nothing is sent
+
+### Requirement: Let an agent message the owner's direct chat
+Coffer MUST offer agents the built-in tool `coffer__channel_notify`, in every
+MCP session (not only inside a turn Coffer runs), so an agent in a terminal or
+in its own scheduled task can tell the owner on their phone that it is done.
+It takes the message text (up to 4,000 characters), optionally up to 10 files
+by absolute path, and optionally the channel's name or id. It sends to the
+owner's direct chat only, never a group: the same chat "Notify the paired owner
+on demand" picks by default, then the files after the text. With no channel
+named it uses the one running, paired channel; with several it refuses and
+names them, and with none it says to set one up on the Channels page. A file
+that is missing or not an absolute path refuses the call before anything is
+sent.
+
+#### Scenario: an agent in a terminal tells the owner it is done
+- **GIVEN** one running channel paired to the owner, and an agent in a terminal
+- **WHEN** the agent calls `coffer__channel_notify` with a message and a report file
+- **THEN** the message and then the file arrive in the owner's direct chat
+
+#### Scenario: several channels need one named
+- **GIVEN** two running, paired channels
+- **WHEN** an agent calls `coffer__channel_notify` without `channel`
+- **THEN** the call is refused naming both channels, and nothing is sent
 
 ### Requirement: Manage channels from the Channels page
 The Channels page MUST be a list beside a detail pane. The **list** shows every
@@ -2165,7 +2201,11 @@ with the agent by its display name, the model by the name its button shows, and 
 messages a stop held, see "Continue or discard the messages a stop held") or
 "Idle"; in a direct chat, one "Parallel threads (n):" line naming each with its
 agent and its state — running, n on hold, n waiting or idle (see "Open
-parallel conversations beside a direct chat"). It shows no conversation or agent
+parallel conversations beside a direct chat"). While a turn runs it adds what
+the turn is doing: the status header (how long it has run and how many steps),
+the agent's latest words before a tool, and the step in hand, as the live
+preview shows them (see "Show a turn's working state as one status line"), so a
+platform with no live surface can still be asked. It shows no conversation or agent
 ids. Where the transport has buttons it is a card carrying only the buttons that
 act on what it shows: Stop while a turn runs, Continue and Discard while
 messages are on hold, then Model and Dir, which change the model and directory
@@ -2181,6 +2221,12 @@ always an ordinary message the whole room would see.
 - **THEN** a card titled "Status" names the agent by display name, the model
   and the directory, shows no conversation title, carries the Model and Dir buttons —
   and Stop first while a turn runs — and contains no conversation id
+
+#### Scenario: /status says what a running turn is doing
+- **GIVEN** a direct chat whose turn has run for two minutes and three tools
+- **WHEN** the owner sends `/status`
+- **THEN** below "Running" it shows `⏳ Working · 2m … · 3 steps`, the agent's
+  latest words and the step in hand
 
 ### Requirement: List the commands with /help
 `/help` MUST answer with the commands from the roster as a list to read: a
@@ -3096,6 +3142,10 @@ long it is. Cutting the long reply would leave half a message, and Coffer keeps
 no reply text to send later; the agent still holds the full answer in its
 session.
 
+The long reply's files are not lost with its text: its `MEDIA:` lines are
+carried to the follow-up, whose reply sends them (once, even when the short
+version repeats a line), and the follow-up's text tells the agent so.
+
 The follow-up's reply carries a **📄 Full report** button where the transport
 has buttons. A tap by the owner is the owner asking, in a message of its own,
 "Send me the full report as a Markdown file." — through every gate a typed
@@ -3120,6 +3170,12 @@ Agent](../../../docs/decisions/long-channel-reply-is-rewritten-short.md).
 - **WHEN** the owner taps it
 - **THEN** the conversation runs a turn asking "Send me the full report as a
   Markdown file." and its answer is delivered
+
+#### Scenario: a long reply's files are sent with its short version
+- **GIVEN** an agent whose 40-line answer ends with a `MEDIA:` line for a chart
+- **WHEN** the turn ends cleanly and the short version is written
+- **THEN** the chart is sent after the short version, once, whether or not the
+  short version repeats the `MEDIA:` line
 
 #### Scenario: the short version is never shortened again
 - **GIVEN** an agent whose short version is still 40 lines

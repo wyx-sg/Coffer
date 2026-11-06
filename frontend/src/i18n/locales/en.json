@@ -916,6 +916,8 @@
       "sync_run_authFailed": "Sync stopped: the remote refused the secret",
       "sync_run_pausedCloudFolder": "Sync paused: the vault is inside a folder another tool syncs",
       "sync_run_remoteTooNew": "Sync stopped: a newer Coffer wrote the remote",
+      "sync_run_olderRemoteHasChanges": "Sync stopped: the older remote has changes this Mac has not pulled",
+      "sync_run_keyMismatch": "Sync stopped: another Mac has a different master key",
       "sync_run_plaintextFound": "Sync pushed nothing: a file holds a plaintext secret",
       "sync_run_failed": "Sync round failed",
       "token_rotated": "Access token rotated",
@@ -2240,7 +2242,6 @@
       }
     },
     "workspace": {
-      "skills": "Skills",
       "mcp": {
         "detail": {
           "loadFailed": "Couldn't load this MCP server"
@@ -2283,7 +2284,6 @@
       }
     },
     "skillsTab": {
-      "unmanagedBadge": "Unmanaged",
       "adopt": "Adopt",
       "adoptSuccess": "Adopted {{name}}",
       "search": "Search skills",
@@ -2333,21 +2333,6 @@
         "reach": "Reach",
         "reachHint": "Who gets it. Change it later on the Skills page.",
         "failedTitle": "Couldn’t adopt {{name}}"
-      },
-      "unmanagedDetail": {
-        "invalidTitle": "Not a valid skill — Coffer can't adopt this folder as it is",
-        "notFound": "This unmanaged skill is no longer in the agent's skill locations.",
-        "readOnlyHint": "Coffer reads this folder but doesn’t manage it. Adopt it to share it with your other agents.",
-        "ownSkill": "{{agent}}’s own skill",
-        "files_one": "{{count}} file",
-        "files_other": "{{count}} files",
-        "description": "Description",
-        "folder": "Folder",
-        "foundIn": "Found in",
-        "foundInSkills": "{{agent}}’s skills directory",
-        "foundInAgentsDir": "The shared ~/.agents/skills directory",
-        "filesLabel": "Files",
-        "viewFiles": "View files"
       },
       "bulk": {
         "label": "Selected skills",
@@ -2854,7 +2839,6 @@
     "detail": {
       "updated": "Updated {{when}}",
       "tabs": {
-        "overview": "Overview",
         "files": "Files",
         "delivery": "Delivery",
         "requires": "Requires",
@@ -2881,13 +2865,13 @@
         "commandNotReady": "Command not ready",
         "toolOff": "Tool off",
         "secretMissing": "Secret missing",
-        "sourceUnreachable": "Source unreachable"
+        "sourceUnreachable": "Source unreachable",
+        "skillNotShared": "Skill not shared"
       }
     },
     "files": {
       "tree": "Files",
-      "lockBuiltin": "Written by Coffer — read-only",
-      "lockNotMine": "Not in your library — read-only"
+      "lockBuiltin": "Written by Coffer — read-only"
     },
     "checkCopies": "Check copies",
     "bulk": {
@@ -2987,7 +2971,6 @@
       "toolsIntro": "MCP servers and custom tools the skill calls, declared in SKILL.md under <code>tools:</code>.",
       "skillsIntro": "Other skills this one loads, declared in SKILL.md under <code>metadata.requires</code>.",
       "checkedAgo": "Checked on this Mac {{when}}.",
-      "inProfiles": "in profile {{profiles}}",
       "viewInClis": "View in CLIs",
       "viewInSecrets": "View in Secrets",
       "viewInSkills": "View in Skills",
@@ -3046,7 +3029,8 @@
       "needsSecret": "Needs secret {{name}} · not set",
       "needsTool": "Needs {{name}} · {{state}}",
       "sourceUnreachable": "Git source unreachable",
-      "updateAvailable": "Update available · Git"
+      "updateAvailable": "Update available · Git",
+      "needsSkill": "Needs skill {{name}} · not on {{agents}}"
     },
     "selection": {
       "title_one": "{{count}} skill selected",
@@ -3107,7 +3091,10 @@
         }
       },
       "openTool": "Open {{tool}}",
-      "unreachablePrompt": "Coffer can’t reach the Git repository {{url}} that the skill {{name}} was imported from. Last error: {{error}}\n\nCheck whether this machine’s network, VPN or git credentials can reach that repository (for example with `git ls-remote {{url}}`), fix what blocks it, and tell me what you changed. Don’t change the skill itself."
+      "unreachablePrompt": "Coffer can’t reach the Git repository {{url}} that the skill {{name}} was imported from. Last error: {{error}}\n\nCheck whether this machine’s network, VPN or git credentials can reach that repository (for example with `git ls-remote {{url}}`), fix what blocks it, and tell me what you changed. Don’t change the skill itself.",
+      "skillNotShared": "{{name}} loads {{dep}}, which {{agents}} doesn’t get",
+      "skillNotSharedBody": "Give {{dep}} the same reach as {{name}}, or narrow {{name}}’s reach.",
+      "openSkill": "Open {{name}}"
     },
     "copy": {
       "title": ": a folder is in the way in {{agent}}",
@@ -3145,38 +3132,10 @@
       "files_one": "{{count}} file",
       "files_other": "{{count}} files",
       "found": "Found {{day}}",
-      "body": "It is in Coffer’s skills store but not in your library — copied in by hand, or left by an interrupted import. Add it to give it reach and history, or delete it.",
+      "body": "It is in Coffer’s skills store but not in your library — copied in by hand, or left by an interrupted import. Add it to give it reach and history. To remove it, delete it in Finder or ask an agent.",
       "add": "Add to library",
-      "delete": "Delete folder…",
-      "deleteTitle": "Delete the folder {{name}}?",
-      "deleteBody": "Coffer moves it out of the skills store into ~/.coffer/content/backup/.",
-      "deleteConfirm": "Delete folder",
       "gone": "No folder named “{{name}}” is outside your library",
       "bannerTitle": "No agent gets this folder"
-    },
-    "source": {
-      "change": "Change source…"
-    },
-    "changeSource": {
-      "title": "Change source of {{name}}",
-      "now": "Now",
-      "check": "Check source",
-      "checking": "Checking…",
-      "take": "Change to {{commit}}",
-      "noteForm": "Nothing is replaced yet.",
-      "note": "The current version stays in the vault’s history.",
-      "refHelp": "Leave empty for the default branch.",
-      "pathHelp": "Where SKILL.md is. Leave empty when it is at the top.",
-      "noFiles": "The new source holds the same files.",
-      "filesChange_one": "{{count}} file would change:",
-      "filesChange_other": "{{count}} files would change:",
-      "status": {
-        "added": "Added",
-        "removed": "Removed",
-        "modified": "Changed"
-      },
-      "done": "{{name}} now follows {{repo}}",
-      "failed": "Couldn’t change the source"
     },
     "update": {
       "handoff": "Hand off to {{agent}} to update",
@@ -3185,7 +3144,6 @@
       "mergedBody": "Coffer pins the skill to {{commit}} and leaves its files as your agent left them. Do this once the update is in the master folder.",
       "mergedDone": "{{name}} is pinned to {{commit}}",
       "mergedFailed": "Couldn’t record the merge",
-      "viewUpstream": "View upstream changes",
       "range": "Commits",
       "copyRange": "Copy the commit range"
     },
@@ -4361,6 +4319,10 @@
         "title": "The remote uses another vault layout",
         "body": "The repository was written by a Coffer with a different vault layout. Update Coffer on the machine that is behind, then sync again."
       },
+      "key_mismatch": {
+        "title": "Another Mac has a different master key",
+        "body": "This remote carries encrypted secrets, and they would not open on every Mac. Nothing syncs until the keys match: import the same master key on Settings › Security in the desktop app, then sync again."
+      },
       "failed": {
         "title": "The last round failed",
         "body": "The round stopped before it finished. Git's message is below."
@@ -4398,6 +4360,8 @@
         "auth_failed": "sign-in refused",
         "paused_cloud_folder": "paused (cloud folder)",
         "remote_too_new": "remote too new",
+        "older_remote_has_changes": "older remote has changes",
+        "key_mismatch": "key mismatch",
         "rolled_back": "rolled back",
         "failed": "failed"
       }
@@ -4745,6 +4709,7 @@
       "cloud_folder": "Paused",
       "git_missing": "Git missing",
       "layout": "Layout differs",
+      "key_mismatch": "Key differs",
       "failed": "Round failed",
       "to_push_one": "{{count}} change to push",
       "to_push_other": "{{count}} changes to push",
@@ -4843,6 +4808,8 @@
         "auth_failed": "Sign-in failed",
         "paused_cloud_folder": "Paused (cloud folder)",
         "remote_too_new": "Remote too new",
+        "older_remote_has_changes": "Older remote has changes",
+        "key_mismatch": "Master key differs",
         "rolled_back": "Rolled back",
         "failed": "Failed",
         "pulledPushFailed": "Pulled, push failed",
@@ -6652,7 +6619,7 @@
     "folder": {
       "label": "Folder",
       "placeholder": "~/src/skills/my-skill",
-      "help": "A folder with SKILL.md at its top, or skills one folder down."
+      "help": "A folder with SKILL.md at its top, or skills in the folders below it."
     },
     "archive": {
       "label": "Archive",
@@ -6701,7 +6668,7 @@
     "refusal": {
       "noSkillMd": "No SKILL.md found",
       "unsafe": "The archive has unsafe entries",
-      "noSkillMdIn": "No SKILL.md in {{file}}. Coffer looks at the top level and one folder down.",
+      "noSkillMdIn": "No SKILL.md in {{file}}. Coffer looks at the top level and in the folders below it.",
       "noSkillMdTop": "No SKILL.md at the top of this folder. There is one in",
       "useFolder": "Use that folder",
       "unsafeBody": "Nothing was unpacked. These entries could write outside the archive or link elsewhere:",

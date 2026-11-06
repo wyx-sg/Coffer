@@ -1,6 +1,6 @@
 // src/components/skills/skillSourceTestData.ts
 // Test fixtures for the Git source panel and the update dialog: a Git-imported skill, one with an update waiting, and a change of source.
-import type { SkillOut, SkillSourceChange, SkillSourceStatus } from "@/lib/api/skills";
+import type { SkillOut, SkillSourceStatus } from "@/lib/api/skills";
 
 export function gitSkill(status: Partial<SkillSourceStatus> | null = {}): SkillOut {
   return {
@@ -42,7 +42,6 @@ export function gitSkill(status: Partial<SkillSourceStatus> | null = {}): SkillO
             files_changed: 0,
             update_available: false,
             commits: [],
-            compare_url: null,
             ...status,
           },
   };
@@ -59,21 +58,6 @@ export function updatableSkill(status: Partial<SkillSourceStatus> = {}): SkillOu
       { id: "f9e8d7c6b5a4", subject: "Ask before backend changes" },
       { id: "0011223344", subject: "Add plan.sh" },
     ],
-    compare_url: "https://github.com/acme/agent-skills/compare/a1b2c3d4e5f6...f9e8d7c6b5a4",
     ...status,
   });
-}
-
-/** What Change source answers: names and status, no diff. */
-export function sourceChange(over: Partial<SkillSourceChange> = {}): SkillSourceChange {
-  return {
-    staging_id: "chg-1",
-    commit: "f9e8d7c6b5a4",
-    files: [
-      { path: "SKILL.md", status: "modified" },
-      { path: "scripts/plan.sh", status: "added" },
-      { path: "old.txt", status: "removed" },
-    ],
-    ...over,
-  };
 }

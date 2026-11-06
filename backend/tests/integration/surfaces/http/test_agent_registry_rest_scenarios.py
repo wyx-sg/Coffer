@@ -393,7 +393,8 @@ def test_add_an_agent_that_has_never_run(home: pathlib.Path) -> None:
 
         r = c.post("/api/v1/agents", json={"type": "codex"})
         assert r.status_code == 201, r.text
-        assert [p.name for p in standard.iterdir()] == ["skills"]
+        assert list(standard.iterdir()) == []
+        assert (home / ".agents" / "skills").is_dir()
         assert "resource_created" in _audit_types(c, str(r.json()["uid"]))
 
 

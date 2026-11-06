@@ -64,10 +64,26 @@ def test_a_builtin_skill_is_not_to_be_edited() -> None:
     assert "do not edit it" in conformance_prompt([_skill("coffer-guide", True, BuiltinSource())])
 
 
-def test_read_declared_reads_skill_md_and_profiles(tmp_path: pathlib.Path) -> None:
+def test_read_declared_reads_skill_md_only(tmp_path: pathlib.Path) -> None:
     assert read_declared(tmp_path) is False
     (tmp_path / "SKILL.md").write_text("---\nname: s\n---\n")
     assert read_declared(tmp_path) is False
     (tmp_path / "profiles").mkdir()
     (tmp_path / "profiles" / "p.md").write_text("---\nrequires: []\n---\n")
+    assert read_declared(tmp_path) is False
+    (tmp_path / "SKILL.md").write_text("---\nname: s\nrequires: []\n---\n")
     assert read_declared(tmp_path) is True
+
+
+@pytest.mark.acceptance(
+    spec="skill-manager",
+    scenario="the review prompt checks overlapping descriptions and manual-only skills",
+)
+def test_the_prompt_checks_overlap_and_manual_only_skills() -> None:
+    prompt = conformance_prompt([_skill("a", True)])
+    assert "the other folders beside its master folder" in prompt
+    assert "picked for the same request" in prompt
+    assert "`disable-model-invocation: true`" in prompt
+    assert "`policy: {allow_implicit_invocation: false}`" in prompt
+    assert "`agents/openai.yaml`" in prompt
+    assert "a skill other skills rely on should keep the default" in prompt

@@ -48,8 +48,8 @@ async def test_register_with_custom_config_dir(agent_bundle, tmp_path):
     assert r.kind == "agent"
     assert r.name == "codex"  # named by its type, never chosen
     assert r.config["type"] == "codex"
-    # Registration auto-creates <config_dir>/skills.
-    assert (custom / "skills").is_dir()
+    # Registration auto-creates the skills dir Codex reads: ~/.agents/skills.
+    assert (pathlib.Path(os.environ["HOME"]) / ".agents" / "skills").is_dir()
     entries = await agent_bundle.audit.query(event_type=AuditEventType.RESOURCE_CREATED.value)
     assert len(entries) == 1
 
@@ -134,7 +134,7 @@ async def test_update_config_dir(agent_bundle, tmp_path):
     old.mkdir()
     new.mkdir()
     agent = await agent_bundle.svc.register(
-        agent_type=AgentType.CODEX, config_dir=str(old), actor="cli"
+        agent_type=AgentType.CLAUDE_CODE, config_dir=str(old), actor="cli"
     )
     updated = await agent_bundle.svc.update_config_dir(
         uid=agent.uid, new_config_dir=str(new), actor="cli"

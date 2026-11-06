@@ -16,10 +16,6 @@ export const skillCopyKey = (uid: string, agentUid: string) =>
   ["skills", uid, "copies", agentUid] as const;
 /** Folders in the skills store no skill claims ("Not in your library"). */
 export const skillOrphansKey = ["skills", "orphans"] as const;
-/** One orphan folder's file tree and one of its files. */
-export const skillOrphanFilesKey = (name: string) => ["skills", "orphans", name, "files"] as const;
-export const skillOrphanFileKey = (name: string, path: string) =>
-  ["skills", "orphans", name, "file", path] as const;
 /** How often this machine checks skills for updates in the background. */
 export const skillUpdateCheckKey = ["skills", "update-check"] as const;
 

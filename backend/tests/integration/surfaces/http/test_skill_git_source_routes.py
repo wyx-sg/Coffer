@@ -103,8 +103,8 @@ def test_a_git_stage_names_the_commit_and_confirm_records_the_source(
 def test_requires_reaches_the_skill_read_model(c: TestClient, up: Upstream) -> None:
     item = _add(c, up, path="skills/review")
     expected = [
-        {"command": "jq", "profiles": []},
-        {"command": "gh", "profiles": []},
+        {"command": "jq"},
+        {"command": "gh"},
     ]
     assert item["requires"] == expected
     assert c.get(f"/api/v1/skills/{item['uid']}").json()["requires"] == expected
@@ -130,10 +130,10 @@ def test_requires_secrets_reach_the_read_model_with_their_state(
     get_secret_store().set(secret_ref("NPM_TOKEN"), "npm-value-never-served")
     item = _add(c, up, path="skills/review")
     expected = [
-        {"name": "GH_TOKEN", "is_set": False, "profiles": []},
-        {"name": "NPM_TOKEN", "is_set": True, "profiles": []},
+        {"name": "GH_TOKEN", "is_set": False},
+        {"name": "NPM_TOKEN", "is_set": True},
     ]
-    assert item["requires"] == [{"command": "jq", "profiles": []}]
+    assert item["requires"] == [{"command": "jq"}]
     assert item["requires_secrets"] == expected
     r = c.get(f"/api/v1/skills/{item['uid']}")
     assert r.json()["requires_secrets"] == expected
@@ -169,9 +169,7 @@ def _move(up: Upstream) -> str:
 
 
 @pytest.mark.acceptance(spec="skill-manager", scenario="a newer commit shows update available")
-def test_check_reports_the_update_with_its_range_and_compare_link(
-    c: TestClient, up: Upstream
-) -> None:
+def test_check_reports_the_update_with_its_range(c: TestClient, up: Upstream) -> None:
     item = _add(c, up, path="skills/review")
     uid, first = item["uid"], item["source"]["commit"]
     new = _move(up)
@@ -186,7 +184,6 @@ def test_check_reports_the_update_with_its_range_and_compare_link(
     )
     assert status["files_changed"] == 2 and status["error"] is None
     assert [cm["subject"] for cm in status["commits"]] == ["v2 change"]
-    assert status["compare_url"] is None  # a file:// repository has no host page
     listed = {i["name"]: i for i in c.get("/api/v1/skills").json()["items"]}
     assert listed["review"]["source_status"]["update_available"] is True
     assert "v1" in (_master() / "SKILL.md").read_text()

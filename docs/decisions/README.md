@@ -220,6 +220,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`channel-help-is-a-list-and-cards-carry-only-their-own-actions`](channel-help-is-a-list-and-cards-carry-only-their-own-actions.md) | Channel `/help` Is a List to Read, and a Card Carries Only the Buttons That Act on It |
 | [`held-channel-messages-are-continued-or-discarded`](held-channel-messages-are-continued-or-discarded.md) | Held Channel Messages Are Settled by Continue and Discard |
 | [`ask-in-the-reply-not-in-a-card`](ask-in-the-reply-not-in-a-card.md) | An Agent Asks the Owner in Its Reply, Not in a Question Card |
+| [`an-agent-notifies-the-owner-through-a-built-in-tool`](an-agent-notifies-the-owner-through-a-built-in-tool.md) | An Agent Notifies the Owner Through a Built-in Tool, Direct Chat Only |
 | [`a-reply-names-its-files-and-they-follow-it`](a-reply-names-its-files-and-they-follow-it.md) | A Channel Reply Names Its Files, and the Files Follow It |
 | [`chat-attachment-uploads`](chat-attachment-uploads.md) | The Chat Page Uploads a File First and Sends Its Id, Into a Sibling Media Directory |
 | [`seatalk-websocket-inbound`](seatalk-websocket-inbound.md) | SeaTalk Inbound Is One Outbound WebSocket, Through an Operator-Supplied SDK |
@@ -231,6 +232,9 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | --- | --- |
 | [`cross-platform-skill-delivery`](cross-platform-skill-delivery.md) | Skills Reach an Agent as a Directory Link to One Master Folder |
 | [`coffer-ships-its-own-skill`](coffer-ships-its-own-skill.md) | Coffer Ships Its Own Manual as a Skill Resource |
+| [`codex-skills-go-to-agents-skills`](codex-skills-go-to-agents-skills.md) | Codex Skills Go to `~/.agents/skills` |
+| [`accept-long-skill-descriptions-and-find-skills-below-a-repos-top`](accept-long-skill-descriptions-and-find-skills-below-a-repos-top.md) | Accept Long Skill Descriptions, and Find Skills Below a Repository's Top |
+| [`trim-skill-management-to-what-an-agent-cannot-do`](trim-skill-management-to-what-an-agent-cannot-do.md) | Trim Skill Management to What an Agent Cannot Do |
 | [`git-source-partial-clone-prefetch`](git-source-partial-clone-prefetch.md) | A Git Skill's Folder Is Fetched in One Request From a Partial Clone, With One Full-Clone Fallback |
 | [`knowledge-is-plain-files`](knowledge-is-plain-files.md) | Knowledge Is a Directory of Markdown Files, Not an Index |
 | [`tidying-knowledge-is-the-agents-job`](tidying-knowledge-is-the-agents-job.md) | Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change |

@@ -325,8 +325,8 @@ acceptance("skill-manager", "a skill's requires tab links each command", async (
   h.skills = [
     makeSkill({
       requires: [
-        { command: "jq", profiles: [] },
-        { command: "gh", profiles: [] },
+        { command: "jq" },
+        { command: "gh" },
       ],
     }),
   ];

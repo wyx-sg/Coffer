@@ -27,6 +27,7 @@ __all__ = [
     "MAX_REPLY_LINES",
     "full_report_button",
     "measure",
+    "media_lines",
     "rewrite_prompt",
     "too_long",
 ]
@@ -61,6 +62,12 @@ def measure(text: str, *, collapses_details: bool = False) -> tuple[int, int]:
     return lines, len(body)
 
 
+def media_lines(text: str) -> str:
+    """The reply's ``MEDIA:`` lines, one per line: the files it sends, which the
+    short version carries over rather than losing them with the long text."""
+    return "\n".join(m.group(0).strip() for m in _MEDIA_LINE.finditer(text))
+
+
 def too_long(text: str, *, collapses_details: bool = False) -> bool:
     lines, chars = measure(text, collapses_details=collapses_details)
     return lines > MAX_REPLY_LINES or chars > MAX_REPLY_CHARS
@@ -73,8 +80,9 @@ def rewrite_prompt(lines: int) -> str:
         f"[Coffer] Your last reply ({lines} lines) was too long for a chat, so it "
         "was not sent. Write it again for the chat: only the conclusion and what "
         "the reader needs to act on, in at most 5 lines, in the same language. Do "
-        "not offer the full report; a button under your reply does. Do not call "
-        "tools and do not mention this note."
+        "not offer the full report; a button under your reply does. Files you "
+        "attached with MEDIA: lines are sent with it, so do not repeat them. Do "
+        "not call tools and do not mention this note."
     )
 
 

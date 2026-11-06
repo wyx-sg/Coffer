@@ -209,6 +209,10 @@ def confirm_hold(engine: RoundEngine) -> Stop:
     if stop is None or stop.kind is not StopKind.HOLD:
         raise SyncNothingStopped("no round is held")
     d.state.set_confirmed((stop.local, stop.remote))
+    if stop.hold is not None:
+        # Remembered by file, so a later stop in the same round (a plaintext
+        # secret, then its fix) does not ask about these deletions again.
+        d.state.approve_losses(stop.hold.paths)
     return stop
 
 
