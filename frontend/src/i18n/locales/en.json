@@ -5205,7 +5205,7 @@
       "putItIn": "Put it in",
       "newGroupSub": "Its own name, base URL and secret",
       "noGroupMatches": "No group matches",
-      "existingNote": "A request added to {{group}} runs in its environments, each with its own base URL and secret. Import an OpenAPI spec only when you create a new group.",
+      "existingNote": "A request added to {{group}} runs in its environments, each with its own base URL and secret.",
       "change": "Change",
       "handSummary": "Base URL and auth come from the group's environments",
       "addTo": "Add to {{group}}",

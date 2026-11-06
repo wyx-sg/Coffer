@@ -1,5 +1,5 @@
 // src/components/custom-tools/EnvironmentDialog.tsx — Add environment / Edit environment (4.2.28, 760): its name,
-// base URL, headers (a plain value, or a secret from Coffer behind an optional scheme), variables and timeout. The group's
+// base URL, headers (a plain value, or a secret from Coffer behind an optional scheme), variables. The group's
 // tools are not copied: an environment is only where the same tools are sent (spec mcp-gateway "Keep a custom-tool
 // group's environments in the group"). A new base URL, or a secret bound to a header, waits for approval before any
 // request carries the secret, and only for this environment.

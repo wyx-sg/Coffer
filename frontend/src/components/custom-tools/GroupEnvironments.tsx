@@ -1,6 +1,6 @@
 // src/components/custom-tools/GroupEnvironments.tsx — a group's Environments tab: one card per environment, everything
 // it holds readable without opening it — its switch, name and secret state with Edit and ⋯ (Delete) in the card's
-// head; then its base URL, its timeout and whose it is, its headers in the shared table (a secret by its name and
+// head; then its base URL, its headers in the shared table (a secret by its name and
 // state) and its variables. Add environment sits above the cards. Every caller names the environment it calls (spec
 // mcp-gateway "Choose a custom tool's environment on every call"), so a card is never "current": the same tools
 // are sent to whichever one a call names.
