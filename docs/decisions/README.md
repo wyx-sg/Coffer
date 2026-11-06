@@ -200,6 +200,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`managed-agents-run-with-full-permissions`](managed-agents-run-with-full-permissions.md) | Managed Agents Run With Full Permissions; Owner Pairing Is the Gate |
 | [`chat-single-owner-live-mirror`](chat-single-owner-live-mirror.md) | Chat Is a Single-Owner Live Mirror |
 | [`a-coffer-turn-takes-over-a-session-open-elsewhere`](a-coffer-turn-takes-over-a-session-open-elsewhere.md) | A Coffer Turn Takes Over a Session Open Elsewhere |
+| [`a-claude-code-turn-waits-for-its-background-sub-agents`](a-claude-code-turn-waits-for-its-background-sub-agents.md) | A Claude Code Turn Waits for Its Background Sub-Agents |
 | [`channel-adapter-framework`](channel-adapter-framework.md) | Channels Are Thin Transport Adapters Over One Shared Core, Supervised In-Daemon |
 | [`channels-are-machine-local-resources`](channels-are-machine-local-resources.md) | Channels Are Machine-Local Resources, Like Agents |
 | [`channel-owner-gate`](channel-owner-gate.md) | A Channel Answers Only Its Paired Owner, and Fails Closed in Groups |

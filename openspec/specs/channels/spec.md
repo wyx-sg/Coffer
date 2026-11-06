@@ -2692,6 +2692,8 @@ has those messages moved into the `💬` line and left out of the reply wherever
 they stand, even after the last tool call; messages the agent wrote between two
 tool events join the reply as paragraphs. A turn that wrote nothing but
 narration replies with its last words.
+A turn whose agent wrote no text at all sends no reply: no placeholder line is
+posted, and the live surface is closed.
 
 A channel setting `show_steps` (default on) hides the step lines and keeps the
 header and narration — useful in a busy group. It is edited on the Channels
@@ -2707,6 +2709,11 @@ block drops the step lines, then the header.
 - **WHEN** its status block is drawn
 - **THEN** the header reads `⏳ Working · 2m 14s · 8 steps (1 failed)`, followed by
   `+5 earlier` and the newest three step lines
+
+#### Scenario: a turn that wrote no text sends no reply
+- **GIVEN** a turn whose agent ended without writing any text
+- **WHEN** the turn finishes
+- **THEN** no reply message is sent and the live status is closed
 
 #### Scenario: narration between tool calls moves to the status line
 - **GIVEN** a turn whose agent writes a sentence and then calls a tool

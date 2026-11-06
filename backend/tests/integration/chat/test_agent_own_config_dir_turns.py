@@ -69,6 +69,9 @@ def home(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> pathlib.Pat
     return fake_home
 
 
+_BG_WAIT = "CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS"
+
+
 async def _claude_turn_env(tmp_path: pathlib.Path, agents: _Agents) -> dict[str, str]:
     repo, engine = await _repo(tmp_path)
     try:
@@ -84,7 +87,8 @@ async def _claude_turn_env(tmp_path: pathlib.Path, agents: _Agents) -> dict[str,
         stream = await adapter.run_turn(_user_turn("hi", conv.id))
         _ = [ev async for ev in stream]
         assert len(captured) == 1
-        return dict(captured[0].env)
+        # The CLI's background wait is Coffer's own setting, not the agent's home.
+        return {k: v for k, v in captured[0].env.items() if k != _BG_WAIT}
     finally:
         await engine.dispose()
 

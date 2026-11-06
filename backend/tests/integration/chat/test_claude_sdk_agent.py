@@ -22,6 +22,8 @@ from claude_agent_sdk import (
     ResultMessage,
     StreamEvent,
     SystemMessage,
+    TaskNotificationMessage,
+    TaskStartedMessage,
     UserMessage,
 )
 from claude_agent_sdk import (
@@ -752,6 +754,122 @@ async def test_adapter_runs_without_ask_user_question():
 
 
 # ---------------------------------------------------------------------------
+# Background sub-agents (spec chat "Wait for a Claude Code turn's background sub-agents")
+# ---------------------------------------------------------------------------
+
+
+def _result(*, tokens: int = 1) -> ResultMessage:
+    return ResultMessage(
+        subtype="success",
+        duration_ms=1,
+        duration_api_ms=1,
+        is_error=False,
+        num_turns=1,
+        session_id="sess-1",
+        usage={"input_tokens": tokens, "output_tokens": tokens},
+        total_cost_usd=0.0,
+    )
+
+
+def _task_started(task_id: str, task_type: str = "local_agent") -> TaskStartedMessage:
+    return TaskStartedMessage(
+        subtype="task_started",
+        data={},
+        task_id=task_id,
+        description="review",
+        uuid="u",
+        session_id="sess-1",
+        task_type=task_type,
+    )
+
+
+def _task_done(task_id: str) -> TaskNotificationMessage:
+    return TaskNotificationMessage(
+        subtype="task_notification",
+        data={},
+        task_id=task_id,
+        status="completed",
+        output_file="/tmp/out",
+        summary="done",
+        uuid="u",
+        session_id="sess-1",
+    )
+
+
+@pytest.mark.acceptance(
+    spec="chat",
+    scenario="a result held while a sub-agent runs ends with the follow-up turn",
+)
+@pytest.mark.asyncio
+async def test_a_result_is_held_while_a_background_sub_agent_runs():
+    messages = [
+        SystemMessage(subtype="init", data={"session_id": "sess-1"}),
+        _task_started("t1"),
+        _result(tokens=1),  # the agent's own turn ends with no text
+        _task_done("t1"),
+        AssistantMessage(
+            content=[SdkTextBlock(text="The review found two issues.")], model="claude"
+        ),
+        _result(tokens=9),
+    ]
+    events = await _collect(_adapter(_Factory(messages)), _user_turn("go"))
+    done = [e for e in events if isinstance(e, TurnDone)]
+    assert len(done) == 1
+    assert done[0].completion_tokens == 9
+    assert "The review found two issues." in "".join(
+        e.text for e in events if isinstance(e, TextDelta)
+    )
+    assert events[-1] is done[0]
+
+
+@pytest.mark.acceptance(
+    spec="chat",
+    scenario="a stream that ends while a result is held ends the turn with it",
+)
+@pytest.mark.asyncio
+async def test_a_stream_that_ends_while_a_result_is_held_ends_the_turn_with_it():
+    messages = [
+        SystemMessage(subtype="init", data={"session_id": "sess-1"}),
+        _task_started("t1"),
+        _result(tokens=4),
+    ]
+    events = await _collect(_adapter(_Factory(messages)), _user_turn("go"))
+    terminals = [e for e in events if isinstance(e, (TurnDone, TurnError))]
+    assert len(terminals) == 1 and isinstance(terminals[0], TurnDone)
+    assert terminals[0].completion_tokens == 4
+
+
+@pytest.mark.asyncio
+async def test_a_background_shell_command_is_not_waited_for():
+    messages = [
+        SystemMessage(subtype="init", data={"session_id": "sess-1"}),
+        _task_started("t1", task_type="local_bash"),
+        _result(),
+    ]
+    state = ClaudeParseState(session_id=None)
+    events = _map_all(messages, state)
+    assert [type(e) for e in events] == [TurnDone]
+
+
+@pytest.mark.asyncio
+async def test_the_cli_waits_an_hour_for_background_work(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv("CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS", raising=False)
+    factory = _Factory(_basic_messages())
+    await _collect(_adapter(factory), _user_turn("hi"))
+    assert factory.last_options is not None
+    assert factory.last_options.env["CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS"] == "3600000"
+
+
+@pytest.mark.asyncio
+async def test_an_owner_set_background_wait_is_kept(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS", "0")
+    factory = _Factory(_basic_messages())
+    await _collect(_adapter(factory), _user_turn("hi"))
+    assert factory.last_options is not None
+    assert "CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS" not in factory.last_options.env
+
+
+# ---------------------------------------------------------------------------
 # Cancellation
 # ---------------------------------------------------------------------------
 
@@ -950,21 +1068,21 @@ async def test_adapter_forwards_env_to_options():
     )
     await _collect(adapter, _user_turn("hi"))
     assert factory.last_options is not None
-    assert factory.last_options.env == env
+    assert factory.last_options.env["MY_VAR"] == "hello"
 
 
 @pytest.mark.asyncio
-async def test_adapter_omits_env_from_options_when_none():
-    """When env is not provided to the adapter, the options.env must be the
-    ClaudeAgentOptions default (empty dict) — i.e., we must not pass env=None
-    explicitly, which would override the SDK default."""
+async def test_adapter_adds_only_the_background_wait_when_env_is_none(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """With no env the options carry just the CLI's background wait, never
+    ``env=None``, which would override the SDK default."""
+    monkeypatch.delenv("CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS", raising=False)
     factory = _Factory(_basic_messages())
     adapter = _adapter(factory)  # no env kwarg
     await _collect(adapter, _user_turn("hi"))
     assert factory.last_options is not None
-    # ClaudeAgentOptions.env defaults to {} via default_factory=dict.
-    # When self._env is None we skip the kwarg entirely, so the default applies.
-    assert factory.last_options.env == {}
+    assert factory.last_options.env == {"CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS": "3600000"}
 
 
 # ---------------------------------------------------------------------------

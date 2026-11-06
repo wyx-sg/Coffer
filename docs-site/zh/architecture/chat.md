@@ -186,7 +186,7 @@ stateDiagram-v2
 
 ### Claude Code：Claude Agent SDK {#claude-code-the-claude-agent-sdk}
 
-Claude Code 适配器通过 `claude-agent-sdk` 里的客户端驱动 Claude Code，它是 Coffer 中唯一导入这个 SDK 的部分。每个轮次都续接存储的会话 id，以 `bypassPermissions` 权限模式运行，并要求部分消息。Coffer 的系统上下文是追加到 Claude Code 自己的预设提示词之后，而不是替换它。
+Claude Code 适配器通过 `claude-agent-sdk` 里的客户端驱动 Claude Code，它是 Coffer 中唯一导入这个 SDK 的部分。每个轮次都续接存储的会话 id，以 `bypassPermissions` 权限模式运行，并要求部分消息。Coffer 的系统上下文是追加到 Claude Code 自己的预设提示词之后，而不是替换它。后台子智能体或工作流还在运行时到达的结果只结束一个轮次，并不结束整次运行：适配器根据 SDK 的任务消息跟踪这些任务，把该结果先扣住，等到后面一个到达时已没有任务在运行的结果，才结束本轮次，因为任务结束时智能体会被唤醒，它的后续轮次才是答案。后台 shell 命令不等。CLI 等待后台任务的时间从 10 分钟提高到一小时（`CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS`，已设置时不覆盖）；如果流先结束，就以被扣住的结果结束本轮次。见 ADR [a-claude-code-turn-waits-for-its-background-sub-agents](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/a-claude-code-turn-waits-for-its-background-sub-agents.md)。
 
 部分消息正是让回复边写边长的东西。开启后，SDK 既会发送增量，也会发送完整的助手消息。到平台事件的映射会减去已经发出的部分，让回复恰好一次地到达消费方。取消时，适配器打断并断开 SDK 客户端，并且仍然保存会话 id（SDK 很早就会报告它），所以被打断的轮次仍可续接。
 

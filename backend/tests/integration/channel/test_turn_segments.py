@@ -12,6 +12,8 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
+import pytest
+
 from coffer.application.channel.turn_render import TurnRenderer
 from coffer.domain.chat.events import TextDelta, ToolCall, ToolResult, TurnDone
 
@@ -99,3 +101,15 @@ async def test_tool_progress_keeps_updating_after_the_agent_has_written_text() -
 
     snapshots = adapter.live_handles[0].snapshots
     assert any("Grep · 3DS" in s for s in snapshots)
+
+
+@pytest.mark.acceptance(spec="channels", scenario="a turn that wrote no text sends no reply")
+async def test_a_turn_that_wrote_no_text_sends_no_reply() -> None:
+    adapter = FakeChannelAdapter(supports_edit=False)
+
+    await _render(
+        adapter,
+        [TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn")],
+    )
+
+    assert adapter.texts() == []

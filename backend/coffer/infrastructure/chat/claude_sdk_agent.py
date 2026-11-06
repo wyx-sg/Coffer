@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import os
 from collections.abc import AsyncIterator, Callable, Sequence
 from typing import Any, Protocol
 
@@ -107,6 +108,11 @@ def default_session_factory(options: ClaudeAgentOptions) -> ClaudeSdkSession:
     """Build a real ``ClaudeSDKClient``-backed session (production seam)."""
     return ClaudeSdkClientSession(options)
 
+
+#: The CLI's wait for background work after the last turn (see ``_build_options``).
+BACKGROUND_WAIT_CEILING_ENV = "CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS"
+BACKGROUND_WAIT_CEILING_MS = str(60 * 60 * 1000)
+_CEILING_DEFAULT = {BACKGROUND_WAIT_CEILING_ENV: BACKGROUND_WAIT_CEILING_MS}
 
 #: Sentinel pushed after the terminal event so ``_stream`` knows to stop.
 _SENTINEL = object()
@@ -205,8 +211,12 @@ class ClaudeSdkAgentAdapter:
             # chat "Ask the owner in the reply, not in a dialog").
             disallowed_tools=[ASK_USER_QUESTION],
         )
-        if self._env is not None:
-            opts.env = self._env
+        # The CLI waits this long for background sub-agents once its input is
+        # closed, then stops them. Its default (10 minutes) is shorter than a
+        # review sub-agent can take, and a stopped one leaves the turn without an
+        # answer; the owner's own setting wins.
+        inherited = {} if BACKGROUND_WAIT_CEILING_ENV in os.environ else _CEILING_DEFAULT
+        opts.env = {**inherited, **(self._env or {})}
         if self._system_context:
             # Tell a channel-driven agent it is bridged to a chat (be concise,
             # no clickable dialogs) by appending to Claude Code's own preset
@@ -309,6 +319,14 @@ class ClaudeSdkAgentAdapter:
                         if isinstance(event, (TurnDone, TurnError)):
                             await queue.put(_SENTINEL)
                             return
+                if state.deferred_done is not None:
+                    # The CLI ended while a result was held back for background
+                    # work (it stopped that work at its ceiling): the held result
+                    # is the turn's end.
+                    state.terminal_emitted = True
+                    await queue.put(state.deferred_done)
+                    await queue.put(_SENTINEL)
+                    return
             except asyncio.CancelledError:
                 raise
             except Exception as exc:  # surface pump failures as a terminal error
