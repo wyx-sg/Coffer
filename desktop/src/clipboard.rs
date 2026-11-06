@@ -32,7 +32,10 @@ mod imp {
     use super::CLEAR_AFTER;
 
     const STRING_TYPE: &str = "public.utf8-plain-text";
-    const MARKERS: [&str; 2] = ["org.nspasteboard.ConcealedType", "org.nspasteboard.TransientType"];
+    const MARKERS: [&str; 2] = [
+        "org.nspasteboard.ConcealedType",
+        "org.nspasteboard.TransientType",
+    ];
 
     /// The general pasteboard. Only called on the main thread.
     fn general() -> Retained<AnyObject> {
