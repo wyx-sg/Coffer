@@ -30,7 +30,7 @@ interface Props {
   selectedStatus?: ProbeStatus;
 }
 
-type Problem = "keyRejected" | "unreachable";
+type Problem = Exclude<ProbeStatus, "checking" | "reachable">;
 
 const KEPT: Record<ProviderHealth["status"], Problem | null> = {
   reachable: null,

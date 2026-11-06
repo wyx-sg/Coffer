@@ -697,6 +697,8 @@
         "secret": "Secret",
         "foundVersion": "Found · {{version}}",
         "viewClis": "View in CLIs",
+        "openApprovals": "Open approvals",
+        "askAgain": "Ask again",
         "status": {
           "found": "Found",
           "not_found": "Not found",
@@ -2006,7 +2008,7 @@
     "UPSTREAM_TIMEOUT": "Upstream server did not respond in time — retry, or raise its request timeout",
     "UPSTREAM_UNAVAILABLE": "Upstream server is unreachable — check its command or URL, then run Test connection",
     "ADOPT_SECRET_REF_EXISTS": "Adopting only creates new secrets — one of these names is already stored or is a standalone secret",
-    "SECRET_BINDING_REJECTED": "That destination was refused in the Coffer app, so nothing was sent. Change the destination, or ask again from the Secrets page.",
+    "SECRET_BINDING_REJECTED": "That destination was refused in the Coffer app, so nothing was sent. Change the destination, or press Ask again on the page that uses it.",
     "SECRET_BINDING_PENDING": "That secret is waiting for approval in the Coffer app before it is sent here.",
     "PRESENCE_GRANT_INVALID": "The approval could not be verified. Try again from the Coffer app.",
     "APPROVAL_NOT_FOUND": "That approval no longer exists.",
@@ -6413,7 +6415,9 @@
       "checking": "Checking…",
       "reachable": "Reachable",
       "keyRejected": "Key rejected",
-      "unreachable": "Unreachable"
+      "unreachable": "Unreachable",
+      "awaitingApproval": "Waiting for approval",
+      "refused": "Refused"
     },
     "list": {
       "filter": "Filter providers",

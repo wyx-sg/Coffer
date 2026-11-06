@@ -23,6 +23,8 @@ const TONE: Record<ProbeStatus, StatusTone> = {
   reachable: "ok",
   keyRejected: "err",
   unreachable: "err",
+  awaitingApproval: "warn",
+  refused: "warn",
 };
 
 /** `host[:port]` of a base URL, or the URL itself when it does not parse. */

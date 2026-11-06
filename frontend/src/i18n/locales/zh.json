@@ -697,6 +697,8 @@
         "secret": "密钥",
         "foundVersion": "已找到 · {{version}}",
         "viewClis": "在 CLI 中查看",
+        "openApprovals": "打开批准列表",
+        "askAgain": "重新申请",
         "status": {
           "found": "已找到",
           "not_found": "未找到",
@@ -2006,7 +2008,7 @@
     "UPSTREAM_TIMEOUT": "上游服务器响应超时——请重试，或调大它的请求超时",
     "UPSTREAM_UNAVAILABLE": "上游服务器不可达——请检查它的命令或 URL，再点「测试连接」",
     "ADOPT_SECRET_REF_EXISTS": "纳入托管只会新建密钥——其中有名字已存在，或是独立的密钥",
-    "SECRET_BINDING_REJECTED": "该去向已在 Coffer 应用中被拒绝，未发送任何内容。请更换去向，或在“密钥”页重新请求批准。",
+    "SECRET_BINDING_REJECTED": "该去向已在 Coffer 应用中被拒绝，未发送任何内容。请更换去向，或在使用它的页面上点“重新申请”。",
     "SECRET_BINDING_PENDING": "该密钥需在 Coffer 应用中批准后才会发送到这里。",
     "PRESENCE_GRANT_INVALID": "无法验证这次批准，请在 Coffer 应用中重试。",
     "APPROVAL_NOT_FOUND": "该审批已不存在。",
@@ -6413,7 +6415,9 @@
       "checking": "正在检查…",
       "reachable": "可连接",
       "keyRejected": "密钥被拒",
-      "unreachable": "无法连接"
+      "unreachable": "无法连接",
+      "awaitingApproval": "等待批准",
+      "refused": "已拒绝"
     },
     "list": {
       "filter": "筛选提供商",
