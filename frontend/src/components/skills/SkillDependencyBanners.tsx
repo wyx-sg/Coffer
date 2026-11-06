@@ -12,6 +12,7 @@ import { useTranslation } from "react-i18next";
 import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { SkillBannerFrame } from "@/components/skills/SkillBannerFrame";
 import { Button } from "@/components/ui/button";
+import { agentTypeLabel } from "@/lib/agents/display";
 import type { SkillOut } from "@/lib/api/skills";
 import { useClis } from "@/lib/hooks/useClis";
 import type { SkillAttention } from "@/lib/skills/attention";
@@ -33,28 +34,12 @@ function CommandsBanner({
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
   const clis = useClis().data?.items ?? [];
-  const parts = [
-    item.missing.length > 0
-      ? t("skills.banner.requiresMissingPart", {
-          count: item.missing.length,
-          commands: joinNames(item.missing, lang),
-        })
-      : null,
-    item.loggedOut.length > 0
-      ? t("skills.banner.requiresLoginPart", {
-          count: item.loggedOut.length,
-          commands: joinNames(item.loggedOut, lang),
-        })
-      : null,
-    item.outdated.length > 0
-      ? t("skills.banner.requiresOldPart", {
-          count: item.outdated.length,
-          commands: joinNames(item.outdated, lang),
-        })
-      : null,
-  ].filter(Boolean);
+  const title = t("skills.banner.requiresMissingPart", {
+    count: item.missing.length,
+    commands: joinNames(item.missing, lang),
+  });
   // One hand-off for every command that needs the person, as the daemon wrote them.
-  const wanted = new Set([...item.missing, ...item.loggedOut, ...item.outdated]);
+  const wanted = new Set(item.missing);
   const prompt = clis
     .filter((c) => wanted.has(c.command) && c.handoff)
     .map((c) => c.handoff?.prompt)
@@ -63,7 +48,7 @@ function CommandsBanner({
     <SkillBannerFrame
       tone="warning"
       testId="skill-banner-requires"
-      title={joinNames(parts as string[], lang)}
+      title={title}
       actions={prompt ? <AgentHandoff prompt={prompt} size="sm" /> : null}
     >
       {t("skills.banner.requiresBody", { name: skill.name })}
@@ -105,6 +90,29 @@ export function SkillDependencyBanners({ skill, items }: Props) {
                       name: skill.name,
                     },
                   )}
+            </SkillBannerFrame>
+          ));
+        }
+        if (item.kind === "skillNotShared") {
+          return item.skills.map((dep) => (
+            <SkillBannerFrame
+              key={`skill:${dep.name}`}
+              tone="warning"
+              testId="skill-banner-skill"
+              title={t("skills.banner.skillNotShared", {
+                dep: dep.name,
+                name: skill.name,
+                agents: dep.missing_agent_names.map(agentTypeLabel).join(", "),
+              })}
+              actions={
+                <Button asChild variant="outline" size="sm">
+                  <Link to={`/skills/${encodeURIComponent(dep.name)}`}>
+                    {t("skills.banner.openSkill", { name: dep.name })}
+                  </Link>
+                </Button>
+              }
+            >
+              {t("skills.banner.skillNotSharedBody", { dep: dep.name, name: skill.name })}
             </SkillBannerFrame>
           ));
         }

@@ -7,8 +7,6 @@ import type { Cli, CliStatus } from "@/lib/api/clis";
 
 const TONE: Record<CliStatus, StatusTone> = {
   missing: "err",
-  outdated: "warn",
-  logged_out: "warn",
   ready: "ok",
 };
 
@@ -17,7 +15,7 @@ export function cliTone(status: CliStatus): StatusTone {
 }
 
 /** The list pane's two groups, each in the daemon's order (problems first:
- *  missing, too old, not logged in), narrowed to commands matching `filter`. */
+ *  missing, then ready), narrowed to commands matching `filter`. */
 export function groupClis(
   items: readonly Cli[],
   filter: string,
@@ -55,12 +53,6 @@ export function relativeTime(iso: string, locale: string, now: number = Date.now
     if (Math.abs(seconds) >= size) return rtf.format(Math.round(seconds / size), unit);
   }
   return rtf.format(0, "second");
-}
-
-/** A skill's name followed by the profiles that declare the requirement:
- *  "coffer-investigating-logs · shopee-account"; the bare name for SKILL.md. */
-export function withProfiles(name: string, profiles: readonly string[] | undefined): string {
-  return [name, ...(profiles ?? [])].join(" · ");
 }
 
 /** The MCP servers started with the command, by name, comma-joined. */

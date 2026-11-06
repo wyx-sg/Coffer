@@ -16,6 +16,7 @@ import pytest
 from coffer.application.agent.service import AgentService
 from coffer.application.skill import drift_view
 from coffer.application.skill.service import SkillService
+from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import SkillValidationError
@@ -93,7 +94,7 @@ async def _register_agent(
     )
     # Registration auto-creates <config_dir>/skills; that's where this agent's
     # enabled skills are symlinked, so return it for link-location assertions.
-    return agent, config_dir / "skills"
+    return agent, AgentConfig.model_validate(agent.config).resolved_skill_dir()
 
 
 # ----- import -----

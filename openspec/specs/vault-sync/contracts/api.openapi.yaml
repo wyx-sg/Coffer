@@ -2317,6 +2317,7 @@ components:
           - plaintext_found
           - cloud_folder
           - layout
+          - key_mismatch
           - git_missing
           - failed
           title: Kind
@@ -2660,6 +2661,8 @@ components:
       - auth_failed
       - paused_cloud_folder
       - remote_too_new
+      - older_remote_has_changes
+      - key_mismatch
       - plaintext_found
       - rolled_back
       - failed

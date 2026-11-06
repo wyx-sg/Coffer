@@ -15,7 +15,6 @@ from coffer.domain.mcp.capability import MCPInvocation
 from coffer.domain.mcp.http_api import HttpApiTool, HttpApiTransport
 from coffer.domain.mcp.http_api_environment import HttpApiEnvironment
 from coffer.domain.mcp.http_api_response import RuleFailure
-from coffer.domain.mcp.openapi_import import OperationSource
 from coffer.domain.secrets import SecretApproval, SecretDestination
 
 
@@ -41,20 +40,6 @@ class BoundaryCheckPort(Protocol):
     def check(
         self, dest: SecretDestination, refs: Mapping[str, str], *, actor: str = "system"
     ) -> list[SecretApproval]: ...
-
-
-class OpenApiSourcePort(Protocol):
-    async def fetch(self, url: str) -> tuple[str, str]:
-        """``(final URL, text)``; raises ``OpenApiUnreadable``."""
-        ...
-
-    def parse(self, text: str) -> Any:
-        """JSON or YAML into a mapping; raises ``OpenApiUnreadable``."""
-        ...
-
-    def locate(self, text: str) -> dict[str, OperationSource]:
-        """Each operation's lines in the text, keyed ``"<METHOD> <path>"``."""
-        ...
 
 
 @dataclass(frozen=True)

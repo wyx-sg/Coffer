@@ -1,13 +1,13 @@
 // src/components/agents/skills/AgentOwnSkillRows.tsx — the agent's own skill folders as table rows (board 2.1.20).
 //
-// Columns (OWN_SKILL_COLUMNS): Name (mono, opens the folder's read-only page),
+// Columns (OWN_SKILL_COLUMNS): Name (mono; the folder has no page of its own),
 // Note (why the state is what it is), Location (the folder it sits in), Status
 // (a state word), then at most one button: Adopt on an
 // unmanaged folder (hidden — not disabled — on an invalid one or a foreign
 // link), Delete duplicate on a folder that shares its name with a skill Coffer
-// delivers. The ⋯ menu holds Delete… only, and not on a duplicate, whose
-// button already does that.
-import { Link } from "react-router-dom";
+// delivers. The ⋯ menu holds Reveal in Finder and, except on a duplicate whose
+// button already does that, Delete…. Reading the files is Finder's or an
+// agent's job, so Coffer shows none.
 import { useTranslation } from "react-i18next";
 
 import type { RowSelect } from "@/components/agents/tabs/AgentKindTab";
@@ -15,9 +15,10 @@ import { KindActions, KindName, KindRow } from "@/components/agents/tabs/KindRow
 import { StatusWord } from "@/components/status/StatusWord";
 import { Button } from "@/components/ui/button";
 import { ActionMenu } from "@/components/ui/menu";
+import { useToast } from "@/components/ui/toast";
 import { TruncatedText } from "@/components/ui/truncated-text";
 import { abbreviateHomePath } from "@/lib/agents/display";
-import { unmanagedSkillPath } from "@/lib/agents/routes";
+import { useFsActions } from "@/lib/fsActions";
 import { OWN_STATE_TONE, skillParentDir, type OwnSkillRow, type OwnSkillState } from "./skillRows";
 
 const STATE_LABEL: Record<OwnSkillState, string> = {
@@ -28,7 +29,6 @@ const STATE_LABEL: Record<OwnSkillState, string> = {
 };
 
 interface Props {
-  agentType: string;
   rows: OwnSkillRow[];
   select: RowSelect<OwnSkillRow>;
   onAdopt: (row: OwnSkillRow) => void;
@@ -37,15 +37,10 @@ interface Props {
   onDelete: (row: OwnSkillRow) => void;
 }
 
-export function AgentOwnSkillRows({
-  agentType,
-  rows,
-  select,
-  onAdopt,
-  onDeleteDuplicate,
-  onDelete,
-}: Props) {
+export function AgentOwnSkillRows({ rows, select, onAdopt, onDeleteDuplicate, onDelete }: Props) {
   const { t } = useTranslation();
+  const { toast } = useToast();
+  const fs = useFsActions();
   return (
     <>
       {rows.map((row) => {
@@ -62,16 +57,9 @@ export function AgentOwnSkillRows({
           <KindRow
             key={row.key}
             leading={select.leading(row, row.name)}
-            openable
             cells={[
               <KindName key="name">
-                <Link
-                  to={unmanagedSkillPath(agentType, item.location, row.name)}
-                  data-row-open
-                  className="hover:underline"
-                >
-                  {row.name}
-                </Link>
+                <span data-testid="own-skill-name">{row.name}</span>
               </KindName>,
               note ? (
                 <TruncatedText
@@ -112,19 +100,30 @@ export function AgentOwnSkillRows({
                   >
                     {t("agents.skillsTab.removeDuplicate")}
                   </Button>
-                ) : (
-                  <ActionMenu
-                    label={t("agents.kindTab.moreFor", { name: row.name })}
-                    actions={[
-                      {
-                        key: "delete",
-                        label: t("agents.skillsTab.menu.delete"),
-                        destructive: true,
-                        onSelect: () => onDelete(row),
-                      },
-                    ]}
-                  />
-                )}
+                ) : null}
+                <ActionMenu
+                  label={t("agents.kindTab.moreFor", { name: row.name })}
+                  actions={[
+                    {
+                      key: "reveal",
+                      label: t("fileActions.reveal"),
+                      onSelect: () =>
+                        void fs
+                          .reveal(item.path)
+                          .catch(() => toast.error(t("fileActions.revealFailed"))),
+                    },
+                    ...(row.state === "duplicate"
+                      ? []
+                      : [
+                          {
+                            key: "delete",
+                            label: t("agents.skillsTab.menu.delete"),
+                            destructive: true,
+                            onSelect: () => onDelete(row),
+                          },
+                        ]),
+                  ]}
+                />
               </KindActions>,
             ]}
           />

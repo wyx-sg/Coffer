@@ -28,9 +28,6 @@ vi.mock("@/lib/api/skills", async (importOriginal) => ({
     checkSource: vi.fn(),
     orphans: vi.fn(async () => ({ items: [] })),
     adoptOrphan: vi.fn(),
-    removeOrphan: vi.fn(async () => undefined),
-    orphanFiles: vi.fn(),
-    orphanFileContent: vi.fn(),
   },
 }));
 vi.mock("@/lib/api/clis", () => ({
@@ -51,7 +48,7 @@ const api = vi.mocked(skillsApi);
 beforeEach(() => {
   h.agents = [makeAgent()];
   h.skills = [
-    makeSkill({ requires: [{ command: "jq", min_version: null, profiles: [] }] }),
+    makeSkill({ requires: [{ command: "jq" }] }),
     {
       ...gitSkill({
         update_available: true,
@@ -90,8 +87,8 @@ acceptance(
     h.skills = [
       makeSkill({
         requires_secrets: [
-          { name: "GITHUB_TOKEN", is_set: false, profiles: [] },
-          { name: "NPM_TOKEN", is_set: true, profiles: [] },
+          { name: "GITHUB_TOKEN", is_set: false },
+          { name: "NPM_TOKEN", is_set: true },
         ],
       }),
     ];
@@ -122,7 +119,6 @@ acceptance(
             kind: "mcp_server",
             status: "off",
             why: null,
-            profiles: [],
           },
         ],
       }),
@@ -158,7 +154,6 @@ test("a failing custom-tool group links to the group's page and says why", async
           kind: "custom_tools",
           status: "failing",
           why: "401 from the API",
-          profiles: [],
         },
       ],
     }),
@@ -183,7 +178,6 @@ test("a failing MCP server without a reason says failing, not off, in the body",
           kind: "mcp_server",
           status: "failing",
           why: null,
-          profiles: [],
         },
       ],
     }),
@@ -225,7 +219,7 @@ test("an unreachable source says so and offers Check again", async () => {
   await waitFor(() => expect(api.checkSource).toHaveBeenCalledWith("sk-1"));
 });
 
-acceptance("web-ui", "a folder no skill claims is added in place or moved out", async () => {
+acceptance("web-ui", "a folder no skill claims is added in place", async () => {
   api.orphans.mockResolvedValue({
     items: [
       {
@@ -239,45 +233,19 @@ acceptance("web-ui", "a folder no skill claims is added in place or moved out", 
       },
     ],
   });
-  const file = (name: string) => ({
-    name,
-    path: name,
-    abs_path: `/Users/me/.coffer/skills/lint-rules/${name}`,
-    folder_abs_path: "/Users/me/.coffer/skills/lint-rules",
-    type: "file" as const,
-    size: 9,
-    truncated: false,
-    children: [],
-  });
-  api.orphanFiles.mockResolvedValue({
-    root: { ...file(""), type: "dir", children: [file("SKILL.md"), file("rules.md")] },
-  });
-  api.orphanFileContent.mockResolvedValue({
-    ...file("SKILL.md"),
-    content: "# Lint rules",
-    truncated: false,
-    binary: false,
-    size: 12,
-  });
   api.adoptOrphan.mockResolvedValue(makeSkill({ uid: "sk-lr", name: "lint-rules" }));
   renderSkillsPage("/skills");
   const section = await screen.findByRole("list", { name: "Not in your library" });
   fireEvent.click(within(section).getByRole("link", { name: /lint-rules/ }));
   await waitFor(() => expect(where.url).toBe("/skills?orphan=lint-rules"));
   expect(await screen.findByText(/Valid SKILL\.md/)).toBeInTheDocument();
-  // The meta line counts the files and says when it was found; the files show
-  // in the read-only tree and reader.
+  // The meta line counts the files and says when it was found; Coffer shows no
+  // files of its own and offers no delete, only Reveal in Finder.
   expect(screen.getByText("3 files")).toBeInTheDocument();
   expect(screen.getByText(/Found \d+ Sep/)).toBeInTheDocument();
-  const tree = await screen.findByRole("tree", { name: "Files" });
-  expect(within(tree).getByRole("treeitem", { name: /rules\.md/ })).toBeInTheDocument();
-  await waitFor(() => expect(api.orphanFileContent).toHaveBeenCalledWith("lint-rules", "SKILL.md"));
-
-  fireEvent.click(screen.getByRole("button", { name: "Delete folder…" }));
-  const dialog = await screen.findByRole("dialog", { name: "Delete the folder lint-rules?" });
-  expect(dialog).toHaveTextContent("~/.coffer/content/backup/");
-  fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
-  expect(api.removeOrphan).not.toHaveBeenCalled();
+  expect(screen.queryByRole("tree", { name: "Files" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Delete folder…" })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Reveal in Finder" })).toBeInTheDocument();
 
   fireEvent.click(screen.getByRole("button", { name: "Add to library" }));
   await waitFor(() => expect(api.adoptOrphan).toHaveBeenCalledWith("lint-rules"));

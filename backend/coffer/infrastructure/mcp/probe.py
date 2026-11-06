@@ -47,7 +47,8 @@ from coffer.domain.mcp.probe import (
     stderr_tail,
 )
 from coffer.domain.mcp.server_config import HttpTransport, StdioTransport
-from coffer.infrastructure.mcp.http_client import HttpUpstreamConnection, _leaf_exception
+from coffer.infrastructure.mcp.failure_detail import leaf_exception
+from coffer.infrastructure.mcp.http_client import HttpUpstreamConnection
 from coffer.infrastructure.mcp.subprocess import StdioUpstreamConnection
 from coffer.infrastructure.platform.host import HostOs, host_os
 
@@ -116,7 +117,7 @@ def _http_failure(exc: BaseException, url: str, answered: int | None = None) -> 
     """Classify a failed HTTP connect/initialize without echoing the URL's query."""
     if isinstance(exc, UpstreamTimeout):
         return _FailError("timeout", "The server did not answer within the time limit.")
-    cause = _leaf_exception(exc.__cause__ or exc)
+    cause = leaf_exception(exc.__cause__ or exc)
     host = urlparse(url).hostname or url
     response = getattr(cause, "response", None)
     status = getattr(response, "status_code", None) or answered

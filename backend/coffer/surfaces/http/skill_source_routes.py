@@ -22,8 +22,6 @@ from coffer.surfaces.http.handoff_schemas import HandoffOut
 from coffer.surfaces.http.skill_dependencies import get_skill_service, get_skill_source_service
 from coffer.surfaces.http.skill_routes import SkillOut, _actor, _agents_by_uid, _to_skill_out
 from coffer.surfaces.http.skill_source_schemas import (
-    SkillSourceChangeApplyRequest,
-    SkillSourceChangeOut,
     SkillSourceStatusOut,
     SkillStageFolderRequest,
     SkillStageGitRequest,
@@ -32,7 +30,6 @@ from coffer.surfaces.http.skill_source_schemas import (
     SkillUpdateCheckSettingBody,
     SkillUpdateHandoffOut,
     SkillUpdateMergedRequest,
-    change_preview_out,
     staging_out,
     status_out,
 )
@@ -154,29 +151,6 @@ async def hand_off_update(
     ``SKILL_UPDATE_NOT_PENDING`` when no update is available. Writes nothing."""
     result = await sources.handoff(uid)
     return SkillUpdateHandoffOut(commit=result.commit, handoff=HandoffOut(prompt=result.prompt))
-
-
-@router.post("/{uid}/source/change", response_model=SkillSourceChangeOut)
-async def preview_source_change(
-    uid: str,
-    body: SkillStageGitRequest,
-    sources: SkillSourceService = Depends(get_skill_source_service),  # noqa: B008
-) -> SkillSourceChangeOut:
-    """Stage a new repository / ref / folder for this skill and name the files
-    that would change; ``/source/change/apply`` with the stage takes it."""
-    return change_preview_out(await sources.change_source(uid, body.url, body.ref, body.path))
-
-
-@router.post("/{uid}/source/change/apply", response_model=SkillOut)
-async def apply_source_change(
-    uid: str,
-    body: SkillSourceChangeApplyRequest,
-    svc: SkillService = Depends(get_skill_service),  # noqa: B008
-    sources: SkillSourceService = Depends(get_skill_source_service),  # noqa: B008
-    actor: str = Depends(_actor),
-) -> SkillOut:
-    updated = await sources.apply_change(uid, body.staging_id, actor=actor)
-    return await _to_skill_out(svc, updated, await _agents_by_uid(svc), sources=sources)
 
 
 @router.post("/{uid}/source/merged", response_model=SkillOut)

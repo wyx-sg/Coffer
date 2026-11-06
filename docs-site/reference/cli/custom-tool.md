@@ -27,11 +27,6 @@ This page matches what `coffer custom-tool --help` prints. Add `--help` to any c
 | [`custom-tool group enable`](#custom-tool-group-enable) | Switch a group on: its tools reach the agents in its reach again. |
 | [`custom-tool group disable`](#custom-tool-group-disable) | Switch a group off: no agent sees or calls its tools. |
 | [`custom-tool group reach`](#custom-tool-group-reach) | Choose which agents see the group's tools: ``--agent`` (repeat) or ``--all``. |
-| [`custom-tool import`](#custom-tool-import) | Read an OpenAPI document into draft tools. |
-| [`custom-tool import read`](#custom-tool-import-read) | Read an OpenAPI document into draft tools; saves nothing. |
-| [`custom-tool reimport`](#custom-tool-reimport) | Preview and apply a re-import of a group's OpenAPI document. |
-| [`custom-tool reimport preview`](#custom-tool-reimport-preview) | What a re-import would add, remove, keep and change; changes nothing. |
-| [`custom-tool reimport apply`](#custom-tool-reimport-apply) | Apply a re-import: removed tools go, chosen additions arrive switched on, kept tools keep their switch, and every environment is kept as it is. |
 | [`custom-tool tool`](#custom-tool-tool) | One custom tool: add, show, change, switch, test, delete. |
 | [`custom-tool tool list`](#custom-tool-tool-list) | A group's tools with their request, switch and 24-hour calls. |
 | [`custom-tool tool show`](#custom-tool-tool-show) | One tool's definition: request template, headers, body and argument schema. |
@@ -124,9 +119,7 @@ coffer custom-tool group create [OPTIONS] NAME
 | `--description` <span class="cli-chip">option</span> | text |  | What the API is for |
 | `--timeout` <span class="cli-chip">option</span> | integer |  | Seconds per request (1-300) |
 | `--agent` <span class="cli-chip">option</span> | text (repeatable) |  | Reach only this agent (name or uid); repeat. Default: every agent |
-| `--from-openapi` <span class="cli-chip">option</span> | text |  | An OpenAPI file or URL to draft the tools from |
-| `--operation` <span class="cli-chip">option</span> | text (repeatable) |  | With --from-openapi: an operation key to import; repeat |
-| `--response` <span class="cli-chip">option</span> | text |  | Response settings as JSON {"diagnostic_headers": [...], "rules": [...]}: text, @file or - |
+| `--response` <span class="cli-chip">option</span> | text |  | Response settings as JSON {"rules": [...]}: text, @file or - |
 | `--data, -d` <span class="cli-chip">option</span> | text |  | The whole group as JSON (text, @file or -) |
 | `--set` <span class="cli-chip">option</span> | text (repeatable) |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
 | `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
@@ -148,7 +141,7 @@ coffer custom-tool group update [OPTIONS] NAME
 | `NAME` <span class="cli-chip">argument</span> | text | required | The group's name |
 | `--description` <span class="cli-chip">option</span> | text |  |  |
 | `--timeout` <span class="cli-chip">option</span> | integer |  | The group's seconds per request |
-| `--response` <span class="cli-chip">option</span> | text |  | Response settings as JSON {"diagnostic_headers": [...], "rules": [...]}: text, @file or - |
+| `--response` <span class="cli-chip">option</span> | text |  | Response settings as JSON {"rules": [...]}: text, @file or - |
 | `--data, -d` <span class="cli-chip">option</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
 | `--set` <span class="cli-chip">option</span> | text (repeatable) |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
 | `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
@@ -221,85 +214,6 @@ coffer custom-tool group reach [OPTIONS] NAME
 | `NAME` <span class="cli-chip">argument</span> | text | required |  |
 | `--agent` <span class="cli-chip">option</span> | text (repeatable) |  | An agent (name or uid); repeat |
 | `--all` <span class="cli-chip">option</span> | flag |  | Reach every agent |
-| `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
-
-## custom-tool import
-
-Read an OpenAPI document into draft tools.
-
-<p class="cli-label">Synopsis</p>
-
-```sh
-coffer custom-tool import [OPTIONS] COMMAND [ARGS]...
-```
-
-Subcommands: `read`.
-
-## custom-tool import read
-
-Read an OpenAPI document into draft tools; saves nothing.
-
-<p class="cli-label">Synopsis</p>
-
-```sh
-coffer custom-tool import read [OPTIONS]
-```
-
-<p class="cli-label">Arguments and options</p>
-
-| Name | Type | Default | Description |
-| --- | --- | --- | --- |
-| `--url` <span class="cli-chip">option</span> | text |  | The document's URL |
-| `--file` <span class="cli-chip">option</span> | text |  | The document's path |
-| `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
-
-## custom-tool reimport
-
-Preview and apply a re-import of a group's OpenAPI document.
-
-<p class="cli-label">Synopsis</p>
-
-```sh
-coffer custom-tool reimport [OPTIONS] COMMAND [ARGS]...
-```
-
-Subcommands: `preview`, `apply`.
-
-## custom-tool reimport preview
-
-What a re-import would add, remove, keep and change; changes nothing.
-
-<p class="cli-label">Synopsis</p>
-
-```sh
-coffer custom-tool reimport preview [OPTIONS] NAME
-```
-
-<p class="cli-label">Arguments and options</p>
-
-| Name | Type | Default | Description |
-| --- | --- | --- | --- |
-| `NAME` <span class="cli-chip">argument</span> | text | required |  |
-| `--file` <span class="cli-chip">option</span> | text |  | The document again (a file-imported group) |
-| `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
-
-## custom-tool reimport apply
-
-Apply a re-import: removed tools go, chosen additions arrive switched on, kept tools keep their switch, and every environment is kept as it is.
-
-<p class="cli-label">Synopsis</p>
-
-```sh
-coffer custom-tool reimport apply [OPTIONS] NAME
-```
-
-<p class="cli-label">Arguments and options</p>
-
-| Name | Type | Default | Description |
-| --- | --- | --- | --- |
-| `NAME` <span class="cli-chip">argument</span> | text | required |  |
-| `--file` <span class="cli-chip">option</span> | text |  |  |
-| `--add` <span class="cli-chip">option</span> | text (repeatable) |  | An added operation's key to import; repeat |
 | `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
 
 ## custom-tool tool
@@ -581,7 +495,6 @@ coffer custom-tool env add [OPTIONS] NAME ENV
 | `--header` <span class="cli-chip">option</span> | text (repeatable) |  | Name=value (plain); repeat |
 | `--secret-header` <span class="cli-chip">option</span> | text (repeatable) |  | Name=secret[:Scheme]: a stored secret's name; repeat |
 | `--var` <span class="cli-chip">option</span> | text (repeatable) |  | NAME=value for {env:NAME}; repeat |
-| `--timeout` <span class="cli-chip">option</span> | integer |  | Seconds per request (default: the group's) |
 | `--description` <span class="cli-chip">option</span> | text | `""` |  |
 | `--disabled` <span class="cli-chip">option</span> | flag |  | Add it switched off |
 | `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
@@ -604,8 +517,6 @@ coffer custom-tool env update [OPTIONS] NAME ENV
 | `ENV` <span class="cli-chip">argument</span> | text | required |  |
 | `--base-url` <span class="cli-chip">option</span> | text |  |  |
 | `--rename` <span class="cli-chip">option</span> | text |  | A new name (its approvals are kept) |
-| `--timeout` <span class="cli-chip">option</span> | integer |  | Its own seconds per request |
-| `--group-timeout` <span class="cli-chip">option</span> | flag |  | Use the group's timeout |
 | `--description` <span class="cli-chip">option</span> | text |  |  |
 | `--data, -d` <span class="cli-chip">option</span> | text |  | Fields to change as JSON (text, @file or -) |
 | `--set` <span class="cli-chip">option</span> | text (repeatable) |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |

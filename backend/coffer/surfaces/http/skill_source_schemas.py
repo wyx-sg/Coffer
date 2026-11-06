@@ -15,9 +15,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from coffer.application.skill.source_change_ops import SourceChangePreview
 from coffer.application.skill.staging import ImportStage, StagedSkill
-from coffer.domain.skill.compare_url import compare_url
 from coffer.domain.skill.folder_diff import FileChange
 from coffer.domain.skill.requirements import CommandRequirement
 from coffer.domain.skill.source import ArchiveImportSource, GitImportSource
@@ -71,15 +69,10 @@ class SkillRequirementOut(BaseModel):
     """One command the skill's SKILL.md says it needs."""
 
     command: str
-    min_version: str | None
-    #: The profiles that declare it; empty when SKILL.md itself does.
-    profiles: list[str]
 
 
 def requirement_out(r: CommandRequirement) -> SkillRequirementOut:
-    return SkillRequirementOut(
-        command=r.command, min_version=r.min_version, profiles=list(r.profiles)
-    )
+    return SkillRequirementOut(command=r.command)
 
 
 class SkillSecretRequirementOut(BaseModel):
@@ -88,7 +81,6 @@ class SkillSecretRequirementOut(BaseModel):
 
     name: str
     is_set: bool
-    profiles: list[str]
 
 
 class SkillToolRequirementOut(BaseModel):
@@ -104,7 +96,6 @@ class SkillToolRequirementOut(BaseModel):
     #: test failed, ``healthy`` otherwise.
     status: Literal["healthy", "off", "failing"]
     why: str | None
-    profiles: list[str]
 
 
 class SkillSkillRequirementOut(BaseModel):
@@ -137,12 +128,8 @@ class SkillSourceStatusOut(BaseModel):
     files_changed: int
     #: The ref moved past the pin with commits that change the folder.
     update_available: bool
-    #: The commits in the range with their subjects, shown where the source's
-    #: host has no compare page.
+    #: The commits in the range with their subjects.
     commits: list[SkillCommitOut]
-    #: The compare page on the source's host (GitHub, GitLab) from the pin to
-    #: ``latest_commit`` while an update is available; null for any other host.
-    compare_url: str | None
 
 
 def status_out(status: SourceStatus | None, source: GitImportSource) -> SkillSourceStatusOut:
@@ -159,9 +146,6 @@ def status_out(status: SourceStatus | None, source: GitImportSource) -> SkillSou
         commits=[SkillCommitOut(id=i, subject=subject) for i, subject in s.commits]
         if available
         else [],
-        compare_url=compare_url(source.url, source.commit, s.latest_commit)
-        if available and s.latest_commit
-        else None,
     )
 
 
@@ -279,35 +263,6 @@ class SkillUpdateHandoffOut(BaseModel):
 
     commit: str
     handoff: HandoffOut
-
-
-class SkillSourceChangeFileOut(BaseModel):
-    """A file a change of source would add, remove or change — its name only."""
-
-    path: str
-    status: Literal["added", "removed", "modified"]
-
-
-class SkillSourceChangeOut(BaseModel):
-    """What moving the skill to another source would do, against its current
-    folder. Staged until ``/source/change/apply`` or
-    ``DELETE /skills/stage/{staging_id}``."""
-
-    staging_id: str
-    commit: str
-    files: list[SkillSourceChangeFileOut]
-
-
-class SkillSourceChangeApplyRequest(BaseModel):
-    staging_id: str = Field(min_length=1)
-
-
-def change_preview_out(p: SourceChangePreview) -> SkillSourceChangeOut:
-    return SkillSourceChangeOut(
-        staging_id=p.stage_id,
-        commit=p.commit,
-        files=[SkillSourceChangeFileOut(path=f.path, status=f.status) for f in p.files],  # type: ignore[arg-type]
-    )
 
 
 class SkillUpdateCheckSettingBody(BaseModel):

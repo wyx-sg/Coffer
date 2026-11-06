@@ -46,15 +46,16 @@ def scan_locations(
         An ordered list of ``pathlib.Path`` values.  Paths need not exist —
         the infrastructure scanning layer handles missing-directory cases.
 
-    Locations by agent type:
+    Locations by agent type (the first is where Coffer delivers):
     - **CLAUDE_CODE**: ``[<config_dir>/skills]``
-    - **CODEX**: ``[<config_dir>/skills, ~/.agents/skills]``
-      The second entry (``~/.agents/skills``) is Codex's newer standard
-      location introduced in later CLI versions; both must be scanned.
+    - **CODEX**: ``[~/.agents/skills, <config_dir>/skills]``
+      ``~/.agents/skills`` is where Codex reads personal skills; its own
+      ``<config_dir>/skills`` is the older location Codex still reads for
+      backward compatibility, so skills left there are listed too (ADR
+      codex-skills-go-to-agents-skills).
     """
     if home is None:
         home = _home()
-    locs: list[pathlib.Path] = [config_dir / "skills"]
     if agent_type is AgentType.CODEX:
-        locs.append(home / ".agents" / "skills")
-    return locs
+        return [home / ".agents" / "skills", config_dir / "skills"]
+    return [config_dir / "skills"]

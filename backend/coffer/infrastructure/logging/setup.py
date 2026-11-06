@@ -299,6 +299,30 @@ def _attach_stderr_handler(formatter: logging.Formatter) -> None:
     root.addHandler(handler)
 
 
+class _GoneSessionFilter(logging.Filter):
+    """Drop the SDK's warning for a session the upstream already forgot.
+
+    Closing a Streamable HTTP upstream sends ``DELETE`` for its session; a
+    server that restarted or expired the session answers 404, which the
+    protocol defines as "no such session" (the goal of the ``DELETE``, already
+    met). The SDK logs it as ``Session termination failed: 404`` at WARNING,
+    one line per closed session, and nothing is wrong. Any other status, and
+    a failed request, still reaches the log.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return record.getMessage() != "Session termination failed: 404"
+
+
+_GONE_SESSION_FILTER = _GoneSessionFilter()
+
+
+def _install_sdk_noise_filter() -> None:
+    sdk = logging.getLogger("mcp.client.streamable_http")
+    if _GONE_SESSION_FILTER not in sdk.filters:
+        sdk.addFilter(_GONE_SESSION_FILTER)
+
+
 def configure_logging(level: str = "INFO") -> None:
     """Idempotent global logging setup; safe to call multiple times."""
     formatter = _json_formatter()
@@ -313,6 +337,7 @@ def configure_logging(level: str = "INFO") -> None:
     # at INFO. Their warnings and errors still reach the log.
     for noisy in ("httpx", "httpx2", "httpcore", "mcp.client.streamable_http"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
+    _install_sdk_noise_filter()
     _attach_file_handler(formatter)
     _attach_stderr_handler(formatter)
     # Nothing in Coffer logs through structlog's own API — every call site is

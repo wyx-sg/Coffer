@@ -56,7 +56,8 @@ def _agent(c: TestClient, tmp_path: pathlib.Path, kind: str) -> tuple[str, pathl
     cfg.mkdir()
     r = c.post("/api/v1/agents", json={"type": kind, "config_dir": str(cfg)})
     assert r.status_code == 201, r.text
-    return r.json()["uid"], cfg / "skills"
+    # Codex's skills go to ~/.agents/skills (HOME is tmp_path here).
+    return r.json()["uid"], (tmp_path / ".agents" / "skills") if kind == "codex" else cfg / "skills"
 
 
 def _import(c: TestClient, src: pathlib.Path) -> dict:  # type: ignore[type-arg]
@@ -148,63 +149,34 @@ def test_delete_refuses_when_a_copy_is_not_coffers(c: TestClient, tmp_path: path
     assert "agent text" in (link / "SKILL.md").read_text()
 
 
-@pytest.mark.acceptance(
-    spec="skill-manager", scenario="an orphan folder is added in place or moved out"
-)
-def test_orphans_list_adopt_and_remove(c: TestClient, tmp_path: pathlib.Path) -> None:
+@pytest.mark.acceptance(spec="skill-manager", scenario="an orphan folder is added in place")
+def test_orphans_list_and_adopt(c: TestClient, tmp_path: pathlib.Path) -> None:
     root = default_master_root()
     _skill(root / "lint-rules", "lint-rules")
     (root / "lint-rules" / "rules.md").write_text("x")
-    _skill(root / "old-notes", "old-notes")
 
     items = {i["name"]: i for i in c.get("/api/v1/skills/orphans").json()["items"]}
-    assert set(items) == {"lint-rules", "old-notes"}
+    assert set(items) == {"lint-rules"}
     assert items["lint-rules"]["valid"] is True
     assert items["lint-rules"]["file_count"] == 2
+    assert items["lint-rules"]["found_at"]
 
     r = c.post("/api/v1/skills/orphans/lint-rules/adopt")
     assert r.status_code == 201, r.text
     assert r.json()["name"] == "lint-rules"
     names = [i["name"] for i in c.get("/api/v1/skills").json()["items"]]
     assert "lint-rules" in names
-
-    assert c.delete("/api/v1/skills/orphans/old-notes").status_code == 204
-    assert not (root / "old-notes").exists()
-    assert list((tmp_path / ".coffer" / "content" / "backup" / "skills" / "orphans").iterdir())
     assert c.get("/api/v1/skills/orphans").json()["items"] == []
     # A claimed folder is no orphan.
-    r = c.delete("/api/v1/skills/orphans/lint-rules")
+    r = c.post("/api/v1/skills/orphans/lint-rules/adopt")
     assert r.status_code == 404
     assert r.json()["error"]["code"] == "SKILL_ORPHAN_NOT_FOUND"
-
-
-@pytest.mark.acceptance(spec="skill-manager", scenario="an orphan folder's files can be read")
-def test_orphan_files_are_readable_read_only(c: TestClient) -> None:
-    root = default_master_root()
-    _skill(root / "lint-rules", "lint-rules")
-    (root / "lint-rules" / "rules.md").write_text("no tabs")
-    (root / "lint-rules" / "blob.bin").write_bytes(b"\x00\x01\x02")
-
-    item = c.get("/api/v1/skills/orphans").json()["items"][0]
-    assert item["file_count"] == 3
-    assert item["found_at"]
-
-    tree = c.get("/api/v1/skills/orphans/lint-rules/files").json()["root"]
-    assert {n["name"] for n in tree["children"]} == {"SKILL.md", "rules.md", "blob.bin"}
-
-    r = c.get("/api/v1/skills/orphans/lint-rules/files/content", params={"path": "rules.md"})
-    assert r.status_code == 200
-    assert r.json()["content"] == "no tabs"
-    r = c.get("/api/v1/skills/orphans/lint-rules/files/content", params={"path": "blob.bin"})
-    assert r.json()["binary"] is True
-    r = c.get("/api/v1/skills/orphans/lint-rules/files/content", params={"path": "../x"})
-    assert r.status_code == 400
-    r = c.get("/api/v1/skills/orphans/lint-rules/files/content", params={"path": "nope.md"})
-    assert r.status_code == 404
-    # A folder that is not an orphan has no files to read.
-    r = c.get("/api/v1/skills/orphans/ghost/files")
-    assert r.status_code == 404
-    assert r.json()["error"]["code"] == "SKILL_ORPHAN_NOT_FOUND"
+    # Coffer reads no orphan's files and deletes none.
+    for method, path in (
+        ("delete", "/api/v1/skills/orphans/lint-rules"),
+        ("get", "/api/v1/skills/orphans/lint-rules/files"),
+    ):
+        assert getattr(c, method)(path).status_code in (404, 405)
 
 
 @pytest.mark.acceptance(spec="skill-manager", scenario="a skill whose master is gone says so")
@@ -257,27 +229,6 @@ def test_bulk_delete_reports_each_skill(c: TestClient, tmp_path: pathlib.Path) -
     ).json()["results"]
     assert again[0]["deleted"] is True and again[0]["kept_copies"][0]["path"] == str(link)
     assert "agent text" in (link / "SKILL.md").read_text()
-
-
-@pytest.mark.acceptance(spec="skill-manager", scenario="a reach change reports delivery per agent")
-def test_scope_change_reports_delivery_per_agent(c: TestClient, tmp_path: pathlib.Path) -> None:
-    claude, _claude_dir = _agent(c, tmp_path, "claude_code")
-    codex, codex_dir = _agent(c, tmp_path, "codex")
-    skill = _import(c, _skill(tmp_path / "src" / "pdf", "pdf"))
-    # Codex already holds a real folder where the link would go.
-    (codex_dir / "pdf").unlink(missing_ok=True)
-    _skill(codex_dir / "pdf", "pdf", "codex text")
-
-    r = c.put(f"/api/v1/resources/{skill['uid']}/scope", json={"scope": None})
-    assert r.status_code == 200, r.text
-    rows = {d["agent_uid"]: d for d in r.json()["delivery"]}
-    assert rows[claude]["ok"] is True and rows[claude]["reason"] is None
-    assert rows[codex]["ok"] is False and rows[codex]["reason"]
-    agent = c.get(f"/api/v1/resources/{claude}").json()
-    assert (
-        c.put(f"/api/v1/resources/{claude}/scope", json={"scope": None}).json()["delivery"] is None
-    )
-    assert agent["kind"] == "agent"
 
 
 @pytest.mark.acceptance(

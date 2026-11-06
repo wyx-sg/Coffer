@@ -48,7 +48,7 @@ def response_record(outcome: HttpCallOutcome, cut_at: int) -> dict[str, Any]:
     """The outcome's status, every header and its body (already masked)."""
     record: dict[str, Any] = {
         "status": outcome.status,
-        "headers": dict(outcome.all_headers),
+        "headers": dict(outcome.headers),
         "body": _body(outcome.body),
     }
     if outcome.truncated:

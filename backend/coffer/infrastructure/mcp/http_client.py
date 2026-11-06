@@ -41,15 +41,17 @@ from typing import Any
 
 import httpx2
 from mcp import ClientSession, MCPError
-from mcp.client.session import ListRootsFnT, SamplingFnT
+from mcp.client.session import ElicitationFnT, ListRootsFnT, SamplingFnT
 from mcp.client.streamable_http import streamable_http_client
 from mcp.types import ServerNotification
 
 from coffer.application.runtime.supervisor import spawn
 from coffer.domain.auth_scheme import with_schemes
-from coffer.domain.errors import UpstreamAuthRejected, UpstreamTimeout, UpstreamUnavailable
+from coffer.domain.errors import UpstreamTimeout, UpstreamUnavailable
 from coffer.domain.mcp.server_config import HttpTransport
 from coffer.infrastructure.mcp.dispatch import dispatch_method
+from coffer.infrastructure.mcp.failure_detail import request_failure
+from coffer.infrastructure.mcp.http_errors import AUTH_STATUSES, auth_rejected, init_error
 from coffer.infrastructure.mcp.push_stream_guard import GuardedAsyncClient, PushStreamGuard
 
 NotificationCallback = Callable[[Any], Awaitable[None]]
@@ -63,21 +65,6 @@ _TEARDOWN_SECONDS = 5.0
 # NOT bound initialize — spawn_and_initialize enforces spawn_timeout_seconds
 # itself, from outside the anyio scopes.
 _STREAM_READ_SECONDS = 300.0
-
-# The statuses that say the key or token the upstream was given is refused.
-_AUTH_STATUSES = (401, 403)
-
-
-def _leaf_exception(exc: BaseException) -> BaseException:
-    """Unwrap single-member exception groups so the real transport error is named.
-
-    anyio surfaces a crashed transport task as a (possibly nested)
-    ExceptionGroup on scope exit; a one-leaf group is the one exception it
-    carries.
-    """
-    while isinstance(exc, BaseExceptionGroup) and len(exc.exceptions) == 1:
-        exc = exc.exceptions[0]
-    return exc
 
 
 class HttpUpstreamConnection:
@@ -109,6 +96,7 @@ class HttpUpstreamConnection:
         #: the SDK reports it as a generic JSON-RPC error.
         self.last_status: int | None = None
         self._session: ClientSession | None = None
+        self._http_client: GuardedAsyncClient | None = None
         # The lifetime task and the two handles spawn/close talk to it with.
         self._runner: asyncio.Task[None] | None = None
         self._ready: asyncio.Future[Any] | None = None
@@ -117,6 +105,7 @@ class HttpUpstreamConnection:
         # Server-initiated request callbacks (sampling and roots)
         self._sampling_callback: SamplingFnT | None = None
         self._list_roots_callback: ListRootsFnT | None = None
+        self._elicitation_callback: ElicitationFnT | None = None
 
     def on_notification(self, cb: NotificationCallback) -> None:
         """Register a callback that receives every upstream-initiated notification."""
@@ -129,6 +118,10 @@ class HttpUpstreamConnection:
     def on_roots_request(self, cb: ListRootsFnT) -> None:
         """Register a callback that handles roots/list requests from the upstream."""
         self._list_roots_callback = cb
+
+    def on_elicitation_request(self, cb: ElicitationFnT) -> None:
+        """Register a callback that handles elicitation/create requests from the upstream."""
+        self._elicitation_callback = cb
 
     async def _message_handler(self, message: Any) -> None:
         """Forward ServerNotifications to the registered callback."""
@@ -168,6 +161,7 @@ class HttpUpstreamConnection:
             timeout=httpx2.Timeout(float(self._spawn_timeout), read=_STREAM_READ_SECONDS),
         )
         http_client.event_hooks["response"].append(self._note_status)
+        self._http_client = http_client
 
         loop = asyncio.get_running_loop()
         ready: asyncio.Future[Any] = loop.create_future()
@@ -198,7 +192,13 @@ class HttpUpstreamConnection:
         exc = ready.exception()
         if exc is not None:
             await self._cleanup()
-            raise self._init_error(exc) from exc
+            raise init_error(
+                exc,
+                name=self._server_name,
+                spawn_timeout=self._spawn_timeout,
+                first_error_status=self.first_error_status,
+                network=self._http_client.last_network_error if self._http_client else None,
+            ) from exc
 
         init_result = ready.result()
         try:
@@ -212,32 +212,10 @@ class HttpUpstreamConnection:
         if response.status_code >= 400 and self.first_error_status is None:
             self.first_error_status = response.status_code
 
-    def _init_error(self, exc: BaseException) -> UpstreamTimeout | UpstreamUnavailable:
-        """Map a lifetime-task failure onto a domain error.
-
-        httpx2/transport exceptions can embed the request URL (which
-        may carry a query-string secret) or reflected headers.  Surface only
-        the exception type; callers chain the original via ``from``.
-        """
-        leaf = _leaf_exception(exc)
-        if self.first_error_status in _AUTH_STATUSES:
-            return self._auth_rejected(self.first_error_status)
-        if isinstance(leaf, httpx2.TimeoutException):
-            return UpstreamTimeout(
-                f"MCP server {self._server_name!r} did not finish starting within "
-                f"{self._spawn_timeout}s (its spawn timeout)"
-            )
-        if isinstance(leaf, asyncio.CancelledError):
-            # anyio delivers a crashed transport task to the awaiting coroutine
-            # as a CancelledError; when scope exit surfaced nothing better,
-            # this is all we know.
-            return UpstreamUnavailable(f"upstream init cancelled: {type(leaf).__name__}")
-        return UpstreamUnavailable(f"upstream init failed: {type(leaf).__name__}")
-
-    def _auth_rejected(self, status: int | None) -> UpstreamAuthRejected:
-        return UpstreamAuthRejected(
-            f"MCP server {self._server_name!r} rejected its credentials (HTTP {status})"
-        )
+    def _request_failure(self, exc: MCPError) -> str | None:
+        """Why a request failed in the HTTP exchange, or None for a real answer."""
+        network = self._http_client.last_network_error if self._http_client else None
+        return request_failure(exc.code, network, self.last_status)
 
     async def _run_lifetime(
         self,
@@ -272,6 +250,7 @@ class HttpUpstreamConnection:
                         message_handler=self._message_handler,
                         sampling_callback=self._sampling_callback,
                         list_roots_callback=self._list_roots_callback,
+                        elicitation_callback=self._elicitation_callback,
                     )
                 )
                 init_result = await session.initialize()
@@ -334,8 +313,13 @@ class HttpUpstreamConnection:
         except MCPError as exc:
             # The SDK folds a 401/403 into a generic JSON-RPC error; the status
             # the response hook saw says it was the key that was refused.
-            if self.last_status in _AUTH_STATUSES:
-                raise self._auth_rejected(self.last_status) from exc
+            if self.last_status in AUTH_STATUSES:
+                raise auth_rejected(self._server_name, self.last_status) from exc
+            reason = self._request_failure(exc)
+            if reason is not None:
+                raise UpstreamUnavailable(
+                    f"MCP server {self._server_name!r} failed {method}: {reason}"
+                ) from exc
             raise
         except TimeoutError as exc:
             raise UpstreamTimeout(

@@ -2,9 +2,8 @@
 //
 // The status line says what is wrong, in the problem's colour ("Not found · 2
 // skills need it", "Not found · duckdb can't start" for a launcher an MCP
-// server starts with, "24.0.2 · needs ≥ 25.0", "Not logged in · 3 skills need
-// it") or, when ready, in grey: the version, "logged in" where a login is
-// declared, and who needs it — or "added by you" for a tool nothing needs.
+// server starts with) or, when ready, in grey: who needs it — or "added by
+// you" for a tool nothing needs.
 import { useTranslation } from "react-i18next";
 
 import type { Cli } from "@/lib/api/clis";
@@ -20,7 +19,6 @@ interface Props {
 
 function useStatusLine(cli: Cli): string {
   const { t } = useTranslation();
-  const version = cli.version ?? t("clis.unknownVersion");
   const count = neededTotal(cli);
   const who = neededByCount(t, cli, "list");
   const needIt = (lead: string) => t("clis.list.needLine", { lead, who, count });
@@ -32,25 +30,13 @@ function useStatusLine(cli: Cli): string {
             count: cli.needed_by_servers.length,
           })
         : needIt(t("clis.status.missing"));
-    case "outdated":
-      return t("clis.list.outdatedLine", { version, min: cli.min_version ?? "" });
-    case "logged_out":
-      return needIt(t("clis.status.logged_out"));
     case "ready":
-      return [
-        version,
-        cli.login.state === "logged_in" ? t("clis.list.loggedIn") : null,
-        count > 0 ? who : t("clis.list.addedByYou"),
-      ]
-        .filter(Boolean)
-        .join(" · ");
+      return count > 0 ? who : t("clis.list.addedByYou");
   }
 }
 
 const TONE = {
   missing: "text-danger",
-  outdated: "text-warning",
-  logged_out: "text-warning",
   ready: "text-success",
 } as const;
 

@@ -1,0 +1,7 @@
+- [x] Attribute each loss to its deleting commit and set aside memory-sync and Tidy deletions
+- [x] Remember a confirmed hold by file while the remote tip is unchanged
+- [x] Log the round's detail and counts
+- [x] Spec vault-sync, ADR addendum, guide and architecture (en, zh)
+- [x] Tests: thin rounds and breaker unit tests
+- [x] Refuse to replace an older remote with commits this machine never pulled (`older_remote_has_changes`)
+- [x] Refuse to sync secrets between machines whose master keys differ (`key_mismatch`)

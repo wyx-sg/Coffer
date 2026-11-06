@@ -96,10 +96,6 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `NOT_A_CUSTOM_TOOL_GROUP` | 404 | 该名字属于其他传输方式的 MCP 服务器，而不是自定义工具组。 | 在 **MCP 服务器**页面管理它，或在**自定义工具**里列出工具组。 |
 | `CUSTOM_TOOL_NOT_FOUND` | 404 | 该工具组中没有这个名字的工具。 | 在**自定义工具**里打开该工具组，列出它的工具。 |
 | `CUSTOM_TOOL_EXISTS` | 409 | 该工具组中已有同名工具。 | 换个名字，或编辑已有的工具。 |
-| `OPENAPI_UNREADABLE` | 422 | OpenAPI 文档无法获取、解析或读取：不是 JSON 或 YAML（`details.line` 和 `details.column` 指出出错位置）、不是 OpenAPI 3.x、大于 5 MiB，或者 URL 位于回环、私有或链路本地主机上。 | 修正文档，或把私有主机上的规范作为文件导入。 |
-| `OPENAPI_UNREACHABLE` | 502 | OpenAPI URL 没有响应：主机名无法解析、连接被拒绝或超时。`details.reason` 为 `dns`、`refused`、`timeout` 或 `unreachable`，`details.handoff.prompt` 是交给 agent 的提示词。 | 检查 URL、网络、VPN 或代理，或把规范作为文件导入。 |
-| `NOT_IMPORTED_FROM_OPENAPI` | 409 | 对一个工具全部是手动添加的工具组请求了重新导入。 | 没有可重新导入的内容；请手动添加工具。 |
-| `OPENAPI_FILE_NEEDED` | 422 | 该工具组是从文件导入的，重新导入需要再次提供那个文件。 | 在该工具组的页面重新导入，并提供文件。 |
 | `CUSTOM_TOOL_ARGUMENTS_INVALID` | 422 | 调用的参数违反了工具的 JSON Schema。`details.errors` 以 `{path, keyword, message}` 列出每一个失败。什么都没有发往上游。在 MCP 上，同样的列表是一个带内工具错误。 | 逐个修正列出的参数；见[自定义工具 → 任何请求之前先检查参数](/zh/guides/custom-tools#arguments-are-checked-before-any-request)。 |
 | `CUSTOM_TOOL_ENVIRONMENT_REQUIRED` | 422 | 该工具组开启了不止一个环境，而调用没有指定。`details.environments` 列出已开启的环境。什么都没发送。 | 传入 `coffer_environment`（命令行上是 `--env`）。见[自定义工具 → 选择一次调用的环境](/zh/guides/custom-tools#choosing-the-environment-of-a-call)。 |
 | `CUSTOM_TOOL_ENVIRONMENT_UNKNOWN` | 422 | 调用指定了该工具组没有的环境。`details.environments` 列出已开启的环境。什么都没发送。 | 使用列出的名字之一，与 `coffer custom-tool env list` 打印的完全一致。 |
@@ -115,7 +111,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | --- | --- | --- | --- |
 | `CLI_NOT_KNOWN` | 404 | 没有托管技能需要该命令，也没有以该名字添加的命令行工具。 | 在**命令行工具**页面列出已知的命令。 |
 | `CLI_TOOL_EXISTS` | 409 | 已经添加过同名的命令行工具。 | 在**命令行工具**页面修改它，或先移除。 |
-| `CLI_TOOL_INVALID` | 400 | 命令名、最低版本或登录检查不合法。登录检查不以命令名开头时，`details.reason` 为 `login_check_command`，`details.field` 为 `login_check`，`details.command` 是它必须开头的名字（路径命令取文件名）。 | 使用普通的命令名或绝对路径；登录检查以命令名开头；字段见 `message`。 |
+| `CLI_TOOL_INVALID` | 400 | 命令名、路径、显示名称或描述不合法。 | 使用普通的命令名或绝对路径，显示名称写成一行，描述不超过上限；字段见 `message`。 |
 | `CLI_TOOL_NOT_DECLARED` | 404 | 该命令行工具不是手动添加的，因此不能在这里编辑或移除。 | 技能需要的命令要在技能里修改，不在这里。 |
 
 ## 智能体与智能体工作目录 {#agents-and-agent-workspaces}
@@ -137,6 +133,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `MCP_ENTRY_PROTECTED` | 422 | 该条目是 Coffer 自己的网关条目。 | 用安装和卸载操作，不要直接编辑它。 |
 | `MCP_ENTRY_SOURCE_AMBIGUOUS` | 422 | 该条目存在于多个配置文件中。 | 指明来源文件。 |
 | `ADOPT_SECRET_UNRESOLVED` | 422 | 纳入托管一个 MCP 条目时，发现了没有密钥映射的、疑似密钥的环境变量键。 | 纳入托管时把列出的每个键映射到一个密钥 ref。 |
+| `MCP_SSE_NOT_SUPPORTED` | 422 | 智能体的 MCP 条目用的是旧的 HTTP+SSE 传输，Coffer 不支持，所以不能导入或纳入托管。 | 把条目留在智能体里；或者改用服务器的 Streamable HTTP 地址（通常把 `/sse` 换成 `/mcp`）再导入。 |
 | `ADOPT_SECRET_REF_EXISTS` | 409 | 纳入托管一个 MCP 条目时，把某个密钥键映射到了已有值的 ref，或映射到独立密钥 `secret/<id>`。纳入托管只创建 ref。什么都没写入。 | 把该键映射到一个新的 ref；如果没有任何东西使用已有的密钥，也可以先删除它。 |
 | `PLUGIN_NOT_FOUND` | 404 | 没有已安装的插件使用这个标识符。 | 刷新插件列表。 |
 | `PLUGIN_TOGGLE_UNSUPPORTED` | 422 | 这个类型智能体的插件不能通过 Coffer 启用或禁用。 | 使用智能体自己的工具。 |

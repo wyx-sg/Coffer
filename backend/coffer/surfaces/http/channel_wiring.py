@@ -23,6 +23,7 @@ from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.channel.avatars import PersonAvatars
 from coffer.application.channel.inbound import InboundProcessor
 from coffer.application.channel.kind import make_channel_kind
+from coffer.application.channel.notify_tool import OwnerNotifier, channel_notify_tool
 from coffer.application.channel.pairing import PairingManager
 from coffer.application.channel.places import ChannelPlaces
 from coffer.application.channel.ports import ChannelAdapter, ChannelBinding
@@ -250,6 +251,20 @@ def wire_channel_kind(
     # thread's earlier messages on demand").
     builtin_tools.register(
         channel_read_thread_tool(ThreadReader(resolve=running_channel, peers=peers))
+    )
+
+    async def running_channels() -> list[ChannelBinding]:
+        bindings = []
+        for channel in await resource_svc.list(kind="channel"):
+            binding = processor.binding(channel.uid)
+            if binding is not None:
+                bindings.append(binding)
+        return bindings
+
+    # An agent anywhere tells the owner on their phone (spec channels "Let an
+    # agent message the owner's direct chat").
+    builtin_tools.register(
+        channel_notify_tool(OwnerNotifier(bindings=running_channels, peers=peers))
     )
     set_credential_check(build_credential_check(resource_svc, materialize))
     # Parallel threads idle for a day close on their own (spec channels "Open

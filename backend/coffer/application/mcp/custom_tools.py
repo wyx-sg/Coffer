@@ -8,8 +8,7 @@ add-http-custom-tools §2, §5, §9.
 A group is an ``mcp_server`` resource of the ``http_api`` transport, so every
 write goes through :class:`ResourceService` — the kind's validation, the
 missing-secret probe, audit and the eviction of live connections come with
-it. OpenAPI import and re-import are in ``custom_tool_import``; the page's
-read model in ``custom_tool_views``.
+it. The page's read model is in ``custom_tool_views``.
 """
 
 from __future__ import annotations
@@ -152,7 +151,6 @@ class CustomToolService:
         timeout_seconds: int,
         agents: list[str] | None,
         tools: list[dict[str, Any]],
-        source: dict[str, Any] | None,
         actor: str,
         response: dict[str, Any] | None = None,
     ) -> GroupView:
@@ -167,7 +165,6 @@ class CustomToolService:
             "environments": [environment_fields(e) for e in environments],
             "timeout_seconds": timeout_seconds,
             "tools": tools,
-            "source": source,
             "response": response or {},
         }
         transport = _validated(fields)
@@ -379,7 +376,7 @@ class CustomToolService:
     async def write_transport(
         self, resource: Resource, transport: HttpApiTransport, actor: str
     ) -> Resource:
-        """For ``custom_tool_import``: the same write path."""
+        """For ``custom_tool_environments``: the same write path."""
         return await self._write(resource, transport, actor)
 
     def validated(self, fields: dict[str, Any]) -> HttpApiTransport:

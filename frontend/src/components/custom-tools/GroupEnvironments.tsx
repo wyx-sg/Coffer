@@ -1,6 +1,6 @@
 // src/components/custom-tools/GroupEnvironments.tsx — a group's Environments tab: one card per environment, everything
 // it holds readable without opening it — its switch, name and secret state with Edit and ⋯ (Delete) in the card's
-// head; then its base URL, its timeout and whose it is, its headers in the shared table (a secret by its name and
+// head; then its base URL, its headers in the shared table (a secret by its name and
 // state) and its variables. Add environment sits above the cards. Every caller names the environment it calls (spec
 // mcp-gateway "Choose a custom tool's environment on every call"), so a card is never "current": the same tools
 // are sent to whichever one a call names.
@@ -15,7 +15,6 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ActionMenu } from "@/components/ui/menu";
 import { Switch } from "@/components/ui/switch";
 import type { CustomToolEnvironment, CustomToolGroup } from "@/lib/api/customTools";
-import { effectiveTimeout } from "@/lib/customTools/environmentContext";
 import {
   useDeleteCustomToolEnvironment,
   useToggleCustomToolEnvironment,
@@ -62,7 +61,6 @@ export function GroupEnvironments({ group }: Props) {
         {envs.map((env) => (
           <EnvironmentCard
             key={env.name}
-            group={group}
             env={env}
             toggling={toggle.isPending}
             onToggle={(enabled) => toggle.mutate({ name: env.name, enabled })}
@@ -101,7 +99,6 @@ export function GroupEnvironments({ group }: Props) {
 }
 
 interface CardProps {
-  group: CustomToolGroup;
   env: CustomToolEnvironment;
   toggling: boolean;
   onToggle: (enabled: boolean) => void;
@@ -110,9 +107,8 @@ interface CardProps {
   onDelete: (() => void) | null;
 }
 
-function EnvironmentCard({ group, env, toggling, onToggle, onEdit, onDelete }: CardProps) {
+function EnvironmentCard({ env, toggling, onToggle, onEdit, onDelete }: CardProps) {
   const { t } = useTranslation();
-  const timeout = effectiveTimeout(group, env);
   const variables = Object.entries(env.variables ?? {});
   return (
     <article
@@ -170,9 +166,6 @@ function EnvironmentCard({ group, env, toggling, onToggle, onEdit, onDelete }: C
         <dl className="grid grid-cols-[7rem_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
           <Fact label={t("customTools.fields.baseUrl")}>
             <span className="break-all font-mono text-xs">{env.base_url}</span>
-          </Fact>
-          <Fact label={t("customTools.editGroup.timeout")}>
-            {t(`customTools.environments.timeout.${timeout.source}`, { seconds: timeout.seconds })}
           </Fact>
         </dl>
         <div className="flex flex-col gap-1.5">

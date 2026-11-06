@@ -266,7 +266,7 @@ describe("SkillAddDialog", () => {
     uploadArchive();
     expect(
       await screen.findByText(
-        "No SKILL.md in skills.zip. Coffer looks at the top level and one folder down.",
+        "No SKILL.md in skills.zip. Coffer looks at the top level and in the folders below it.",
       ),
     ).toBeInTheDocument();
     // The drop zone already has Choose file…, so no second button offers another file.

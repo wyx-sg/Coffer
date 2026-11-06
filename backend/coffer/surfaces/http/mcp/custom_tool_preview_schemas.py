@@ -43,7 +43,6 @@ class CustomToolRequestPreviewOut(BaseModel):
     headers: list[CustomToolPreviewHeaderOut]
     body: str | None
     timeout_seconds: int
-    timeout_source: Literal["environment", "group"]
     variables: dict[str, str]
 
 
@@ -74,7 +73,6 @@ def preview_out(
         ],
         body=p.body,
         timeout_seconds=p.timeout_seconds,
-        timeout_source=p.timeout_source,
         variables=p.variables,
     )
 

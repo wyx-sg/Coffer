@@ -49,19 +49,19 @@ function useSublineText(item: SkillAttention, agents: readonly AgentOut[]): stri
       return t("skills.row.folderInWay", { agent: agent?.display_name ?? item.agentName });
     }
     case "requires":
-      if (item.missing.length > 0) {
-        return t("skills.row.needsMissing", { command: item.missing[0] });
-      }
-      if (item.loggedOut.length > 0) {
-        return t("skills.row.needsLogin", { command: item.loggedOut[0] });
-      }
-      return t("skills.row.needsNewer", { command: item.outdated[0] });
+      return t("skills.row.needsMissing", { command: item.missing[0] });
     case "toolOff": {
       const tool = item.tools[0];
       return t("skills.row.needsTool", {
         name: tool?.name,
         state: t(`skills.requires.toolState.${tool?.status ?? "off"}`).toLowerCase(),
       });
+    }
+    case "skillNotShared": {
+      const dep = item.skills[0];
+      const missing = dep?.missing_agent_names ?? [];
+      const names = missing.map((n) => agents.find((a) => a.name === n)?.display_name ?? n);
+      return t("skills.row.needsSkill", { name: dep?.name, agents: names.join(", ") });
     }
     case "secrets":
       return t("skills.row.needsSecret", { name: item.missing[0] });

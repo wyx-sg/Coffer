@@ -9,9 +9,8 @@ page's status read never spawns anything:
 - **failure detail**: the newest run of calls that failed to reach the server
   (a transport error or a timeout; ``denied`` rows never reached it and are
   skipped, and a call the upstream answered with an error — or one that
-  succeeded — ends the run). Its newest row gives the last error and when it
-  happened, its oldest when the server started failing.
-- **last success**: when the newest successful call was, and which capability.
+  succeeded — ends the run). Its newest row gives the last error.
+- **last success**: when the newest successful call was.
 - **missing secret**: the first secret the transport cites whose value is
   not in this machine's store (a vault restored on a new Mac), by the
   environment or header key that cites it and the reference itself. The value
@@ -22,7 +21,6 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Any
 
 from coffer.application.mcp.invocation_outcome import is_upstream_answered
@@ -32,8 +30,6 @@ from coffer.domain.mcp.capability import MCPInvocation
 @dataclass(frozen=True)
 class FailureRun:
     last_error: str | None
-    last_error_at: datetime
-    failing_since: datetime
 
 
 def failure_run(recent: Iterable[MCPInvocation]) -> FailureRun | None:
@@ -47,11 +43,7 @@ def failure_run(recent: Iterable[MCPInvocation]) -> FailureRun | None:
         run.append(inv)
     if not run:
         return None
-    return FailureRun(
-        last_error=run[0].error_message,
-        last_error_at=run[0].timestamp,
-        failing_since=run[-1].timestamp,
-    )
+    return FailureRun(last_error=run[0].error_message)
 
 
 def secret_refs_of(config: Mapping[str, Any]) -> dict[str, str]:

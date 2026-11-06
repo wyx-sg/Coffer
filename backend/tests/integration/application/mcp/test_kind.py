@@ -340,3 +340,29 @@ async def test_editing_a_server_config_reaches_a_live_session(
     finally:
         await session.dispose()
         await engine.dispose()
+
+
+@pytest.mark.acceptance(
+    spec="mcp-gateway", scenario="an HTTP server's header with no value is refused when saved"
+)
+async def test_an_empty_header_value_is_refused_on_register_and_edit(tmp_path: Path) -> None:
+    from coffer.domain.errors import ConfigValidationError
+
+    def http(**headers: str) -> dict:  # type: ignore[type-arg]
+        return {"transport": {"type": "http", "url": "https://mcp.example/mcp", "headers": headers}}
+
+    rsvc, engine = await _services(tmp_path, {})
+    try:
+        with pytest.raises(ConfigValidationError, match="'X-Team' has no value"):
+            await rsvc.register(
+                kind="mcp_server", name="abtest", config=http(**{"X-Team": ""}), actor="test"
+            )
+        await rsvc.register(
+            kind="mcp_server", name="abtest", config=http(**{"X-Team": "core"}), actor="test"
+        )
+        row = await rsvc.get_by_name("mcp_server", "abtest")
+        with pytest.raises(ConfigValidationError, match="'X-Team' has no value"):
+            await rsvc.update_config(row.uid, http(**{"X-Team": ""}), actor="test")
+        assert (await rsvc.get(row.uid)).config["transport"]["headers"] == {"X-Team": "core"}
+    finally:
+        await engine.dispose()

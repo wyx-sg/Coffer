@@ -103,10 +103,6 @@ give the status each code is actually sent with.
 | `NOT_A_CUSTOM_TOOL_GROUP` | 404 | The name belongs to an MCP server of another transport, not a custom-tool group. | Manage it on the **MCP servers** page, or list groups on **Custom tools**. |
 | `CUSTOM_TOOL_NOT_FOUND` | 404 | The group has no tool of that name. | Open the group on **Custom tools** to list its tools. |
 | `CUSTOM_TOOL_EXISTS` | 409 | The group already has a tool of that name. | Pick another name, or edit the existing tool. |
-| `OPENAPI_UNREADABLE` | 422 | The OpenAPI document could not be fetched, parsed or read: not JSON or YAML (`details.line` and `details.column` say where it broke), not OpenAPI 3.x, larger than 5 MiB, or a URL on a loopback, private or link-local host. | Fix the document, or import a spec on a private host as a file. |
-| `OPENAPI_UNREACHABLE` | 502 | The OpenAPI URL did not answer: its host name does not resolve, the connection was refused, or it timed out. `details.reason` is `dns`, `refused`, `timeout` or `unreachable`, and `details.handoff.prompt` is a prompt for your agent. | Check the URL, your network, VPN or proxy, or import the spec as a file. |
-| `NOT_IMPORTED_FROM_OPENAPI` | 409 | Re-import was asked of a group whose tools were all added by hand. | Nothing to re-import; add tools by hand. |
-| `OPENAPI_FILE_NEEDED` | 422 | The group was imported from a file, and re-import needs that file again. | Re-import from the group's page and give the file. |
 | `CUSTOM_TOOL_ARGUMENTS_INVALID` | 422 | The call's arguments break the tool's JSON Schema. `details.errors` lists every failure as `{path, keyword, message}`. Nothing was sent upstream. On MCP the same list is an in-band tool error. | Fix each argument named; see [Custom tools → Arguments are checked before any request](/guides/custom-tools#arguments-are-checked-before-any-request). |
 | `CUSTOM_TOOL_ENVIRONMENT_REQUIRED` | 422 | The group has more than one enabled environment and the call named none. `details.environments` lists the enabled ones. Nothing was sent. | Pass `coffer_environment` (on the command line, `--env`). See [Custom tools → Choosing the environment of a call](/guides/custom-tools#choosing-the-environment-of-a-call). |
 | `CUSTOM_TOOL_ENVIRONMENT_UNKNOWN` | 422 | The call named an environment the group does not have. `details.environments` lists the enabled ones. Nothing was sent. | Use one of the names listed, exactly as `coffer custom-tool env list` prints it. |
@@ -122,7 +118,7 @@ give the status each code is actually sent with.
 | --- | --- | --- | --- |
 | `CLI_NOT_KNOWN` | 404 | No managed skill requires that command and no command-line tool was added under that name. | List the known commands on the **CLIs** page. |
 | `CLI_TOOL_EXISTS` | 409 | A command-line tool with that name was already added. | Edit it on the **CLIs** page, or remove it first. |
-| `CLI_TOOL_INVALID` | 400 | The command name, minimum version or login check is not valid. A login check that does not start with the command name has `details.reason` `login_check_command`, `details.field` `login_check` and `details.command`, the name it must start with (a path command's file name). | Use a plain command name or an absolute path; start the login check with the command name; read `message` for the field. |
+| `CLI_TOOL_INVALID` | 400 | The command name, path, display name or description is not valid. | Use a plain command name or an absolute path, a one-line display name and a description within the limit; read `message` for the field. |
 | `CLI_TOOL_NOT_DECLARED` | 404 | That command-line tool was not added by hand, so it cannot be edited or removed. | A command a skill requires is changed in the skill, not here. |
 
 ## Agents and agent workspaces
@@ -144,6 +140,7 @@ give the status each code is actually sent with.
 | `MCP_ENTRY_PROTECTED` | 422 | The entry is Coffer's own gateway entry. | Use the install and uninstall actions instead of editing it. |
 | `MCP_ENTRY_SOURCE_AMBIGUOUS` | 422 | The entry exists in more than one config file. | Name the source file. |
 | `ADOPT_SECRET_UNRESOLVED` | 422 | Adopting an MCP entry found secret-like environment keys with no secret mapping. | Map each listed key to a secret ref when adopting. |
+| `MCP_SSE_NOT_SUPPORTED` | 422 | The agent's MCP entry uses the old HTTP+SSE transport, which Coffer does not support, so it cannot be imported or adopted. | Keep the entry in the agent, or point it at the server's Streamable HTTP URL (often `/mcp` in place of `/sse`) and import that. |
 | `ADOPT_SECRET_REF_EXISTS` | 409 | Adopting an MCP entry mapped a secret key to a ref that already holds a value, or to a standalone `secret/<id>`. Adopting only creates refs. Nothing was written. | Map the key to a new ref, or delete the existing secret first if nothing uses it. |
 | `PLUGIN_NOT_FOUND` | 404 | No installed plugin has that identifier. | Refresh the plugin list. |
 | `PLUGIN_TOGGLE_UNSUPPORTED` | 422 | This agent type's plugins cannot be enabled or disabled through Coffer. | Use the agent's own tooling. |

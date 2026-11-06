@@ -21,21 +21,10 @@ def _path(bin_dir: pathlib.Path) -> UserPath:
     return UserPath(shell_path=lambda: shell)
 
 
-def test_probe_reads_version_and_login_exit(tmp_path: pathlib.Path) -> None:
-    gh = _script(
-        tmp_path,
-        "gh",
-        'case "$1" in --version) echo "gh version 2.45.0";; auth) exit "$2";; esac',
-    )
+def test_probe_finds_the_command_and_runs_nothing(tmp_path: pathlib.Path) -> None:
+    ran = tmp_path / "ran"
+    gh = _script(tmp_path, "gh", f'touch "{ran}"')
     probe = CommandProbe(user_path=_path(tmp_path))
     assert probe.locate("gh") == str(gh.resolve())
     assert probe.locate("no-such-command-xyz") is None
-    assert probe.version(str(gh)) == "2.45.0"
-    assert probe.login_ok([str(gh), "auth", "0"]) is True
-    assert probe.login_ok([str(gh), "auth", "1"]) is False
-
-
-def test_a_login_check_past_its_timeout_is_unknown(tmp_path: pathlib.Path) -> None:
-    slow = _script(tmp_path, "slow", "sleep 5")
-    probe = CommandProbe(user_path=_path(tmp_path), login_timeout=0.2)
-    assert probe.login_ok([str(slow), "status"]) is None
+    assert not ran.exists()

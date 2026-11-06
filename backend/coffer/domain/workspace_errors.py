@@ -53,6 +53,20 @@ class AdoptSecretUnresolved(CofferError):  # noqa: N818
         super().__init__("secret-like env keys need a keychain mapping: " + ", ".join(self.keys))
 
 
+class McpSseNotSupported(CofferError):  # noqa: N818
+    """The entry uses the old SSE transport, which Coffer's gateway does not
+    serve (ADR upstreams-speak-stdio-or-streamable-http). Maps to 422."""
+
+    code = "MCP_SSE_NOT_SUPPORTED"
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+        super().__init__(
+            f"{name!r} uses the old SSE transport, which Coffer does not support: keep it "
+            "in the agent, or switch it to the server's Streamable HTTP URL if it has one"
+        )
+
+
 class AdoptSecretRefExists(CofferError):  # noqa: N818
     """An adopt names a secret ref that already holds a value, or a standalone name. Maps to 409.
 

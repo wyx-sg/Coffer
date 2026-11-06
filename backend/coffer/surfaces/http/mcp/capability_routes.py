@@ -52,7 +52,7 @@ from coffer.surfaces.http.mcp.dependencies import (
     get_server_requirements,
     require_mcp_server,
 )
-from coffer.surfaces.http.mcp.handoff_views import diagnose_prompt, launcher_prompt
+from coffer.surfaces.http.mcp.handoff_views import server_prompt
 from coffer.surfaces.http.mcp.page_schemas import McpRequirementOut, McpServerStatusOut
 from coffer.surfaces.http.schemas import CapabilityKeyBody, CapabilityListOut
 from coffer.surfaces.http.secret_composition import get_secret_store
@@ -205,16 +205,11 @@ async def get_server_status(
     detail: dict[str, Any] = {
         "missing_runner": runner,
         "last_error": failure.last_error if failure else None,
-        "last_error_at": failure.last_error_at if failure else None,
-        "failing_since": failure.failing_since if failure else None,
         "last_ok_at": ok[0].timestamp if ok else None,
-        "last_ok_capability": ok[0].capability_key if ok else None,
         "missing_secret": secret[0] if secret else None,
         "missing_secret_ref": secret[1] if secret else None,
         "requires": [
-            McpRequirementOut(
-                kind=r.kind, name=r.name, status=r.status, version=r.version, secret=r.secret
-            )
+            McpRequirementOut(kind=r.kind, name=r.name, status=r.status, secret=r.secret)
             for r in (await requirements.of(resource) if requirements else [])
         ],
     }
@@ -226,8 +221,6 @@ async def get_server_status(
     health = await health_repo.get(resource.uid)
     if health is not None:
         health_status, checked_at = health
-        if health_status == "failing" and failure is None:
-            detail["failing_since"] = checked_at
         out = McpServerStatusOut(
             status=health_status,
             last_checked_at=checked_at,
@@ -260,12 +253,11 @@ async def get_server_status(
 async def _with_handoff(out: McpServerStatusOut, resource: Resource) -> McpServerStatusOut:
     """``out`` with the chore its state hands to an agent: installing a missing
     launcher first (it is the cause of any failure), else diagnosing a failure."""
-    if out.missing_runner:
-        prompt = await asyncio.to_thread(launcher_prompt, resource, out.missing_runner)
-    elif out.status == "failing" and not out.missing_secret:
-        prompt = await asyncio.to_thread(diagnose_prompt, resource, error=out.last_error)
-    else:
+    if not out.missing_runner and (out.status != "failing" or out.missing_secret):
         return out
+    prompt = await asyncio.to_thread(
+        server_prompt, resource, error=out.last_error, runner=out.missing_runner
+    )
     return out.model_copy(update={"handoff": HandoffOut(prompt=prompt)})
 
 

@@ -7,10 +7,10 @@ to, whether this machine serves an MCP server at all — so it is never in a
 resource's file and never committed. It is one JSON object in
 ``local/reach.json``::
 
-    {"<uid>": {"enabled": true, "agents": ["<agent uid>", ...] | null, "projects": null}}
+    {"<uid>": {"enabled": true, "agents": ["<agent uid>", ...] | null}}
 
-``agents: null`` is unrestricted. ``projects`` is reserved for the context's
-next axis and always written ``null``. A resource with **no record** reaches
+``agents: null`` is unrestricted. A ``projects`` key older builds wrote (always
+``null``) is ignored on read and dropped on the next write. A resource with **no record** reaches
 as registration would have made it: enabled and unrestricted —
 which is what a resource that arrived from another machine, or a file a person
 wrote by hand, gets until someone narrows it here.
@@ -40,7 +40,7 @@ class Reach:
 
     def to_json(self) -> dict[str, Any]:
         agents = self.scope.agents if self.scope is not None else None
-        return {"enabled": self.enabled, "agents": agents, "projects": None}
+        return {"enabled": self.enabled, "agents": agents}
 
     @classmethod
     def from_json(cls, raw: Any) -> Reach | None:

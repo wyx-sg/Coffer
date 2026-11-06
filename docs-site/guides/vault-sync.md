@@ -94,7 +94,7 @@ Until a machine has joined, rounds move nothing and end as `join required`.
 
 Only needed when the remote carries secrets. On a machine that has the key, open the **desktop app** and back the key up on **Settings › Security**: choose a passphrase, confirm with Touch ID or your login password, pick a folder, and the app writes the passphrase-protected `coffer-master-key.cfk` there with mode `0600`. No command, route or browser page exports the key, because an agent could run it; see [Secrets → The master key and its backup](/guides/secrets#the-master-key-and-its-backup).
 
-Carry the file over a channel you trust (a password manager, `scp`, a USB stick), never through the sync repository. On the other machine, **Import a master key** on **Settings › Security** in the desktop app (it asks for Touch ID) does the rest, with the two keys' fingerprints side by side before anything is replaced, and asks for the passphrase the backup was made with. Delete the copied file afterwards. The key it replaces is kept as a backup, in a second Keychain item. Without the key, sync still works, but secrets that arrived cannot be decrypted here and the resources that need them cannot start. The **Machines** tab flags a machine whose key differs from this one's.
+Carry the file over a channel you trust (a password manager, `scp`, a USB stick), never through the sync repository. On the other machine, **Import a master key** on **Settings › Security** in the desktop app (it asks for Touch ID) does the rest, with the two keys' fingerprints side by side before anything is replaced, and asks for the passphrase the backup was made with. Delete the copied file afterwards. The key it replaces is kept as a backup, in a second Keychain item. Until the keys match, a remote that carries secrets does not sync at all: the round stops as `key mismatch` and names the Mac whose key differs, because ciphertext under another key could not be opened here and would overwrite values that can. The **Machines** tab also flags a machine whose key differs from this one's. A remote without **Include encrypted secrets** syncs whatever the keys.
 
 ## What travels and what stays
 
@@ -166,9 +166,9 @@ An agent's merge is never an answer by itself. When a copy holds a merge, the fi
 
 Then **Continue round**.
 
-An encrypted secret (`secret/*.enc`) is never handed to an agent or edited by hand. It offers only the two choices, and the prompt never carries its contents.
+An encrypted secret (`secret/*.enc`) is never handed to an agent or edited by hand. In a round it never conflicts (below); one a join left different offers only the two choices, and the prompt never carries its contents.
 
-A resource with the same name but a different uid on each side (two machines created `jira` independently) is a conflict too. Secret ciphertext never conflicts: the more recently encrypted value wins.
+A resource with the same name but a different uid on each side (two machines created `jira` independently) is a conflict too. In a round, secret ciphertext never conflicts: the more recently encrypted value wins.
 
 ## When a round is held for deletions
 
@@ -179,7 +179,9 @@ A round that would lose **20 or more** files in one area, or **5 or more** that 
 
 A file that reappears at another path in the same round is a move, not a loss, and a resource file counts by its uid, so reorganising or renaming never asks.
 
-Either answer continues the round. On the web the **Status** tab says who deleted how many files, and **Review deletions** lists every one of them, folder by folder; the file list and the diff sit side by side at the same height, each scrolling on its own; the chosen file shows its whole text as the lines a delete removes. Its foot has two buttons, **Keep the files** and **Delete N files**. Each acts at once: the page already shows what a delete removes, so no second dialog repeats it, and a safety snapshot is taken before a delete. If this machine was just reinstalled or restored, keep the files: do not delete.
+Deletions Coffer can explain are not counted either: memories the memory sync removed from the hub (they follow your agents' own memories, which stay where they are) and documents a **Tidy** you started removed. Whatever removed them, an area that would be left with no files is still held. A hand deletion, a shell's `rm -rf` and deletions you make in Coffer count as before.
+
+Either answer continues the round. On the web the **Status** tab says who deleted how many files, and **Review deletions** lists every one of them, folder by folder; the file list and the diff sit side by side at the same height, each scrolling on its own; the chosen file shows its whole text as the lines a delete removes. Its foot has two buttons, **Keep the files** and **Delete N files**. Each acts at once: the page already shows what a delete removes, so no second dialog repeats it, and a safety snapshot is taken before a delete. If this machine was just reinstalled or restored, keep the files: do not delete. Once you delete, the round does not ask about the same files again, even if it next stops on something else, such as a plaintext secret, and the fix adds a commit; it asks again only if the remote moved meanwhile.
 
 ## When a round finds a plaintext secret
 
@@ -225,8 +227,10 @@ The **Machines** tab lists every machine with when it was last seen, its last ro
 | `git missing` | No `git` on the PATH the daemon uses. | Install git the way that fits the machine (**Hand off to &lt;Agent&gt;** on the card), then press **Check again**. |
 | `paused (cloud folder)` | The vault is inside a folder Dropbox, iCloud Drive, Syncthing or similar also syncs. | Press **Move the vault…** on the Status tab: Coffer pauses rounds and agent writes, moves the folder (to `~/.coffer/vault` unless you choose another place outside any synchronised folder), checks the git repository there and resumes. The old folder is left empty; delete it yourself. |
 | `remote too new` | Another machine runs a newer Coffer. | Upgrade this machine. |
+| `older remote has changes` | This machine runs a newer Coffer than the remote's, and another machine pushed changes this one never pulled. Replacing the remote now would lose them. | Upgrade Coffer on the machine the message names and let it sync; this machine then syncs on its own. |
 | `waiting on an edit` | You have an unsaved or invalid edit on a file the round would change. | Finish or fix the edit (`coffer vault problems` lists invalid ones); the next round continues. |
 | A held round after reinstalling Coffer | The empty vault would push its loss. | **Keep the files** in **Review deletions** on the **Status** tab. |
+| `key mismatch` | The remote carries secrets and another Mac's master key differs from this one's (or this Mac has none yet). Nothing moved. | **Import a master key** on **Settings › Security** with the key the other Macs use, then press **Sync now**. |
 | Secrets cannot be decrypted | This machine lacks the master key they were encrypted with. | **Import a master key** on **Settings › Security**, with the key from a machine that has it. |
 
 A refused push, a refused sign-in, an unreachable remote and a missing git each come with a prompt for your agent (a plaintext secret has none, above). The prompt names the remote without its credentials, the branch, the secret's name and git's message with tokens scrubbed, and says what to check. It is on the Sync page next to the message. It never carries or asks for a token. **Retry** stays Coffer's own button.

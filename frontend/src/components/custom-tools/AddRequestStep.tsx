@@ -68,7 +68,6 @@ export function AddRequestStep({ group, pending, error, onChangeWay, onCancel, o
     <>
       <div className="flex flex-col gap-5">
         <WaySummary
-          way="hand"
           into={name}
           sub={t("customTools.add.handSummary")}
           onChange={onChangeWay}

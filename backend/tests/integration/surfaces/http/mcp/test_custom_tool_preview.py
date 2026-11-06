@@ -1,4 +1,4 @@
-"""A custom tool's request preview (dry run) and a test's diagnostic headers, against a real daemon.
+"""A custom tool's request preview (dry run) and a test's response headers, against a real daemon.
 
 Spec mcp-gateway "Preview a custom tool's request without sending it" and
 "Report what a custom tool's test reached". The upstream is a real socket that
@@ -72,7 +72,6 @@ def _two_envs(d: BoundaryDaemon, api: FakeHttpApi) -> None:
                 api.base_url + "/l",
                 "live-key",
                 variables={"region": "us-1"},
-                timeout_seconds=7,
             ),
         ],
         "tools": [_SEARCH],
@@ -120,8 +119,7 @@ def test_a_dry_run_shows_each_environments_request(
     assert test["url"] == api.base_url + "/t/v1/eu-1/search?cid=SG"
     assert live["url"] == api.base_url + "/l/v1/us-1/search?cid=SG"
     assert test["body"] == '{"query": "x"}'
-    assert (test["timeout_seconds"], test["timeout_source"]) == (30, "group")
-    assert (live["timeout_seconds"], live["timeout_source"]) == (7, "environment")
+    assert test["timeout_seconds"] == live["timeout_seconds"] == 30
     assert test["variables"] == {"region": "eu-1"}
 
     def headers(p: dict[str, Any]) -> dict[str, Any]:
@@ -178,11 +176,9 @@ def test_a_dry_run_refuses_what_a_call_would(
 
 
 @pytest.mark.acceptance(
-    spec="mcp-gateway", scenario="a test reports the request id but no cookie or credential"
+    spec="mcp-gateway", scenario="a test reports every response header, a cookie's value masked"
 )
-def test_a_test_reports_allow_listed_response_headers(
-    daemon: BoundaryDaemon, api: FakeHttpApi
-) -> None:
+def test_a_test_reports_every_response_header(daemon: BoundaryDaemon, api: FakeHttpApi) -> None:
     _two_envs(daemon, api)
     api.echo_secret = TEST_TOKEN
     tool = {
@@ -200,7 +196,7 @@ def test_a_test_reports_allow_listed_response_headers(
     seen = result["response_headers"]
     assert seen["x-request-id"] == "req-123"
     assert seen["x-trace-id"] == "trace-***"
-    assert "server" in seen and "date" in seen
-    for left_out in ("set-cookie", "www-authenticate", "x-internal-node"):
-        assert left_out not in seen
+    assert "server" in seen and "date" in seen and "x-internal-node" in seen
+    assert seen["set-cookie"] == "***"
+    assert "www-authenticate" in seen
     assert TEST_TOKEN not in r.text and "s3cr3t-cookie" not in r.text

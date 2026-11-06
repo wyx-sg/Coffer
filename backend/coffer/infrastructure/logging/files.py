@@ -20,6 +20,7 @@ from __future__ import annotations
 import logging
 import os
 import time
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol, TextIO
@@ -76,16 +77,42 @@ class LineSink(Protocol):
     def flush(self) -> None: ...
 
 
+def _ends_mid_line(sink: LineSink) -> bool:
+    """Whether the last thing written to ``sink`` was a partial line.
+
+    The child writes its stderr straight into the file (or through a masking
+    pump, which keeps track itself), so a server that printed ``Starting...``
+    with no newline would get Coffer's next line glued onto its own. The file
+    is read back for its last byte; anything unreadable counts as a line end.
+    """
+    tracked = getattr(sink, "ends_mid_line", None)
+    if callable(tracked):
+        return bool(tracked())
+    name = getattr(sink, "name", None)
+    if not isinstance(name, str):
+        return False
+    try:
+        with open(name, "rb") as f:
+            if f.seek(0, os.SEEK_END) == 0:
+                return False
+            f.seek(-1, os.SEEK_END)
+            return f.read(1) != b"\n"
+    except OSError:
+        return False
+
+
 def write_coffer_line(sink: LineSink, text: str) -> None:
     """Append one Coffer-authored line to an upstream's log file.
 
     ``<ISO-8601 UTC timestamp> coffer <text>`` — the prefix is what the log read
     uses to tell Coffer's own lines (how it started and stopped the server) from
-    what the server printed on stderr. Best-effort: never raises.
+    what the server printed on stderr, so the line always starts a line of its
+    own, even after a server's partial one. Best-effort: never raises.
     """
     stamp = datetime.now(tz=UTC).isoformat(timespec="seconds")
     try:
-        sink.write(f"{stamp} {COFFER_LINE_SOURCE} {text}\n")
+        lead = "\n" if _ends_mid_line(sink) else ""
+        sink.write(f"{lead}{stamp} {COFFER_LINE_SOURCE} {text}\n")
         sink.flush()
     except (OSError, ValueError):
         return
@@ -113,8 +140,15 @@ def open_upstream_errlog(server_name: str) -> TextIO | None:
         return None
 
 
-def prune_log_dir(*, max_age_days: int = DEFAULT_MAX_AGE_DAYS) -> int:
+def prune_log_dir(
+    *, max_age_days: int = DEFAULT_MAX_AGE_DAYS, upstreams: Iterable[str] | None = None
+) -> int:
     """Delete log files older than ``max_age_days``. Returns how many went.
+
+    With ``upstreams`` (the names of the registered servers), an upstream log
+    no registered server writes to any more goes too, whatever its age: a
+    deleted or renamed server's file would otherwise sit there for ever, and
+    one a new server of the same name picked up would read as its history.
 
     Best-effort and never raises: a file that vanished under us, or one we
     cannot remove, is skipped. Pruning logs must not be able to fail a
@@ -133,6 +167,23 @@ def prune_log_dir(*, max_age_days: int = DEFAULT_MAX_AGE_DAYS) -> int:
                     removed += 1
             except OSError:
                 continue
+    if upstreams is not None:
+        removed += _prune_orphan_upstream_logs(directory, upstreams)
     if removed:
         _logger.info("log.pruned", extra={"removed": removed, "max_age_days": max_age_days})
+    return removed
+
+
+def _prune_orphan_upstream_logs(directory: Path, upstreams: Iterable[str]) -> int:
+    keep = {upstream_log_path(name).name for name in upstreams}
+    removed = 0
+    for path in (directory / "upstream").glob("*.log*"):
+        base = path.name.removesuffix(".1")
+        if not base.endswith(".log") or base in keep:
+            continue
+        try:
+            path.unlink()
+            removed += 1
+        except OSError:
+            continue
     return removed

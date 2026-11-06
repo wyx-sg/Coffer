@@ -5,11 +5,12 @@ Three drift kinds are never repaired by a pass, because repairing them would
 mean choosing between two versions or deciding what a folder is: a folder
 Coffer did not make sitting where a skill's link belongs, a folder in the
 skills store no skill owns, and a skill whose master folder is gone. Coffer
-keeps its buttons for them (the compare and its two choices, Add to library /
-Delete folder, Remove the skill) and hands the looking to the person's agent:
-compare, say what the folder is, find a copy that can be restored. The agent
-reads and advises; the choice stays a button the person presses, except the
-one write that has no button — copying a found master back into place.
+keeps its buttons for them (the compare and its two choices, Add to library,
+Remove the skill) and hands the looking to the person's agent: compare, say
+what the folder is, find a copy that can be restored. The agent reads and
+advises; the choice stays a button the person presses, except the writes that
+have no button — copying a found master back into place, and setting aside a
+folder no skill owns that the person agrees should go.
 
 Built only from what the drift finding itself carries (the skill's name, the
 path, the master path), so the drift report and the attention list hand over
@@ -66,17 +67,18 @@ def orphan_master_handoff(*, name: str, folder: str, backup: pathlib.Path) -> st
             facts=(
                 f"Folder: {folder}",
                 f"Coffer's skills store: {pathlib.Path(folder).parent}",
-                "In Coffer I choose one of two: Add to library (registers the folder in place; "
-                f"its SKILL.md must name it {name}) or Delete folder (moved to {backup}/orphans/, "
-                "not deleted).",
+                "In Coffer I can Add to library (registers the folder in place; its SKILL.md "
+                f"must name it {name}). Coffer has no delete for it.",
                 "The skills already in my library are the other folders in that store.",
             ),
             steps=(
                 "Read the folder: say what the skill does and whether its SKILL.md is valid and "
                 f"its frontmatter `name` is {name}.",
                 "Check whether a skill already in my library covers the same thing.",
-                "Recommend Add to library or Delete folder, and say why.",
-                _HANDS_OFF,
+                "Recommend adding it to my library or deleting it, and say why.",
+                "Do not edit the folder. If I say to add it, I press Add to library in Coffer. "
+                f"If I agree it should go, move it (don't delete it) to {backup}/orphans/{name}-"
+                "<time>/.",
             ),
         )
     )

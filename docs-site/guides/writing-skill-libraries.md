@@ -101,23 +101,9 @@ The organisation's log platform, reached through its own skill.
 
 Longer design reasoning — why a key exists, why it is split from another — belongs in this guide or in the domain's design record, not in a file an agent reads on every run.
 
-### Requirements a profile declares
+### Requirements and profiles
 
-A profile's frontmatter may carry a `requires:` in the same shape as a skill's (commands, secrets, tools). Use it for what the skill itself runs or uses in that environment: a CLI the profile's carrier is, a login check for it, a secret its commands read. A skill declares only what it runs itself, never on behalf of another skill it delegates to: a domain that invokes `Skill(<carrier>)` does not declare the carrier's CLIs, because the carrier declares them. For example, a profile whose `carrier` is the bare command `gh` declares `gh`, and a carrier whose script loads another skill's auth module declares what that module needs.
-
-```markdown
----
-remote_hosts: [git.example.com]
-carrier: gh
-requires:
-  commands:
-    - command: gh
-      login_check: gh auth status
-      why: The carrier for this organisation's review requests.
----
-```
-
-An agent picks one profile at run time, and Coffer cannot know which. So Coffer reads the union of `SKILL.md`'s `requires:` and that of every `profiles/*.md`, and the skill's **Requires** tab and the CLIs page's **Needed by** name the profile that declared each entry, as in `coffer-investigating-logs · example-org`. A command several of them declare is one requirement, with the highest minimum. Generic commands every environment needs stay in `SKILL.md`; only the environment-specific ones go in the profile. See [CLIs](/guides/clis) and [Skills](/guides/skills#profile-declared-requirements).
+Coffer reads `requires:` from `SKILL.md` only, never from a profile. List there every command, secret and tool the skill itself runs or uses in any environment: a CLI a profile's carrier is, a secret its commands read. A command only one environment uses then shows on every machine, which is the honest answer, since Coffer cannot know which profile the agent will pick. A skill declares only what it runs itself, never on behalf of another skill it delegates to: a domain that invokes `Skill(<carrier>)` does not declare the carrier's CLIs, because the carrier declares them. For example, a domain one of whose profiles names the bare command `gh` as its carrier declares `gh` in `SKILL.md`, and a carrier whose script loads another skill's auth module declares what that module needs.
 
 ### What a profile holds, and what it never does
 
@@ -175,7 +161,7 @@ metadata:
 ---
 ```
 
-`metadata.profiles` indexes the profile files the domain ships. `metadata.requires` is covered under [Declared dependencies](#declared-dependencies). A top-level `requires:` is something else: the command-line tools the skill drives (`gh`, `jq`), with a minimum version and a login check, which Coffer checks and hands to your agent to install when one is missing — see [CLIs](/guides/clis). A carrier skill that wraps a CLI declares it there, but a product domain that merely delegates to a carrier skill does not: a skill declares only the commands, secrets and tools it runs or uses itself, never on behalf of another skill, whether Coffer-managed or external. Coffer reads only what a skill declares; it never scans a skill to guess, so a skill that does not follow these rules is fixed in the skill. The mapping form of that same key also names the Coffer secrets the skill's commands need, by id, as `requires: {commands: [psql], secrets: [<id>]}`, so the skill's **Requires** tab and the Overview tell the person when one is not set — see [Secrets a skill needs](/guides/skills#secrets-a-skill-needs). The same mapping names the MCP servers and custom tool groups the skill calls under `tools:`, by the name each has in Coffer, as `requires: {commands: [psql], secrets: [<id>], tools: [orders-api]}`: the **Requires** tab lists them under **Tools**, and a skill whose tool is off lands under **Needs attention**. A name Coffer does not know is skipped with a warning shown on the [CLIs](/guides/clis) page — see [Tools a skill needs](/guides/skills#tools-a-skill-needs). Any other key under the mapping is refused with a warning. A profile's own frontmatter may carry the same `requires:`; see [Requirements a profile declares](#requirements-a-profile-declares). Quote a description that contains `: ` (colon and space); unquoted, it is invalid YAML and the skill fails to parse. Keep the description to 1024 characters at most; Coffer refuses to import a longer one.
+`metadata.profiles` indexes the profile files the domain ships. `metadata.requires` is covered under [Declared dependencies](#declared-dependencies). A top-level `requires:` is something else: the command-line tools the skill drives (`gh`, `jq`), which Coffer looks up on `PATH` and hands to your agent to install when one is missing — see [CLIs](/guides/clis). A carrier skill that wraps a CLI declares it there, but a product domain that merely delegates to a carrier skill does not: a skill declares only the commands, secrets and tools it runs or uses itself, never on behalf of another skill, whether Coffer-managed or external. Coffer reads only what a skill declares; it never scans a skill to guess, so a skill that does not follow these rules is fixed in the skill. The mapping form of that same key also names the Coffer secrets the skill's commands need, by id, as `requires: {commands: [psql], secrets: [<id>]}`, so the skill's **Requires** tab and the Overview tell the person when one is not set — see [Secrets a skill needs](/guides/skills#secrets-a-skill-needs). The same mapping names the MCP servers and custom tool groups the skill calls under `tools:`, by the name each has in Coffer, as `requires: {commands: [psql], secrets: [<id>], tools: [orders-api]}`: the **Requires** tab lists them under **Tools**, and a skill whose tool is off lands under **Needs attention**. A name Coffer does not know is skipped with a warning shown on the [CLIs](/guides/clis) page — see [Tools a skill needs](/guides/skills#tools-a-skill-needs). Any other key under the mapping is refused with a warning. A profile's own frontmatter may carry the same `requires:`; see [Requirements a profile declares](#requirements-a-profile-declares). Quote a description that contains `: ` (colon and space); unquoted, it is invalid YAML and the skill fails to parse. Keep the description to 1024 characters at most; Coffer refuses to import a longer one.
 
 ### Folder hygiene
 
@@ -329,7 +315,7 @@ When a new domain replaces older single-purpose skills, remove the old ones (**�
 6. **Write one file per environment you use.** Each is complete on its own; add a sibling file only when a real second environment appears.
 7. **Pull shared method into a base skill.** If another domain already has the same rules, extract them, load them by name, and declare `metadata.requires`.
 8. **Write the body.** Keep `SKILL.md` to the Profile paragraph, routing and boundaries. Add the runtime rules: try the carrier before claiming it is missing, quote evidence, name what could not be resolved.
-9. **Declare what Coffer should see.** List the commands, secrets and tools the domain itself runs under its top-level `requires:`, and the environment-specific ones under each profile's `requires:`. Never list what a carrier it delegates to runs. Write `requires: []` when it truly needs nothing: a skill with no `requires:` key anywhere reads as unknown on its **Requires** tab, while an explicit empty one reads as needing nothing. The Skills page can hand a skill to an agent for a check; see [Declared or not](/guides/skills#declared-or-not).
+9. **Declare what Coffer should see.** List the commands, secrets and tools the domain itself runs, in any environment, under the top-level `requires:` of `SKILL.md`. Never list what a carrier it delegates to runs. Write `requires: []` when it truly needs nothing: a skill whose `SKILL.md` has no `requires:` key reads as unknown on its **Requires** tab, while an explicit empty one reads as needing nothing. The Skills page can hand a skill to an agent for a check; see [Declared or not](/guides/skills#declared-or-not).
 10. **Check it.** Tests pass, nothing organisation-specific sits outside `profiles/`, each environment file merged over `default.md` gives the values you expect, the folder has no venv, cache or secret, and required base skills reach the same agents. Then import and verify.
 
 ## Related

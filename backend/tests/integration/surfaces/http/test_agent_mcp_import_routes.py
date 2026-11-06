@@ -268,3 +268,34 @@ def test_a_name_that_cannot_be_registered_fails_that_server_only(client: TestCli
 
 def test_plan_requires_at_least_one_entry(client: TestClient) -> None:
     assert client.post("/api/v1/agents/mcp-import/plan", json={"entries": []}).status_code == 422
+
+
+@pytest.mark.acceptance(
+    spec="agent-registry",
+    scenario="an old SSE entry is listed but neither imported nor adopted",
+)
+def test_an_old_sse_entry_is_listed_but_neither_imported_nor_adopted(
+    client: TestClient, home: pathlib.Path
+) -> None:
+    (home / ".claude.json").write_text(
+        json.dumps({"mcpServers": {"legacy": {"type": "sse", "url": "https://sse.example/sse"}}}),
+        encoding="utf-8",
+    )
+    _cx, cc = _agents(client)
+    (row,) = client.get(f"/api/v1/agents/{cc}/mcp-entries").json()["items"]
+    assert (row["name"], row["legacy_sse"]) == ("legacy", True)
+    before = _files(home)
+
+    plan = client.post(
+        "/api/v1/agents/mcp-import/plan",
+        json={"entries": [{"agent_uid": cc, "name": "legacy", "source": row["source"]}]},
+    ).json()
+    assert plan["servers"] == []
+    (refused,) = plan["unavailable"]
+    assert refused["error_code"] == "MCP_SSE_NOT_SUPPORTED"
+    assert "SSE" in refused["error"]
+
+    r = client.post(f"/api/v1/agents/{cc}/mcp-entries/legacy/adopt", json={"source": row["source"]})
+    assert (r.status_code, r.json()["error"]["code"]) == (422, "MCP_SSE_NOT_SUPPORTED")
+    assert _files(home) == before
+    assert _resources(client) == []

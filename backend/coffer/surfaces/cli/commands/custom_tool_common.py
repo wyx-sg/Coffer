@@ -91,9 +91,7 @@ def _rule_line(rule: dict[str, Any]) -> str:
 
 def _show_response(group: dict[str, Any]) -> None:
     response = group.get("response") or {}
-    headers = response.get("diagnostic_headers") or []
     rules = response.get("rules") or []
-    typer.echo(f"  response: diagnostic headers: {', '.join(headers) if headers else 'none'}")
     typer.echo("  response rules:" + ("" if rules else " none"))
     for rule in rules:
         typer.echo(f"    {_rule_line(rule)}")
@@ -179,7 +177,7 @@ def show_preview(result: dict[str, Any]) -> None:
         else:
             typer.echo(f"{h['name']}: {h['value']}")
     timeout = result.get("timeout_seconds")
-    typer.echo(f"timeout: {timeout} s (from the {result.get('timeout_source')})")
+    typer.echo(f"timeout: {timeout} s")
     if result.get("body") is not None:
         typer.echo("")
         typer.echo(result["body"])

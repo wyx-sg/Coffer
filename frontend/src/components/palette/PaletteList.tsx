@@ -54,7 +54,12 @@ export function PaletteList({ model, query, listboxId, baseId, ...props }: Props
         const variant: RowVariant =
           group.key === "best" ? "best" : group.key === "recent" ? "recent" : "list";
         return (
-          <div key={group.key} role="group" aria-labelledby={labelId} className="flex flex-col gap-0.5">
+          <div
+            key={group.key}
+            role="group"
+            aria-labelledby={labelId}
+            className="flex flex-col gap-0.5"
+          >
             <GroupLabel id={labelId}>{groupTitle(group.key)}</GroupLabel>
             {group.items.map((item, i) => {
               const at = group.key === "recent" ? group.recent[i]?.at : undefined;

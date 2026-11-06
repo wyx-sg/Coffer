@@ -15,7 +15,7 @@ from typing import Any
 
 from coffer.application.sync import round_plaintext
 from coffer.application.sync.round_engine import PROBLEM_STATUS, Recorder, RoundEngine
-from coffer.application.sync.round_layout import is_older, layout_refusal
+from coffer.application.sync.round_layout import is_older, refusal
 from coffer.application.sync.round_replace import replace, replace_preview
 from coffer.application.sync.round_trees import identity_conflicts, settle_machines
 from coffer.domain.sync.joins import AreaCount, JoinKind, JoinPreview
@@ -64,7 +64,7 @@ def preview(engine: RoundEngine, remote: SyncRemote, token: str | None) -> JoinP
     mine = _content(d.git.files(local))
     if tip is None:
         return JoinPreview(JoinKind.EMPTY, None, pushed=_areas(sorted(mine)))
-    refused = layout_refusal(d, tip)
+    refused = refusal(d, remote, tip)
     if refused is not None:
         return JoinPreview(JoinKind.NEW, tip, refused=refused[1])
     newest = d.git.log(start=tip, limit=1)
@@ -122,7 +122,7 @@ def join(engine: RoundEngine, remote: SyncRemote, token: str | None) -> RoundRec
             return rec(PROBLEM_STATUS[exc.problem], detail=exc.detail)
         local = d.git.head() or ""
         if shown.refused is not None and shown.remote_tip is not None:
-            refused = layout_refusal(d, shown.remote_tip)
+            refused = refusal(d, remote, shown.remote_tip)
             if refused is not None:
                 return rec(refused[0], detail=refused[1])
         d.state.set_joined(True)

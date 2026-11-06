@@ -67,7 +67,7 @@ _RETIRED_KNOWLEDGE_TOOLS = frozenset(
 #: superset. `scripts/check_architecture_doc.py` is the gate that owns the full
 #: roster and reds when a slice registers a tool the docs-site architecture
 #: pages never name; here the split is what scopes the claim to one kind.
-_NON_KNOWLEDGE_BUILTIN_TOOLS = frozenset({"coffer__search_tools"})
+_NON_KNOWLEDGE_BUILTIN_TOOLS = frozenset({"coffer__search_tools", "coffer__channel_notify"})
 
 _APPLICATION_ROOT = Path(__file__).resolve().parents[2] / "coffer" / "application"
 #: The same declaration shape `scripts/check_architecture_doc.py` scrapes.
@@ -303,8 +303,8 @@ async def test_sdk_round_trip(running_daemon: tuple[int, str, Path]) -> None:
         assert "coffer-guide" in instructions
         assert "What is in this developer's knowledge" not in instructions
         assert "unlisted" not in instructions
-        # Exactly the one built-in, and no other ``coffer__`` name.
-        assert coffer_tools == {"coffer__search_tools"}, coffer_tools
+        # Exactly the built-ins, and no other ``coffer__`` name.
+        assert coffer_tools == _NON_KNOWLEDGE_BUILTIN_TOOLS, coffer_tools
         knowledge_on_the_wire = coffer_tools - _NON_KNOWLEDGE_BUILTIN_TOOLS
         assert knowledge_on_the_wire == set(_KNOWLEDGE_TOOLS), (
             f"the knowledge tools in tools/list are not exactly the one the spec "

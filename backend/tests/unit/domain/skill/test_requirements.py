@@ -20,7 +20,6 @@ description: Files issues.
 requires:
   - command: gh
     title: GitHub CLI
-    min_version: "2.40"
     login_check: gh auth status
     login: gh auth login
     why: Opens and labels issues.
@@ -37,9 +36,6 @@ def test_a_full_entry_and_a_bare_name() -> None:
         CommandRequirement(
             command="gh",
             title="GitHub CLI",
-            min_version="2.40",
-            login_check=("gh", "auth", "status"),
-            login="gh auth login",
             why="Opens and labels issues.",
         ),
         CommandRequirement(command="jq"),
@@ -57,27 +53,26 @@ def test_a_path_is_skipped() -> None:
     assert "is a path" in parsed.warnings[0]
 
 
-def test_a_login_check_running_another_program_is_skipped() -> None:
-    parsed = parse_requires([{"command": "gh", "login_check": "curl evil.example"}])
-    assert parsed.requirements == ()
-    assert "'curl'" in parsed.warnings[0] and "'gh'" in parsed.warnings[0]
-
-
-def test_a_login_check_may_be_a_list() -> None:
-    parsed = parse_requires([{"command": "gh", "login_check": ["gh", "auth", "status"]}])
-    assert parsed.requirements[0].login_check == ("gh", "auth", "status")
-
-
-def test_an_unquoted_float_minimum_is_skipped() -> None:
-    # YAML reads 2.40 as 2.4, which is a different minimum.
-    parsed = parse_requires([{"command": "gh", "min_version": 2.40}])
-    assert parsed.requirements == ()
-    assert "quoted" in parsed.warnings[0]
-
-
-def test_an_integer_minimum_is_kept() -> None:
-    [req] = parse_requires([{"command": "node", "min_version": 20}]).requirements
-    assert req.min_version == "20"
+@pytest.mark.acceptance(
+    spec="skill-manager",
+    scenario="an older minimum version or login check in a declaration is accepted and not read",
+)
+def test_an_older_minimum_or_login_check_is_accepted_and_not_read() -> None:
+    # Coffer checks neither a version nor a login, so whatever ``login_check``
+    # names is never run, and a skill that still carries these gets no warning.
+    parsed = parse_requires(
+        [
+            {
+                "command": "gh",
+                "min_version": 2.40,
+                "login_check": "curl evil.example",
+                "login": "gh auth login",
+            },
+            "node>=20.1",
+        ]
+    )
+    assert parsed.requirements == (CommandRequirement("gh"), CommandRequirement("node"))
+    assert parsed.warnings == ()
 
 
 def test_no_command_and_wrong_shapes_are_skipped() -> None:
@@ -188,8 +183,8 @@ def test_an_unknown_key_under_the_mapping_is_refused_with_a_warning() -> None:
     )
 
 
-def _req(command: str, min_version: str | None = None) -> CommandRequirement:
-    return CommandRequirement(command=command, min_version=min_version)
+def _req(command: str) -> CommandRequirement:
+    return CommandRequirement(command=command)
 
 
 def _commands(value: object) -> list[CommandRequirement]:
@@ -203,7 +198,7 @@ def _md_commands(text: str) -> list[CommandRequirement]:
 def test_a_list_of_names_and_versioned_names_is_read_in_order() -> None:
     assert _commands(["jq", "gh>=2.40"]) == [
         _req("jq"),
-        _req("gh", "2.40"),
+        _req("gh"),
     ]
 
 
@@ -221,12 +216,11 @@ def test_a_mapping_without_commands_declares_nothing() -> None:
 @pytest.mark.parametrize(
     ("entry", "expected"),
     [
-        ({"command": "gh", "version": ">=2.40"}, _req("gh", "2.40")),
-        ({"command": "gh", "version": 2}, _req("gh", "2")),
-        ({"name": "jq", "min_version": "1.6"}, _req("jq", "1.6")),
+        ({"command": "gh", "version": ">=2.40"}, _req("gh")),
+        ({"name": "jq", "min_version": "1.6"}, _req("jq")),
         ({"command": " kubectl "}, _req("kubectl")),
-        ("node == 20.1", _req("node", "20.1")),
-        ("python3~=3.12", _req("python3", "3.12")),
+        ("node == 20.1", _req("node")),
+        ("python3~=3.12", _req("python3")),
     ],
 )
 def test_each_entry_spelling_is_one_requirement(
@@ -266,7 +260,7 @@ def test_skill_md_frontmatter_is_read() -> None:
     text = '---\nname: x\ndescription: d\nrequires: [jq, "gh>=2.40"]\n---\nbody\n'
     assert _md_commands(text) == [
         _req("jq"),
-        _req("gh", "2.40"),
+        _req("gh"),
     ]
 
 
@@ -285,59 +279,18 @@ def test_skill_md_without_a_readable_requires_declares_nothing(text: str) -> Non
     assert _md_commands(text) == []
 
 
-@pytest.mark.acceptance(spec="skill-manager", scenario="a profile's requires joins the skill's")
-def test_profile_requires_are_unioned_and_name_their_profile() -> None:
-    from coffer.domain.skill.requirements_union import requirements_of_skill
-
-    skill_md = "---\nname: s\nrequires: [jq, 'gh>=2.40']\n---\n"
-    profile = (
-        "---\nrequires:\n  commands:\n    - gh>=2.50\n"
-        "    - {command: smc, login_check: smc login status}\n"
-        "  secrets: [ACME_TOKEN]\n  tools: [github]\n---\n"
-    )
-    bad = "---\nrequires:\n  bogus: 1\n---\n"
-    parsed = requirements_of_skill(skill_md, [("acme-team", profile), ("x", bad)])
-    by = {r.command: r for r in parsed.requirements}
-    assert by["jq"].profiles == ()
-    assert by["gh"].min_version == "2.50"
-    # SKILL.md declares gh too, so it is unconditional: no profile is named.
-    assert by["gh"].profiles == ()
-    assert by["smc"].login_check == ("smc", "login", "status")
-    assert by["smc"].profiles == ("acme-team",)
-    assert parsed.secrets == ("ACME_TOKEN",)
-    assert parsed.secret_profiles == {"ACME_TOKEN": ("acme-team",)}
-    assert parsed.tools == (ToolRequirement("github", None, ("acme-team",)),)
-    assert parsed.warnings and parsed.warnings[0].startswith("profiles/x.md: ")
-
-
 @pytest.mark.acceptance(
     spec="skill-manager", scenario="a skill with no requires key has not declared"
 )
 def test_a_skill_with_no_requires_key_has_not_declared() -> None:
-    from coffer.domain.skill.requirements_union import requirements_of_skill
-
-    parsed = requirements_of_skill("---\nname: s\n---\n", [("p", "---\nnote: x\n---\n")])
+    parsed = requirements_from_skill_md("---\nname: s\n---\n")
     assert parsed.declared is False
-    assert requirements_of_skill("no frontmatter", []).declared is False
+    assert requirements_from_skill_md("no frontmatter").declared is False
 
 
 @pytest.mark.acceptance(spec="skill-manager", scenario="an empty requires is a declaration")
 @pytest.mark.parametrize("empty", ["[]", "{}"])
 def test_an_explicit_empty_requires_is_declared(empty: str) -> None:
-    from coffer.domain.skill.requirements_union import requirements_of_skill
-
-    parsed = requirements_of_skill(f"---\nname: s\nrequires: {empty}\n---\n", [])
+    parsed = requirements_from_skill_md(f"---\nname: s\nrequires: {empty}\n---\n")
     assert parsed.declared is True
     assert parsed.requirements == ()
-
-
-@pytest.mark.acceptance(
-    spec="skill-manager", scenario="a profile's requires key makes the skill declared"
-)
-def test_a_profile_requires_key_makes_the_skill_declared() -> None:
-    from coffer.domain.skill.requirements_union import requirements_of_skill
-
-    parsed = requirements_of_skill(
-        "---\nname: s\n---\n", [("a", "---\n---\n"), ("b", "---\nrequires: []\n---\n")]
-    )
-    assert parsed.declared is True

@@ -1,10 +1,10 @@
 """``derived/derived.db`` — tables rebuilt from other state (ADR
 storage-is-five-classes-by-nature).
 
-Four tables are observations this machine can make again: an MCP server's
+Its tables are observations this machine can make again: an MCP server's
 last health check, a model provider connection's last health verdict, which
-skill copies were delivered into which agent, and when each upstream
-capability was first and last seen. None of them is the
+skill copies were delivered into which agent, when each upstream capability
+was first and last seen, and what each upstream listed last. None of them is the
 only copy of a fact, so they live under ``derived/`` in a database of their
 own: no Alembic lineage, the schema created with ``create_all`` at open, and
 ``PRAGMA user_version`` compared with :data:`SCHEMA_VERSION` — a file at any
@@ -29,7 +29,8 @@ from coffer.infrastructure.persistence.engine import (
 )
 from coffer.infrastructure.vault.home import derived_root
 
-#: Bumped whenever a table below changes shape; an older file is recreated.
+#: Bumped whenever a table below changes shape; an older file is recreated. A
+#: new table needs no bump: ``create_all`` adds it to an existing file.
 SCHEMA_VERSION = 3
 
 
@@ -102,6 +103,26 @@ class MCPCapabilitySeenModel(DerivedBase):
     )
 
 
+class MCPCatalogueModel(DerivedBase):
+    """What an upstream listed last on this machine, per capability type: the
+    whole definitions, so a session can answer a list without starting the
+    server (ADR session-subprocess-model, "lists from the saved catalogue").
+    ``config_hash`` is the server config they were listed under; a list saved
+    under another config is not used."""
+
+    __tablename__ = "mcp_catalogue"
+
+    server_uid: Mapped[str] = mapped_column(String, nullable=False)
+    capability_type: Mapped[str] = mapped_column(String, nullable=False)
+    config_hash: Mapped[str] = mapped_column(String, nullable=False)
+    items_json: Mapped[str] = mapped_column(Text, nullable=False)
+    saved_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+
+    __table_args__ = (
+        PrimaryKeyConstraint("server_uid", "capability_type", name="pk_mcp_catalogue"),
+    )
+
+
 def derived_db_path(home: Path | None = None) -> Path:
     return derived_root(home) / "derived.db"
 
@@ -148,6 +169,7 @@ __all__ = [
     "SCHEMA_VERSION",
     "DerivedBase",
     "MCPCapabilitySeenModel",
+    "MCPCatalogueModel",
     "MCPServerHealthModel",
     "ProviderHealthModel",
     "SkillAgentBindingModel",

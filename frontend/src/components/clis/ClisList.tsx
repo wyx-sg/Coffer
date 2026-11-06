@@ -1,6 +1,6 @@
 // src/components/clis/ClisList.tsx — the CLIs list pane: a filter ("/" focuses it) with Check beside it, then Needs attention and Ready.
 //
-// Needs attention holds the commands that are missing, too old or not logged in, in
+// Needs attention holds the commands that are missing or too old, in
 // the daemon's order; Ready the rest. A row opens
 // `/clis/<command>` in the detail pane beside it.
 import { useState } from "react";

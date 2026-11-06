@@ -229,3 +229,39 @@ restoring the copy and moving the new vault aside, never a downgrade.
   file), the property test that a layout commit on a random vault preserves the
   uid set, and the rehearsal gate in which two machines on different builds
   upgrade in both orders.
+
+## Addendum (2026-11-06): a joined machine replaces an older remote only once it has merged its tip
+
+### Context
+
+Replacing an older-layout remote ran "joined or not", on a timer round, with no
+preview for a joined machine. When the machine still on the old build had
+pushed after the upgraded one last pulled, the replacement dropped those
+commits from the remote's tip (they stayed only in the history), and the old
+machine, once upgraded, merged against its last base and applied the drop as
+deletions. Small drops pass the deletion breaker, so this could lose files
+silently. O-10 (PR #652) was exactly such an all-Macs-must-upgrade change.
+
+### Options considered
+
+- **A — Refuse while the remote has commits this vault never merged (chosen).**
+  The round ends `older_remote_has_changes`, naming the machine that pushed
+  last; that machine upgrades and replaces the remote with a vault that holds
+  its commits, and the two then merge at the new layout from their shared base.
+  Pros: nothing is dropped; a few lines. Cons: the upgraded machine waits until
+  the other one is upgraded, which O-10 already required.
+- **B — Convert the old remote in memory and merge.** Pros: no waiting. Cons: a
+  second migration path, which this ADR rejected.
+- **C — Always preview, even when joined.** Pros: the person sees what goes
+  away. Cons: they cannot tell which removals are another machine's new work;
+  the drop happens anyway once confirmed.
+- **D — Keep it.** Lost on the silent deletions above.
+
+Comparable products: Obsidian Sync and 1Password refuse an outdated client
+rather than let it rewrite the shared copy; Coffer does the same in the other
+direction for the newer client when it has not seen the latest data.
+
+### Decision
+
+Option A. Spec vault-sync "Refuse a newer-layout remote and replace an older
+one". A machine that has not joined still replaces only from the join preview.

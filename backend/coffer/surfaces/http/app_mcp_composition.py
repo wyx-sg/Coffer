@@ -28,7 +28,6 @@ from coffer.application.audit_service import AuditService
 from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.mcp.call_content import CallContentRecording
 from coffer.application.mcp.call_content import configure as configure_call_content
-from coffer.application.mcp.custom_tool_import import CustomToolImporter
 from coffer.application.mcp.custom_tool_views import GroupViewer
 from coffer.application.mcp.custom_tools import CustomToolService
 from coffer.application.mcp.discovery import CapabilityDiscovery
@@ -51,9 +50,9 @@ from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Resource
 from coffer.domain.secrets import SecretDestination
 from coffer.infrastructure.daemon.call_content_setting import DaemonConfigCallContent
+from coffer.infrastructure.mcp.catalogue_store import McpCatalogueStore
 from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.mcp.http_api_runner import HttpApiToolRunner
-from coffer.infrastructure.mcp.openapi_fetch import OpenApiDocumentSource
 from coffer.infrastructure.mcp.persistence import (
     MCPCapabilityPreferenceStore,
     MCPInvocationRepo,
@@ -128,6 +127,7 @@ def wire_mcp_kind(
     # session (spec mcp-gateway "Switch call content recording per machine").
     configure_call_content(CallContentRecording(DaemonConfigCallContent()))
     health_repo = MCPServerHealthRepo(vault.derived_sm)
+    catalogue = McpCatalogueStore(vault.derived_sm)
     auth_monitor = UpstreamAuthMonitor(health_repo)
 
     # 2. Per-session supervisor registry (used for the lifecycle hooks + factory)
@@ -190,10 +190,13 @@ def wire_mcp_kind(
             # lambda) so the return type is None, matching on_dispose's type.
             session_supervisors.pop(session_id, None)
 
+        # A session lists from the saved catalogue and starts a server only
+        # when a call needs it (ADR session-subprocess-model).
         discovery = CapabilityDiscovery(
             resource_service=resource_svc,
             supervisor=supervisor,
             preferences=prefs_repo,
+            catalogue=catalogue,
         )
         return MCPGatewaySession(
             session_id=session_id,
@@ -248,7 +251,7 @@ def wire_custom_tools(
         resolver=lambda: boundary_resolver(secret_store),
         runner=HttpApiToolRunner(),
     )
-    set_custom_tool_services(service, CustomToolImporter(service, OpenApiDocumentSource()))
+    set_custom_tool_services(service)
     return service
 
 

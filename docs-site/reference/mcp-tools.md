@@ -18,8 +18,9 @@ integrations against Coffer. For how the gateway works internally, see
 | --- | --- | --- |
 | [`coffer__search_tools`](#coffer-search-tools) | Rank the upstream tool catalogue against an intent. | Always. |
 | [`coffer__channel_read_thread`](#coffer-channel-read-thread) | Read a chat thread's earlier messages, page by page. | Only inside a turn Coffer runs. |
+| [`coffer__channel_notify`](#coffer-channel-notify) | Send the owner a message, and files, in their direct chat with a channel. | Always. |
 
-Those two are the whole list. There is no tool for asking the owner a question: an agent asks in its reply, and the owner's next message is the answer. Coffer's knowledge, memory and its own records have no
+Those three are the whole list. There is no tool for asking the owner a question: an agent asks in its reply, and the owner's next message is the answer. Coffer's knowledge, memory and its own records have no
 tool: agents change and read knowledge with their own file tools, reach memory through their
 own native memory, and read the records with the `coffer` command line. See
 [Knowledge, memory and logs without a tool](#memory-and-logs-without-a-tool).
@@ -160,6 +161,34 @@ thread (SeaTalk returns only the last 7 days of replies), the result also carrie
 saying so. A channel that is not running, a chat the channel has not paired, a missing
 `thread_id`, a `before` that is not in the thread and a read the platform refused each fail
 with `isError: true` and a message saying which.
+
+## coffer\_\_channel\_notify {#coffer-channel-notify}
+
+Sends the owner a message on their phone, in their direct chat with a
+[channel](/guides/channels#notifications), then any files after it. It is for an agent that is
+**not** answering a chat message: one working in a terminal, or in the agent's own scheduled
+task, that wants to say it is done. A turn that came from a chat replies on its own. It never
+posts to a group. It is offered in every session, not only inside a turn Coffer runs.
+
+### Input {#input-3}
+
+| Property | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `text` | string | yes | | The message, up to 4,000 characters. |
+| `files` | array of strings | no | | Up to 10 absolute paths of local files, sent after the message. |
+| `channel` | string | no | | The channel's name or id. Needed only when more than one channel is running and paired. |
+
+### Result {#result-3}
+
+```json
+{ "sent": true, "channel": "work bot" }
+```
+
+A file that failed to upload is listed under `files_failed`; the message has already gone. The
+call fails with `isError: true`, sending nothing, when `text` is missing or too long, a file is
+not an absolute path to an existing file, no channel is running and paired (the message says to
+set one up on the Channels page), or several are and `channel` is not given (the message names
+them).
 
 ## Upstream names
 

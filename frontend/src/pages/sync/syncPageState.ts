@@ -27,6 +27,7 @@ export type SyncStateKind =
   | "cloud_folder"
   | "git_missing"
   | "layout"
+  | "key_mismatch"
   | "failed"
   | "to_push"
   | "pulled"
@@ -56,6 +57,7 @@ const PILL_TONE: Record<SyncStateKind, PillTone> = {
   cloud_folder: "warn",
   git_missing: "err",
   layout: "err",
+  key_mismatch: "err",
   failed: "err",
   to_push: "info",
   pulled: "ok",

@@ -1,8 +1,7 @@
 // frontend/src/lib/hooks/useSkillCopies.ts — TanStack Query bindings for an
-// agent's copy in the way of a skill's link, the store's orphan folders and a
-// Git skill's change of source (spec skill-manager "Resolve a folder in the
-// way of a skill's link", "Act on a folder in the skills store that no skill
-// claims", "Change a Git-imported skill's source").
+// agent's copy in the way of a skill's link and the store's orphan folders
+// (spec skill-manager "Resolve a folder in the way of a skill's link", "Act on
+// a folder in the skills store that no skill claims").
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
@@ -13,8 +12,6 @@ import {
   resourcesKey,
   scopeKey,
   skillCopyKey,
-  skillOrphanFileKey,
-  skillOrphanFilesKey,
   skillOrphansKey,
   skillsKey,
 } from "@/lib/api/queryKeys";
@@ -62,16 +59,6 @@ export function useAdoptSkillOrphan() {
   });
 }
 
-/** Move an orphan folder out of the store. No toast: the confirmation shows a
- *  refusal inline. */
-export function useRemoveSkillOrphan() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (name: string) => skillsApi.removeOrphan(name),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: skillsKey }),
-  });
-}
-
 /** Write the Add dialog's "Available to" onto the skills it just added: every
  *  agent is what an add already did, so only Off and chosen agents write. */
 export function useApplySkillReach() {
@@ -91,32 +78,5 @@ export function useApplySkillReach() {
       void qc.invalidateQueries({ queryKey: scopeKey });
     },
     onError: (e) => toast.error(translateApiError(t, e)),
-  });
-}
-
-/** Stage a new source for a Git skill. No toast: the dialog renders why the
- *  source can't be used (unreachable, another skill's name). */
-export function useChangeSkillSource() {
-  return useMutation({
-    mutationFn: (vars: { uid: string; url: string; ref: string | null; path: string | null }) =>
-      skillsApi.changeSource(vars.uid, { url: vars.url, ref: vars.ref, path: vars.path }),
-  });
-}
-
-/** An orphan folder's file tree, read-only (same shape as a skill's Files tab). */
-export function useSkillOrphanFiles(name: string) {
-  return useQuery({
-    queryKey: skillOrphanFilesKey(name),
-    queryFn: async () => (await skillsApi.orphanFiles(name)).root,
-    enabled: !!name,
-  });
-}
-
-/** One file of an orphan folder. */
-export function useSkillOrphanFileContent(name: string, path: string | null) {
-  return useQuery({
-    queryKey: skillOrphanFileKey(name, path ?? ""),
-    queryFn: () => skillsApi.orphanFileContent(name, path as string),
-    enabled: !!name && !!path,
   });
 }

@@ -111,25 +111,11 @@ SPECS = [
         "Folders in the skills store that no skill owns.",
     ),
     RouteCommand(
-        "skill orphan files",
-        "GET",
-        "/skills/orphans/{name}/files",
-        _UI + "an orphan's files",
-        "An orphan folder's files.",
-    ),
-    RouteCommand(
         "skill orphan adopt",
         "POST",
         "/skills/orphans/{name}/adopt",
         _UI + "an orphan · Adopt",
         "Register an orphan folder as a skill.",
-    ),
-    RouteCommand(
-        "skill orphan remove",
-        "DELETE",
-        "/skills/orphans/{name}",
-        _UI + "an orphan · Remove",
-        "Delete an orphan folder.",
     ),
     RouteCommand(
         "skill stage-folder",
@@ -153,7 +139,10 @@ SPECS = [
         "POST",
         "/skills/stage/{staging_id}/confirm",
         _UI + "Import · Import",
-        "Import staged skills. Body: skills, replace.",
+        (
+            "Import staged skills. Body: skills (names, or the folders the stage "
+            "listed), replace (names to overwrite)."
+        ),
         body=True,
     ),
     RouteCommand(
@@ -171,25 +160,6 @@ SPECS = [
         "Ask the skill's source for a newer version.",
         names=S,
         wait=_waits.GIT_S,
-    ),
-    RouteCommand(
-        "skill source change",
-        "POST",
-        "/skills/{uid}/source/change",
-        _UI + "Source · Change source · preview",
-        "Stage the skill from another source. Body: url, ref, path.",
-        names=S,
-        body=True,
-        wait=_waits.GIT_S,
-    ),
-    RouteCommand(
-        "skill source change-apply",
-        "POST",
-        "/skills/{uid}/source/change/apply",
-        _UI + "Source · Change source · apply",
-        "Apply a staged change of source. Body: staging_id.",
-        names=S,
-        body=True,
     ),
     RouteCommand(
         "skill source handoff",

@@ -674,3 +674,45 @@ async def test_initialize_generic_error_wraps_as_upstream_unavailable(monkeypatc
     assert "_LeakyError" in msg
     assert "secret" not in msg and "token=abc" not in msg
     assert conn._session is None
+
+
+@pytest.mark.acceptance(
+    spec="mcp-gateway",
+    scenario="an HTTP server that cannot be reached is named by the kind of failure",
+)
+async def test_an_unreachable_http_server_is_named_by_the_kind_of_failure() -> None:
+    import asyncio
+
+    from tests.fixtures.net import free_port
+
+    refused = HttpUpstreamConnection(
+        transport=HttpTransport(type="http", url=f"http://127.0.0.1:{free_port()}/mcp"),
+        header_overlay={},
+        spawn_timeout_seconds=5,
+    )
+    with pytest.raises(UpstreamUnavailable) as no_listener:
+        await refused.spawn_and_initialize()
+    await refused.close()
+
+    async def answer_502(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        await reader.read(65536)
+        writer.write(b"HTTP/1.1 502 Bad Gateway\r\ncontent-length: 0\r\nconnection: close\r\n\r\n")
+        await writer.drain()
+        writer.close()
+
+    server = await asyncio.start_server(answer_502, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    gateway = HttpUpstreamConnection(
+        transport=HttpTransport(type="http", url=f"http://127.0.0.1:{port}/mcp"),
+        header_overlay={},
+        spawn_timeout_seconds=5,
+    )
+    try:
+        with pytest.raises(UpstreamUnavailable) as bad_gateway:
+            await gateway.spawn_and_initialize()
+    finally:
+        await gateway.close()
+        server.close()
+
+    assert "(the connection was refused)" in str(no_listener.value)
+    assert "(the server answered HTTP 502)" in str(bad_gateway.value)

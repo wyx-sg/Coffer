@@ -1,40 +1,48 @@
-"""A JSON Schema validator for custom tools' arguments.
+"""JSON Schema checks for custom tools' arguments, over the ``jsonschema`` library.
 
 Spec mcp-gateway "Validate a custom tool's arguments before any request";
-design align-cli-with-ui-and-add-tool-environments D7. Two entry points:
+ADR json-schema-validation-library. Two entry points:
 
-* :func:`check_schema` — the schema itself is well formed (keyword types,
-  valid regular expressions, resolvable local ``$ref``), run when a tool is
-  saved;
+* :func:`check_schema` — the schema itself is well formed (against the draft
+  2020-12 meta-schema, valid regular expressions, resolvable local ``$ref``),
+  run when a tool is saved;
 * :func:`validate` — every way ``instance`` breaks ``schema``, each as a
   :class:`SchemaError` naming the instance path, the keyword and a message,
   run before any request is made.
 
-The vocabulary is what OpenAPI imports and hand-written tools use: draft
-2020-12's validation keywords, draft-07's ``definitions`` and array ``items``,
-and OpenAPI 3.0's ``nullable``. Unknown keywords (``description``, ``format``,
-``example``...) are annotations and never fail a value.
-
-Pure: the standard library only (the domain fence forbids a third-party
-validator here).
+Schemas are draft 2020-12. Before either step a schema is normalised so the
+older spellings agents copy from API documents keep working: OpenAPI 3.0's
+``nullable``, draft-04's boolean ``exclusiveMinimum`` / ``exclusiveMaximum``
+and draft-07's array ``items`` with ``additionalItems``. Unknown keywords
+(``description``, ``format``, ``example``...) are annotations and never fail a
+value. No reference is ever fetched: the registry is empty, so only local
+``$ref`` resolve. ``jsonschema`` is pure computation, so it may live in the
+domain (the domain fence forbids I/O libraries, not this one).
 """
 
 from __future__ import annotations
 
-import json
-import math
 import re
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
+from itertools import islice
 from typing import Any
 
-from coffer.domain.mcp.json_schema_check import InvalidSchema, check_schema, resolve_ref
+from jsonschema import Draft202012Validator
+from jsonschema.exceptions import SchemaError as _MetaSchemaError
+from jsonschema.exceptions import ValidationError
+from referencing import Registry
+from referencing.exceptions import Unresolvable
 
 #: The most errors one validation reports: enough to fix a call, bounded so a
 #: hostile array cannot make an answer huge.
 MAX_ERRORS = 50
-#: How deep ``$ref`` may recurse on one value before it counts as a cycle.
-_MAX_DEPTH = 64
+
+_EMPTY_REGISTRY: Registry[Any] = Registry()
+
+
+class InvalidSchema(ValueError):  # noqa: N818
+    """The schema itself is malformed; raised by :func:`check_schema`."""
 
 
 @dataclass(frozen=True)
@@ -48,300 +56,147 @@ class SchemaError:
         return {"path": self.path or "/", "keyword": self.keyword, "message": self.message}
 
 
-def _pointer(parts: tuple[str | int, ...]) -> str:
+def _pointer(parts: Any) -> str:
     return "".join("/" + str(p).replace("~", "~0").replace("/", "~1") for p in parts)
 
 
-def _short(value: Any) -> str:
-    text = json.dumps(value, ensure_ascii=False, default=str)
-    return text if len(text) <= 60 else text[:57] + "..."
+def _normalise(node: Any) -> Any:
+    """Rewrite the older spellings into draft 2020-12 (see the module docstring)."""
+    if isinstance(node, list):
+        return [_normalise(v) for v in node]
+    if not isinstance(node, dict):
+        return node
+    out = {k: _normalise(v) for k, v in node.items()}
+    if out.get("nullable") is True and "type" in out:
+        types = out["type"] if isinstance(out["type"], list) else [out["type"]]
+        if "null" not in types:
+            out["type"] = [*types, "null"]
+    if out.get("nullable") in (True, False):
+        out.pop("nullable")
+    for exclusive, bound in (("exclusiveMinimum", "minimum"), ("exclusiveMaximum", "maximum")):
+        if isinstance(out.get(exclusive), bool) and out.pop(exclusive) and bound in out:
+            out[exclusive] = out.pop(bound)
+    if isinstance(out.get("items"), list):
+        out["prefixItems"] = out.pop("items")
+        if "additionalItems" in out:
+            out["items"] = out.pop("additionalItems")
+    return out
 
 
-def _is_type(value: Any, name: str) -> bool:
-    if name == "null":
-        return value is None
-    if name == "boolean":
-        return isinstance(value, bool)
-    if name == "object":
-        return isinstance(value, dict)
-    if name == "array":
-        return isinstance(value, list)
-    if name == "string":
-        return isinstance(value, str)
-    if isinstance(value, bool):
-        return False
-    if name == "integer":
-        return isinstance(value, int) or (isinstance(value, float) and value.is_integer())
-    if name == "number":
-        return isinstance(value, (int, float)) and not (
-            isinstance(value, float) and (math.isnan(value) or math.isinf(value))
+def _resolve_local(root: Mapping[str, Any], ref: str) -> None:
+    if not ref.startswith("#"):
+        raise InvalidSchema(f"$ref {ref!r} is not a local reference (it must start with '#')")
+    node: Any = root
+    for raw in ref[1:].lstrip("/").split("/") if ref not in ("#", "#/") else []:
+        part = raw.replace("~1", "/").replace("~0", "~")
+        if isinstance(node, dict) and part in node:
+            node = node[part]
+        elif isinstance(node, list) and part.isdigit() and int(part) < len(node):
+            node = node[int(part)]
+        else:
+            raise InvalidSchema(f"$ref {ref!r} points at nothing")
+    if not isinstance(node, (dict, bool)):
+        raise InvalidSchema(f"$ref {ref!r} does not point at a schema")
+
+
+def _refs(node: Any) -> Iterator[Any]:
+    if isinstance(node, dict):
+        if "$ref" in node:
+            yield node["$ref"]
+        for key, value in node.items():
+            if key not in ("enum", "const", "default", "examples", "example"):
+                yield from _refs(value)
+    elif isinstance(node, list):
+        for value in node:
+            yield from _refs(value)
+
+
+def _empty_enums(node: Any) -> bool:
+    if isinstance(node, dict):
+        if node.get("enum") == []:
+            return True
+        return any(
+            _empty_enums(v)
+            for k, v in node.items()
+            if k not in ("const", "default", "examples", "example")
         )
+    if isinstance(node, list):
+        return any(_empty_enums(v) for v in node)
     return False
 
 
-def _equal(a: Any, b: Any) -> bool:
-    """JSON equality: ``1 == 1.0``, but ``True`` is not ``1``."""
-    if isinstance(a, bool) or isinstance(b, bool):
-        return type(a) is type(b) and a == b
-    if isinstance(a, dict) and isinstance(b, dict):
-        return a.keys() == b.keys() and all(_equal(a[k], b[k]) for k in a)
-    if isinstance(a, list) and isinstance(b, list):
-        return len(a) == len(b) and all(_equal(x, y) for x, y in zip(a, b, strict=True))
-    return bool(a == b)
+def check_schema(schema: Any) -> None:
+    """Raise :class:`InvalidSchema` naming the first malformed spot of ``schema``."""
+    normal = _normalise(schema)
+    try:
+        Draft202012Validator.check_schema(normal)
+    except _MetaSchemaError as e:
+        where = _pointer(e.path) or "/"
+        raise InvalidSchema(f"the schema at {where}: {e.message}") from None
+    if _empty_enums(normal):
+        raise InvalidSchema("'enum' must be a non-empty list")
+    if isinstance(normal, dict):
+        for ref in _refs(normal):
+            if not isinstance(ref, str):
+                raise InvalidSchema("'$ref' must be a string")
+            _resolve_local(normal, ref)
 
 
-def _compiled(pattern: str) -> re.Pattern[str]:
-    return re.compile(pattern)
-
-
-# --- validation ----------------------------------------------------------------
-
-
-class _Validator:
-    def __init__(self, root: Any) -> None:
-        self.root = root
-        self.errors: list[SchemaError] = []
-
-    def run(self, schema: Any, value: Any, at: tuple[str | int, ...], depth: int = 0) -> bool:
-        """Validate, collecting errors; answer whether ``value`` passed."""
-        before = len(self.errors)
-        for error in self._errors(schema, value, at, depth):
-            if len(self.errors) < MAX_ERRORS:
-                self.errors.append(error)
-        return len(self.errors) == before
-
-    def passes(self, schema: Any, value: Any, at: tuple[str | int, ...], depth: int) -> bool:
-        """Whether ``value`` passes, recording nothing (for the combinators)."""
-        trial = _Validator(self.root)
-        return trial.run(schema, value, at, depth)
-
-    def _errors(
-        self, schema: Any, value: Any, at: tuple[str | int, ...], depth: int
-    ) -> Iterator[SchemaError]:
-        path = _pointer(at)
-        if schema is True or schema == {}:
-            return
-        if schema is False:
-            yield SchemaError(path, "false", "no value is allowed here")
-            return
-        if not isinstance(schema, dict):
-            return
-        if depth > _MAX_DEPTH:
-            yield SchemaError(path, "$ref", "the schema refers to itself too deeply")
-            return
-        if "$ref" in schema:
-            target = resolve_ref(self.root, schema["$ref"])
-            sub = _Validator(self.root)
-            sub.run(target, value, at, depth + 1)
-            yield from sub.errors
-            # 2020-12: siblings of $ref apply too.
-        if value is None and schema.get("nullable") is True:
-            return
-        if "type" in schema:
-            names = schema["type"] if isinstance(schema["type"], list) else [schema["type"]]
-            if not any(_is_type(value, n) for n in names):
-                yield SchemaError(
-                    path, "type", f"expected {' or '.join(names)}, got {_type_name(value)}"
-                )
-                return
-        if "const" in schema and not _equal(value, schema["const"]):
-            yield SchemaError(path, "const", f"must be {_short(schema['const'])}")
-        if "enum" in schema and not any(_equal(value, e) for e in schema["enum"]):
-            options = ", ".join(_short(e) for e in schema["enum"][:10])
-            yield SchemaError(path, "enum", f"must be one of {options}")
-        if _is_type(value, "number"):
-            yield from self._number(schema, value, path)
-        if isinstance(value, str):
-            yield from self._string(schema, value, path)
-        if isinstance(value, list):
-            yield from self._array(schema, value, at, depth)
-        if isinstance(value, dict):
-            yield from self._object(schema, value, at, depth)
-        yield from self._combinators(schema, value, at, depth)
-
-    def _number(self, schema: dict[str, Any], value: float, path: str) -> Iterator[SchemaError]:
-        lo, hi = schema.get("minimum"), schema.get("maximum")
-        ex_lo, ex_hi = schema.get("exclusiveMinimum"), schema.get("exclusiveMaximum")
-        if ex_lo is True and lo is not None:
-            if value <= lo:
-                yield SchemaError(path, "exclusiveMinimum", f"must be greater than {lo}")
-        elif lo is not None and value < lo:
-            yield SchemaError(path, "minimum", f"must be at least {lo}")
-        if ex_hi is True and hi is not None:
-            if value >= hi:
-                yield SchemaError(path, "exclusiveMaximum", f"must be less than {hi}")
-        elif hi is not None and value > hi:
-            yield SchemaError(path, "maximum", f"must be at most {hi}")
-        if isinstance(ex_lo, int | float) and not isinstance(ex_lo, bool) and value <= ex_lo:
-            yield SchemaError(path, "exclusiveMinimum", f"must be greater than {ex_lo}")
-        if isinstance(ex_hi, int | float) and not isinstance(ex_hi, bool) and value >= ex_hi:
-            yield SchemaError(path, "exclusiveMaximum", f"must be less than {ex_hi}")
-        step = schema.get("multipleOf")
-        if step:
-            quotient = value / step
-            if not math.isclose(quotient, round(quotient), rel_tol=0, abs_tol=1e-9):
-                yield SchemaError(path, "multipleOf", f"must be a multiple of {step}")
-
-    def _string(self, schema: dict[str, Any], value: str, path: str) -> Iterator[SchemaError]:
-        length = len(value)
-        if "minLength" in schema and length < schema["minLength"]:
-            yield SchemaError(
-                path, "minLength", f"must be at least {schema['minLength']} characters"
-            )
-        if "maxLength" in schema and length > schema["maxLength"]:
-            yield SchemaError(
-                path, "maxLength", f"must be at most {schema['maxLength']} characters"
-            )
-        if "pattern" in schema and _compiled(schema["pattern"]).search(value) is None:
-            yield SchemaError(path, "pattern", f"must match {schema['pattern']!r}")
-
-    def _array(
-        self, schema: dict[str, Any], value: list[Any], at: tuple[str | int, ...], depth: int
-    ) -> Iterator[SchemaError]:
-        path = _pointer(at)
-        if "minItems" in schema and len(value) < schema["minItems"]:
-            yield SchemaError(path, "minItems", f"must hold at least {schema['minItems']} items")
-        if "maxItems" in schema and len(value) > schema["maxItems"]:
-            yield SchemaError(path, "maxItems", f"must hold at most {schema['maxItems']} items")
-        if schema.get("uniqueItems"):
-            for i, item in enumerate(value):
-                if any(_equal(item, other) for other in value[:i]):
-                    yield SchemaError(path, "uniqueItems", f"item {i} repeats an earlier item")
-                    break
-        prefix = schema.get("prefixItems")
-        items = schema.get("items")
-        if isinstance(items, list):  # draft-07 tuple form
-            prefix, items = items, schema.get("additionalItems")
-        start = 0
-        if isinstance(prefix, list):
-            for i, sub in enumerate(prefix[: len(value)]):
-                sub_v = _Validator(self.root)
-                sub_v.run(sub, value[i], (*at, i), depth)
-                yield from sub_v.errors
-            start = len(prefix)
-        if items is not None and not isinstance(items, list):
-            for i in range(start, len(value)):
-                sub_v = _Validator(self.root)
-                sub_v.run(items, value[i], (*at, i), depth)
-                yield from sub_v.errors
-        if "contains" in schema:
-            matches = sum(
-                1
-                for i, v in enumerate(value)
-                if self.passes(schema["contains"], v, (*at, i), depth)
-            )
-            least = schema.get("minContains", 1)
-            if matches < least:
-                yield SchemaError(path, "contains", f"must hold at least {least} matching item(s)")
-            if "maxContains" in schema and matches > schema["maxContains"]:
-                yield SchemaError(
-                    path, "maxContains", f"must hold at most {schema['maxContains']} matching items"
-                )
-
-    def _object(
-        self, schema: dict[str, Any], value: dict[str, Any], at: tuple[str | int, ...], depth: int
-    ) -> Iterator[SchemaError]:
-        path = _pointer(at)
-        for name in schema.get("required", []):
-            if name not in value:
-                yield SchemaError(_pointer((*at, name)), "required", "is required")
-        for name, needs in (schema.get("dependentRequired") or {}).items():
-            if name in value:
-                for other in needs:
-                    if other not in value:
+def _entries(error: ValidationError) -> Iterator[SchemaError]:
+    """One entry per argument: ``required``, ``dependentRequired`` and
+    ``additionalProperties`` name each property, not the object holding it."""
+    at = list(error.absolute_path)
+    keyword = str(error.validator)
+    instance = error.instance
+    value: Any = error.validator_value
+    if keyword == "required" and isinstance(instance, dict):
+        for name in value:
+            if name not in instance:
+                yield SchemaError(_pointer([*at, name]), keyword, f"'{name}' is required")
+        return
+    if keyword == "dependentRequired" and isinstance(instance, dict):
+        for owner, needed in value.items():
+            if owner in instance:
+                for name in needed:
+                    if name not in instance:
                         yield SchemaError(
-                            _pointer((*at, other)),
-                            "dependentRequired",
-                            f"is required when {name!r} is given",
+                            _pointer([*at, name]), keyword, f"'{name}' is required with '{owner}'"
                         )
-        if "minProperties" in schema and len(value) < schema["minProperties"]:
-            yield SchemaError(
-                path, "minProperties", f"must hold at least {schema['minProperties']} properties"
-            )
-        if "maxProperties" in schema and len(value) > schema["maxProperties"]:
-            yield SchemaError(
-                path, "maxProperties", f"must hold at most {schema['maxProperties']} properties"
-            )
-        props: dict[str, Any] = schema.get("properties") or {}
-        patterns: dict[str, Any] = schema.get("patternProperties") or {}
-        extra = schema.get("additionalProperties", True)
-        names_schema = schema.get("propertyNames")
-        for name, item in value.items():
-            if names_schema is not None and not self.passes(names_schema, name, (*at, name), depth):
-                yield SchemaError(
-                    _pointer((*at, name)), "propertyNames", f"{name!r} is not an allowed name"
-                )
-            matched = False
-            if name in props:
-                matched = True
-                sub_v = _Validator(self.root)
-                sub_v.run(props[name], item, (*at, name), depth)
-                yield from sub_v.errors
-            for pattern, sub in patterns.items():
-                if _compiled(pattern).search(name):
-                    matched = True
-                    sub_v = _Validator(self.root)
-                    sub_v.run(sub, item, (*at, name), depth)
-                    yield from sub_v.errors
-            if not matched:
-                if extra is False:
-                    yield SchemaError(
-                        _pointer((*at, name)),
-                        "additionalProperties",
-                        f"{name!r} is not an allowed argument",
-                    )
-                elif isinstance(extra, dict):
-                    sub_v = _Validator(self.root)
-                    sub_v.run(extra, item, (*at, name), depth)
-                    yield from sub_v.errors
-
-    def _combinators(
-        self, schema: dict[str, Any], value: Any, at: tuple[str | int, ...], depth: int
-    ) -> Iterator[SchemaError]:
-        path = _pointer(at)
-        for sub in schema.get("allOf") or []:
-            sub_v = _Validator(self.root)
-            sub_v.run(sub, value, at, depth)
-            yield from sub_v.errors
-        if "anyOf" in schema and not any(
-            self.passes(sub, value, at, depth) for sub in schema["anyOf"]
-        ):
-            yield SchemaError(path, "anyOf", "must match at least one of the allowed shapes")
-        if "oneOf" in schema:
-            matched = sum(1 for sub in schema["oneOf"] if self.passes(sub, value, at, depth))
-            if matched != 1:
-                yield SchemaError(
-                    path,
-                    "oneOf",
-                    "must match exactly one of the allowed shapes"
-                    + (f" (it matches {matched})" if matched else " (it matches none)"),
-                )
-        if "not" in schema and self.passes(schema["not"], value, at, depth):
-            yield SchemaError(path, "not", "matches a shape that is not allowed")
-        if "if" in schema:
-            branch = "then" if self.passes(schema["if"], value, at, depth) else "else"
-            if branch in schema:
-                sub_v = _Validator(self.root)
-                sub_v.run(schema[branch], value, at, depth)
-                yield from sub_v.errors
-
-
-def _type_name(value: Any) -> str:
-    for name in ("null", "boolean", "integer", "number", "string", "array", "object"):
-        if _is_type(value, name):
-            return name
-    return type(value).__name__
+        return
+    if keyword == "additionalProperties" and isinstance(instance, dict):
+        schema = error.schema if isinstance(error.schema, dict) else {}
+        known = set(schema.get("properties") or {})
+        patterns = list(schema.get("patternProperties") or {})
+        for name in instance:
+            if name not in known and not any(re.search(p, name) for p in patterns):
+                yield SchemaError(_pointer([*at, name]), keyword, f"'{name}' is not allowed")
+        return
+    yield SchemaError(_pointer(at), keyword, error.message)
 
 
 def validate(schema: Any, instance: Any) -> list[SchemaError]:
     """Every way ``instance`` breaks ``schema`` (empty when it is valid).
 
     ``schema`` is assumed to have passed :func:`check_schema`; a reference that
-    cannot be resolved still raises :class:`InvalidSchema` rather than passing.
+    cannot be resolved, or never ends, is reported as a ``$ref`` failure rather
+    than passing.
     """
-    validator = _Validator(schema)
-    validator.run(schema, instance, ())
-    return validator.errors
+    validator = Draft202012Validator(_normalise(schema), registry=_EMPTY_REGISTRY)
+    out: list[SchemaError] = []
+    seen: set[SchemaError] = set()
+    try:
+        for error in validator.iter_errors(instance):
+            for entry in _entries(error):
+                if entry not in seen:
+                    seen.add(entry)
+                    out.append(entry)
+            if len(out) >= MAX_ERRORS:
+                break
+    except RecursionError:
+        out.append(SchemaError("", "$ref", "the schema's $ref never reaches a value check"))
+    except Unresolvable as e:
+        out.append(SchemaError("", "$ref", f"$ref {e.ref!r} cannot be resolved"))
+    return list(islice(out, MAX_ERRORS))
 
 
 __all__ = ["MAX_ERRORS", "InvalidSchema", "SchemaError", "check_schema", "validate"]

@@ -31,8 +31,9 @@ than a rule someone remembers.
 Reach is stored in `~/.coffer/local/reach.json`
 (`infrastructure/vault/reach_store.py`), one JSON object keyed by the
 resource's uid: `{"<uid>": {"enabled": true, "agents": ["<agent uid>", …] |
-null, "projects": null}}`. `agents: null` is unrestricted; `projects` is a
-reserved key that is always written `null`. The file lives in the `local/`
+null}}`. `agents: null` is unrestricted. (Older builds also wrote a reserved
+`projects: null`; it is ignored on read and dropped on the next write, since
+per-project reach has no consumer and a new key needs no migration.) The file lives in the `local/`
 class, which no sync round commits
 ([Storage Is Five Classes by Nature](storage-is-five-classes-by-nature.md)),
 and it is never in a resource's own vault file, so a reach write makes no vault
@@ -157,7 +158,7 @@ Replace the one-identity predicate with `is_active(reach, ctx)` over a
   dimension the context cannot supply narrows to nothing, which a caller that
   forgets to pass one sees as a resource that vanished.
 - **Why it is not adopted.** No second dimension has a consumer. The record
-  already reserves `projects`, so adding the dimension later costs one key and
+  is a JSON object read by key, so adding a dimension later costs one key and
   a change of call signature, not a migration of stored data. A channel's
   default agent staying inside its scope is held today by two checks (the
   kind's config check and its scope check, on both write paths) plus a runtime
@@ -206,5 +207,4 @@ reason, covered in [Sync Withholds Derived Output](sync-withholds-derived-output
   would start.
 - Not built yet: the context predicate of Option F — there is no `ReachContext`,
   `is_active` takes one agent uid, enforcement sites still combine `enabled`
-  and scope themselves, `projects` is stored as `null` and enforced nowhere,
-  and a channel's drive list has no `may_drive` config field.
+  and scope themselves, there is no project dimension, and a channel's drive list has no `may_drive` config field.

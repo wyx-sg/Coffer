@@ -44,7 +44,6 @@ from coffer.domain.skill.validator import (
 
 if TYPE_CHECKING:
     from coffer.application.skill.copy_ops import KeptCopy
-    from coffer.application.skill.delivery_report import AgentDelivery
     from coffer.application.skill.unmanaged_ops import UnmanagedDetail, UnmanagedView
 
 logger = logging.getLogger(__name__)
@@ -140,12 +139,6 @@ class SkillService:
             return None
         self.last_delivery = await self._reconcile_delivery()
         return self.last_delivery
-
-    async def delivery_of(self, skill: Resource) -> list[AgentDelivery]:
-        """Per agent, what the newest delivery pass did for ``skill``."""
-        from coffer.application.skill.delivery_report import delivery_for
-
-        return delivery_for(skill, await self.list_agents(), self.last_delivery)
 
     async def remove(
         self, *, uid: str, actor: str = "api", keep_foreign_copies: bool = False

@@ -53,6 +53,7 @@ from coffer.domain.workspace_errors import (
     McpEntryNotFound,
     McpEntryProtected,
     McpEntrySourceAmbiguous,
+    McpSseNotSupported,
 )
 
 
@@ -301,6 +302,8 @@ class AgentMcpEntryService:
         """
         agent, cfg = await self.agent(uid)
         spec, _text, parsed_entry = await self.locate(uid, entry, source)
+        if parsed_entry.legacy_sse:
+            raise McpSseNotSupported(parsed_entry.name)
 
         flagged = secret_env_keys({**parsed_entry.env, **parsed_entry.headers})
         unresolved = [k for k in flagged if k not in (secrets or {})]

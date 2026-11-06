@@ -62,7 +62,7 @@ async def _taken(svc: SkillSourceService) -> tuple[set[str], set[str]]:
 async def _found(
     svc: SkillSourceService, root: pathlib.Path, label: str, *, name_the_candidate: bool = False
 ) -> list[StagedSkill]:
-    """Every skill at or one level under ``root``. With ``name_the_candidate``
+    """Every skill at or below ``root`` (``find_skill_folders``). With ``name_the_candidate``
     (a folder the person picked), a root with no SKILL.md whose one sub-folder
     holds a skill that cannot be added is refused with that reason and the
     sub-folder in the details, so the dialog can offer it as the folder."""
@@ -70,7 +70,7 @@ async def _found(
     if not discovery.folders:
         raise SkillSourceRejected(
             NO_SKILL_MD,
-            f"no SKILL.md in {label}: it must be at the top or one folder down",
+            f"no SKILL.md in {label} or in the folders below it",
             looked_in(label),
         )
     taken, protected = await _taken(svc)
@@ -222,14 +222,18 @@ async def confirm(
     if not isinstance(stage, ImportStage):
         raise SkillValidationError("not_an_import_stage", {"path": stage_id})
     by_name = {s.name: s for s in stage.skills if s.valid and s.name}
+    # A skill may be chosen by the folder the stage listed it under too ("."
+    # for the stage's root), since that is what the stage answer shows first.
+    by_folder = {s.folder: s for s in stage.skills if s.valid and s.name}
     if not names:
         raise SkillValidationError("no_skill_chosen", {})
     chosen: list[StagedSkill] = []
     for name in dict.fromkeys(names):
-        staged = by_name.get(name)
+        staged = by_name.get(name) or by_folder.get(name)
         if staged is None:
             raise SkillValidationError("skill_not_in_stage", {"path": name})
-        chosen.append(staged)
+        if staged not in chosen:
+            chosen.append(staged)
     taken, protected = await _taken(svc)
     for s in chosen:
         assert s.name is not None

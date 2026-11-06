@@ -1371,30 +1371,6 @@ components:
       - op
       title: ChangeEventOut
       type: object
-    DeliveryResultOut:
-      description: What delivering a reach change did for one agent.
-      properties:
-        agent_name:
-          title: Agent Name
-          type: string
-        agent_uid:
-          title: Agent Uid
-          type: string
-        ok:
-          title: Ok
-          type: boolean
-        reason:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Reason
-      required:
-      - agent_uid
-      - agent_name
-      - ok
-      - reason
-      title: DeliveryResultOut
-      type: object
     ErrorDetail:
       properties:
         code:
@@ -1775,13 +1751,6 @@ components:
           format: date-time
           title: Created At
           type: string
-        delivery:
-          anyOf:
-          - items:
-              $ref: '#/components/schemas/DeliveryResultOut'
-            type: array
-          - type: 'null'
-          title: Delivery
         description:
           anyOf:
           - type: string
@@ -1824,7 +1793,6 @@ components:
       - config
       - scope
       - enabled
-      - delivery
       - toggleable
       - secrets_readable_by_local_processes
       - created_at

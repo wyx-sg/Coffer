@@ -34,8 +34,6 @@ export type SkillStaging = Schemas["SkillStagingOut"];
 export type StagedSkill = Schemas["StagedSkillOut"];
 export type SkillStagingConfirm = Schemas["SkillStagingConfirmRequest"];
 export type SkillStageGit = Schemas["SkillStageGitRequest"];
-export type SkillSourceChange = Schemas["SkillSourceChangeOut"];
-export type SkillSourceChangeFile = Schemas["SkillSourceChangeFileOut"];
 export type SkillFileChange = Schemas["SkillFileChangeOut"];
 export type SkillUpdateCheckInterval = Schemas["SkillUpdateCheckSettingBody"]["interval"];
 export type SkillDriftEntry = Schemas["DriftEntryOut"];
@@ -130,21 +128,6 @@ export const skillsApi = {
   setUpdateCheck: (interval: SkillUpdateCheckInterval) =>
     unwrap(getApiClient().PUT("/skills/update-check", { body: { interval } })),
 
-  changeSource: (uid: string, body: SkillStageGit) =>
-    unwrap(
-      getApiClient().POST("/skills/{uid}/source/change", {
-        params: { path: skillPath(uid) },
-        body,
-      }),
-    ),
-  applySourceChange: (uid: string, stagingId: string) =>
-    unwrap(
-      getApiClient().POST("/skills/{uid}/source/change/apply", {
-        params: { path: skillPath(uid) },
-        body: { staging_id: stagingId },
-      }),
-    ),
-
   // ----- agents' copies (spec skill-manager "Report skill drift on request") -----
   verify: () => unwrap(getApiClient().POST("/skills/verify")),
   repair: () => unwrap(getApiClient().POST("/skills/repair")),
@@ -166,16 +149,6 @@ export const skillsApi = {
 
   // ----- folders in the store no skill claims -----
   orphans: () => unwrap(getApiClient().GET("/skills/orphans")),
-  orphanFiles: (name: string) =>
-    unwrap(getApiClient().GET("/skills/orphans/{name}/files", { params: { path: { name } } })),
-  orphanFileContent: (name: string, path: string) =>
-    unwrap(
-      getApiClient().GET("/skills/orphans/{name}/files/content", {
-        params: { path: { name }, query: { path } },
-      }),
-    ),
   adoptOrphan: (name: string) =>
     unwrap(getApiClient().POST("/skills/orphans/{name}/adopt", { params: { path: { name } } })),
-  removeOrphan: (name: string) =>
-    unwrapVoid(getApiClient().DELETE("/skills/orphans/{name}", { params: { path: { name } } })),
 };

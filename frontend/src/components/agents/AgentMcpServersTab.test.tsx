@@ -70,6 +70,7 @@ function entry(name: string, extra: Partial<McpEntryOut> = {}): McpEntryOut {
     enabled: null,
     is_coffer: false,
     matches_resource: null,
+    legacy_sse: false,
     ...extra,
   };
 }
@@ -287,6 +288,22 @@ describe("AgentMcpServersTab", () => {
     // The server is now listed once: in Coffer's row, not among the agent's own entries.
     await waitFor(() => expect(screen.queryByRole("button", { name: "github" })).toBeNull());
     expect(screen.getByText("github · filesystem")).toBeInTheDocument();
+  });
+
+  acceptance("agent-registry", "an old SSE entry is listed but neither imported nor adopted", async () => {
+    const legacy = entry("legacy", {
+      transport: "http",
+      command: null,
+      args: [],
+      url: "https://sse.example/sse",
+      legacy_sse: true,
+    });
+    stub({ items: [GATEWAY, legacy] });
+    renderTab();
+    const adopt = await screen.findByRole("button", { name: "Adopt: legacy" });
+    expect(adopt).toBeDisabled();
+    expect(adopt).toHaveAttribute("title", expect.stringContaining("old SSE transport"));
+    expect(screen.getByText("Old SSE transport")).toBeInTheDocument();
   });
 
   test("a config file that failed to parse is an inline warning; its entries are read-only", async () => {

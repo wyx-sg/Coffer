@@ -23,7 +23,6 @@ interface Props {
   summaryPending: boolean;
   rows: readonly ToolRow[];
   toolsHref: string;
-  onReimport: () => void;
 }
 
 export function GroupOverview({
@@ -33,7 +32,6 @@ export function GroupOverview({
   summaryPending,
   rows,
   toolsHref,
-  onReimport,
 }: Props) {
   const update = useUpdateCustomToolGroup(group.name);
   const saveEnv = useSaveCustomToolEnvironment(group.name);
@@ -55,7 +53,7 @@ export function GroupOverview({
   };
   return (
     <div className="flex flex-col gap-6">
-      <GroupDefinition group={group} onReimport={onReimport} />
+      <GroupDefinition group={group} />
       <SectionStack>
         <McpLast24h
           name={group.name}

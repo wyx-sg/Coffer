@@ -45,11 +45,6 @@ export function agentTabPath(type: string, tab: AgentTab, search = ""): string {
   return detailTabPath(agentBasePath(type), tab, AGENT_TABS, DEFAULT_AGENT_TAB, search);
 }
 
-/** One skill folder Coffer does not manage, named as the scan names it, under Skills. */
-export function unmanagedSkillPath(type: string, location: string, name: string): string {
-  return `${agentBasePath(type)}/skills/unmanaged/${enc(location)}/${enc(name)}`;
-}
-
 /** One native memory store, addressed by its directory (its identity), under Memory. */
 export function agentMemoryStorePath(type: string, dir: string, project?: string | null): string {
   const params = new URLSearchParams({ dir });

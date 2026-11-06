@@ -59,10 +59,11 @@ def test_the_read_model_tells_undeclared_from_declared(c: TestClient, up: Upstre
     assert items["bare"]["requires_declared"] is False
     assert items["empty"]["requires_declared"] is True
     folder = default_master_root() / "bare"
+    # A profile file's requires is not read: only SKILL.md declares.
     (folder / "profiles").mkdir()
     (folder / "profiles" / "p.md").write_text("---\nrequires: [jq]\n---\n")
     got = c.get(f"/api/v1/skills/{items['bare']['uid']}").json()
-    assert got["requires_declared"] is True
+    assert got["requires_declared"] is False
 
 
 def test_the_prompt_is_built_from_the_folders_as_they_are(c: TestClient, up: Upstream) -> None:

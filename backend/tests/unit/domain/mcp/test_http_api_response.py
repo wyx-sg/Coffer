@@ -120,11 +120,9 @@ def test_a_malformed_rule_is_refused(bad: dict[str, Any]) -> None:
         ResponseRule.model_validate(bad)
 
 
-def test_diagnostic_headers_are_lowered_deduplicated_and_never_sensitive() -> None:
-    settings = HttpApiResponse(diagnostic_headers=["X-Req", "x-req", "X-Other"])
-    assert settings.diagnostic_headers == ["x-req", "x-other"]
-    with pytest.raises(ValidationError):
-        HttpApiResponse(diagnostic_headers=["WWW-Authenticate"])
+def test_an_old_diagnostic_header_list_is_ignored_and_rules_are_bounded() -> None:
+    settings = HttpApiResponse.model_validate({"diagnostic_headers": ["X-Req"], "rules": []})
+    assert settings.model_dump() == {"rules": []}
     with pytest.raises(ValidationError):
         HttpApiResponse(rules=[json_rule("/c", "0")] * 11)
 

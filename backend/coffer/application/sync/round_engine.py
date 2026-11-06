@@ -24,8 +24,8 @@ from typing import Any
 
 from coffer.application.sync import round_plaintext
 from coffer.application.sync.round_deps import RoundDeps
-from coffer.application.sync.round_guard import hold_for, invalid_files
-from coffer.application.sync.round_layout import is_older, layout_refusal
+from coffer.application.sync.round_guard import invalid_files, merge_hold, push_hold
+from coffer.application.sync.round_layout import is_older, refusal, unseen_older
 from coffer.application.sync.round_replace import replace
 from coffer.application.sync.round_trees import (
     conflict_files,
@@ -37,7 +37,6 @@ from coffer.domain.sync.remote import SyncRemote
 from coffer.domain.sync.rounds import PROBLEM_STATUS, RoundRecord, RoundStatus
 from coffer.domain.sync.stops import (
     ConflictFile,
-    HoldDirection,
     Stop,
     StopKind,
     held_fields,
@@ -107,13 +106,16 @@ class RoundEngine:
             if not d.state.joined():
                 return rec(RoundStatus.JOIN_REQUIRED, detail="the remote is empty")
             return self._push(rec, remote, token, local, None)
-        refused = layout_refusal(d, tip)
+        refused = refusal(d, remote, tip)
         if refused is not None:
             return rec(refused[0], detail=refused[1])
         if is_older(d, tip):
             # This vault is the source of truth: it replaces a remote at an
-            # older layout, joined or not (spec vault-sync "Refuse a newer-layout remote
-            # and replace an older one").
+            # older layout, unless the remote holds commits it never pulled
+            # (spec vault-sync "Refuse a newer-layout remote and replace an older one").
+            unseen = unseen_older(d, tip, local)
+            if unseen is not None:
+                return rec(unseen[0], detail=unseen[1])
             return replace(self, rec, remote, token, local, tip)
         base = d.git.merge_base(local, tip)
         if base is None:
@@ -228,11 +230,7 @@ class RoundEngine:
         """Steps 5-7 for a merged tree nothing stops on."""
         d = self.d
         confirmed = d.state.confirmed() == (local, tip)
-        hold = hold_for(d.git, d.trees, before=local, after=tree, direction=HoldDirection.INCOMING)
-        if hold is None and base is not None:
-            hold = hold_for(
-                d.git, d.trees, before=base, after=local, direction=HoldDirection.OUTGOING
-            )
+        hold = merge_hold(d.git, d.trees, d.state, local=local, tip=tip, base=base, tree=tree)
         if hold is not None and not confirmed:
             d.state.set_stop(
                 Stop(StopKind.HOLD, local, tip, base, d.now(), hold=hold, tree=tree, join=join)
@@ -314,9 +312,7 @@ class RoundEngine:
         d = self.d
         confirmed = d.state.confirmed() == (local, tip or "")
         if tip is not None and not confirmed:
-            hold = hold_for(
-                d.git, d.trees, before=tip, after=local, direction=HoldDirection.OUTGOING
-            )
+            hold = push_hold(d.git, d.trees, d.state, local=local, tip=tip)
             if hold is not None:
                 d.state.set_stop(
                     Stop(

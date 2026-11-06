@@ -177,7 +177,7 @@ To undo an upgrade by hand, point the symlinks back at the previous version dire
 | `logs/daemon.log`, `daemon.log.1`…`.3` | The daemon's log, one JSON object per line, rotated at 10 MB with three backups. The desktop app and the login service write their own records into the same file. Shown on the **Activity** page, read by `coffer log daemon`, and located by `coffer path logs`. | daemon, desktop app | No | Rotated files, yes. Leave the live file while the daemon runs. |
 | `logs/proxy.log` | Standard error of the model proxy: metadata-only lines, never a body, prompt or secret. | daemon (supervisor), model proxy | No | Yes. |
 | `logs/shim-<pid>-<epoch>.log` | One file per MCP shim process, created only when the shim has something to log. Pruned after 7 days. | shim | No | Yes. |
-| `logs/upstream/<server>.log`, `.log.1` | Standard error of each stdio upstream MCP server. Rolled aside at 2 MB; the `.1` copy is pruned after 7 days. | daemon | No | Yes. |
+| `logs/upstream/<server>.log`, `.log.1` | Standard error of each stdio upstream MCP server. Rolled aside at 2 MB; the `.1` copy is pruned after 7 days, and both go once the server is deleted. | daemon | No | Yes. |
 
 `COFFER_LOG_DIR` moves the daemon, proxy, upstream and shim logs together. See [Observability](/architecture/observability).
 

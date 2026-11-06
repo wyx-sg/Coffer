@@ -55,6 +55,8 @@ class McpEntryOut(BaseModel):
     enabled: bool | None
     is_coffer: bool
     matches_resource: str | None
+    #: The old HTTP+SSE transport: listed, but it cannot be adopted.
+    legacy_sse: bool = False
 
 
 class McpEntryFieldOut(BaseModel):
@@ -181,6 +183,7 @@ def _entry_out(e: McpEntry) -> McpEntryOut:
         enabled=e.enabled,
         is_coffer=e.is_coffer,
         matches_resource=e.matches_resource,
+        legacy_sse=e.legacy_sse,
     )
 
 

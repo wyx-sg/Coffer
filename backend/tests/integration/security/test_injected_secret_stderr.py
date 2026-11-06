@@ -32,7 +32,7 @@ from coffer.infrastructure.logging.upstream_tail import read_upstream_tail
 from coffer.infrastructure.mcp.probe import probe_server
 from coffer.infrastructure.mcp.stderr_mask import DRAIN_SECONDS, MASK
 from coffer.infrastructure.mcp.subprocess import StdioUpstreamConnection
-from coffer.surfaces.http.mcp.handoff_views import diagnose_prompt
+from coffer.surfaces.http.mcp.handoff_views import server_prompt
 
 _FAKE = Path(__file__).resolve().parents[2] / "fixtures" / "fake_mcp_server.py"
 _PLAIN_LINE = "plain progress line ünïcödé 42"
@@ -115,7 +115,7 @@ def _assert_masked_log(name: str, canary: str) -> bytes:
     tail = read_upstream_tail(name, 200)
     assert tail.lines
     assert all(canary not in line.text for line in tail.lines)
-    assert canary not in diagnose_prompt(_resource(name), error="boom")
+    assert canary not in server_prompt(_resource(name), error="boom")
     return raw
 
 

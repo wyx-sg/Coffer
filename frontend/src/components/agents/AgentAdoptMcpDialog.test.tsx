@@ -32,6 +32,7 @@ const ENTRY: McpEntryOut = {
   enabled: null,
   is_coffer: false,
   matches_resource: null,
+  legacy_sse: false,
 };
 
 function renderDialog(entry: McpEntryOut = ENTRY, onAdopted = vi.fn()) {

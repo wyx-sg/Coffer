@@ -15,20 +15,16 @@ from coffer.application.skill.cli_requirements import CliListing, CliView, Skill
 from coffer.application.skill.cli_tools import CliPreview
 from coffer.surfaces.http.handoff_schemas import HandoffOut, handoff_out
 
-CliStatusOut = Literal["missing", "outdated", "logged_out", "ready"]
-CliLoginStateOut = Literal["logged_in", "logged_out", "not_needed"]
+CliStatusOut = Literal["missing", "ready"]
 CliCofferUseOut = Literal["vault_history", "sync"]
 
 
 class CliNeededByOut(BaseModel):
-    """One skill that requires the command, with what it asked for."""
+    """One skill that requires the command, and why."""
 
     skill_uid: str
     skill_name: str
-    min_version: str | None
     why: str | None
-    #: The skill's profiles that declare it; empty when SKILL.md itself does.
-    profiles: list[str]
 
 
 class CliServerOut(BaseModel):
@@ -39,17 +35,6 @@ class CliServerOut(BaseModel):
     server_name: str
     #: The launcher its config names, e.g. ``uvx``.
     launcher: str
-
-
-class CliLoginOut(BaseModel):
-    """``state`` is ``None`` when the command was not found, so its login check
-    could not run, or when the check has not been run yet (only a Check runs
-    it). ``command`` is the login command to copy — Coffer never runs it.
-    ``check`` is the declared login check."""
-
-    state: CliLoginStateOut | None
-    check: list[str] | None
-    command: str | None
 
 
 class CliOut(BaseModel):
@@ -64,14 +49,8 @@ class CliOut(BaseModel):
     status: CliStatusOut
     #: Where the agent's ``PATH`` finds it; ``None`` when missing.
     path: str | None
-    #: What ``--version`` printed; ``None`` when missing or unreadable.
-    version: str | None
-    #: The highest minimum any skill or the hand-added declaration asks for
-    #: (MCP servers ask for none).
-    min_version: str | None
-    login: CliLoginOut
-    #: The prompt to hand to an agent: install a missing command, update an
-    #: outdated one, or help the person log in. ``None`` when ready.
+    #: The prompt to hand to an agent to install a missing command. ``None``
+    #: when ready.
     handoff: HandoffOut | None
     #: The skills that declare the command.
     needed_by: list[CliNeededByOut]
@@ -99,14 +78,11 @@ class CliListOut(BaseModel):
 class CliAddIn(BaseModel):
     """Declare a tool by hand. ``command`` is a command name (``jq``) or the
     absolute path of an executable (``/opt/tools/bin/jq``; the file name is
-    the command). ``login_check`` is a command line that starts with the tool,
-    like ``gh auth status``."""
+    the command)."""
 
     command: str = Field(min_length=1, max_length=512)
     title: str | None = None
     description: str | None = None
-    min_version: str | None = None
-    login_check: str | None = None
 
 
 class CliEditIn(BaseModel):
@@ -116,8 +92,6 @@ class CliEditIn(BaseModel):
 
     title: str | None = None
     description: str | None = None
-    min_version: str | None = None
-    login_check: str | None = None
 
 
 class CliPreviewIn(BaseModel):
@@ -130,7 +104,6 @@ class CliPreviewOut(BaseModel):
     command: str
     #: Where it was found; ``None`` when it is not on this machine.
     path: str | None
-    version: str | None
     #: Already added by hand.
     added: bool
     #: A skill or MCP server already requires it.
@@ -138,9 +111,7 @@ class CliPreviewOut(BaseModel):
 
 
 def cli_preview_out(p: CliPreview) -> CliPreviewOut:
-    return CliPreviewOut(
-        command=p.command, path=p.path, version=p.version, added=p.added, required=p.required
-    )
+    return CliPreviewOut(command=p.command, path=p.path, added=p.added, required=p.required)
 
 
 def cli_out(view: CliView) -> CliOut:
@@ -152,21 +123,12 @@ def cli_out(view: CliView) -> CliOut:
         added=row.added,
         status=view.status.value,
         path=probe.path,
-        version=probe.version,
-        min_version=row.min_version,
-        login=CliLoginOut(
-            state=probe.login.value if probe.login is not None else None,
-            check=list(row.login_check) if row.login_check is not None else None,
-            command=row.login,
-        ),
         handoff=handoff_out(view.handoff),
         needed_by=[
             CliNeededByOut(
                 skill_uid=n.skill_uid,
                 skill_name=n.skill_name,
-                min_version=n.min_version,
                 why=n.why,
-                profiles=list(n.profiles),
             )
             for n in row.needed_by
         ],
