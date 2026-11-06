@@ -24,7 +24,9 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import datetime
 import logging
+import re
 from collections.abc import Callable, Sequence
 from typing import Protocol
 
@@ -34,6 +36,28 @@ from coffer.infrastructure.daemon.child_process import ChildProcess
 from coffer.infrastructure.platform.user_path import which_on_user_path
 
 _logger = logging.getLogger(__name__)
+
+#: Codex prints the same start-up warnings (ignored config keys, a skill it
+#: cannot load) every time an app-server starts. Each distinct line is logged
+#: once a day; the rest would bury the lines that matter.
+_SEEN_STDERR: dict[str, datetime.date] = {}
+_SEEN_STDERR_MAX = 512
+_ANSI = re.compile(r"\x1b\[[0-9;]*m")
+_LEADING_STAMP = re.compile(r"^\s*\d{4}-\d{2}-\d{2}T[0-9:.]+Z?\s*")
+
+
+def _first_today(text: str, today: datetime.date | None = None) -> bool:
+    """True the first time ``text`` (its ANSI colours and leading timestamp
+    stripped) is seen on ``today``."""
+    day = today or datetime.date.today()
+    key = _LEADING_STAMP.sub("", _ANSI.sub("", text))
+    if _SEEN_STDERR.get(key) == day:
+        return False
+    if len(_SEEN_STDERR) >= _SEEN_STDERR_MAX:
+        _SEEN_STDERR.clear()
+    _SEEN_STDERR[key] = day
+    return True
+
 
 #: Pidfile prefix under ``~/.coffer/upstream-pids`` for the app-server child.
 _CHILD_NAME = "codex-app-server"
@@ -115,7 +139,7 @@ class CodexSubprocessSession:
                 if not line:
                     break
                 text = line.decode("utf-8", "replace").rstrip()
-                if text:
+                if text and _first_today(text):
                     _logger.warning("codex app-server stderr: %s", text)
 
     async def close(self) -> None:

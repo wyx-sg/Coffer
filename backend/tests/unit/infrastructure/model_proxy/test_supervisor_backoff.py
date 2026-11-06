@@ -251,3 +251,52 @@ async def test_an_idle_supervisor_parks_with_no_timer_and_a_push_wakes_it(
         assert seen[-1] is False
     finally:
         await supervisor.stop()
+
+
+async def test_an_unchanged_state_is_not_pushed_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A refresh with the same routes, to a proxy that holds the last push, is
+    skipped; a changed state, or a proxy that lost it, is pushed."""
+    state = _routed()
+
+    async def provider() -> ProxyState:
+        return state.model_copy(update={"revision": state.revision})
+
+    supervisor = ProxySupervisor(
+        provider, port=1, coffer_dir=tmp_path, version="0.0.0", clock=_Clock(), interval=0.0
+    )
+    supervisor._info = ProxyInfo(
+        port=1, pid=1, started_at="2026-11-06T00:00:00Z", version="0.0.0", control_token="t"
+    )
+
+    async def attested(_info: object) -> bool:
+        return True
+
+    puts: list[str] = []
+
+    class _Resp:
+        def raise_for_status(self) -> None:
+            return None
+
+    async def put(url: str, **kwargs: object) -> _Resp:
+        puts.append(url)
+        return _Resp()
+
+    monkeypatch.setattr(supervisor, "_attested", attested)
+    monkeypatch.setattr(supervisor._http, "put", put)
+
+    await supervisor.refresh()
+    assert len(puts) == 1
+    supervisor._health = {"revision": supervisor._pushed_revision}
+    await supervisor.refresh()
+    assert len(puts) == 1  # same routes, proxy holds them
+
+    supervisor._health = {"revision": 0}  # the proxy restarted and lost them
+    await supervisor.refresh()
+    assert len(puts) == 2
+
+    supervisor._health = {"revision": supervisor._pushed_revision}
+    state = state.model_copy(update={"routes": []})
+    await supervisor.refresh()
+    assert len(puts) == 3

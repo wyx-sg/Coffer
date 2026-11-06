@@ -148,7 +148,7 @@ is preserved, and the projection tests assert exactly this set.
 | `env.NO_PROXY` | gains `127.0.0.1,localhost`, appended to the user's own entries; de-projection takes back only that appended pair |
 | `model` | the AGENT binding's `model`; left untouched when unbound, removed on de-projection only while it still equals the binding |
 | `env.ANTHROPIC_DEFAULT_{OPUS,SONNET,HAIKU,FABLE}_MODEL` | the binding's `tier_models`, else Coffer's suggestion (`suggest_tier_models`); an unpinned tier is removed |
-| `modelPicker` | the connection's curated text models, each option described `via Coffer` (the ownership marker); `replaceBuiltInOptions` true when no curated id is a Claude id |
+| `modelPicker` | the connection's curated text models, each option described `via Coffer` (the ownership marker); `replaceBuiltInOptions` always true |
 | `env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS` | a local runtime only: `"1"` |
 | `env.CLAUDE_CODE_MAX_CONTEXT_TOKENS` | the chosen model's recorded window, when it records one and is not a Claude id, on any connection |
 

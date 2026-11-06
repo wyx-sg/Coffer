@@ -105,6 +105,9 @@ class ProxySupervisor:
         self._restarts = 0
         self._last_error: str | None = None
         self._pushed_revision: int | None = None
+        #: What the last push carried, revision aside: a refresh that would
+        #: push the same routes to a proxy that holds them is skipped.
+        self._pushed_body: dict[str, object] | None = None
         self._lock = asyncio.Lock()
         self._dirty = False
         self._watchdog: asyncio.Task[None] | None = None
@@ -156,6 +159,12 @@ class ProxySupervisor:
                 self._info = self._health = None  # not ours: re-found only through the checked path
                 return
             state, self._prefetched = self._prefetched or await self._state_provider(), None
+            body = state.model_dump(mode="json", exclude={"revision"})
+            held = (
+                self._health is not None and self._health.get("revision") == self._pushed_revision
+            )
+            if held and body == self._pushed_body:
+                return
             try:
                 r = await self._http.put(
                     self._url(info, "/_coffer/state"),
@@ -168,6 +177,7 @@ class ProxySupervisor:
                 _logger.warning("model_proxy.state_push_failed: %s", type(exc).__name__)
                 return
             self._pushed_revision = state.revision
+            self._pushed_body = body
             if self._health is not None:
                 self._health = {**self._health, "revision": state.revision}
 
@@ -337,6 +347,7 @@ class ProxySupervisor:
                 if health is not None:
                     self._info, self._health = info, health
                     self._pushed_revision = None
+                    self._pushed_body = None
                     _logger.info("model_proxy.spawned pid=%s port=%s", proc.pid, info.port)
                     return
             await asyncio.sleep(0.05)
