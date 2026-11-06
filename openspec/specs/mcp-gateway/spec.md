@@ -226,6 +226,8 @@ the existing name pattern and the ban on `__`, wherever the framework validates 
   only once the change is approved.
 - Registering a server with a name that already exists within the kind MUST be rejected with a clear error;
   a partial write is impossible.
+- Registering or editing an HTTP server with a static header whose value is empty MUST be refused naming the
+  header; a server saved earlier with one still loads, so it can be fixed.
 - Registering, listing, viewing, editing, enabling, disabling, scoping and deleting a server MUST be done
   on the MCP servers page, through the resource routes and with the `coffer mcp` commands that call
   them (`add`, `list`, `show`, `update`, `enable`, `disable`, `reach`, `delete`, `status`, `tools`,
@@ -294,6 +296,11 @@ of that session still under way.
 - **GIVEN** a session whose spawn of `fs` has started its child but has not finished starting
 - **WHEN** the session ends and the spawn then finishes
 - **THEN** the child is closed, the call fails as unavailable, and the ended session starts nothing more
+
+#### Scenario: an HTTP server's header with no value is refused when saved
+- **GIVEN** an HTTP server whose `X-Team` header has an empty value
+- **WHEN** it is registered, and when a registered server is edited to have one
+- **THEN** both are refused naming `X-Team`, and the registered server keeps its value
 
 ### Requirement: Support stdio and HTTP upstreams
 The system MUST support both stdio and HTTP MCP transports for upstream servers. An HTTP upstream MAY cite a
@@ -1012,7 +1019,9 @@ lines Coffer writes there when it starts the server, when a start fails (a launc
 a start that timed out) and when it stops it — through `GET /api/v1/resources/mcp_server/{uid}/log`,
 newest first, each line saying whether Coffer or the server wrote it and, for Coffer's lines, when. Only
 the tail is read, from the current file and then the one rolled aside. A server Coffer does not start
-(Streamable HTTP) has no log and answers none. Coffer's lines name the command and never a secret, which
+(Streamable HTTP) has no log and answers none. A Coffer line always starts a line of its own, even when
+the server's last output ended without a newline. A server's log file goes with the server: once no
+registered server has its name, the next retention run deletes it and its rolled-aside file. Coffer's lines name the command and never a secret, which
 reaches the server only through its environment; a value Coffer injected into that environment is masked in
 the file before it is written, whoever wrote the line (secret "Hold plaintext only in memory at the moment
 of use").
@@ -1022,6 +1031,16 @@ of use").
 - **WHEN** its log is read, and read again with a limit of two
 - **THEN** the lines come newest first across both files, Coffer's marked `coffer` with their time and the server's marked `stderr`
 - **AND** the limited read holds two lines and says more exist
+
+#### Scenario: a Coffer line after a server's unfinished line starts its own
+- **GIVEN** a server log whose last output is `Starting...` with no newline
+- **WHEN** Coffer writes its stop line
+- **THEN** the file holds `Starting...` and Coffer's line on two separate lines, through the masking pump too
+
+#### Scenario: a deleted server's log goes at the next retention run
+- **GIVEN** log files for two servers, one of which is no longer registered
+- **WHEN** the retention run prunes log files with the registered servers' names
+- **THEN** the unregistered server's file and its rolled-aside file are deleted and the other server's are kept
 
 ### Requirement: Offer turn-scoped tools only inside a Coffer turn
 Every agent process Coffer spawns for a turn MUST carry the turn's random token

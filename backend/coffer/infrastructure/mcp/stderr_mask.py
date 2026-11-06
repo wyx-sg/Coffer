@@ -121,6 +121,7 @@ class MaskedSink:
         self._loop: asyncio.AbstractEventLoop | None = None
         self._thread: threading.Thread | None = None
         self._ended = asyncio.Event()
+        self._mid_line = False
 
     @property
     def active(self) -> bool:
@@ -130,7 +131,14 @@ class MaskedSink:
     # -- Coffer's own lines ---------------------------------------------------
     def write(self, text: str, /) -> int:
         with self._lock:
+            if text:
+                self._mid_line = not text.endswith("\n")
             return self._target.write(self._masker.mask_text(text))
+
+    def ends_mid_line(self) -> bool:
+        """Whether the child's last stderr bytes left a line unfinished."""
+        with self._lock:
+            return self._mid_line
 
     def flush(self) -> None:
         with self._lock:
@@ -190,6 +198,7 @@ class MaskedSink:
         if not text:
             return
         with self._lock:
+            self._mid_line = not text.endswith("\n")
             try:
                 self._target.write(text)
                 self._target.flush()
