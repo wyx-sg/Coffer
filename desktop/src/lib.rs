@@ -33,6 +33,7 @@
 //   * `traffic_lights` — keeps the macOS lights on the title strip's centre line
 
 mod approval_watch;
+mod clipboard;
 mod coffer_home;
 mod daemon;
 mod daemon_attest;
@@ -125,6 +126,7 @@ pub fn run() {
             tray::set_ui_language,
             tray::set_attention_count,
             secrets::reveal_secret,
+            clipboard::copy_secret,
             secrets::export_master_key_backup,
             desktop_requests::master_key_backup_closed,
             secrets::approve_pending,

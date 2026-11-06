@@ -6,7 +6,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
 import { ToastProvider } from "@/components/ui/toast";
+import { acceptance } from "@/test/acceptance";
 import { McpRequires } from "./McpRequires";
+
+const openSheet = vi.fn();
+vi.mock("@/lib/hooks/useApprovals", async (orig) => ({
+  ...(await orig<typeof import("@/lib/hooks/useApprovals")>()),
+  openApprovalsSheet: () => openSheet(),
+}));
 
 const ID = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const OTHER = "secret/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
@@ -23,6 +30,8 @@ vi.mock("@/lib/api/secret", async (orig) => ({
   ...(await orig<typeof import("@/lib/api/secret")>()),
   secretsApi: {
     set: vi.fn(async () => undefined),
+    rejectedApprovalsFor: vi.fn(async () => ({ approvals: [{ id: "apr-9" }] })),
+    askAgain: vi.fn(async () => undefined),
     list: vi.fn(async () => ({
       refs: [row(`secret/${ID}`, "Sentry token"), row(OTHER, "Team key")],
     })),
@@ -31,12 +40,19 @@ vi.mock("@/lib/api/secret", async (orig) => ({
 
 const REQUIRES = [{ kind: "secret", name: "SENTRY_TOKEN", status: "set", secret: ID }] as const;
 
-function renderRequires(onRebind?: (r: unknown, ref: string) => Promise<unknown>) {
+function renderRequires(
+  onRebind?: (r: unknown, ref: string) => Promise<unknown>,
+  requires: readonly unknown[] = REQUIRES,
+) {
   render(
     <QueryClientProvider client={new QueryClient()}>
       <ToastProvider>
         <MemoryRouter>
-          <McpRequires requires={REQUIRES} onRebind={onRebind} />
+          <McpRequires
+            requires={requires as typeof REQUIRES}
+            onRebind={onRebind}
+            serverUid="u-sentry"
+          />
         </MemoryRouter>
       </ToastProvider>
     </QueryClientProvider>,
@@ -69,4 +85,21 @@ describe("McpRequires", () => {
     await waitFor(() => expect(onRebind).toHaveBeenCalled());
     expect(onRebind).toHaveBeenCalledWith(expect.objectContaining({ name: "SENTRY_TOKEN" }), OTHER);
   });
+
+  acceptance(
+    "mcp-gateway",
+    "a secret row held for approval offers its next step",
+    async () => {
+      const { secretsApi } = await import("@/lib/api/secret");
+      renderRequires(undefined, [
+        { ...REQUIRES[0], status: "waiting_approval" },
+        { ...REQUIRES[0], name: "OTHER_TOKEN", status: "refused" },
+      ]);
+      fireEvent.click(await screen.findByRole("button", { name: "Open approvals" }));
+      expect(openSheet).toHaveBeenCalled();
+      fireEvent.click(screen.getByRole("button", { name: "Ask again" }));
+      await waitFor(() => expect(secretsApi.askAgain).toHaveBeenCalledWith("apr-9"));
+      expect(secretsApi.rejectedApprovalsFor).toHaveBeenCalledWith("u-sentry");
+    },
+  );
 });

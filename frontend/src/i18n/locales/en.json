@@ -692,6 +692,8 @@
         "cli": "CLI",
         "secret": "Secret",
         "viewClis": "View in CLIs",
+        "openApprovals": "Open approvals",
+        "askAgain": "Ask again",
         "status": {
           "found": "Found",
           "not_found": "Not found",
@@ -2004,7 +2006,7 @@
     "UPSTREAM_TIMEOUT": "Upstream server did not respond in time — retry, or raise its request timeout",
     "UPSTREAM_UNAVAILABLE": "Upstream server is unreachable — check its command or URL, then run Test connection",
     "ADOPT_SECRET_REF_EXISTS": "Adopting only creates new secrets — one of these names is already stored or is a standalone secret",
-    "SECRET_BINDING_REJECTED": "That destination was refused in the Coffer app, so nothing was sent. Change the destination, or ask again from the Secrets page.",
+    "SECRET_BINDING_REJECTED": "That destination was refused in the Coffer app, so nothing was sent. Change the destination, or press Ask again on the page that uses it.",
     "SECRET_BINDING_PENDING": "That secret is waiting for approval in the Coffer app before it is sent here.",
     "PRESENCE_GRANT_INVALID": "The approval could not be verified. Try again from the Coffer app.",
     "APPROVAL_NOT_FOUND": "That approval no longer exists.",
@@ -5838,7 +5840,7 @@
       "revealedAt": "Revealed at {{time}}",
       "valueLabel": "Value of {{name}}",
       "hide": "Hide",
-      "copied": "Value copied",
+      "copied": "Value copied. The clipboard is cleared in 90 seconds.",
       "hidesIn": "Hides in {{seconds}} s · Recorded in Activity"
     },
     "delete": {
@@ -6211,7 +6213,9 @@
       "checking": "Checking…",
       "reachable": "Reachable",
       "keyRejected": "Key rejected",
-      "unreachable": "Unreachable"
+      "unreachable": "Unreachable",
+      "awaitingApproval": "Waiting for approval",
+      "refused": "Refused"
     },
     "list": {
       "filter": "Filter providers",
@@ -6264,6 +6268,12 @@
       "unreachableTitle": "Can’t reach {{host}}",
       "unreachableBody": "{{reason}} Everything that uses it fails until it answers.",
       "unreachablePrompt": "Coffer can’t reach the model provider “{{name}}” at {{url}}. The last answer was: {{reason}}. Find out why — network, VPN, the gateway being down, a wrong address — and fix it or tell me what to change. Don’t change Coffer’s settings without asking.",
+      "awaitingTitle": "The API key is waiting for approval",
+      "awaitingBody": "Its secret is held until you approve sending it here. Nothing that uses this provider works until then.",
+      "openApprovals": "Open approvals",
+      "refusedTitle": "Sending the API key here was refused",
+      "refusedBody": "Its secret stays held while the address is the same. Ask again to put the request back.",
+      "askAgain": "Ask again",
       "routeThrough": "Through Coffer’s proxy at"
     },
     "key": {

@@ -4,7 +4,9 @@
 // each secret its environment or headers cite (set, missing here, or waiting
 // for approval). A CLI row links to its CLIs page; a secret row names the env
 // var or header, then the secret by its Secrets-page name (a link to its page)
-// with Replace key… beside it. A Streamable HTTP server has no launcher row.
+// with Replace key… beside it. A secret waiting for approval offers Open
+// approvals; a refused one offers Ask again, which in the desktop app asks for
+// Touch ID at once. A Streamable HTTP server has no launcher row.
 // Nothing to show when it needs nothing.
 import { useState } from "react";
 import { Link } from "react-router-dom";
@@ -15,6 +17,9 @@ import { Section } from "@/components/Section";
 import { ReplaceSecretDialog } from "@/components/secret/ReplaceSecretDialog";
 import { SecretRefControl } from "@/components/secret/SecretRefControl";
 import { Button } from "@/components/ui/button";
+import { mcpStatusKey } from "@/lib/api/queryKeys";
+import { useAskAgainFor } from "@/lib/hooks/useAskAgain";
+import { openApprovalsSheet } from "@/lib/hooks/useApprovals";
 import type { McpStatusDetail } from "@/lib/hooks/useMcpServerStatus";
 import { toneTextClass } from "@/lib/statusColors";
 import { cn } from "@/lib/utils";
@@ -27,13 +32,16 @@ const refOf = (id: string) => (id.startsWith("secret/") ? id : `secret/${id}`);
 
 interface Props {
   requires: readonly Requirement[];
+  /** The destination the secrets go to, for Ask again on a refused row; omitted, no Ask again. */
+  serverUid?: string;
   /** Saves the owner pointing `requirement` (an env var or header) at the secret `ref`; omitted, no Replace key button. */
   onRebind?: (requirement: Requirement, ref: string) => Promise<unknown>;
 }
 
-export function McpRequires({ requires, onRebind }: Props) {
+export function McpRequires({ requires, serverUid, onRebind }: Props) {
   const { t } = useTranslation();
   const [replacing, setReplacing] = useState<Requirement | null>(null);
+  const askAgain = useAskAgainFor(serverUid ?? "", serverUid ? [mcpStatusKey(serverUid)] : []);
   if (requires.length === 0) return null;
   return (
     <Section title={t("mcp.page.requires.title")} gap="snug" labelled compact>
@@ -78,7 +86,23 @@ export function McpRequires({ requires, onRebind }: Props) {
                     </Button>
                   ) : null
                 ) : (
-                  <SecretRefControl secretRef={refOf(secret)} onReplace={replace} />
+                  <span className="flex items-center gap-2">
+                    {r.status === "waiting_approval" ? (
+                      <Button variant="outline" size="sm" onClick={openApprovalsSheet}>
+                        {t("mcp.page.requires.openApprovals")}
+                      </Button>
+                    ) : r.status === "refused" && serverUid ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={askAgain.isPending}
+                        onClick={() => askAgain.mutate()}
+                      >
+                        {t("mcp.page.requires.askAgain")}
+                      </Button>
+                    ) : null}
+                    <SecretRefControl secretRef={refOf(secret)} onReplace={replace} />
+                  </span>
                 )}
               </span>
             </li>

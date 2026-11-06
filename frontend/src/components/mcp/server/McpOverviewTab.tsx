@@ -17,6 +17,8 @@ import { McpLast24h } from "./McpLast24h";
 import { McpRequires } from "./McpRequires";
 
 interface Props {
+  /** The server's uid, for Ask again on a refused secret. */
+  uid?: string;
   name: string;
   /** Off servers link nowhere and say only their last call. */
   enabled: boolean;
@@ -39,6 +41,7 @@ interface Props {
 }
 
 export function McpOverviewTab({
+  uid,
   name,
   enabled,
   state,
@@ -78,6 +81,7 @@ export function McpOverviewTab({
         />
         <McpRequires
           requires={requires}
+          serverUid={uid}
           onRebind={onRebindSecret ? (r, ref) => onRebindSecret(r.name, ref) : undefined}
         />
         {tools}

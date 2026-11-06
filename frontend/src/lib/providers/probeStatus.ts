@@ -5,9 +5,18 @@
 // call itself failed (the message then carries the reason). So health is read
 // from that answer: reachable (models listed, or an honest empty catalogue);
 // not reachable with a reason naming 401/403 → the key is rejected; any other
-// failure, or a failed request → unreachable.
+// failure, or a failed request → unreachable. A request refused because the
+// stored key waits for approval, or was refused, in the Coffer app says so:
+// nothing was sent, so nothing is known about the endpoint.
+import { ApiError } from "@/lib/api/errors";
 
-export type ProbeStatus = "checking" | "reachable" | "keyRejected" | "unreachable";
+export type ProbeStatus =
+  | "checking"
+  | "reachable"
+  | "keyRejected"
+  | "unreachable"
+  | "awaitingApproval"
+  | "refused";
 
 const AUTH_RE =
   /\b(401|403)\b|unauthori[sz]ed|forbidden|invalid[\s_-]*(api[\s_-]*)?key|authentication/i;
@@ -40,6 +49,10 @@ export function probeStatus(opts: {
   pending: boolean;
 }): ProbeStatus {
   const { data, error, pending } = opts;
+  if (error instanceof ApiError && error.code === "SECRET_BINDING_PENDING") {
+    return "awaitingApproval";
+  }
+  if (error instanceof ApiError && error.code === "SECRET_BINDING_REJECTED") return "refused";
   if (error != null) return "unreachable";
   if (pending || !data) return "checking";
   if (data.reachable) return "reachable";

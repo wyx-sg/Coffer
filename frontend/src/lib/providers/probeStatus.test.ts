@@ -1,6 +1,7 @@
 // src/lib/providers/probeStatus.test.ts — health read from the endpoint-models probe.
 import { describe, expect, test } from "vitest";
 
+import { ApiError } from "@/lib/api/errors";
 import { authStatusOf, probeFailed, probeStatus } from "./probeStatus";
 
 const answer = (models: unknown[], message: string, reachable: boolean) => ({
@@ -49,5 +50,12 @@ describe("probeStatus", () => {
     expect(probeFailed(answer([], "the endpoint listed no models", true), null)).toBe(false);
     expect(probeFailed(answer([], "boom", false), null)).toBe(true);
     expect(probeFailed(undefined, new Error("x"))).toBe(true);
+  });
+
+  test("a key held for approval is waiting or refused, not unreachable", () => {
+    const held = (code: string) =>
+      probeStatus({ data: undefined, error: new ApiError(code, "held"), pending: false });
+    expect(held("SECRET_BINDING_PENDING")).toBe("awaitingApproval");
+    expect(held("SECRET_BINDING_REJECTED")).toBe("refused");
   });
 });

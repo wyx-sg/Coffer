@@ -61,7 +61,9 @@ export function ProviderDetail({
         }),
       );
     } else {
-      toast.error(r.data?.message || t("providers.test.failed"));
+      toast.error(
+        r.error ? translateApiError(t, r.error) : r.data?.message || t("providers.test.failed"),
+      );
     }
   };
 

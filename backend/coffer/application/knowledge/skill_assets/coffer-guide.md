@@ -283,16 +283,27 @@ stays ungranted and reaches its service through Coffer (an MCP server or a
 custom HTTP tool). For example:
 
 ```sh
-coffer run --secret PGPASSWORD=coffer://secret/orders-db -- psql -h db.internal orders
+coffer run --secret PGPASSWORD=coffer://secret/<id> -- psql -h db.internal orders
 coffer run --env-file connection.env -- ./query.sh
 ```
 
-A secret for `coffer run` is a standalone secret, stored as `secret/<name>` and
-cited in files as `coffer://secret/<name>`. Write that reference into skills,
-scripts and env files — never the value. `coffer secret list` shows what
-exists; `coffer secret set <name>` stores a value read from stdin. If you find a
-plaintext secret left in a file or in a skill, tell the developer to store it as
-a secret and cite it by `coffer://secret/<name>`.
+Always name the variable (`ENV=coffer://secret/<id>`). A tool that wants a
+file rather than a variable (a service-account JSON, a kubeconfig) gets one
+from inside the child, so the value never leaves it:
+
+```sh
+coffer run --secret SA_JSON=coffer://secret/<id> -- sh -c \
+  'f=$(mktemp) && trap "rm -f $f" EXIT && printf %s "$SA_JSON" > "$f" &&
+   GOOGLE_APPLICATION_CREDENTIALS="$f" gcloud …'
+```
+
+A secret for `coffer run` is a standalone secret, stored as `secret/<id>` (Coffer
+mints the id) and cited in files as `coffer://secret/<id>`. Write that reference
+into skills, scripts and env files — never the value. `coffer secret list` shows
+what exists and each secret's name; the developer adds one on the Secrets page
+or with `coffer secret set --name "<name>"`, which prints the reference. If you
+find a plaintext secret left in a file or in a skill, tell the developer to move
+it with Find plaintext keys on the Secrets page.
 
 A secret that would go somewhere it has not gone before — a new MCP server
 citing an existing token, a changed command line or URL —

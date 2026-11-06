@@ -126,6 +126,9 @@ REMOVED: tuple[tuple[str, str], ...] = (
     # Removed by the OpenSpec change make-knowledge-and-memory-files-only: an
     # agent adds knowledge with its own file tools.
     ("coffer__write", "write a file into <collection>/.inbox/"),
+    # Removed by the OpenSpec change act-on-secret-approvals-where-they-show:
+    # only the desktop app can sign the grant an install needs.
+    ("coffer secret key-install", "coffer secret import-key"),
 )
 
 #: (command phrase, removed option, what replaces it). Matches the phrase with

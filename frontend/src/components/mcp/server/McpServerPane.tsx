@@ -177,6 +177,7 @@ export function McpServerPane({ resource, basePath, onDeleted }: Props) {
         overview={
           <McpOverviewTab
             activityHref={activityHref}
+            uid={uid}
             name={resource.name}
             enabled={resource.enabled}
             state={state}

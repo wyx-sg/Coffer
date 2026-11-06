@@ -96,6 +96,7 @@ SHELL_COMMANDS: dict[str, str | tuple[Category, str]] = {
     "set_ui_language": ("window", "the window's interface language"),
     "set_attention_count": ("internal", "the menu bar's count, set by the page"),
     "reveal_secret": "secret reveal",
+    "copy_secret": ("window", "copies a revealed value onto this Mac's pasteboard"),
     "export_master_key_backup": "secret backup-key",
     "master_key_backup_closed": (
         "internal",

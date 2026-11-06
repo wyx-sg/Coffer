@@ -24,6 +24,7 @@ import type { SecretRef } from "@/lib/api/secret";
 import { translateApiError } from "@/lib/api/errors";
 import { useRevealSecret } from "@/lib/hooks/useSecrets";
 import { toneTextClass } from "@/lib/statusColors";
+import { copySecretValue } from "@/lib/secretClipboard";
 import { cn } from "@/lib/utils";
 import { displayName } from "./secretRows";
 import { shortDate } from "./secretTimes";
@@ -83,8 +84,7 @@ export function RevealSecretDialog({ row, onOpenChange }: Props) {
   const start = () =>
     reveal.mutate(row.ref, { onSuccess: () => setRevealedAt(new Date().toISOString()) });
   const copy = () =>
-    void navigator.clipboard
-      .writeText(value ?? "")
+    void copySecretValue(value ?? "")
       .then(() => toast.success(t("secrets.reveal.copied")))
       .catch(() => toast.error(t("secrets.menu.copyFailed")));
 

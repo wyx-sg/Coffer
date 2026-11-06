@@ -114,8 +114,7 @@ coffer run --env-file connection.env -- ./query.sh
 
 | Option | Meaning |
 | --- | --- |
-| `--secret ENV=coffer://secret/<id>` | Set `secret/<id>` as the variable `ENV`. Repeatable. This is the form to use, and the form a skill cites: the secret then lists the skill under **Used by**. `ENV=<id>` works too. |
-| `--secret coffer://secret/<id>` or `--secret <id>` | Set `secret/<id>` as a variable whose name is derived from the id (upper-cased, `-` and `.` turned into `_`). Since an id is a string of hex characters, the derived name is rarely what the command wants; prefer `ENV=coffer://secret/<id>`. |
+| `--secret ENV=coffer://secret/<id>` | Set `secret/<id>` as the variable `ENV`. Repeatable. This is the form to use, and the form a skill cites: the secret then lists the skill under **Used by**. `ENV=<id>` works too. The variable is always named: a bare id or URI is refused, since a name derived from a hex id is one no command reads. |
 | `--env-file FILE` | Read `KEY=VALUE` lines. Plain values are passed through; each `coffer://secret/<id>` value is resolved. |
 | `--no-masking` | Pass the command's output through untouched, for tools that need a real terminal. |
 
@@ -151,7 +150,7 @@ If you already have skills that cite `coffer://secret/<id>`, allow each such sec
 
 ## See or copy a value
 
-Open the [Secrets page](#the-secrets-page) in the **desktop app** and choose **Reveal value…** on the row. A warning comes first: anyone who can see your screen can read the value. Then macOS asks for Touch ID or your login password, and the prompt names the secret. The value shows for 30 seconds, with **Copy** and **Hide**, then hides again; closing the dialog drops it at once. Each reveal asks again; there is no window during which a second one is free. The reveal is audited as `secret_revealed` with the ref only.
+Open the [Secrets page](#the-secrets-page) in the **desktop app** and choose **Reveal value…** on the row. A warning comes first: anyone who can see your screen can read the value. Then macOS asks for Touch ID or your login password, and the prompt names the secret. The value shows for 30 seconds, with **Copy** and **Hide**, then hides again; closing the dialog drops it at once. **Copy** marks the value as concealed, so clipboard managers that honour the marker (Raycast, Alfred, Paste, Maccy and the like) neither show nor keep it, and clears the clipboard 90 seconds later unless you copied something else since. Each reveal asks again; there is no window during which a second one is free. The reveal is audited as `secret_revealed` with the ref only.
 
 The browser UI offers no reveal: the menu item reads **Reveal in the Coffer app** and is disabled.
 

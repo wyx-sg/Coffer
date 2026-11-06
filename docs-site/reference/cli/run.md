@@ -18,6 +18,6 @@ Only a secret granted to local programs in the Coffer app resolves; any other is
 
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |
-| `--secret` <span class="cli-chip">option</span> | text (repeatable) |  | NAME, ENV=NAME or ENV=coffer://secret/&lt;id&gt; of a standalone secret (repeatable) |
+| `--secret` <span class="cli-chip">option</span> | text (repeatable) |  | ENV=coffer://secret/&lt;id&gt; (or ENV=&lt;id&gt;) of a standalone secret (repeatable) |
 | `--env-file` <span class="cli-chip">option</span> | path |  | KEY=VALUE file; coffer://secret/&lt;name&gt; values are resolved |
 | `--no-masking` <span class="cli-chip">option</span> | flag |  | Pass the child's output through unfiltered |

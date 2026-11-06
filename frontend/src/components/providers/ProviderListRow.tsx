@@ -10,6 +10,7 @@ import { useTranslation } from "react-i18next";
 import { AgentBadge } from "@/components/agent/AgentBadge";
 import type { Provider } from "@/lib/api/providers";
 import { PROTOCOL_LABEL_KEY } from "@/lib/providers/presets";
+import type { ProbeStatus } from "@/lib/providers/probeStatus";
 import type { ProviderUse } from "@/lib/providers/usedBy";
 import { TruncatedText } from "@/components/ui/truncated-text";
 import { toneTextClass } from "@/lib/statusColors";
@@ -23,7 +24,7 @@ interface Props {
   use: ProviderUse;
   selected: boolean;
   /** What is wrong with the connection, when something is: the sub-line says so, in red. */
-  problem?: "keyRejected" | "unreachable" | null;
+  problem?: Exclude<ProbeStatus, "checking" | "reachable"> | null;
 }
 
 function useOfferLabel(provider: Provider): string {

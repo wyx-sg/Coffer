@@ -1374,15 +1374,21 @@ The web surfaces:
   until a runtime is detected, does not let the user go on to Models; the connection's Name
   appears once a runtime is chosen. The dialog surfaces test-connection and list-models with an inline, not-yet-saved
   secret.
-- The connection detail (`/model-providers/<uid>`, addressed by `uid` because a connection can be renamed) is one column opened beside the list — Used by, Endpoint, Models — and has no tabs. Its header carries a health pill (Reachable, Key rejected or Unreachable, read from a probe that runs when it opens), the agents its addresses serve ("For Claude Code, Codex", or that none can use it), the host and, when the endpoint answered, how long it took, with Test, Edit and a menu holding Delete provider ("Review what deleting a connection changes"). **Used by** is read-only: each agent whose `connection_uid` names the connection (and that the connection still serves),
+- The connection detail (`/model-providers/<uid>`, addressed by `uid` because a connection can be renamed) is one column opened beside the list — Used by, Endpoint, Models — and has no tabs. Its header carries a health pill (Reachable, Key rejected or Unreachable, read from a probe that runs when it opens; Waiting for approval or Refused when the probe is held because the API key's secret waits for, or was refused, its approval for this connection — neither reads as Unreachable), the agents its addresses serve ("For Claude Code, Codex", or that none can use it), the host and, when the endpoint answered, how long it took, with Test, Edit and a menu holding Delete provider ("Review what deleting a connection changes"). **Used by** is read-only: each agent whose `connection_uid` names the connection (and that the connection still serves),
   with the model it runs, as a link reading "<Agent> › Change model" that opens that agent's page with its Change model dialog already open (`/agents/<type>?change-model=1`); and Speech to text
   when the connection is flagged for it, reading "Settings › General" and opening it. Used by carries no
-  switch, activate or revert control, and no row repeats a fault: a connection's fault shows in its header pill and in the section it belongs to (Endpoint for Unreachable or Key rejected, Models for a failed listing).
+  switch, activate or revert control, and no row repeats a fault: a connection's fault shows in its header pill and in the section it belongs to (Endpoint for Unreachable or Key rejected, Models for a failed listing). Endpoint shows a held key as its own box with its next step and no agent hand-off: Waiting for approval offers Open approvals, Refused offers Ask again (in the desktop app it is approved on the spot with Touch ID).
 - Per-agent connection and model selection lives on the agent detail page's **Overview › Model** section and its **Change model** dialog; the agent page has no Model tab. The section reads **Provider**, **Model** and **Route** and carries **Change…**. The dialog is one 480-wide form for both agents ("Review a model change before writing it"), filtered to the connections that serve that agent: **Provider** (the agent's built-in login or a connection), then, for a connection, **Model** and, for Claude Code, **Model per tier** (Opus, Sonnet, Haiku, and Fable only when the connection lists a Fable model; see "Suggest a model for each Claude Code tier"). It carries no
   other model setting — no output-limit, subagent, thinking or fast-mode
   control — because what else a model needs Coffer derives and writes itself. Picking a non-built-in
   connection introspects its endpoint and stages a default model — the first model returned — and
   the tier suggestions for it. Picking things in the form is a DRAFT: it writes nothing, and **Review changes** is enabled only once the draft differs from what is applied, names a model and has passed its connection test ("Review a model change before writing it"). On the built-in login Model is the agent's own model and optional, and no test runs. The agent's Overview reads the connection the agent is on from the agent record's `connection_uid`, not from any flag on a connection.
+
+#### Scenario: a key held for approval says so on the provider page
+- **GIVEN** a connection whose API key's secret waits for approval to be sent to it
+- **WHEN** its detail page opens and the probe is held
+- **THEN** Endpoint says the key is waiting for approval and offers Open approvals, with no Unreachable box and no agent hand-off
+- **AND** once refused, it says so and offers Ask again, which puts the refused request back (TypeScript acceptance test)
 
 #### Scenario: update a provider profile
 - **GIVEN** a connection exists,

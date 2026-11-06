@@ -66,8 +66,8 @@ and the initial environment of any same-user process is readable with `ps eww`
 | A plaintext secrets file read by any tool that walks `~/.coffer/` | **Yes**, after migration — the file holds references |
 | A secret in the agent's own environment inherited by its shell or MCP children | **Yes** for secrets resolved through `coffer run` — they never enter it |
 | An agent that asks Coffer for a secret's value, through REST, the CLI or MCP | **Yes** for a secret without the local-process grant — no route returns its value and `coffer run` refuses it; in a build without the Keychain access group the agent can still read the master key file and decrypt the store itself |
-| An agent that runs `coffer run --secret X -- env` for a secret a person has not granted to local programs | **Yes** — the resolve is refused, nothing starts, and the request waits in the desktop app |
-| An agent that runs `coffer run --secret X -- env`, or reads the environment of the child it started, for a granted secret | **No** — the agent is the child's parent; the grant says so in the approval and on the Secrets page |
+| An agent that runs `coffer run --secret X=<id> -- env` for a secret a person has not granted to local programs | **Yes** — the resolve is refused, nothing starts, and the request waits in the desktop app |
+| An agent that runs `coffer run --secret X=<id> -- env`, or reads the environment of the child it started, for a granted secret | **No** — the agent is the child's parent; the grant says so in the approval and on the Secrets page |
 
 ## Options Considered
 

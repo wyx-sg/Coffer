@@ -10,21 +10,19 @@ from coffer.domain.mcp.server_config import HttpTransport, StdioTransport
 from coffer.domain.secret_masking import StreamMasker
 from coffer.domain.secrets import (
     cited_secret_names,
-    default_env_var,
     is_standalone_ref,
     is_valid_secret_name,
     parse_secret_uri,
 )
 
 
-def test_names_uris_and_default_variables() -> None:
+def test_names_and_uris() -> None:
     assert is_valid_secret_name("db-password.prod")
     assert not is_valid_secret_name("a/b") and not is_valid_secret_name("..")
     assert not is_valid_secret_name("x" * 65)
     assert parse_secret_uri(" coffer://secret/db-password ") == "db-password"
     assert parse_secret_uri("coffer://secret/a/b") is None
     assert cited_secret_names("use coffer://secret/a and coffer://secret/b.c") == {"a", "b.c"}
-    assert default_env_var("db-password.prod") == "DB_PASSWORD_PROD"
     assert is_standalone_ref("secret/x") and not is_standalone_ref("mcp_server/x/TOKEN")
 
 

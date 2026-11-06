@@ -425,6 +425,18 @@ token to the page (on attach, on a cold start and after a restart) and before ev
 presence-gated operation (reveal, approve, approve several, key backup, key import); on a
 failure it aborts with "This is not Coffer's daemon — nothing was sent" and sends nothing.
 
+Copying a revealed value MUST go through the shell (`copy_secret`), never the page's own
+clipboard write: the shell puts the value on the general pasteboard together with the
+`org.nspasteboard.ConcealedType` and `org.nspasteboard.TransientType` markers, so clipboard
+managers that honour them neither show nor keep it, and clears the pasteboard 90 seconds later
+unless something else was copied since. The app says the clipboard is cleared in 90 seconds.
+
+#### Scenario: copying a revealed value goes through the shell
+- **GIVEN** a secret revealed in the desktop app
+- **WHEN** the person presses Copy
+- **THEN** the value is handed to the shell's `copy_secret`, not written by the page
+- **AND** the app says the clipboard is cleared in 90 seconds
+
 #### Scenario: a reveal with a valid grant returns the value once
 - **GIVEN** a stored secret and a challenge issued for revealing exactly that ref
 - **WHEN** the reveal is sent with the challenge signed by the grant key
@@ -672,11 +684,13 @@ A standalone secret MUST live in the store under `secret/<id>`, where `<id>` is 
 minted 32 hex characters (older names are moved to one at start), and MUST be
 cited from files as `coffer://secret/<id>`
 ([Standalone Secrets Are Named `coffer://secret/` References](../../../docs/decisions/standalone-secrets-are-named-references-injected-into-one-child.md)).
-`coffer run [--secret NAME|ENV=NAME|ENV=coffer://secret/<id>]… [--env-file FILE] [--no-masking] -- cmd
-args…` MUST accept a secret as its name or as its `coffer://secret/<id>` URI
-(a bare URI sets the variable the name would; skills cite a secret in the URI
-form, which the citation index sees, so the secret lists the skill under Used
-by), and MUST resolve every named secret, every `coffer://secret/` value in the
+`coffer run [--secret ENV=coffer://secret/<id>|ENV=<id>]… [--env-file FILE] [--no-masking] -- cmd
+args…` MUST take each secret with the variable it sets named, as its
+`coffer://secret/<id>` URI (the form skills cite, which the citation index sees,
+so the secret lists the skill under Used by) or its id. A `--secret` that names
+no variable MUST be refused before anything is resolved, with the form to use:
+an id is 32 hex characters, so a variable named after it is one no program
+reads. It MUST resolve every named secret, every `coffer://secret/` value in the
 env file and every such value in its own environment through
 `POST /api/v1/secrets/resolve`, which MUST answer standalone names
 only and MUST record one `secret_resolved` entry per name carrying the ref, the name,
@@ -707,9 +721,14 @@ only use stays without the grant and reaches its service through Coffer.
 
 #### Scenario: coffer run sets a secret only in the child
 - **GIVEN** a standalone secret `db-password`
-- **WHEN** `coffer run --secret db-password -- <cmd>` runs a command that reports whether `DB_PASSWORD` is set
+- **WHEN** `coffer run --secret DB_PASSWORD=db-password -- <cmd>` runs a command that reports whether `DB_PASSWORD` is set
 - **THEN** the child sees the value in `DB_PASSWORD` while the calling process's environment does not change
 - **AND** one `secret_resolved` entry names `db-password` and the program and does not contain the value
+
+#### Scenario: coffer run refuses a secret whose variable is not named
+- **GIVEN** a standalone secret granted to local programs
+- **WHEN** `coffer run` is given it as a bare id, a bare URI, or `=<id>`
+- **THEN** it exits non-zero naming the form `--secret ENV=coffer://secret/<id>`, starts nothing, and records no `secret_resolved` entry
 
 #### Scenario: coffer run masks the value in the child's output
 - **GIVEN** a standalone secret whose value the child prints, split across two writes
@@ -1399,11 +1418,10 @@ answer from the secret store, never from sync, because Settings › Security
 shows the fingerprint and offers the import whether or not a sync remote is
 configured. On
 the command line, `coffer secret key-fingerprint` and `coffer secret key-preview`
-call the first two; `coffer secret key-install` sends the import request and its
-help MUST say that the request needs the presence grant only the desktop app
-signs and that a person imports with `coffer secret import-key`, which opens the
-import in the app. The command line MUST offer no way to obtain a grant, so a
-`key-install` without one is refused and changes nothing.
+call the first two, and a person imports with `coffer secret import-key`, which
+opens the import in the app. The import request itself MUST have no command: only
+the desktop app can sign the grant it needs, so a command for it could only fail.
+The command line MUST offer no way to obtain a grant.
 
 Settings › Security MUST offer the import, in the desktop app only, as one dialog
 whose Replace key runs behind the app's Touch ID prompt naming the key's
@@ -1438,8 +1456,8 @@ way to the Secrets page.
 - **THEN** both answer the same way either time: this machine's fingerprint, and the file's key beside it marked not the same
 - **AND** no route under `/api/v1/sync` serves the master key any more
 
-#### Scenario: a key install from the command line without a grant changes nothing
+#### Scenario: a key install without the app's grant changes nothing
 - **GIVEN** a running daemon with its master key
-- **WHEN** `coffer secret key-install` is run with a key file and no grant, and again with a grant it made up
-- **THEN** the first exits with the invalid-input code and the second with the presence-not-confirmed code naming `PRESENCE_GRANT_INVALID`
-- **AND** the key and its fingerprint are unchanged, nothing is audited as `master_key_imported`, and `coffer secret key-install --help` names the presence grant and `coffer secret import-key`
+- **WHEN** the import route is called with a key file and no grant, and again with a grant made up
+- **THEN** the first is refused as invalid input and the second with `PRESENCE_GRANT_INVALID`
+- **AND** the key and its fingerprint are unchanged, nothing is audited as `master_key_imported`, and `coffer secret` lists no command that sends the import request

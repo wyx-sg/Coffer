@@ -198,21 +198,6 @@ threads appending at once rarely conflict:
   delete the file, then ask for a fresh `.cfk` backup and say the other Macs
   need the new key. No standing "rotate" button. Draft: B3.
 
-### Keep plaintext secrets out of the memories Coffer copies
-
-- **Added:** 2026-11-06, from the thread "梳理密钥管理的缺口与缺陷"
-- **What:** before memory sync copies a memory into each agent's own memory,
-  Coffer checks it with the plaintext detector. A memory holding a credential is
-  not delivered, and shows under "Needs you".
-- **Why later:** memory sync copies a memory into several places outside the
-  vault (Claude Code's rules file, Codex's memories), and the check before a
-  push never sees those. So a token that lands in a memory gets spread by Coffer
-  itself. Nothing has hit this yet.
-- **Sketch:** reuse the detector and the "Not a secret" list of "Find plaintext
-  keys". Report only; never edit the memory text. Agents' own config files and
-  knowledge stay out of scope: an agent can scan those itself, and the push
-  check already covers knowledge. Draft: C3.
-
 ### Move a `.env` file into the store
 
 - **Added:** 2026-11-06, from the thread "梳理密钥管理的缺口与缺陷"
@@ -223,3 +208,22 @@ threads appending at once rarely conflict:
   values (principle IV), so it has to be Coffer. Nobody has needed it yet.
 - **Sketch:** reuse the scan's tick, review and apply steps. Doppler, Infisical
   and Vercel all import `.env` files. Draft: C4.
+
+### Drop the switch that turns secret approval off
+
+- **Added:** 2026-11-06, from the thread "梳理密钥管理的缺口与缺陷"
+- **What:** in a signed build, approvals are always on; a development build has
+  them off. No setting, no "turn off" approval, no Overview item about it.
+- **Why later:** Coffer holds exactly one boundary, and this switch is a master
+  breaker for it. Around it sit a `disable_protection` approval, an exception for
+  the `coffer run` grant, its exclusion from batches, a build-dependent default
+  with `default_on`, help text and an Overview item. Doing it now would leave
+  development builds unable to turn approvals on to test the flow, so it waits
+  for the first signed release (O-13), when the two builds' split is settled.
+- **Sketch:** amend the principles line "Approvals default on (a person's own
+  setting wins)"; remove spec secret "Default the approval protection by the
+  build" and "Turn the protection off only through the desktop app", the
+  setting, its routes, CLI, UI and docs; give e2e tests another way to run with
+  approvals on. Comparable: 1Password can't turn vault encryption off; macOS
+  privacy prompts have no "allow all" switch. Draft: project file
+  `secret-gaps/讨论稿.md`, E2.1.
