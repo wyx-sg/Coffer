@@ -2745,6 +2745,10 @@ components:
         is_coffer:
           title: Is Coffer
           type: boolean
+        legacy_sse:
+          default: false
+          title: Legacy Sse
+          type: boolean
         matches_resource:
           anyOf:
           - type: string
@@ -2788,6 +2792,7 @@ components:
       - enabled
       - is_coffer
       - matches_resource
+      - legacy_sse
       - path
       - cwd
       - extra
@@ -2843,6 +2848,10 @@ components:
         is_coffer:
           title: Is Coffer
           type: boolean
+        legacy_sse:
+          default: false
+          title: Legacy Sse
+          type: boolean
         matches_resource:
           anyOf:
           - type: string
@@ -2883,6 +2892,7 @@ components:
       - enabled
       - is_coffer
       - matches_resource
+      - legacy_sse
       title: McpEntryOut
       type: object
     McpImportAgentOut:

@@ -167,6 +167,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | ADR | Decision |
 | --- | --- |
 | [`session-subprocess-model`](session-subprocess-model.md) | One Upstream Subprocess Set Per Downstream Client Session |
+| [`upstreams-speak-stdio-or-streamable-http`](upstreams-speak-stdio-or-streamable-http.md) | Upstreams Speak stdio or Streamable HTTP; the Old SSE Transport Stays With the Agent |
 | [`mcp-capability-state-preferences-in-the-vault-lists-live-queried-from-upstream`](mcp-capability-state-preferences-in-the-vault-lists-live-queried-from-upstream.md) | MCP Capability State: Preferences in the Vault, Lists Live-Queried From Upstream |
 | [`tool-overload-tier-the-list-search-the-rest`](tool-overload-tier-the-list-search-the-rest.md) | Tool Overload: List a Usage-Ranked Slice, Search the Rest |
 | [`tool-search-cuts-cjk-text-into-bigrams`](tool-search-cuts-cjk-text-into-bigrams.md) | Tool Search Cuts CJK Text Into Bigrams |

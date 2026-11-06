@@ -140,6 +140,7 @@ give the status each code is actually sent with.
 | `MCP_ENTRY_PROTECTED` | 422 | The entry is Coffer's own gateway entry. | Use the install and uninstall actions instead of editing it. |
 | `MCP_ENTRY_SOURCE_AMBIGUOUS` | 422 | The entry exists in more than one config file. | Name the source file. |
 | `ADOPT_SECRET_UNRESOLVED` | 422 | Adopting an MCP entry found secret-like environment keys with no secret mapping. | Map each listed key to a secret ref when adopting. |
+| `MCP_SSE_NOT_SUPPORTED` | 422 | The agent's MCP entry uses the old HTTP+SSE transport, which Coffer does not support, so it cannot be imported or adopted. | Keep the entry in the agent, or point it at the server's Streamable HTTP URL (often `/mcp` in place of `/sse`) and import that. |
 | `ADOPT_SECRET_REF_EXISTS` | 409 | Adopting an MCP entry mapped a secret key to a ref that already holds a value, or to a standalone `secret/<id>`. Adopting only creates refs. Nothing was written. | Map the key to a new ref, or delete the existing secret first if nothing uses it. |
 | `PLUGIN_NOT_FOUND` | 404 | No installed plugin has that identifier. | Refresh the plugin list. |
 | `PLUGIN_TOGGLE_UNSUPPORTED` | 422 | This agent type's plugins cannot be enabled or disabled through Coffer. | Use the agent's own tooling. |

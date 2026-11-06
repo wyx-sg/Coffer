@@ -1970,6 +1970,7 @@
     "MASTER_KEY_MISSING": "The master key is missing — Coffer can't decrypt stored secrets. Import it in Settings › Security.",
     "MCP_ENTRY_NOT_FOUND": "MCP entry not found",
     "MCP_ENTRY_PROTECTED": "This MCP entry is protected and can't be changed",
+    "MCP_SSE_NOT_SUPPORTED": "This entry uses the old SSE transport, which Coffer doesn't support. Keep it in the agent, or switch it to the server's Streamable HTTP URL.",
     "MCP_ENTRY_SOURCE_AMBIGUOUS": "The MCP entry's source is ambiguous — specify which one",
     "MCP_INSTALL_UNSUPPORTED": "This agent does not support installing Coffer's MCP entry",
     "MEMORY_DELIVERY_CONFIG_INVALID": "That agent's settings file isn't something Coffer can edit",
@@ -2394,6 +2395,8 @@
       "duplicateOfLead": "Duplicate of",
       "duplicateOfTail": "in Coffer",
       "adopt": "Adopt",
+      "sseNote": "Old SSE transport",
+      "sseCannotAdopt": "Coffer doesn't support the old SSE transport: keep this entry in the agent, or switch it to the server's Streamable HTTP URL.",
       "remove": "Remove",
       "removeDuplicate": "Remove duplicate",
       "menu": {

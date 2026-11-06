@@ -133,6 +133,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `MCP_ENTRY_PROTECTED` | 422 | 该条目是 Coffer 自己的网关条目。 | 用安装和卸载操作，不要直接编辑它。 |
 | `MCP_ENTRY_SOURCE_AMBIGUOUS` | 422 | 该条目存在于多个配置文件中。 | 指明来源文件。 |
 | `ADOPT_SECRET_UNRESOLVED` | 422 | 纳入托管一个 MCP 条目时，发现了没有密钥映射的、疑似密钥的环境变量键。 | 纳入托管时把列出的每个键映射到一个密钥 ref。 |
+| `MCP_SSE_NOT_SUPPORTED` | 422 | 智能体的 MCP 条目用的是旧的 HTTP+SSE 传输，Coffer 不支持，所以不能导入或纳入托管。 | 把条目留在智能体里；或者改用服务器的 Streamable HTTP 地址（通常把 `/sse` 换成 `/mcp`）再导入。 |
 | `ADOPT_SECRET_REF_EXISTS` | 409 | 纳入托管一个 MCP 条目时，把某个密钥键映射到了已有值的 ref，或映射到独立密钥 `secret/<id>`。纳入托管只创建 ref。什么都没写入。 | 把该键映射到一个新的 ref；如果没有任何东西使用已有的密钥，也可以先删除它。 |
 | `PLUGIN_NOT_FOUND` | 404 | 没有已安装的插件使用这个标识符。 | 刷新插件列表。 |
 | `PLUGIN_TOGGLE_UNSUPPORTED` | 422 | 这个类型智能体的插件不能通过 Coffer 启用或禁用。 | 使用智能体自己的工具。 |

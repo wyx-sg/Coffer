@@ -1970,6 +1970,7 @@
     "MASTER_KEY_MISSING": "主密钥缺失，Coffer 无法解密已存储的密钥——请在「设置 › 安全」中导入主密钥",
     "MCP_ENTRY_NOT_FOUND": "未找到该 MCP 条目",
     "MCP_ENTRY_PROTECTED": "该 MCP 条目受保护，无法修改",
+    "MCP_SSE_NOT_SUPPORTED": "该条目使用旧版 SSE 传输，Coffer 不支持。请把它留在智能体里，或改用服务器的 Streamable HTTP 地址。",
     "MCP_ENTRY_SOURCE_AMBIGUOUS": "该 MCP 条目的来源存在歧义，请指定具体来源",
     "MCP_INSTALL_UNSUPPORTED": "该智能体不支持安装 Coffer 的 MCP 条目",
     "MEMORY_DELIVERY_CONFIG_INVALID": "该智能体的设置文件不是 Coffer 可以编辑的格式",
@@ -2394,6 +2395,8 @@
       "duplicateOfLead": "与 Coffer 中的",
       "duplicateOfTail": "重复",
       "adopt": "纳入托管",
+      "sseNote": "旧版 SSE 传输",
+      "sseCannotAdopt": "Coffer 不支持旧版 SSE 传输：把这个条目留在智能体里，或者改用服务器的 Streamable HTTP 地址。",
       "remove": "移除",
       "removeDuplicate": "移除重复项",
       "menu": {

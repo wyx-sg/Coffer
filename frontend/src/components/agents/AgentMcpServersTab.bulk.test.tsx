@@ -66,6 +66,7 @@ function entry(name: string, extra: Partial<McpEntryOut> = {}): McpEntryOut {
     enabled: null,
     is_coffer: false,
     matches_resource: null,
+    legacy_sse: false,
     ...extra,
   };
 }
