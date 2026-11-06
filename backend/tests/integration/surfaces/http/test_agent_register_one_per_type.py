@@ -109,9 +109,9 @@ async def test_an_installed_never_run_type_registers_and_creates_its_directory(e
     assert r.status_code == 201, r.text
     body = r.json()
     assert (body["name"], body["type"], body["config_dir"]) == ("codex", "codex", str(standard))
-    # The directory holds only what Coffer needs: its skills leaf.
-    assert [p.name for p in standard.iterdir()] == ["skills"]
-    assert (standard / "skills").is_dir()
+    # The directory is created empty; Codex's skills go to ~/.agents/skills.
+    assert list(standard.iterdir()) == []
+    assert (env.home / ".agents" / "skills").is_dir()
 
     # A type whose program is NOT installed, on a missing directory, is refused
     # with nothing created and nothing persisted.

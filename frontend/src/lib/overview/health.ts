@@ -71,8 +71,6 @@ export const CONNECT_REASONS: ReadonlySet<string> = new Set([
 /** The warning word a CLI tile uses when every item has the same reason; mixed
  *  reasons read the generic "need attention". */
 const CLI_REASON_WORDS: Record<string, string> = {
-  cli_logged_out: "notLoggedIn",
-  cli_outdated: "outdated",
   cli_missing: "missing",
 };
 

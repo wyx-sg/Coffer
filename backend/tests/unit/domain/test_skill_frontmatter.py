@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
 
 from coffer.domain.skill.frontmatter import (
-    _DESCRIPTION_MAX,
     FrontmatterNameError,
     SkillFrontmatter,
     validate_frontmatter_name,
@@ -22,14 +20,9 @@ def test_minimum_fields_parse():
     assert fm.allowed_tools is None
 
 
-def test_description_at_cap_is_ok():
-    fm = SkillFrontmatter.model_validate({"name": "s", "description": "d" * _DESCRIPTION_MAX})
-    assert len(fm.description) == _DESCRIPTION_MAX
-
-
-def test_description_over_cap_rejected():
-    with pytest.raises(ValidationError):
-        SkillFrontmatter.model_validate({"name": "s", "description": "d" * (_DESCRIPTION_MAX + 1)})
+def test_description_past_the_agentskills_cap_parses():
+    fm = SkillFrontmatter.model_validate({"name": "s", "description": "d" * 2000})
+    assert len(fm.description) == 2000
 
 
 def test_license_recognized():

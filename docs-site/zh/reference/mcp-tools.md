@@ -16,8 +16,9 @@ schema 和返回结果，Coffer 聚合的上游工具、资源和提示词的命
 | --- | --- | --- |
 | [`coffer__search_tools`](#coffer-search-tools) | 按意图对上游工具目录排序。 | 始终存在。 |
 | [`coffer__channel_read_thread`](#coffer-channel-read-thread) | 一页一页地读取聊天会话串里较早的消息。 | 仅在 Coffer 运行的对话轮次内。 |
+| [`coffer__channel_notify`](#coffer-channel-notify) | 给所有者在渠道私聊里发一条消息，可以附带文件。 | 始终存在。 |
 
-完整列表就这两个。没有向所有者提问的工具：智能体在回复里问，所有者的下一条消息就是答案。Coffer 的知识、记忆和它自己的记录都没有对应工具：
+完整列表就这三个。没有向所有者提问的工具：智能体在回复里问，所有者的下一条消息就是答案。Coffer 的知识、记忆和它自己的记录都没有对应工具：
 智能体用自己的文件工具修改和读取知识，通过自己的原生记忆获得记忆，用 `coffer` 命令行读记录。见
 [不用工具处理知识、记忆和日志](#memory-and-logs-without-a-tool)。
 
@@ -132,6 +133,26 @@ BM25，依据每个工具的服务器、名称、描述和参数；用中文、�
 ```
 
 `messages` 是这一页，最早的在前。把 `next_before` 作为 `before` 传入，就能读取前一页；`has_more` 为 `false` 时它是 `null`。平台无法返回会话串的一部分时（SeaTalk 只返回最近 7 天的回复），结果里还有一个 `note` 说明这一点。消息渠道没有运行、聊天未被该消息渠道配对、缺少 `thread_id`、`before` 不在会话串里，以及平台拒绝读取，都会以 `isError: true` 失败，并附上说明是哪一种的消息。
+
+## coffer\_\_channel\_notify {#coffer-channel-notify}
+
+在所有者和[渠道](/zh/guides/channels#notifications)的私聊里，给他手机上发一条消息，有文件的话随后再发文件。它是给**不是在回复聊天消息**的 agent 用的：比如在终端里干活的 agent，或者 agent 自己的定时任务跑完了，想说一声"做完了"。从聊天进来的回合会自己回复，用不着它。它从不发到群里。每个会话都能用这个工具，不只在 Coffer 运行的对话轮次里。
+
+### 输入 {#input-3}
+
+| 属性 | 类型 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `text` | string | 是 | | 消息内容，最多 4,000 个字符。 |
+| `files` | 字符串数组 | 否 | | 最多 10 个本地文件的绝对路径，在消息之后发送。 |
+| `channel` | string | 否 | | 渠道的名称或 id。只有同时运行着不止一个已配对的渠道时才需要。 |
+
+### 结果 {#result-3}
+
+```json
+{ "sent": true, "channel": "work bot" }
+```
+
+上传失败的文件会列在 `files_failed` 里，此时消息已经发出去了。以下情况调用会失败，返回 `isError: true`，什么也不会发出：`text` 缺失或太长；某个文件不是指向已有文件的绝对路径；没有运行中且已配对的渠道（消息会提示去 Channels 页面配置一个）；有多个这样的渠道但没给 `channel`（消息会列出这些渠道的名字）。
 
 ## 上游名称 {#upstream-names}
 

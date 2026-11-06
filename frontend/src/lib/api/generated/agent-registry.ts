@@ -1036,6 +1036,11 @@ export interface components {
             header_keys: string[];
             /** Is Coffer */
             is_coffer: boolean;
+            /**
+             * Legacy Sse
+             * @default false
+             */
+            legacy_sse: boolean;
             /** Matches Resource */
             matches_resource: string | null;
             /** Name */
@@ -1077,6 +1082,11 @@ export interface components {
             header_keys: string[];
             /** Is Coffer */
             is_coffer: boolean;
+            /**
+             * Legacy Sse
+             * @default false
+             */
+            legacy_sse: boolean;
             /** Matches Resource */
             matches_resource: string | null;
             /** Name */

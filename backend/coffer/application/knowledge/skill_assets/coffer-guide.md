@@ -311,18 +311,25 @@ waits for the developer's approval in the Coffer app (a command that hits this
 prints `waiting for approval in the Coffer app` and exits `9`). That is not an
 error to retry or to route around: tell the developer what is waiting.
 
-## Command-line tools Coffer manages
+## Command-line tools the developer uses
 
-Coffer keeps track of the command-line tools this developer relies on: the ones
-skills require, the launchers MCP servers start with, and the ones the
-developer added by hand, each with what it is for. `coffer cli list` prints
-them with whether each is ready, missing, outdated or logged out on this
-machine as of Coffer's last check; `coffer cli list --json` adds, for one that
-needs attention, the prompt for installing, updating or logging in to it. Read
-it before concluding a tool is unavailable, or to learn which tool this
-developer uses for a job. Coffer installs nothing itself: a missing or
-logged-out tool is one to set up as that prompt says, or to raise with the
-developer.
+`coffer cli list` lists the command-line tools this developer added to Coffer
+and the ones skills and MCP servers require, each with what it is for. When
+choosing a tool for a job, prefer the one listed for it. Whether a tool is
+installed, new enough or logged in, check yourself (`command -v`, its
+`--version`, its own status command);
+if one a skill needs is missing, `coffer cli list --json` carries Coffer's
+install prompt for it.
+
+## Adding MCP servers and HTTP APIs
+
+When you add an MCP server that starts with `npx` or `uvx`, write the
+package's version into its arguments (`npx -y @acme/server@1.4.2`,
+`uvx acme-server==1.4.2`): an unpinned package can change under the developer
+between two starts. To turn an API document (an OpenAPI spec, a page of
+examples) into tools, create a group with `coffer custom-tool group create`
+and add each request you need with `coffer custom-tool tool add`; test one with
+`coffer custom-tool tool test`. `coffer custom-tool --help` lists the rest.
 
 ## Where a skill's scripts keep their files
 

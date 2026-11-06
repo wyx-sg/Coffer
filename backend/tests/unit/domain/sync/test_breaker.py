@@ -78,3 +78,29 @@ def test_a_resource_file_is_lost_only_when_its_uid_is_gone() -> None:
 def test_descriptors_and_the_manifest_are_never_counted() -> None:
     gone = _gone([f"machines/m{i}.json" for i in range(30)] + ["manifest.json"])
     assert losses(gone) == []
+
+
+def test_only_memory_sync_and_a_tidy_are_accounted_for() -> None:
+    from coffer.domain.sync.breaker import accounted_for
+
+    assert accounted_for("memory-sync", "memory-sync")
+    assert accounted_for("agent", "tidy")
+    assert not accounted_for("agent", "write")
+    assert not accounted_for("disk", "edit")
+    assert not accounted_for("user", "delete")
+    assert not accounted_for("sync", "sync")
+
+
+def test_unaccounted_keeps_a_hand_deletion_and_an_emptied_area() -> None:
+    from coffer.domain.sync.breaker import unaccounted
+
+    lost = ["memory/a.md", "memory/b.md", "knowledge/c.md", "skills/x/SKILL.md"]
+    deleted_by = {
+        "memory/a.md": ("memory-sync", "memory-sync"),
+        "memory/b.md": ("memory-sync", "memory-sync"),
+        "knowledge/c.md": ("disk", "edit"),
+        "skills/x/SKILL.md": ("agent", "tidy"),
+    }
+    totals = {"memory": 10, "knowledge": 10, "skills": 1}
+    # memory keeps 8 files: set aside. skills would be emptied: kept.
+    assert unaccounted(lost, deleted_by, totals) == ["knowledge/c.md", "skills/x/SKILL.md"]

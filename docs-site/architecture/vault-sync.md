@@ -103,6 +103,8 @@ Every round is recorded in the round history in `runs.db` and audited, whatever 
 | `unreachable`, `auth_failed` | The remote could not be reached, or refused to sign in. |
 | `paused_cloud_folder` | The vault is inside a folder another tool synchronises. |
 | `remote_too_new` | The remote is at a newer vault layout. |
+| `older_remote_has_changes` | The remote is at an older layout and holds commits this machine never pulled. |
+| `key_mismatch` | The remote carries secrets and another machine's master key differs from this one's. |
 | `rolled_back` | A round was rolled back. |
 | `failed` | Anything else, with git's message. |
 
@@ -135,6 +137,8 @@ A round is **held** when, in any area and in either direction, its losses reach 
 - **Outgoing** is what this machine's own commits remove from the shared history. This is what stops a machine that lost its files to a reinstall, a failed restore or a stray `rm -rf` from pushing that loss to every other machine.
 
 It counts **losses, not deletions**. A resource file is lost only when its uid is gone from the other side, so a renamed or moved file is a move by construction. Any other file is a move when its exact bytes land elsewhere in the same area, or git's own rename detection pairs it with a file in the same area. The empty blob never pairs anything, and a pairing across areas is not a move. `machines/` and the manifest are never counted.
+
+It also reads **who** made each loss: the writer of the newest commit that deleted the file in the range the deletion comes from. A loss the memory sync or an agent's Tidy made is set aside, unless the area would be left empty; every other writer, and a deletion only a merge made, still counts. A **Delete** answer is remembered by file while the remote tip is unchanged, so this machine's own later commits (a plaintext fix) do not ask it again.
 
 A hold is answered one of two ways, and either continues the round:
 
@@ -185,12 +189,13 @@ Each machine writes exactly one file, `machines/<machine id>.json`, and never an
 | Plaintext secret | `plaintext_found` | A file the push would publish holds a plaintext secret; the file, line, key and the rule that found it are named, never the value, and each place opens to its surrounding lines with every value masked. | Move into secrets (the Secrets page's move, scoped to the flagged files; never an agent hand-off) and sync again, or Push anyway, which is audited and records each pushed value as not a secret on this machine. |
 | Cloud folder | `paused_cloud_folder` | The vault is inside a folder another tool synchronises. | Move the vault out of that folder: **Move the vault…** (`POST /api/v1/sync/vault/move`) pauses rounds and agent writes, moves the folder (or copies it when the target is on another filesystem), checks the repository at the new place and leaves `~/.coffer/vault` leading to it. A target that is relative, overlapping, inside another synchronised folder or not empty is refused (`SYNC_VAULT_TARGET_INVALID`, `_IN_CLOUD`, `_NOT_EMPTY`), and a failed move puts the vault back (`SYNC_VAULT_MOVE_FAILED`). |
 | Layout | `remote_too_new` | The remote was written with a newer vault layout. | Upgrade this machine. |
+| Layout | `older_remote_has_changes` | The remote is at an older layout and another machine pushed to it since this one pulled. | Upgrade the machine named and let it sync first. |
 
 Each problem is shown as a banner on the **Sync** page (with an **×** that ignores it, shared with Overview, which brings it back when the situation changes), and is listed under **Overview › Needs you** and in the desktop app's menu bar count.
 
 ### Remote layout
 
-The vault's `manifest.json` carries one number, `schema_version`, currently `3`. A remote at the same number is converged with. A remote at a newer number was written by a newer Coffer and is refused until this machine is upgraded. A remote at an older number is never converted in place: this machine's vault is the source of truth, so it replaces the remote. The push is a fast-forward of one commit whose tree is exactly this machine's content, with this machine's commit and the old tip as parents, so the old history stays reachable in git. Files only the old remote had go away on purpose (the deletion breaker does not apply; the plaintext check still does). A person previews it first, and the round records `join: "replace"`. The other machines upgrade and then join the replaced remote as new machines.
+The vault's `manifest.json` carries one number, `schema_version`, currently `3`. A remote at the same number is converged with. A remote at a newer number was written by a newer Coffer and is refused until this machine is upgraded. A remote at an older number is never converted in place: this machine's vault is the source of truth, so it replaces the remote. The push is a fast-forward of one commit whose tree is exactly this machine's content, with this machine's commit and the old tip as parents, so the old history stays reachable in git. Files only the old remote had go away on purpose (the deletion breaker does not apply; the plaintext check still does). A machine that has not joined previews it first. A joined machine replaces it only when its vault already merged the remote's tip; if another machine pushed since, the round ends `older_remote_has_changes` with nothing touched, because the replacement would drop those commits, and that machine applying the drop as deletions once it upgrades. It upgrades and syncs first, and the two then merge at the new layout. The round records `join: "replace"`. The other machines upgrade and then join the replaced remote as new machines.
 
 ## Talking to git safely
 

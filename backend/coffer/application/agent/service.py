@@ -126,6 +126,9 @@ def ensure_skill_dir(
     """
     if not config_dir.is_dir():
         raise SkillDirNotWritable(str(config_dir), "directory_missing")
+    # The skill directory may sit outside the config dir (Codex reads
+    # ~/.agents/skills), so the config dir is checked on its own too.
+    assert_not_privileged(config_dir, rules)
     # Refuse a privileged location BEFORE creating anything in it (spec
     # agent-registry "Validate the config directory at registration").
     assert_not_privileged(skill_dir, rules)

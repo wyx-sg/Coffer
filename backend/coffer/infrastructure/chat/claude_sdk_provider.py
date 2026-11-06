@@ -8,6 +8,7 @@ a fake without a real ``claude`` binary (no network/subprocess needed).
 
 from __future__ import annotations
 
+import asyncio
 import pathlib
 from collections.abc import Awaitable, Callable
 from dataclasses import replace
@@ -35,7 +36,7 @@ from coffer.infrastructure.chat.claude_sdk_agent import (
 from coffer.infrastructure.chat.default_workspace import default_workspace_dir
 from coffer.infrastructure.chat.document_extract import default_document_extractor
 from coffer.infrastructure.chat.transcribe import Transcriber
-from coffer.infrastructure.platform.user_path import which_on_user_path
+from coffer.infrastructure.platform.user_path import user_path_env, which_on_user_path
 
 #: The model ids this agent can be put on, looked up per turn. A narrow callable
 #: rather than the application catalogue service itself, so infrastructure keeps
@@ -145,6 +146,9 @@ class ClaudeSdkProvider:
         # Overrides only: the SDK merges ``options.env`` over the daemon's own
         # environment itself. Empty for the default config dir.
         home_env = dict(await self._resolve_home_env()) if self._resolve_home_env else {}
+        # The PATH the CLIs page checks commands on (spec skill-manager "Check
+        # every required command where the agent runs").
+        home_env.update(await asyncio.to_thread(user_path_env))
         # The turn's token: the shim in the agent's MCP entry forwards it, so the
         # gateway offers this turn's turn-scoped tools.
         home_env.update(turn_tokens.turn_env(conversation_id))

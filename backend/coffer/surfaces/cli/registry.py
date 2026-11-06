@@ -59,10 +59,6 @@ EXEMPT: dict[tuple[str, str], tuple[Category, str]] = {
     ("DELETE", "/knowledge/file"): ("file-content", "a knowledge document is a plain file"),
     ("GET", "/knowledge/asset"): ("file-content", "a knowledge picture is a plain file"),
     ("GET", "/skills/{uid}/files/content"): ("file-content", "a skill's files are plain files"),
-    ("GET", "/skills/orphans/{name}/files/content"): (
-        "file-content",
-        "a skill's files are plain files",
-    ),
     ("GET", "/agents/{uid}/config-files/{key}/content"): (
         "file-content",
         "an agent's config file is its own plain file",
@@ -70,10 +66,6 @@ EXEMPT: dict[tuple[str, str], tuple[Category, str]] = {
     ("GET", "/agents/{uid}/native-memory/files/content"): (
         "file-content",
         "an agent's native memory is its own plain file",
-    ),
-    ("GET", "/agents/{uid}/unmanaged-skills/{skill}/files/content"): (
-        "file-content",
-        "a skill's files are plain files",
     ),
     # Acts whose whole meaning is the window a person sits at.
     ("GET", "/channels/{uid}/people/{sender_id}/avatar"): (

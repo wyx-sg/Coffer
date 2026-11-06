@@ -107,63 +107,6 @@ paths:
       summary: Delete Unmanaged Skill
       tags:
       - agents
-    get:
-      description: |-
-        One unmanaged skill's metadata (spec skill-manager "Preview an unmanaged
-        skill read-only"). 404 when the scan finds no such entry at ``location``.
-      operationId: get_unmanaged_skill_api_v1_agents__uid__unmanaged_skills__skill__get
-      parameters:
-      - in: path
-        name: uid
-        required: true
-        schema:
-          title: Uid
-          type: string
-      - in: path
-        name: skill
-        required: true
-        schema:
-          title: Skill
-          type: string
-      - in: query
-        name: location
-        required: true
-        schema:
-          enum:
-          - skills
-          - agents_dir
-          title: Location
-          type: string
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/UnmanagedSkillDetailOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Get Unmanaged Skill
-      tags:
-      - agents
   /api/v1/agents/{uid}/unmanaged-skills/{skill}/adopt:
     post:
       operationId: adopt_unmanaged_skill_api_v1_agents__uid__unmanaged_skills__skill__adopt_post
@@ -227,8 +170,9 @@ paths:
   /api/v1/agents/{uid}/unmanaged-skills/{skill}/files:
     get:
       description: |-
-        The unmanaged folder as a read-only file tree — the same walk, and the
-        same containment, as a managed skill's master folder.
+        The unmanaged folder's file tree, which the Adopt and Delete dialogs
+        list — the same walk, and the same containment, as a managed skill's
+        master folder. Coffer reads no file of it.
       operationId: list_unmanaged_skill_files_api_v1_agents__uid__unmanaged_skills__skill__files_get
       parameters:
       - in: path
@@ -282,72 +226,6 @@ paths:
       summary: List Unmanaged Skill Files
       tags:
       - agents
-  /api/v1/agents/{uid}/unmanaged-skills/{skill}/files/content:
-    get:
-      description: |-
-        Read one file of an unmanaged folder. A path resolving outside the
-        folder (``..``, absolute, escaping symlink) is refused with 400 before
-        anything is read; there is no write counterpart.
-      operationId: read_unmanaged_skill_file_api_v1_agents__uid__unmanaged_skills__skill__files_content_get
-      parameters:
-      - in: path
-        name: uid
-        required: true
-        schema:
-          title: Uid
-          type: string
-      - in: path
-        name: skill
-        required: true
-        schema:
-          title: Skill
-          type: string
-      - in: query
-        name: location
-        required: true
-        schema:
-          enum:
-          - skills
-          - agents_dir
-          title: Location
-          type: string
-      - in: query
-        name: path
-        required: true
-        schema:
-          minLength: 1
-          title: Path
-          type: string
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SkillFileContentOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Read Unmanaged Skill File
-      tags:
-      - agents
   /api/v1/clis:
     get:
       description: |-
@@ -388,8 +266,7 @@ paths:
     post:
       description: |-
         Add a command-line tool by hand, with no skill. 409 ``CLI_TOOL_EXISTS``
-        when it was already added; 400 ``CLI_TOOL_INVALID`` for a bad name, path,
-        version or login check.
+        when it was already added; 400 ``CLI_TOOL_INVALID`` for a bad name or path.
       operationId: add_cli_api_v1_clis_post
       parameters:
       - in: header
@@ -474,8 +351,8 @@ paths:
   /api/v1/clis/preview:
     post:
       description: |-
-        What Coffer finds for a command name or path — where, which version,
-        whether it is already added or required — before anything is saved.
+        What Coffer finds for a command name or path — where, and whether it
+        is already added or required — before anything is saved.
       operationId: preview_cli_api_v1_clis_preview_post
       parameters:
       - in: header
@@ -911,50 +788,6 @@ paths:
       summary: List Orphans
       tags:
       - skills
-  /api/v1/skills/orphans/{name}:
-    delete:
-      operationId: remove_orphan_api_v1_skills_orphans__name__delete
-      parameters:
-      - in: path
-        name: name
-        required: true
-        schema:
-          title: Name
-          type: string
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      - in: header
-        name: x-coffer-actor
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Actor
-      responses:
-        '204':
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Remove Orphan
-      tags:
-      - skills
   /api/v1/skills/orphans/{name}/adopt:
     post:
       operationId: adopt_orphan_api_v1_skills_orphans__name__adopt_post
@@ -1001,95 +834,6 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
       summary: Adopt Orphan
-      tags:
-      - skills
-  /api/v1/skills/orphans/{name}/files:
-    get:
-      description: The orphan folder as a read-only file tree — the walk of a managed skill's.
-      operationId: list_orphan_files_api_v1_skills_orphans__name__files_get
-      parameters:
-      - in: path
-        name: name
-        required: true
-        schema:
-          title: Name
-          type: string
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SkillFileTreeOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: List Orphan Files
-      tags:
-      - skills
-  /api/v1/skills/orphans/{name}/files/content:
-    get:
-      description: Read one file of an orphan folder; a path outside it is refused with 400.
-      operationId: read_orphan_file_api_v1_skills_orphans__name__files_content_get
-      parameters:
-      - in: path
-        name: name
-        required: true
-        schema:
-          title: Name
-          type: string
-      - in: query
-        name: path
-        required: true
-        schema:
-          minLength: 1
-          title: Path
-          type: string
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SkillFileContentOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Read Orphan File
       tags:
       - skills
   /api/v1/skills/repair:
@@ -1742,109 +1486,6 @@ paths:
       summary: Read Skill File
       tags:
       - skills
-  /api/v1/skills/{uid}/source/change:
-    post:
-      description: |-
-        Stage a new repository / ref / folder for this skill and name the files
-        that would change; ``/source/change/apply`` with the stage takes it.
-      operationId: preview_source_change_api_v1_skills__uid__source_change_post
-      parameters:
-      - in: path
-        name: uid
-        required: true
-        schema:
-          title: Uid
-          type: string
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SkillStageGitRequest'
-        required: true
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SkillSourceChangeOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Preview Source Change
-      tags:
-      - skills
-  /api/v1/skills/{uid}/source/change/apply:
-    post:
-      operationId: apply_source_change_api_v1_skills__uid__source_change_apply_post
-      parameters:
-      - in: path
-        name: uid
-        required: true
-        schema:
-          title: Uid
-          type: string
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      - in: header
-        name: x-coffer-actor
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Actor
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SkillSourceChangeApplyRequest'
-        required: true
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SkillOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Apply Source Change
-      tags:
-      - skills
   /api/v1/skills/{uid}/source/check:
     post:
       operationId: check_source_api_v1_skills__uid__source_check_post
@@ -2077,8 +1718,7 @@ components:
       description: |-
         Declare a tool by hand. ``command`` is a command name (``jq``) or the
         absolute path of an executable (``/opt/tools/bin/jq``; the file name is
-        the command). ``login_check`` is a command line that starts with the tool,
-        like ``gh auth status``.
+        the command).
       properties:
         command:
           maxLength: 512
@@ -2090,16 +1730,6 @@ components:
           - type: string
           - type: 'null'
           title: Description
-        login_check:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Login Check
-        min_version:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Min Version
         title:
           anyOf:
           - type: string
@@ -2120,16 +1750,6 @@ components:
           - type: string
           - type: 'null'
           title: Description
-        login_check:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Login Check
-        min_version:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Min Version
         title:
           anyOf:
           - type: string
@@ -2154,53 +1774,9 @@ components:
       - warnings
       title: CliListOut
       type: object
-    CliLoginOut:
-      description: |-
-        ``state`` is ``None`` when the command was not found, so its login check
-        could not run, or when the check has not been run yet (only a Check runs
-        it). ``command`` is the login command to copy — Coffer never runs it.
-        ``check`` is the declared login check.
-      properties:
-        check:
-          anyOf:
-          - items:
-              type: string
-            type: array
-          - type: 'null'
-          title: Check
-        command:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Command
-        state:
-          anyOf:
-          - enum:
-            - logged_in
-            - logged_out
-            - not_needed
-            type: string
-          - type: 'null'
-          title: State
-      required:
-      - state
-      - check
-      - command
-      title: CliLoginOut
-      type: object
     CliNeededByOut:
-      description: One skill that requires the command, with what it asked for.
+      description: One skill that requires the command, and why.
       properties:
-        min_version:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Min Version
-        profiles:
-          items:
-            type: string
-          title: Profiles
-          type: array
         skill_name:
           title: Skill Name
           type: string
@@ -2215,9 +1791,7 @@ components:
       required:
       - skill_uid
       - skill_name
-      - min_version
       - why
-      - profiles
       title: CliNeededByOut
       type: object
     CliOut:
@@ -2241,13 +1815,6 @@ components:
           anyOf:
           - $ref: '#/components/schemas/HandoffOut'
           - type: 'null'
-        login:
-          $ref: '#/components/schemas/CliLoginOut'
-        min_version:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Min Version
         needed_by:
           items:
             $ref: '#/components/schemas/CliNeededByOut'
@@ -2274,8 +1841,6 @@ components:
         status:
           enum:
           - missing
-          - outdated
-          - logged_out
           - ready
           title: Status
           type: string
@@ -2284,11 +1849,6 @@ components:
           - type: string
           - type: 'null'
           title: Title
-        version:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Version
       required:
       - command
       - title
@@ -2296,9 +1856,6 @@ components:
       - added
       - status
       - path
-      - version
-      - min_version
-      - login
       - handoff
       - needed_by
       - needed_by_servers
@@ -2334,15 +1891,9 @@ components:
         required:
           title: Required
           type: boolean
-        version:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Version
       required:
       - command
       - path
-      - version
       - added
       - required
       title: CliPreviewOut
@@ -3123,20 +2674,8 @@ components:
         command:
           title: Command
           type: string
-        min_version:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Min Version
-        profiles:
-          items:
-            type: string
-          title: Profiles
-          type: array
       required:
       - command
-      - min_version
-      - profiles
       title: SkillRequirementOut
       type: object
     SkillSecretRequirementOut:
@@ -3150,15 +2689,9 @@ components:
         name:
           title: Name
           type: string
-        profiles:
-          items:
-            type: string
-          title: Profiles
-          type: array
       required:
       - name
       - is_set
-      - profiles
       title: SkillSecretRequirementOut
       type: object
     SkillSkillRequirementOut:
@@ -3191,57 +2724,6 @@ components:
       - missing_agent_names
       title: SkillSkillRequirementOut
       type: object
-    SkillSourceChangeApplyRequest:
-      properties:
-        staging_id:
-          minLength: 1
-          title: Staging Id
-          type: string
-      required:
-      - staging_id
-      title: SkillSourceChangeApplyRequest
-      type: object
-    SkillSourceChangeFileOut:
-      description: A file a change of source would add, remove or change — its name only.
-      properties:
-        path:
-          title: Path
-          type: string
-        status:
-          enum:
-          - added
-          - removed
-          - modified
-          title: Status
-          type: string
-      required:
-      - path
-      - status
-      title: SkillSourceChangeFileOut
-      type: object
-    SkillSourceChangeOut:
-      description: |-
-        What moving the skill to another source would do, against its current
-        folder. Staged until ``/source/change/apply`` or
-        ``DELETE /skills/stage/{staging_id}``.
-      properties:
-        commit:
-          title: Commit
-          type: string
-        files:
-          items:
-            $ref: '#/components/schemas/SkillSourceChangeFileOut'
-          title: Files
-          type: array
-        staging_id:
-          title: Staging Id
-          type: string
-      required:
-      - staging_id
-      - commit
-      - files
-      title: SkillSourceChangeOut
-      type: object
     SkillSourceStatusOut:
       description: What this machine last learned about a Git-imported skill's source.
       properties:
@@ -3259,11 +2741,6 @@ components:
         commits_ahead:
           title: Commits Ahead
           type: integer
-        compare_url:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Compare Url
         error:
           anyOf:
           - type: string
@@ -3295,7 +2772,6 @@ components:
       - files_changed
       - update_available
       - commits
-      - compare_url
       title: SkillSourceStatusOut
       type: object
     SkillStageFolderRequest:
@@ -3418,11 +2894,6 @@ components:
         name:
           title: Name
           type: string
-        profiles:
-          items:
-            type: string
-          title: Profiles
-          type: array
         status:
           enum:
           - healthy
@@ -3444,7 +2915,6 @@ components:
       - kind
       - status
       - why
-      - profiles
       title: SkillToolRequirementOut
       type: object
     SkillUpdateCheckSettingBody:
@@ -3555,51 +3025,6 @@ components:
       required:
       - items
       title: UnmanagedListOut
-      type: object
-    UnmanagedSkillDetailOut:
-      description: |-
-        One unmanaged skill for its read-only detail page.
-
-        ``description`` is the SKILL.md frontmatter's, known only when the folder
-        validates; an invalid folder carries ``reason`` instead.
-      properties:
-        description:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Description
-        foreign_link:
-          title: Foreign Link
-          type: boolean
-        location:
-          enum:
-          - skills
-          - agents_dir
-          title: Location
-          type: string
-        name:
-          title: Name
-          type: string
-        path:
-          title: Path
-          type: string
-        reason:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Reason
-        valid:
-          title: Valid
-          type: boolean
-      required:
-      - name
-      - path
-      - location
-      - valid
-      - reason
-      - foreign_link
-      - description
-      title: UnmanagedSkillDetailOut
       type: object
     UnmanagedSkillOut:
       properties:

@@ -473,20 +473,6 @@ export interface components {
              */
             seq: number;
         };
-        /**
-         * DeliveryResultOut
-         * @description What delivering a reach change did for one agent.
-         */
-        DeliveryResultOut: {
-            /** Agent Name */
-            agent_name: string;
-            /** Agent Uid */
-            agent_uid: string;
-            /** Ok */
-            ok: boolean;
-            /** Reason */
-            reason: string | null;
-        };
         /** ErrorDetail */
         ErrorDetail: {
             /**
@@ -724,8 +710,6 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
-            /** Delivery */
-            delivery: components["schemas"]["DeliveryResultOut"][] | null;
             /** Description */
             description: string | null;
             /** Enabled */

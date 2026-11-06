@@ -57,8 +57,6 @@ const CUSTOM_TOOL_STATUS: Partial<Record<string, PaletteStatus>> = {
 };
 const CLI_STATUS: Partial<Record<string, PaletteStatus>> = {
   missing: { key: "notFound", tone: "warn" },
-  outdated: { key: "outdated", tone: "warn" },
-  logged_out: { key: "loggedOut", tone: "warn" },
 };
 
 // One hook per kind, each the list hook that kind's own page reads.

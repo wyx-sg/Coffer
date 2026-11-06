@@ -1,9 +1,10 @@
-"""Sampling and roots relayed through real upstreams, over stdio and HTTP.
+"""Sampling, roots and elicitation relayed through real upstreams, over stdio and HTTP.
 
 Spec mcp-gateway "Relay an upstream's sampling and roots requests to the
-client". The upstream is a real MCP server process that asks the client
-something in the middle of a tool call (``tests/fixtures/server_requests_mcp_server.py``);
-the gateway session spawns it with the real SDK, so the test covers what the
+client" and "Relay an upstream's elicitation to the client". The upstream is
+a real MCP server process that asks the client something in the middle of a
+tool call (``tests/fixtures/server_requests_mcp_server.py``); the gateway
+session spawns it with the real SDK, so the test covers what the
 callback-only tests never did: the SDK client session must have the callbacks
 when it is constructed. Each downstream "client" here is the session's sink,
 answering every server-initiated request the way a client posts its response.
@@ -85,6 +86,8 @@ class _Client:
         result: dict[str, Any] = (
             {"role": "assistant", "content": {"type": "text", "text": self._answer}, "model": "m"}
             if method == "sampling/createMessage"
+            else {"action": "accept", "content": {"name": self._answer}}
+            if method == "elicitation/create"
             else {"roots": [{"uri": self._root}]}
         )
         assert self.session.handle_response_from_downstream(
@@ -203,4 +206,28 @@ async def test_a_client_without_the_capability_is_never_asked(gateway: Any) -> N
 
     assert sample_refused and sample.startswith("refused:")
     assert roots_refused and roots.startswith("refused:")
+    assert plain.asked == []
+
+
+@pytest.mark.parametrize("transport", ["stdio", "http"])
+@pytest.mark.acceptance(
+    spec="mcp-gateway", scenario="an upstream's question reaches the client that made the call"
+)
+async def test_an_upstreams_question_reaches_the_client_that_made_the_call(
+    gateway: Any, http_upstream: str, transport: str
+) -> None:
+    register, client = gateway
+    await register(
+        "asker", _stdio() if transport == "stdio" else {"type": "http", "url": http_upstream}
+    )
+    a = await client({"elicitation": {"form": {}}}, answer="ada")
+    b = await client({"elicitation": {"form": {}}}, answer="bob")
+    plain = await client({})
+
+    results = await asyncio.gather(a.call("asker__ask"), b.call("asker__ask"))
+    refused, is_error = await plain.call("asker__ask")
+
+    assert results == [("asked:accept:ada", False), ("asked:accept:bob", False)]
+    assert a.asked == b.asked == ["elicitation/create"]
+    assert is_error and refused.startswith("refused:")
     assert plain.asked == []

@@ -40,13 +40,9 @@ This page matches what `coffer skill --help` prints. Add `--help` to any command
 | [`skill copy resolve`](#skill-copy-resolve) | Keep the master or the agent's copy. |
 | [`skill orphan`](#skill-orphan) | Folders in the skills store that no skill owns. |
 | [`skill orphan list`](#skill-orphan-list) | Folders in the skills store that no skill owns. |
-| [`skill orphan files`](#skill-orphan-files) | An orphan folder's files. |
 | [`skill orphan adopt`](#skill-orphan-adopt) | Register an orphan folder as a skill. |
-| [`skill orphan remove`](#skill-orphan-remove) | Delete an orphan folder. |
 | [`skill source`](#skill-source) | Where a skill came from: check, change, merge updates. |
 | [`skill source check`](#skill-source-check) | Ask the skill's source for a newer version. |
-| [`skill source change`](#skill-source-change) | Stage the skill from another source. |
-| [`skill source change-apply`](#skill-source-change-apply) | Apply a staged change of source. |
 | [`skill source handoff`](#skill-source-handoff) | The prompt that hands merging an upstream update to an agent. |
 | [`skill source merged`](#skill-source-merged) | Record that the upstream update was merged. |
 | [`skill update-check`](#skill-update-check) | How often skills' sources are checked for updates. |
@@ -299,7 +295,7 @@ coffer skill stage-git [OPTIONS]
 
 ## skill stage-confirm
 
-Import staged skills. Body: skills, replace.
+Import staged skills. Body: skills (names, or the folders the stage listed), replace (names to overwrite).
 
 <p class="cli-label">Synopsis</p>
 
@@ -410,7 +406,7 @@ Folders in the skills store that no skill owns.
 coffer skill orphan [OPTIONS] COMMAND [ARGS]...
 ```
 
-Subcommands: `list`, `files`, `adopt`, `remove`.
+Subcommands: `list`, `adopt`.
 
 ## skill orphan list
 
@@ -426,23 +422,6 @@ coffer skill orphan list [OPTIONS]
 
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |
-| `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
-
-## skill orphan files
-
-An orphan folder's files.
-
-<p class="cli-label">Synopsis</p>
-
-```sh
-coffer skill orphan files [OPTIONS] NAME
-```
-
-<p class="cli-label">Arguments and options</p>
-
-| Name | Type | Default | Description |
-| --- | --- | --- | --- |
-| `NAME` <span class="cli-chip">argument</span> | text | required | name |
 | `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
 
 ## skill orphan adopt
@@ -462,23 +441,6 @@ coffer skill orphan adopt [OPTIONS] NAME
 | `NAME` <span class="cli-chip">argument</span> | text | required | name |
 | `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
 
-## skill orphan remove
-
-Delete an orphan folder.
-
-<p class="cli-label">Synopsis</p>
-
-```sh
-coffer skill orphan remove [OPTIONS] NAME
-```
-
-<p class="cli-label">Arguments and options</p>
-
-| Name | Type | Default | Description |
-| --- | --- | --- | --- |
-| `NAME` <span class="cli-chip">argument</span> | text | required | name |
-| `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
-
 ## skill source
 
 Where a skill came from: check, change, merge updates.
@@ -489,7 +451,7 @@ Where a skill came from: check, change, merge updates.
 coffer skill source [OPTIONS] COMMAND [ARGS]...
 ```
 
-Subcommands: `check`, `change`, `change-apply`, `handoff`, `merged`.
+Subcommands: `check`, `handoff`, `merged`.
 
 ## skill source check
 
@@ -506,44 +468,6 @@ coffer skill source check [OPTIONS] UID
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |
 | `UID` <span class="cli-chip">argument</span> | text | required | The skill's name or uid |
-| `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
-
-## skill source change
-
-Stage the skill from another source. Body: url, ref, path.
-
-<p class="cli-label">Synopsis</p>
-
-```sh
-coffer skill source change [OPTIONS] UID
-```
-
-<p class="cli-label">Arguments and options</p>
-
-| Name | Type | Default | Description |
-| --- | --- | --- | --- |
-| `UID` <span class="cli-chip">argument</span> | text | required | The skill's name or uid |
-| `--data, -d` <span class="cli-chip">option</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
-| `--set` <span class="cli-chip">option</span> | text (repeatable) |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
-| `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
-
-## skill source change-apply
-
-Apply a staged change of source. Body: staging_id.
-
-<p class="cli-label">Synopsis</p>
-
-```sh
-coffer skill source change-apply [OPTIONS] UID
-```
-
-<p class="cli-label">Arguments and options</p>
-
-| Name | Type | Default | Description |
-| --- | --- | --- | --- |
-| `UID` <span class="cli-chip">argument</span> | text | required | The skill's name or uid |
-| `--data, -d` <span class="cli-chip">option</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
-| `--set` <span class="cli-chip">option</span> | text (repeatable) |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
 | `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
 
 ## skill source handoff

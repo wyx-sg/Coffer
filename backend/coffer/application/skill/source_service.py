@@ -20,7 +20,6 @@ from typing import IO, TypeVar
 from coffer.application.runtime.cancellation import raise_if_stopping
 from coffer.application.runtime.supervisor import spawn
 from coffer.application.skill import (
-    source_change_ops,
     source_stage_ops,
     update_merge,
     update_ops,
@@ -133,17 +132,6 @@ class SkillSourceService:
     async def handoff(self, uid: str) -> update_ops.UpdateHandoff:
         skill = await self.skills.get_skill(uid)
         return await self.bounded(update_ops.handoff(self, skill))
-
-    async def change_source(
-        self, uid: str, url: str, ref: str | None, path: str | None
-    ) -> source_change_ops.SourceChangePreview:
-        skill = await self.skills.get_skill(uid)
-        return await self.bounded(source_change_ops.preview_change(self, skill, url, ref, path))
-
-    async def apply_change(self, uid: str, stage_id: str, *, actor: str) -> Resource:
-        return await source_change_ops.apply_change(
-            self, await self.skills.get_skill(uid), stage_id, actor=actor
-        )
 
     async def mark_merged(self, uid: str, commit: str, *, actor: str) -> Resource:
         skill = await self.skills.get_skill(uid)

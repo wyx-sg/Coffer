@@ -32,7 +32,7 @@ from coffer.surfaces.http.dependencies import get_resource_service
 from coffer.surfaces.http.handoff_schemas import HandoffOut
 from coffer.surfaces.http.mcp.config_test_routes import cancel_on_disconnect
 from coffer.surfaces.http.mcp.dependencies import get_health_repo, require_mcp_server
-from coffer.surfaces.http.mcp.handoff_views import diagnose_prompt, launcher_prompt
+from coffer.surfaces.http.mcp.handoff_views import server_prompt
 from coffer.surfaces.http.mcp.probe_schemas import McpTestResultOut, result_out
 from coffer.surfaces.http.secret_composition import boundary_resolver, get_secret_store
 
@@ -169,8 +169,7 @@ async def _failed_test_handoff(
     failing MCP server's diagnosis to an agent"): installing the launcher when
     it is not found here, else finding the cause from the error and stderr."""
     runner = await asyncio.to_thread(missing_runner_of, resource.config)
-    if runner is not None:
-        prompt = await asyncio.to_thread(launcher_prompt, resource, runner)
-    else:
-        prompt = await asyncio.to_thread(diagnose_prompt, resource, error=error, stderr=stderr)
+    prompt = await asyncio.to_thread(
+        server_prompt, resource, error=error, runner=runner, stderr=stderr
+    )
     return HandoffOut(prompt=prompt)

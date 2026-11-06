@@ -46,11 +46,11 @@ _THREE = {
 
 
 async def test_problems_first_then_by_name() -> None:
-    probe = FakeCommandProbe({"gh": FakeCommand("2.30.0"), "uv": FakeCommand("0.4.18")})
+    probe = FakeCommandProbe({"gh": FakeCommand(), "uv": FakeCommand()})
     listing = await _service(_THREE, probe).listing()
     assert [(v.required.command, v.status.value) for v in listing.items] == [
         ("jq", "missing"),
-        ("gh", "outdated"),
+        ("gh", "ready"),
         ("uv", "ready"),
     ]
     jq = listing.items[0]
@@ -58,7 +58,7 @@ async def test_problems_first_then_by_name() -> None:
 
 
 async def test_results_are_cached_until_checked_again() -> None:
-    probe = FakeCommandProbe({"gh": FakeCommand("2.41")})
+    probe = FakeCommandProbe({"gh": FakeCommand()})
     svc = _service({"s": _md("s", "  - gh\n")}, probe)
     await svc.listing()
     await svc.listing()
@@ -69,58 +69,31 @@ async def test_results_are_cached_until_checked_again() -> None:
     assert probe.located == ["gh", "gh", "gh"]
 
 
-async def test_login_check_runs_the_located_file_and_logged_out_is_reported() -> None:
-    probe = FakeCommandProbe({"gh": FakeCommand("2.41", logged_in=False, printed="octocat")})
-    doc = _md("s", "  - command: gh\n    login_check: gh auth status\n")
-    view = await _service({"s": doc}, probe).check("gh")
-    assert view.status.value == "logged_out"
-    assert probe.login_calls == [("/fake/bin/gh", "auth", "status")]
-    assert view.handoff is not None and "octocat" not in view.handoff
-
-
-@pytest.mark.acceptance(spec="skill-manager", scenario="a login check runs only when someone asks")
-async def test_a_read_never_runs_a_login_check() -> None:
-    """A login check runs a program with arguments a skill chose: the reads the
-    attention poll makes probe the version and leave the login unknown."""
-    probe = FakeCommandProbe({"gh": FakeCommand("2.41", logged_in=False)})
-    doc = _md("s", "  - command: gh\n    login_check: gh auth status\n")
-    svc = _service({"s": doc}, probe)
-
-    listed = await svc.listing()
-    got = await svc.get("gh")
-
-    assert probe.login_calls == []
-    assert listed.items[0].probe.login is None and got.status.value == "ready"
-
-
 async def test_an_unknown_command_is_not_required() -> None:
     with pytest.raises(CliNotKnown):
         await _service({}, FakeCommandProbe()).get("gh")
 
 
 async def test_every_problem_carries_a_prompt_and_ready_carries_none() -> None:
-    probe = FakeCommandProbe({"gh": FakeCommand("2.30.0"), "uv": FakeCommand("0.4.18")})
+    probe = FakeCommandProbe({"gh": FakeCommand(), "uv": FakeCommand()})
     views = {v.required.command: v for v in (await _service(_THREE, probe).listing()).items}
     jq, gh, uv = views["jq"].handoff, views["gh"].handoff, views["uv"].handoff
     assert jq is not None and jq.startswith("Please install the command-line tool `jq`")
     assert "- Needed by the Coffer skills: a-skill, b-skill." in jq
     assert f"- This machine: {FAKE_MACHINE}." in jq
-    assert "run `jq --version`" in jq
-    assert gh is not None and gh.startswith("Please update the command-line tool `gh`")
-    assert "a-skill (version 2.40 or newer)" in gh
-    assert uv is None
+    # The agent confirms the tool its own way and asks Coffer to look again.
+    assert "--version" not in jq
+    assert "run `coffer cli check jq` so Coffer sees it" in jq
+    assert gh is None and uv is None
 
 
 async def test_attention_items_one_per_problem() -> None:
-    probe = FakeCommandProbe({"gh": FakeCommand("2.30.0"), "uv": FakeCommand("0.4.18")})
+    probe = FakeCommandProbe({"gh": FakeCommand(), "uv": FakeCommand()})
     items = await CliAttentionSource(_service(_THREE, probe)).items()
-    assert [(i.kind, i.uid, i.reason_code) for i in items] == [
-        ("cli", "jq", "cli_missing"),
-        ("cli", "gh", "cli_outdated"),
-    ]
-    assert items[1].action.verb == "check"
-    assert items[1].action.path == "/api/v1/clis/gh/check"
-    assert items[1].severity.value == "warning"
+    assert [(i.kind, i.uid, i.reason_code) for i in items] == [("cli", "jq", "cli_missing")]
+    assert items[0].action.verb == "check"
+    assert items[0].action.path == "/api/v1/clis/jq/check"
+    assert items[0].severity.value == "warning"
 
 
 async def test_a_command_coffer_and_a_skill_both_need_names_both() -> None:
@@ -151,7 +124,7 @@ class _Servers:
     scenario="a stdio MCP server's launcher is listed under the command that provides it",
 )
 async def test_mcp_launchers_are_required_by_their_servers() -> None:
-    probe = FakeCommandProbe({"node": FakeCommand("22.1.0")})
+    probe = FakeCommandProbe({"node": FakeCommand()})
     profiling = _md("data-profiling", '  - command: uv\n    min_version: "0.4"\n')
     svc = CliRequirementService(
         skills=_Skills({"data-profiling": profiling}),
@@ -168,7 +141,7 @@ async def test_mcp_launchers_are_required_by_their_servers() -> None:
     ]
     assert uv.status.value == "missing" and uv.handoff is not None
     assert "- Needed by the MCP servers Coffer starts: duckdb (started with `uvx`)." in uv.handoff
-    assert "- Needed by the Coffer skills: data-profiling (version 0.4 or newer)." in uv.handoff
+    assert "- Needed by the Coffer skills: data-profiling." in uv.handoff
     node = views["node"]
     assert node.required.needed_by == () and node.status.value == "ready"
     assert (await svc.get("node")).required.needed_by_servers[0].server_name == "files"
@@ -270,42 +243,11 @@ def test_launcher_cli_maps_provided_launchers_and_skips_paths() -> None:
 
 
 def test_coffer_needs_join_the_skills_that_need_the_same_command() -> None:
-    skill = SkillRequirements("u1", "history", (CommandRequirement("git", min_version="2.30"),))
+    skill = SkillRequirements("u1", "history", (CommandRequirement("git"),))
     (alone,) = aggregate([], coffer=COFFER_NEEDS)
     assert (alone.command, alone.title) == ("git", "Git")
     assert alone.needed_by_coffer == (CofferUse.VAULT_HISTORY, CofferUse.SYNC)
     mine = DeclaredTool("git", title="Mine")
     (joined,) = aggregate([skill], declared=[mine], coffer=COFFER_NEEDS)
-    assert joined.title == "Mine" and joined.min_version == "2.30" and joined.added
+    assert joined.title == "Mine" and joined.added
     assert joined.needed_by_coffer and joined.needed_by[0].skill_name == "history"
-
-
-async def test_a_profile_declared_command_is_needed_by_the_skill_with_its_profile() -> None:
-    from coffer.application.skill.cli_requirements import ProfileDocument
-
-    class Docs:
-        async def skill_documents(self) -> Sequence[SkillDocument]:
-            return [
-                SkillDocument(
-                    "u1",
-                    "investigating",
-                    "---\nname: investigating\nrequires: [gh]\n---\n",
-                    (ProfileDocument("acme", "---\nrequires: [smc]\n---\n"),),
-                )
-            ]
-
-    class Probe:
-        def locate(self, command: str) -> str | None:
-            return None
-
-        def version(self, path: str) -> str | None:
-            return None
-
-        def login_ok(self, argv: Sequence[str]) -> bool | None:
-            return None
-
-    service = CliRequirementService(skills=Docs(), probe=Probe(), machine=lambda: "m")
-    listing = await service.listing()
-    by = {v.required.command: v.required.needed_by[0] for v in listing.items}
-    assert by["gh"].profiles == ()
-    assert by["smc"].profiles == ("acme",)

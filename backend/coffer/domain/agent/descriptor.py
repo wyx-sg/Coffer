@@ -65,6 +65,12 @@ class AgentDescriptor:
     #: (``skills``). Coffer delivers a managed skill by symlinking (copy
     #: fallback) the master folder into it.
     skill_subpath: str = "skills"
+    #: Where the agent reads personal skills from when that is under ``$HOME``
+    #: rather than under its config dir (Codex: ``.agents/skills``). When set,
+    #: Coffer delivers there, and ``<config_dir>/<skill_subpath>`` is the
+    #: agent's older location, still scanned for skills it holds (ADR
+    #: codex-skills-go-to-agents-skills).
+    skill_home_subpath: str | None = None
     #: The environment variable the agent's own runtime reads a non-default
     #: config directory from (``CLAUDE_CONFIG_DIR``, ``CODEX_HOME``). Every
     #: process Coffer spawns to run the agent carries it for a custom
@@ -102,7 +108,15 @@ class AgentDescriptor:
         return _home() / self.config_subpath
 
     def default_skill_dir(self) -> pathlib.Path:
+        if self.skill_home_subpath is not None:
+            return _home() / self.skill_home_subpath
         return self.default_config_dir() / self.skill_subpath
+
+    def skill_dir_for(self, config_dir: pathlib.Path) -> pathlib.Path:
+        """Where skills are delivered for an agent whose config dir is ``config_dir``."""
+        if self.skill_home_subpath is not None:
+            return _home() / self.skill_home_subpath
+        return config_dir / self.skill_subpath
 
     def resolved_mcp_source_keys(self) -> tuple[str, ...]:
         if self.mcp_source_keys:
@@ -149,6 +163,9 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
         program="codex",
         install_url="https://developers.openai.com/codex/cli",
         curated_list_replaces_builtin=True,
+        # Codex reads personal skills from ~/.agents/skills; its own
+        # $CODEX_HOME/skills is kept only for backward compatibility.
+        skill_home_subpath=".agents/skills",
         hook_source_keys=("hooks",),
         mcp=McpInjectionSpec(
             config_key="config",

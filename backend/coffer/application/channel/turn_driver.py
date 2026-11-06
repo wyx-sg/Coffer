@@ -120,6 +120,9 @@ class QueuedInbound:
     earlier_message_ids: tuple[str, ...] = ()
     #: Coffer's follow-up asking for a too-long reply again, short (``reply_rewrite``).
     rewrite: bool = False
+    #: That follow-up's share of the long reply: its ``MEDIA:`` lines, sent with
+    #: the short version so the files the agent sent are not lost with the text.
+    carried_media: str = ""
 
 
 class TurnPort(Protocol):
@@ -149,6 +152,9 @@ class Session:
     running_conversation_id: str | None = None
     # The renderer draining that turn's events into the chat.
     render_task: asyncio.Task[None] | None = None
+    # What that turn is doing right now, for ``/status`` (spec channels "Report
+    # the chat's state as a status card"); ``None`` between turns.
+    progress: Callable[[], str] | None = None
 
 
 class TurnDriver:
@@ -341,8 +347,10 @@ class TurnDriver:
             tracker=tracker,
             rewrite=None if item.rewrite else rewrite,
             offer_full_report=item.rewrite,
+            carried_media=item.carried_media,
         )
         outcome: TurnOutcome = "failed"
+        session.progress = renderer.progress
         try:
             outcome = await renderer.consume(queue)
         except asyncio.CancelledError:
@@ -356,6 +364,8 @@ class TurnDriver:
             if session.render_task is asyncio.current_task():
                 session.render_task = None
                 session.running_conversation_id = None
+            if session.progress == renderer.progress:
+                session.progress = None
         # Mark how it ended on the user's message: done, failed or stopped.
         marks = adapter.capabilities.reactions
         mark = {"failed": marks.failed, "stopped": marks.stopped}.get(outcome, marks.done)

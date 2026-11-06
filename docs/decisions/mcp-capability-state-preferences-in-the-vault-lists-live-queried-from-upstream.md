@@ -146,3 +146,13 @@ vanished ones keep their switch and their seen row.
   and deleting the server deletes it in the same commit.
 - Pruning seen rows and switches for permanently vanished capabilities is left
   undone; the volume is small for one user.
+
+## Revision 2026-11-06
+
+A gateway session no longer queries every list live: it answers from the list
+the server last gave on this machine under the same config, saved whole in
+`derived.db` (`mcp_catalogue`), and asks the server only when it was never
+listed here, its config changed, or the session is already connected to it.
+The management routes still query live. The reasons and the options compared
+are in [One Upstream Subprocess Set Per Session](session-subprocess-model.md),
+revision of the same date. Switches stay where this ADR put them.

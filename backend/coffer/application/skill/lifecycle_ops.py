@@ -18,7 +18,7 @@ from coffer.domain.audit import AuditEventType
 from coffer.domain.audit_diff import as_text, text_diff
 from coffer.domain.errors import ResourceAlreadyExists, ResourceProtected
 from coffer.domain.resource import Resource
-from coffer.domain.skill.config import SkillConfig
+from coffer.domain.skill.config import SkillConfig, stored_description
 from coffer.domain.skill.source import ImportedSource
 from coffer.domain.skill.validator import ValidationOk
 
@@ -91,7 +91,7 @@ async def register_from_validated(
         source=source_meta,
         # ``name`` is not stored on the config: it IS the resource's name,
         # taken from the frontmatter right here. See ``SkillConfig``.
-        skill_md_description=validation.frontmatter.description,
+        skill_md_description=stored_description(validation.frontmatter.description),
         version_hash=validation.skill_md_sha256,
         last_synced_from_source_at=now,
     )
@@ -122,7 +122,7 @@ async def register_from_validated(
                 existing_row.uid,
                 new_config=cfg.model_dump(mode="json"),
                 actor=actor,
-                description=validation.frontmatter.description,
+                description=stored_description(validation.frontmatter.description),
                 allow_lifecycle_kind=True,  # creation seam: master folder replaced above
             )
             audit_event = AuditEventType.SKILL_UPDATED
@@ -133,7 +133,7 @@ async def register_from_validated(
                 kind="skill",
                 name=name,
                 config=cfg.model_dump(mode="json"),
-                description=validation.frontmatter.description,
+                description=stored_description(validation.frontmatter.description),
                 actor=actor,
                 allow_lifecycle_kind=True,  # creation seam: master folder replaced above
             )
@@ -146,7 +146,7 @@ async def register_from_validated(
                 kind="skill",
                 name=name,
                 config=cfg.model_dump(mode="json"),
-                description=validation.frontmatter.description,
+                description=stored_description(validation.frontmatter.description),
                 actor=actor,
                 allow_lifecycle_kind=True,  # creation seam: master folder created above
             )

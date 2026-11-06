@@ -9,6 +9,7 @@ fake without a real ``codex`` binary (no subprocess needed).
 
 from __future__ import annotations
 
+import asyncio
 import os
 import pathlib
 from collections.abc import Awaitable, Callable
@@ -37,7 +38,7 @@ from coffer.infrastructure.chat.codex_thread_release import CodexThreadRelease, 
 from coffer.infrastructure.chat.default_workspace import default_workspace_dir
 from coffer.infrastructure.chat.document_extract import default_document_extractor
 from coffer.infrastructure.chat.transcribe import Transcriber
-from coffer.infrastructure.platform.user_path import which_on_user_path
+from coffer.infrastructure.platform.user_path import user_path_env, which_on_user_path
 
 #: Builds the transcriber for one turn, or ``None`` to leave audio untouched.
 #: Resolved per turn so designating (or clearing) the internal connection takes
@@ -134,15 +135,18 @@ class CodexAppServerProvider:
         # reached through Coffer's model proxy, which injects the real key
         # upstream, and Codex authenticates to the proxy with its own ``auth``
         # command. The overrides are CODEX_HOME, when the agent has its own
-        # config dir, and the turn's token — MERGED with os.environ,
-        # because create_subprocess_exec REPLACES the environment; with none
-        # the env stays None (inherit).
+        # config dir, the turn's token and the user's PATH — MERGED with
+        # os.environ, because create_subprocess_exec REPLACES the environment;
+        # with none the env stays None (inherit).
         overrides: dict[str, str] = (
             dict(await self._resolve_home_env()) if self._resolve_home_env else {}
         )
         # The turn's token, for the turn-scoped tools (the ``coffer`` entry in
         # Codex's config passes ``COFFER_TURN_TOKEN`` through to the shim).
         overrides.update(turn_tokens.turn_env(conversation_id))
+        # The PATH the CLIs page checks commands on (spec skill-manager "Check
+        # every required command where the agent runs").
+        overrides.update(await asyncio.to_thread(user_path_env))
         env = {**os.environ, **overrides} if overrides else None
         system_context = await compose_system_context(
             agent_key=self.agent_key,

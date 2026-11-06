@@ -61,7 +61,7 @@ def _unknown_call(c: object, name: str) -> bool:
 
 @pytest.mark.acceptance(
     spec="experimental-features",
-    scenario="knowledge off leaves coffer__search_tools the only built-in tool",
+    scenario="knowledge off adds or removes no built-in tool",
 )
 @pytest.mark.acceptance(
     spec="experimental-features",
@@ -70,7 +70,7 @@ def _unknown_call(c: object, name: str) -> bool:
 def test_knowledge_off_hides_the_write_tool(home: pathlib.Path) -> None:
     with _client() as c:
         on_tools = {t for t in kind_gates._listed_tools(c) if t.startswith("coffer__")}
-        assert on_tools == {"coffer__search_tools"}
+        assert on_tools == {"coffer__search_tools", "coffer__channel_notify"}
         assert "Its knowledge is markdown" in kind_gates._instructions(c)
         # There is no write tool to hide: it is unknown with the feature on, too.
         assert _unknown_call(c, "coffer__write")
@@ -81,7 +81,7 @@ def test_knowledge_off_hides_the_write_tool(home: pathlib.Path) -> None:
         assert c.get("/api/v1/agent-sessions").status_code == 200
         tools = {t for t in kind_gates._listed_tools(c) if t.startswith("coffer__")}
         text = kind_gates._instructions(c)
-        assert tools == {"coffer__search_tools"}
+        assert tools == on_tools
         # The handshake names exactly the tools the list carries and says nothing
         # of knowledge.
         assert kind_gates._named_tools(text) <= tools

@@ -30,6 +30,7 @@ class FakeMachine:
     def __init__(self, machine_id: str, label: str) -> None:
         self.id = machine_id
         self.name = label
+        self.key: str | None = None
 
     def machine_id(self) -> str:
         return self.id
@@ -48,6 +49,7 @@ class FakeMachine:
                     "format_version": 1,
                     "name": self.name,
                     "last_converged_commit": last_commit,
+                    "key_fingerprint": self.key,
                 },
                 indent=2,
             )

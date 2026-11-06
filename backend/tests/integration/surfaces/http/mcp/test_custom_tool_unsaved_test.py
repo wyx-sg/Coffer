@@ -14,7 +14,7 @@ from typing import Any
 import pytest
 
 from tests.support.boundary_daemon import BoundaryDaemon, prepare_home, running_daemon
-from tests.support.custom_tools import SECRET_VALUE, create_group, get_group, tool
+from tests.support.custom_tools import SECRET_VALUE, create_group, tool
 from tests.support.fake_http_api import FakeHttpApi, fake_http_api
 
 
@@ -113,60 +113,3 @@ def test_a_failed_test_says_how_it_failed(
     assert answered["failure"] is None and answered["status"] == 200
     assert answered["handoff"] is None
     assert SECRET_VALUE not in json.dumps(answered)
-
-
-def _document(*ops: tuple[str, str, str, list[str]]) -> dict[str, Any]:
-    paths: dict[str, Any] = {}
-    for method, path, op_id, required in ops:
-        params = [
-            {"name": n, "in": "query", "required": True, "schema": {"type": "string"}}
-            for n in required
-        ]
-        paths.setdefault(path, {})[method.lower()] = {
-            "operationId": op_id,
-            "tags": ["Invoices"],
-            "parameters": params,
-        }
-    return {
-        "openapi": "3.1.0",
-        "info": {"title": "Billing", "version": "2.4.0"},
-        "servers": [{"url": "https://billing.example/v2"}],
-        "paths": paths,
-    }
-
-
-@pytest.mark.acceptance(
-    spec="mcp-gateway", scenario="a re-import preview names the tools the spec changed"
-)
-def test_a_reimport_preview_names_the_tools_the_spec_changed(daemon: BoundaryDaemon) -> None:
-    before = _document(
-        ("GET", "/invoices", "listInvoices", []), ("POST", "/invoices", "createInvoice", [])
-    )
-    r = daemon.client.post(
-        "/api/v1/custom-tools/openapi", json={"document": json.dumps(before), "filename": "b.json"}
-    )
-    reading = r.json()
-    assert {op["tag"] for op in reading["operations"]} == {"Invoices"}
-    r = daemon.client.post(
-        "/api/v1/custom-tools",
-        json={
-            "name": "billing",
-            "base_url": "https://billing.example/v2",
-            "tools": [op["tool"] for op in reading["operations"]],
-            "source": {"kind": "file", "location": "b.json"},
-        },
-    )
-    assert r.status_code == 201, r.text
-    after = _document(
-        ("GET", "/invoices", "listInvoices", []),
-        ("POST", "/invoices", "createInvoice", ["currency"]),
-    )
-    r = daemon.client.post(
-        "/api/v1/custom-tools/billing/reimport/preview", json={"document": json.dumps(after)}
-    )
-    assert r.status_code == 200, r.text
-    changed = r.json()["changed"]
-    assert [c["name"] for c in changed] == ["create_invoice"]
-    assert changed[0]["new_required"] == ["currency"]
-    assert changed[0]["request_changed"] is True  # the query template gained ?currency=
-    assert len(get_group(daemon, "billing")["tools"]) == 2

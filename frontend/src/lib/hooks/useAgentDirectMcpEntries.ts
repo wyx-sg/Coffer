@@ -15,7 +15,8 @@ import { useAgents } from "@/lib/hooks/useAgents";
 /** One agent's direct entries: those Coffer does not serve already. */
 interface AgentDirectEntries {
   agent: AgentOut;
-  /** Entries in the agent's own config files that bypass Coffer. */
+  /** Entries in the agent's own config files that bypass Coffer and could move into it
+   *  (an entry on the old SSE transport stays with the agent: it cannot be imported). */
   entries: McpEntryOut[];
   /** Entries that duplicate a server Coffer already has (`matches_resource`). */
   duplicates: McpEntryOut[];
@@ -34,7 +35,7 @@ export function useAgentDirectMcpEntries() {
     const items = (results[i]?.data?.items ?? []).filter((e) => !e.is_coffer);
     return {
       agent,
-      entries: items.filter((e) => e.matches_resource === null),
+      entries: items.filter((e) => e.matches_resource === null && !e.legacy_sse),
       duplicates: items.filter((e) => e.matches_resource !== null),
     };
   });

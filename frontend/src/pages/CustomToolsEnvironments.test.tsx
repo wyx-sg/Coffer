@@ -48,7 +48,6 @@ function environment(name: string, overrides: Partial<CustomToolEnvironment> = {
     base_url: `https://${name}.billing.example/v2`,
     headers: [],
     variables: {},
-    timeout_seconds: null,
     secret_state: "none",
     pending_approvals: [],
     pending_secrets: [],

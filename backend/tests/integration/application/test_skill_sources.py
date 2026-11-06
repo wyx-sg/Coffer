@@ -332,7 +332,7 @@ async def test_recording_a_merge_moves_the_pin_and_keeps_the_files(env: Env) -> 
     (env.master("review") / "old.txt").unlink()
     merged_hash = folder_content_hash(env.master("review"))
 
-    await env.svc.mark_merged(skill.uid, new[:10], actor="cli")
+    await env.svc.mark_merged(skill.uid, new, actor="cli")
 
     source = await env.source(skill.uid)
     assert source.commit == new
@@ -367,9 +367,10 @@ async def test_recording_a_merge_refuses_a_commit_not_waiting(env: Env) -> None:
     # Nothing newer upstream: there is no update to have merged.
     with pytest.raises(SkillUpdateNotPending):
         await env.svc.mark_merged(skill.uid, first, actor="cli")
-    _upstream_moves(up)
-    # The pinned commit itself, and a commit that is not on the ref, are refused.
-    for commit in (first, "0" * 40):
+    new = _upstream_moves(up)
+    # The pinned commit itself, a commit that is not on the ref and a prefix of
+    # the update are refused: only the update the hand-off names is recorded.
+    for commit in (first, "0" * 40, new[:10]):
         with pytest.raises(SkillUpdateNotPending):
             await env.svc.mark_merged(skill.uid, commit, actor="cli")
     assert (await env.source(skill.uid)).commit == first

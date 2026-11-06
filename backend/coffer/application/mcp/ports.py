@@ -45,6 +45,7 @@ class UpstreamConnectionPort(Protocol):
     def on_notification(self, cb: Callable[[Any], Awaitable[None]]) -> None: ...
     def on_sampling_request(self, cb: Any) -> None: ...
     def on_roots_request(self, cb: Any) -> None: ...
+    def on_elicitation_request(self, cb: Any) -> None: ...
     async def close(self) -> None: ...
 
 
@@ -147,3 +148,19 @@ class MCPInvocationRepoPort(Protocol):
         that would then need a resource lookup to use it.
         """
         ...
+
+
+class McpCataloguePort(Protocol):
+    """What each upstream listed last on this machine (``catalogue_store``)."""
+
+    async def load(
+        self, server_uid: str, capability_type: CapabilityType
+    ) -> tuple[str, list[dict[str, Any]]] | None: ...
+
+    async def save(
+        self,
+        server_uid: str,
+        capability_type: CapabilityType,
+        config_hash: str,
+        items: list[dict[str, Any]],
+    ) -> None: ...

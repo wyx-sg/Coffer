@@ -17,7 +17,7 @@ import { HelpCircle, RefreshCw, Terminal } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
 import { SkillRequireRow } from "@/components/skills/SkillRequireRow";
-import { Group, StateWord, profileNote } from "@/components/skills/SkillRequiresParts";
+import { Group, StateWord } from "@/components/skills/SkillRequiresParts";
 import { SkillReviewHandoff } from "@/components/skills/SkillReviewHandoff";
 import { StatusWord } from "@/components/status/StatusWord";
 import { Button } from "@/components/ui/button";
@@ -145,13 +145,7 @@ export function SkillRequiresTab({ skill }: Props) {
             <SkillRequireRow
               key={req.command}
               name={req.command}
-              note={profileNote(
-                t,
-                req.profiles,
-                req.min_version
-                  ? t("skills.requires.needsAtLeast", { min: req.min_version })
-                  : null,
-              )}
+              note={null}
               state={<StateWord cli={cli} />}
               to={`/clis/${encodeURIComponent(req.command)}`}
               linkLabel={t("skills.requires.viewInClis")}
@@ -171,7 +165,6 @@ export function SkillRequiresTab({ skill }: Props) {
               <SkillRequireRow
                 key={secret.name}
                 name={labelOf.get(ref) || secret.name}
-                note={profileNote(t, secret.profiles)}
                 state={
                   <StatusWord tone={secret.is_set ? "ok" : "warn"}>
                     {secret.is_set
@@ -205,7 +198,7 @@ export function SkillRequiresTab({ skill }: Props) {
                   {t(`skills.requires.toolState.${tool.status}`)}
                 </StatusWord>
               }
-              note={profileNote(t, tool.profiles, tool.status === "healthy" ? null : tool.why)}
+              note={tool.status === "healthy" ? null : tool.why}
               to={toolHref(tool)}
               linkLabel={t(`skills.requires.viewInTools.${tool.kind}`)}
             />

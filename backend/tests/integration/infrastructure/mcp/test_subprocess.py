@@ -231,3 +231,27 @@ async def test_another_child_started_meanwhile_is_not_recorded_as_the_servers(
         if bystander is not None:
             bystander.kill()
             bystander.wait()
+
+
+@pytest.mark.acceptance(
+    spec="mcp-gateway", scenario="a call to a server that exited records what it printed last"
+)
+async def test_a_server_that_exits_mid_call_is_named_with_its_last_stderr_line(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("COFFER_LOG_DIR", str(tmp_path))
+    conn = StdioUpstreamConnection(
+        transport=_transport("--tools", "echo", "--crash-after-calls", "1", scenario="crash"),
+        env_overlay={},
+        server_name="crasher",
+    )
+    try:
+        await conn.spawn_and_initialize()
+        with pytest.raises(UpstreamUnavailable) as caught:
+            await conn.request("tools/call", {"name": "echo", "arguments": {}})
+    finally:
+        await conn.close()
+    message = str(caught.value)
+    assert "failed tools/call: the server exited" in message
+    assert "fatal: out of memory with key <secret>" in message
+    assert "sk-abc" not in message

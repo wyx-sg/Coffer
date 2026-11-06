@@ -34,6 +34,7 @@ import argparse
 import asyncio
 import os
 import subprocess
+import sys
 from typing import Any
 
 import mcp.types as mcp_types
@@ -96,6 +97,9 @@ def _build_server(args: argparse.Namespace) -> tuple[Server[Any], dict[str, Any]
             # os._exit bypasses Python cleanup and immediately terminates the process,
             # ensuring the subprocess dies and the stdio pipe closes for the client.
             # sys.exit() only raises SystemExit which gets swallowed by asyncio TaskGroups.
+            # Its last words, as a real server prints them (one carries a token).
+            sys.stderr.write("fatal: out of memory with key sk-abcdefghijklmnopqrstuvwx\n")
+            sys.stderr.flush()
             os._exit(1)
         if (
             state["scenario"] == "mutating"

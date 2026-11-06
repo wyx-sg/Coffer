@@ -3,7 +3,7 @@
 // Covered: Coffer's skills as one row (count, first five names, a link to the
 // Skills page filtered to this agent) and never as rows; the agent's own
 // folders ordered worst first with their state, one button and a ⋯ menu that
-// holds Delete… only; a name opening the folder's page; the Adopt dialog (name,
+// holds Reveal in Finder and Delete…; a name that opens nothing; the Adopt dialog (name,
 // conflict, reach, errors inside, closing on success); Delete duplicate behind a
 // confirm; the shared empty box. The hooks run for real against mocked wire
 // modules; the fixture agent's uid (`u-cc`) differs from its type so every
@@ -156,7 +156,9 @@ function renderTab() {
   );
 }
 
-const row = (name: string) => screen.getByRole("link", { name }).closest("tr") as HTMLElement;
+/** The agent's own skill folders' name cells; a folder has no page, so no link. */
+const OWN = { selector: '[data-testid="own-skill-name"]' };
+const row = (name: string) => screen.getByText(name, OWN).closest("tr") as HTMLElement;
 
 afterEach(() => vi.clearAllMocks());
 
@@ -170,9 +172,9 @@ describe("AgentSkillsTab", () => {
       renderTab();
       expect(await screen.findByText("1 skill from Coffer")).toBeInTheDocument();
       expect(screen.queryByRole("radio")).not.toBeInTheDocument();
-      expect(screen.queryByRole("link", { name: "coffer-guide" })).not.toBeInTheDocument();
-      expect(screen.getByRole("link", { name: "release-notes" })).toBeInTheDocument();
-      expect(screen.getByRole("link", { name: "migrate-old" })).toBeInTheDocument();
+      expect(screen.queryByText("coffer-guide", OWN)).not.toBeInTheDocument();
+      expect(screen.getByText("release-notes", OWN)).toBeInTheDocument();
+      expect(screen.getByText("migrate-old", OWN)).toBeInTheDocument();
       // The header row, then one row per own skill.
       expect(screen.getAllByRole("row")).toHaveLength(3);
     },
@@ -204,10 +206,8 @@ describe("AgentSkillsTab", () => {
       ],
     );
     renderTab();
-    await screen.findByRole("link", { name: "migrate-old" });
-    const names = screen.getAllByRole("link", {
-      name: /^(release-notes|pdf|lint-fix|migrate-old)$/,
-    });
+    await screen.findByText("migrate-old", OWN);
+    const names = screen.getAllByTestId("own-skill-name");
     expect(names.map((n) => n.textContent)).toEqual([
       "migrate-old",
       "lint-fix",
@@ -225,23 +225,24 @@ describe("AgentSkillsTab", () => {
     expect(within(row("release-notes")).getByText("~/.claude/skills")).toBeInTheDocument();
   });
 
-  acceptance(
-    "skill-manager",
-    "open an unmanaged skill's detail page from the agent's Skills tab",
-    async () => {
-      stub([GUIDE], [LINKED]);
-      renderTab();
-      fireEvent.click(await screen.findByRole("link", { name: "lint-fix" }));
-      expect(screen.getByTestId("where")).toHaveTextContent(
-        "/agents/claude_code/skills/unmanaged/agents_dir/lint-fix",
-      );
-    },
-  );
+  acceptance("skill-manager", "an unmanaged skill is acted on from its row", async () => {
+    stub([GUIDE], [LOOSE]);
+    renderTab();
+    const cell = await screen.findByText("release-notes", OWN);
+    expect(cell.closest("a")).toBeNull();
+    fireEvent.click(cell);
+    expect(screen.getByTestId("where")).toHaveTextContent("/agents/claude_code/skills");
+    const r = row("release-notes");
+    expect(within(r).getByRole("button", { name: "Adopt: release-notes" })).toBeInTheDocument();
+    fireEvent.click(within(r).getByRole("button", { name: "More for release-notes" }));
+    expect(await screen.findByRole("menuitem", { name: "Reveal in Finder" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Delete…" })).toBeInTheDocument();
+  });
 
   test("Adopt is hidden — not disabled — on an invalid folder and a foreign link", async () => {
     stub([], [LOOSE, LINKED, BROKEN]);
     renderTab();
-    await screen.findByRole("link", { name: "lint-fix" });
+    await screen.findByText("lint-fix", OWN);
     expect(screen.getAllByRole("button", { name: /^Adopt:/ })).toHaveLength(1);
     expect(screen.queryByRole("button", { name: "Adopt: lint-fix" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Adopt: migrate-old" })).toBeNull();
@@ -331,7 +332,7 @@ describe("AgentSkillsTab", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 
-  test("the ⋯ menu holds Delete… only, and a duplicate has the Delete duplicate button instead", async () => {
+  test("the ⋯ menu holds Reveal and Delete…, and a duplicate's only Reveal beside its Delete duplicate button", async () => {
     stub(
       [skill("pdf")],
       [
@@ -340,10 +341,15 @@ describe("AgentSkillsTab", () => {
       ],
     );
     renderTab();
-    await screen.findByRole("link", { name: "pdf" });
-    expect(screen.queryByRole("button", { name: "More for pdf" })).toBeNull();
+    await screen.findByText("pdf", OWN);
+    fireEvent.click(screen.getByRole("button", { name: "More for pdf" }));
+    expect(screen.getAllByRole("menuitem").map((i) => i.textContent)).toEqual(["Reveal in Finder"]);
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
     fireEvent.click(screen.getByRole("button", { name: "More for release-notes" }));
-    expect(screen.getAllByRole("menuitem").map((i) => i.textContent)).toEqual(["Delete…"]);
+    expect(screen.getAllByRole("menuitem").map((i) => i.textContent)).toEqual([
+      "Reveal in Finder",
+      "Delete…",
+    ]);
   });
 
   test("Delete… names the folder and its files, and deletes it after the confirm", async () => {
@@ -383,10 +389,10 @@ describe("AgentSkillsTab", () => {
   test("search narrows the agent's own list", async () => {
     stub([], [LOOSE, BROKEN]);
     renderTab();
-    await screen.findByRole("link", { name: "release-notes" });
+    await screen.findByText("release-notes", OWN);
     fireEvent.change(screen.getByLabelText("Search skills"), { target: { value: "migrate" } });
-    expect(screen.queryByRole("link", { name: "release-notes" })).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "migrate-old" })).toBeInTheDocument();
+    expect(screen.queryByText("release-notes", OWN)).not.toBeInTheDocument();
+    expect(screen.getByText("migrate-old", OWN)).toBeInTheDocument();
   });
 
   test("an agent with no skills of its own shows the shared empty box, search kept", async () => {

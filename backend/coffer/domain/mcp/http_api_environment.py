@@ -64,8 +64,6 @@ class HttpApiEnvironment(BaseModel):
     auth_schemes: dict[str, AuthScheme] = Field(default_factory=dict)
     #: Non-sensitive text a tool's template uses as ``{env:NAME}``.
     variables: dict[str, str] = Field(default_factory=dict)
-    #: ``None`` uses the group's timeout.
-    timeout_seconds: int | None = Field(default=None, ge=1, le=300)
 
     @model_validator(mode="before")
     @classmethod

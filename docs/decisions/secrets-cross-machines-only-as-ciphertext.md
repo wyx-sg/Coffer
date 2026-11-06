@@ -213,3 +213,39 @@ variable, with the user's global and system git configuration isolated.
   `run` entry point in `infrastructure/vault/git.py` rather than per command.
 - Rotating the master key is not offered: re-encrypting every row on every
   machine is the coordination Option C was rejected for.
+
+## Addendum (2026-11-06): no sync between machines whose master keys differ
+
+### Context
+
+"The fresher encryption wins" orders two ciphertexts without the key, but it
+does not ask whether this machine can open the winner. With two machines on
+different master keys (a second Mac that created a secret before its key was
+imported), a fresher ciphertext from the other key replaced a value this
+machine could open, and new secrets from each side were unreadable on the
+other. The Machines tab only flagged it.
+
+### Options considered
+
+- **A — Refuse the round while the remote carries secrets and a peer's key
+  fingerprint differs (chosen).** The descriptors already publish
+  `key_fingerprint`. Pros: nothing unreadable arrives and nothing readable is
+  overwritten; a few lines; the fix (import the key) is the one the person
+  must do anyway. Cons: knowledge and skills stop syncing too until the keys
+  match.
+- **B — Keep this machine's value when it cannot open the other's.** Pros:
+  the rest keeps syncing. Cons: each side keeps its own value and overwrites
+  the other's every round; the drift is invisible.
+- **C — Skip `secret/` alone while keys differ.** Pros: the rest keeps
+  syncing. Cons: two divergent secret sets, and a later key import merges them
+  with "fresher wins" over values the person never compared.
+- **D — Keep it, flag on the Machines tab.** Lost on the context above.
+
+Comparable products: 1Password and Bitwarden do not let a device without the
+account key into the vault at all; Coffer does the same for a remote that
+carries secrets, and leaves a remote without them unaffected.
+
+### Decision
+
+Option A. Spec vault-sync "Refuse to carry secrets between machines whose
+master keys differ".

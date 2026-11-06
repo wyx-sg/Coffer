@@ -249,15 +249,6 @@ SPECS = [
         names=A,
     ),
     RouteCommand(
-        "agent unmanaged-skill show",
-        "GET",
-        "/agents/{uid}/unmanaged-skills/{skill}",
-        _UI + "Skills tab · open",
-        "One unmanaged skill.",
-        names=A,
-        query=(Q("location", "Where the skill sits"),),
-    ),
-    RouteCommand(
         "agent unmanaged-skill files",
         "GET",
         "/agents/{uid}/unmanaged-skills/{skill}/files",

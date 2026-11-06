@@ -81,9 +81,6 @@ def add(
         None, "--secret-header", help="Name=secret[:Scheme]: a stored secret's name; repeat"
     ),
     var: list[str] | None = typer.Option(None, "--var", help="NAME=value for {env:NAME}; repeat"),
-    timeout: int | None = typer.Option(
-        None, "--timeout", help="Seconds per request (default: the group's)"
-    ),
     description: str = typer.Option("", "--description"),
     disabled: bool = typer.Option(False, "--disabled", help="Add it switched off"),
     as_json: bool = _io.json_option(),
@@ -94,7 +91,6 @@ def add(
         "base_url": base_url,
         "headers": header_rows(header, secret_header, as_json=as_json),
         "variables": pairs(var, "--var", as_json=as_json),
-        "timeout_seconds": timeout,
         "description": description,
         "enabled": not disabled,
     }
@@ -104,14 +100,12 @@ def add(
 
 
 @envs.command("update")
-@maps("custom-tool env update", ("PATCH", _ENV), ui=_UI + "edit (URL, name, timeout, description)")
+@maps("custom-tool env update", ("PATCH", _ENV), ui=_UI + "edit (URL, name, description)")
 def update(
     name: str = typer.Argument(...),
     env: str = typer.Argument(...),
     base_url: str | None = typer.Option(None, "--base-url"),
     rename: str | None = typer.Option(None, "--rename", help="A new name (its approvals are kept)"),
-    timeout: int | None = typer.Option(None, "--timeout", help="Its own seconds per request"),
-    group_timeout: bool = typer.Option(False, "--group-timeout", help="Use the group's timeout"),
     description: str | None = typer.Option(None, "--description"),
     data: str | None = _io.data_option("Fields to change as JSON (text, @file or -)"),
     sets: list[str] | None = _io.set_option(),
@@ -122,10 +116,6 @@ def update(
     for key, value in (("base_url", base_url), ("name", rename), ("description", description)):
         if value is not None:
             body[key] = value
-    if timeout is not None:
-        body["timeout_seconds"] = timeout
-    if group_timeout:
-        body["timeout_seconds"] = None
     _patch(name, env, body, as_json=as_json)
 
 

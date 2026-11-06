@@ -6,11 +6,10 @@ export type RuleSource = ResponseRule["source"];
 type MessageSource = "header" | "json";
 
 export const MAX_RULES = 10;
-const MAX_DIAGNOSTIC_HEADERS = 20;
 const MAX_OK_VALUES = 20;
 const MAX_VALUE_LENGTH = 200;
 
-/** Headers that carry credentials or cookies: never named by a rule or as a diagnostic header. */
+/** Headers that carry credentials or cookies: never read by a rule. */
 const REFUSED_HEADERS: readonly string[] = [
   "authorization",
   "proxy-authorization",
@@ -86,17 +85,6 @@ export function messageProblem(rule: ResponseRule): RuleProblem | null {
 
 export function rulesValid(rules: readonly ResponseRule[]): boolean {
   return rules.length <= MAX_RULES && rules.every((r) => !ruleProblem(r) && !messageProblem(r));
-}
-
-export function diagnosticHeadersProblem(
-  names: readonly string[],
-): "refused" | "invalid" | "many" | null {
-  if (names.length > MAX_DIAGNOSTIC_HEADERS) return "many";
-  for (const n of names) {
-    const p = headerProblem(n);
-    if (p === "refused" || p === "invalid") return p;
-  }
-  return null;
 }
 
 /** One rule on one line, like `header x-result-code ∈ OK · missing: success · message: header x-result-text`. */

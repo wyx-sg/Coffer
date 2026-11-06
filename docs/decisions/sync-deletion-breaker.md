@@ -223,3 +223,72 @@ remote moves, and recorded once.
 - Every timer round of a held vault costs a fetch and a merge, the same as an
   unheld round, in exchange for a latch that can be at most one interval
   stale.
+
+## Addendum (2026-11-06): deletions Coffer can explain, and an answer remembered by file
+
+### Context
+
+From 2026-10-09 to 2026-11-05 the breaker held this project's owner's vault 13
+times, 28 to 136 files each. The vault's history shows every one of them was
+Coffer's own work: the memory sync removing hub memories the agents had
+consolidated away (`Memory sync: 30 published, 136 removed`), and Tidy runs the
+owner had started on a knowledge collection. Not one was a wiped disk, a bad
+restore or a stray `rm -rf`. Only one machine pushed in that period, so every
+hold was outgoing and every answer was "delete". A prompt that is always
+answered the same way is the failure Option C names: it trains the person to
+click through the one that matters.
+
+Three times (2026-10-13, 2026-11-05 twice) the person also had to answer the
+same hold twice: they confirmed it, the round then stopped on a plaintext
+secret, the fix was a new local commit, and because a confirmation was keyed to
+the exact `(local, remote)` pair the same deletions were asked about again.
+
+### Options considered
+
+**A — Set aside a loss whose deleting commit Coffer can explain (chosen).**
+Every vault commit names its writer and operation
+([Every Vault Write Is a Validated Commit Naming Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md)).
+The breaker reads, for each loss, the newest commit that deleted it in the
+range the deletion comes from, and sets the loss aside when that commit is the
+memory sync's or an agent's Tidy. An area that would be emptied keeps all its
+losses. Pros: the 13 field holds pass; a wiped disk, a restore or `rm -rf` is a
+`disk` write or no commit at all, so the cases the breaker exists for still
+hold; a memory sync bug that empties the hub still holds. Cons: a memory sync
+or a Tidy that wrongly removes many files, but not all of an area, is no longer
+asked about. Accepted: the memory hub is a copy of memories that stay in each
+agent's own folder, and a Tidy is started by the person and reports what it
+removed; both are in the vault's history and can be restored from it.
+
+**B — Leave the memory area out of the breaker.** Pros: simplest. Cons: a
+`rm -rf` of `vault/memory/` would publish unasked, and Tidy's holds remain.
+Lost: it excuses by place, not by cause.
+
+**C — Raise the thresholds.** Rejected again for Option H's reason: the field
+holds were 28–136 files, so any threshold that passes them passes a real wipe
+of a mid-sized area.
+
+**D — Ask at the source.** Make Tidy and the memory sync confirm deletions
+before they commit. The memory sync runs in the background with no one to ask,
+and Tidy is already a person's decision. Lost: it moves the prompt, not the
+noise.
+
+**E — Keep it as it is.** Lost on the field record above.
+
+Comparable products: Dropbox warns after a person deletes many files but does
+not block the sync; Syncthing and Obsidian Sync have no breaker and rely on
+versioning. Coffer keeps a blocking breaker, because its loss case is a
+machine that publishes a wiped vault to every other one, and narrows it by
+cause instead.
+
+For the double answer: **remember the "delete" answer by file** while the
+remote tip is unchanged. This machine's own edits after the answer no longer
+void it; a moved remote still does, as the original decision requires. A
+later hold that loses only those files is not asked; one that loses any other
+file is.
+
+### Decision
+
+Option A, plus the answer remembered by file. Spec vault-sync "Set aside
+deletions Coffer can explain" and "Ask the user to confirm a tripped breaker".
+The rule is the guard reading the history: no caller can ask for it, so
+Option H's "nothing bypasses the guard" still holds.

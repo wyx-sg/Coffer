@@ -122,6 +122,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`resource-framework-upfront`](resource-framework-upfront.md) | The Resource Framework Is Core Domain, Designed Before the Second Kind |
 | [`command-line-parity-with-the-web-ui`](command-line-parity-with-the-web-ui.md) | Every Web UI and Desktop Operation Has a `coffer` Command Over the Same Route |
 | [`cli-request-wait-budgets`](cli-request-wait-budgets.md) | Each CLI Command Waits as Long as Its Route Needs, and Says Why an Answer Did Not Come |
+| [`agents-check-cli-logins-themselves`](agents-check-cli-logins-themselves.md) | Agents Check CLI Versions and Logins Themselves; Coffer Only Looks Commands Up |
 | [`kind-plugin-contract`](kind-plugin-contract.md) | A Kind Plugs In as One Frozen Record of Optional Hooks: Validators Before the Write, Reactions After |
 | [`identity-is-the-uid-inside-the-file`](identity-is-the-uid-inside-the-file.md) | A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label |
 | [`names-visible-to-agents-are-fixed`](names-visible-to-agents-are-fixed.md) | Names Visible to Agents Are Fixed |
@@ -166,15 +167,19 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | ADR | Decision |
 | --- | --- |
 | [`session-subprocess-model`](session-subprocess-model.md) | One Upstream Subprocess Set Per Downstream Client Session |
+| [`upstreams-speak-stdio-or-streamable-http`](upstreams-speak-stdio-or-streamable-http.md) | Upstreams Speak stdio or Streamable HTTP; the Old SSE Transport Stays With the Agent |
 | [`mcp-capability-state-preferences-in-the-vault-lists-live-queried-from-upstream`](mcp-capability-state-preferences-in-the-vault-lists-live-queried-from-upstream.md) | MCP Capability State: Preferences in the Vault, Lists Live-Queried From Upstream |
 | [`tool-overload-tier-the-list-search-the-rest`](tool-overload-tier-the-list-search-the-rest.md) | Tool Overload: List a Usage-Ranked Slice, Search the Rest |
 | [`tool-search-cuts-cjk-text-into-bigrams`](tool-search-cuts-cjk-text-into-bigrams.md) | Tool Search Cuts CJK Text Into Bigrams |
 | [`tool-search-indexes-parameter-text`](tool-search-indexes-parameter-text.md) | Tool Search Indexes Parameter Text |
+| [`tool-search-puts-an-exact-name-first`](tool-search-puts-an-exact-name-first.md) | Tool Search Puts an Exact Name First |
+| [`one-hand-off-per-server-or-group`](one-hand-off-per-server-or-group.md) | One Hand-Off per MCP Server or Custom Tool Group, Carrying the Real Error |
 | [`eval-capture-and-regression-gate`](eval-capture-and-regression-gate.md) | Evals: Opt-In Capture, Hand Curation, and a Deterministic Regression Gate |
 | [`record-tool-call-content-redacted-and-bounded`](record-tool-call-content-redacted-and-bounded.md) | Record Tool Call Content, Masked Where the Secrets Are Known and Cut at 16 KB |
 | [`custom-tool-pages-give-testing-and-environments-their-own-tabs`](custom-tool-pages-give-testing-and-environments-their-own-tabs.md) | A Custom Tool's Test and a Group's Environments Each Have Their Own Tab |
 | [`what-an-agent-fills-in-a-custom-tool-is-an-input`](what-an-agent-fills-in-a-custom-tool-is-an-input.md) | What an Agent Fills in a Custom Tool Is an Input; Query Parameters Are Only the URL's |
 | [`a-body-template-is-laid-out-by-its-tokens`](a-body-template-is-laid-out-by-its-tokens.md) | A Body Template Is Laid Out by Its Tokens, Never Parsed |
+| [`custom-tool-arguments-are-checked-by-the-jsonschema-library`](custom-tool-arguments-are-checked-by-the-jsonschema-library.md) | Custom Tool Arguments Are Checked by the `jsonschema` Library |
 
 ### Agents & providers
 
@@ -219,6 +224,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`channel-help-is-a-list-and-cards-carry-only-their-own-actions`](channel-help-is-a-list-and-cards-carry-only-their-own-actions.md) | Channel `/help` Is a List to Read, and a Card Carries Only the Buttons That Act on It |
 | [`held-channel-messages-are-continued-or-discarded`](held-channel-messages-are-continued-or-discarded.md) | Held Channel Messages Are Settled by Continue and Discard |
 | [`ask-in-the-reply-not-in-a-card`](ask-in-the-reply-not-in-a-card.md) | An Agent Asks the Owner in Its Reply, Not in a Question Card |
+| [`an-agent-notifies-the-owner-through-a-built-in-tool`](an-agent-notifies-the-owner-through-a-built-in-tool.md) | An Agent Notifies the Owner Through a Built-in Tool, Direct Chat Only |
 | [`a-reply-names-its-files-and-they-follow-it`](a-reply-names-its-files-and-they-follow-it.md) | A Channel Reply Names Its Files, and the Files Follow It |
 | [`chat-attachment-uploads`](chat-attachment-uploads.md) | The Chat Page Uploads a File First and Sends Its Id, Into a Sibling Media Directory |
 | [`seatalk-websocket-inbound`](seatalk-websocket-inbound.md) | SeaTalk Inbound Is One Outbound WebSocket, Through an Operator-Supplied SDK |
@@ -230,6 +236,9 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | --- | --- |
 | [`cross-platform-skill-delivery`](cross-platform-skill-delivery.md) | Skills Reach an Agent as a Directory Link to One Master Folder |
 | [`coffer-ships-its-own-skill`](coffer-ships-its-own-skill.md) | Coffer Ships Its Own Manual as a Skill Resource |
+| [`codex-skills-go-to-agents-skills`](codex-skills-go-to-agents-skills.md) | Codex Skills Go to `~/.agents/skills` |
+| [`accept-long-skill-descriptions-and-find-skills-below-a-repos-top`](accept-long-skill-descriptions-and-find-skills-below-a-repos-top.md) | Accept Long Skill Descriptions, and Find Skills Below a Repository's Top |
+| [`trim-skill-management-to-what-an-agent-cannot-do`](trim-skill-management-to-what-an-agent-cannot-do.md) | Trim Skill Management to What an Agent Cannot Do |
 | [`git-source-partial-clone-prefetch`](git-source-partial-clone-prefetch.md) | A Git Skill's Folder Is Fetched in One Request From a Partial Clone, With One Full-Clone Fallback |
 | [`knowledge-is-plain-files`](knowledge-is-plain-files.md) | Knowledge Is a Directory of Markdown Files, Not an Index |
 | [`tidying-knowledge-is-the-agents-job`](tidying-knowledge-is-the-agents-job.md) | Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change |

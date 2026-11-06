@@ -50,7 +50,6 @@ coffer agent [OPTIONS] COMMAND [ARGS]...
 | [`agent session delete`](#agent-session-delete) | Delete a session from the agent's store. |
 | [`agent unmanaged-skill`](#agent-unmanaged-skill) | Skills an agent holds that Coffer does not manage. |
 | [`agent unmanaged-skill list`](#agent-unmanaged-skill-list) | Skills in the agent Coffer does not manage. |
-| [`agent unmanaged-skill show`](#agent-unmanaged-skill-show) | One unmanaged skill. |
 | [`agent unmanaged-skill files`](#agent-unmanaged-skill-files) | The skill's files (read them with your own tools). |
 | [`agent unmanaged-skill adopt`](#agent-unmanaged-skill-adopt) | Make Coffer manage the skill. |
 | [`agent unmanaged-skill delete`](#agent-unmanaged-skill-delete) | Delete an unmanaged skill from the agent. |
@@ -584,7 +583,7 @@ Skills an agent holds that Coffer does not manage.
 coffer agent unmanaged-skill [OPTIONS] COMMAND [ARGS]...
 ```
 
-子命令：`list`, `show`, `files`, `adopt`, `delete`。
+子命令：`list`, `files`, `adopt`, `delete`。
 
 ## agent unmanaged-skill list
 
@@ -601,25 +600,6 @@ coffer agent unmanaged-skill list [OPTIONS] UID
 | 名称 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
 | `UID` <span class="cli-chip">参数</span> | text | 必填 | The agent's name or uid |
-| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
-
-## agent unmanaged-skill show
-
-One unmanaged skill.
-
-<p class="cli-label">概要</p>
-
-```sh
-coffer agent unmanaged-skill show [OPTIONS] UID SKILL
-```
-
-<p class="cli-label">参数与选项</p>
-
-| 名称 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- |
-| `UID` <span class="cli-chip">参数</span> | text | 必填 | The agent's name or uid |
-| `SKILL` <span class="cli-chip">参数</span> | text | 必填 | skill |
-| `--location` <span class="cli-chip">选项</span> | text |  | Where the skill sits |
 | `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
 
 ## agent unmanaged-skill files

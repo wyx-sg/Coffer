@@ -3,15 +3,13 @@
 Spec skill-manager "Act on a folder in the skills store that no skill claims".
 A folder copied into ``~/.coffer/vault/skills/`` by hand, or left behind by an
 interrupted import, reaches no agent. The drift report lists it
-(``orphan_master``); these are the two things a person can do with it: add
-it to the library in place, or move it out of the store (to
-``~/.coffer/content/backup/skills/orphans/``, never a hard delete).
+(``orphan_master``); the one thing Coffer does with it is add it to the
+library in place. Removing it is the person's (Finder) or their agent's.
 """
 
 from __future__ import annotations
 
 import pathlib
-import shutil
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
@@ -49,11 +47,6 @@ async def _folder(service: SkillService, name: str) -> pathlib.Path:
     if name not in await _orphan_names(service):
         raise SkillOrphanNotFound(name)
     return pathlib.Path(service._store.paths_for(name).folder)
-
-
-async def orphan_folder(service: SkillService, name: str) -> pathlib.Path:
-    """The resolved folder of an orphan, for the read-only file viewer."""
-    return (await _folder(service, name)).resolve()
 
 
 async def list_orphans(service: SkillService) -> list[OrphanView]:
@@ -105,20 +98,4 @@ async def adopt_orphan(service: SkillService, *, name: str, actor: str) -> Resou
     )
 
 
-async def remove_orphan(service: SkillService, *, name: str, actor: str) -> pathlib.Path:
-    """Move the folder out of the store into the backup folder."""
-    folder = await _folder(service, name)
-    stamp = datetime.now(tz=UTC).strftime("%Y%m%dT%H%M%S%fZ")
-    root = pathlib.Path(service._store.backup_root) / "orphans"
-    root.mkdir(parents=True, exist_ok=True)
-    dest = root / f"{name}-{stamp}"
-    shutil.move(str(folder), str(dest))
-    await service._audit.record(
-        AuditEventType.SKILL_UNMANAGED_DELETED.value,
-        actor=actor,
-        details={"name": name, "path": str(folder), "backup": str(dest), "orphan": True},
-    )
-    return dest
-
-
-__all__ = ["OrphanView", "adopt_orphan", "list_orphans", "orphan_folder", "remove_orphan"]
+__all__ = ["OrphanView", "adopt_orphan", "list_orphans"]

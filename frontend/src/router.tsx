@@ -125,12 +125,6 @@ const pageRoutes: RouteObject[] = gateRoutes([
     path: "agents/:type/memory/store",
     element: lazyPage(() => import("./pages/AgentMemoryStorePage"), "AgentMemoryStorePage"),
   },
-  // An unmanaged skill folder, from the Skills tab. It has no uid of its own,
-  // so the scan's location and the folder name name it.
-  {
-    path: "agents/:type/skills/unmanaged/:location/:name",
-    element: lazyPage(() => import("./pages/UnmanagedSkillDetailPage"), "UnmanagedSkillDetailPage"),
-  },
   // The Channels page is the list beside the open channel, so all three
   // addresses render the same page (the tab is the optional last segment).
   { path: "channels", element: <ChannelsPage /> },

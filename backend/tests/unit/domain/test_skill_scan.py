@@ -59,7 +59,7 @@ def test_classify_preserves_order() -> None:
 def test_scan_locations_per_type() -> None:
     cfg = pathlib.Path("/home/u/.codex")
     locs = scan_locations(AgentType.CODEX, cfg, home=pathlib.Path("/home/u"))
-    assert locs == [cfg / "skills", pathlib.Path("/home/u/.agents/skills")]
+    assert locs == [pathlib.Path("/home/u/.agents/skills"), cfg / "skills"]
     locs2 = scan_locations(
         AgentType.CLAUDE_CODE, pathlib.Path("/home/u/.claude"), home=pathlib.Path("/home/u")
     )
@@ -69,7 +69,7 @@ def test_scan_locations_per_type() -> None:
 def test_scan_locations_defaults_home_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HOME", "/home/envuser")
     locs = scan_locations(AgentType.CODEX, pathlib.Path("/home/envuser/.codex"))
-    assert locs[-1] == pathlib.Path("/home/envuser/.agents/skills")
+    assert locs[0] == pathlib.Path("/home/envuser/.agents/skills")
 
 
 def test_classify_file_shaped_foreign_link_listed() -> None:

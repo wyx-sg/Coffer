@@ -1,10 +1,10 @@
 // src/components/mcp/server/McpRequires.tsx — the Overview's "Requires": what the server needs from this Mac, worked out from its command and settings (design 4.1.05).
 //
-// One row per thing: the launcher (a CLI, found or not, with its version) and
+// One row per thing: the launcher (a CLI, found or not) and
 // each secret its environment or headers cite (set, missing here, or waiting
 // for approval). A CLI row links to its CLIs page; a secret row names the env
 // var or header, then the secret by its Secrets-page name (a link to its page)
-// with Replace key… beside it. A secret waiting for approval offers Review
+// with Replace key… beside it. A secret waiting for approval offers Open
 // approvals; a refused one offers Ask again, which in the desktop app asks for
 // Touch ID at once. A Streamable HTTP server has no launcher row.
 // Nothing to show when it needs nothing.
@@ -69,9 +69,7 @@ export function McpRequires({ requires, serverUid, onRebind }: Props) {
                   OK.has(r.status) ? "text-text-muted" : toneTextClass("warn"),
                 )}
               >
-                {r.status === "found" && r.version
-                  ? t("mcp.page.requires.foundVersion", { version: r.version })
-                  : t(`mcp.page.requires.status.${r.status}`)}
+                {t(`mcp.page.requires.status.${r.status}`)}
               </span>
               <span className="flex justify-end">
                 {secret === null ? (

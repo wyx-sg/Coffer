@@ -51,7 +51,7 @@ class HttpApiToolRunner:
         try:
             outcome = await send_request(
                 request,
-                timeout_seconds=transport.timeout_for(env),
+                timeout_seconds=transport.timeout_seconds,
                 secrets=secrets,
                 check=response_check(transport, tool),
             )

@@ -6,7 +6,9 @@
 //
 // Order, most urgent first: its master folder is gone, an agent's copy is a
 // folder Coffer did not put there, a command it needs is missing, a tool it
-// calls (an MCP server or a custom-tool group) is off or failing, a secret it
+// calls (an MCP server or a custom-tool group) is off or failing, a skill it
+// loads (`metadata.requires`) is in the library but not delivered to every
+// agent that gets this one, a secret it
 // needs is not set (the skill read model answers that from Coffer's secret
 // store, by name only), its Git source cannot be reached, an update is waiting.
 //
@@ -18,11 +20,15 @@ import type { SkillDriftEntry, SkillOut } from "@/lib/api/skills";
 /** A tool the skill calls that is not healthy: its name, why, and where it lives. */
 export type SkillToolState = SkillOut["requires_tools"][number];
 
+/** A skill this one loads, with the agents that get this one but not it. */
+type SkillSkillState = SkillOut["requires_skills"][number];
+
 export type SkillAttention =
   | { kind: "masterMissing" }
   | { kind: "folderInWay"; agentName: string; entry: SkillDriftEntry }
-  | { kind: "requires"; missing: string[]; loggedOut: string[]; outdated: string[] }
+  | { kind: "requires"; missing: string[] }
   | { kind: "toolOff"; tools: SkillToolState[] }
+  | { kind: "skillNotShared"; skills: SkillSkillState[] }
   | { kind: "secrets"; missing: string[] }
   | { kind: "sourceUnreachable" }
   | { kind: "updateAvailable" };
@@ -35,19 +41,14 @@ function findingsFor(
   return (entries ?? []).filter((e) => e.skill_name === skill.name);
 }
 
-/** The declared commands that are not ready on this machine, by state. */
+/** The declared commands that are not on this machine. */
 function requireProblems(skill: Pick<SkillOut, "requires">, clis: readonly Cli[]) {
   const byCommand = new Map(clis.map((c) => [c.command, c]));
   const missing: string[] = [];
-  const loggedOut: string[] = [];
-  const outdated: string[] = [];
   for (const req of skill.requires) {
-    const cli = byCommand.get(req.command);
-    if (cli?.status === "missing") missing.push(req.command);
-    else if (cli?.status === "logged_out") loggedOut.push(req.command);
-    else if (cli?.status === "outdated") outdated.push(req.command);
+    if (byCommand.get(req.command)?.status === "missing") missing.push(req.command);
   }
-  return { missing, loggedOut, outdated };
+  return missing;
 }
 
 /** Every attention item for the skill, most urgent first. */
@@ -66,12 +67,16 @@ export function skillAttention(
       out.push({ kind: "folderInWay", agentName: e.agent_name, entry: e });
     }
   }
-  const problems = requireProblems(skill, clis);
-  if (problems.missing.length + problems.loggedOut.length + problems.outdated.length > 0) {
-    out.push({ kind: "requires", ...problems });
-  }
+  const missing = requireProblems(skill, clis);
+  if (missing.length > 0) out.push({ kind: "requires", missing });
   const sick = (skill.requires_tools ?? []).filter((tool) => tool.status !== "healthy");
   if (sick.length > 0) out.push({ kind: "toolOff", tools: sick });
+  // A skill it loads that is not in the library may be the agent's own, so
+  // only one Coffer has but does not deliver alongside is a problem.
+  const unshared = (skill.requires_skills ?? []).filter(
+    (s) => s.found && !s.delivered_to_same_agents,
+  );
+  if (unshared.length > 0) out.push({ kind: "skillNotShared", skills: unshared });
   const unset = (skill.requires_secrets ?? []).filter((s) => !s.is_set).map((s) => s.name);
   if (unset.length > 0) out.push({ kind: "secrets", missing: unset });
   if (skill.source_status?.error) out.push({ kind: "sourceUnreachable" });
@@ -111,6 +116,7 @@ export type SkillStatus =
   | "commandMissing"
   | "commandNotReady"
   | "toolOff"
+  | "skillNotShared"
   | "secretMissing"
   | "sourceUnreachable";
 
@@ -125,6 +131,8 @@ export function skillStatus(skill: SkillOut, items: readonly SkillAttention[]): 
       return first.missing.length > 0 ? "commandMissing" : "commandNotReady";
     case "toolOff":
       return "toolOff";
+    case "skillNotShared":
+      return "skillNotShared";
     case "secrets":
       return "secretMissing";
     case "sourceUnreachable":

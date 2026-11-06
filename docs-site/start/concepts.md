@@ -93,6 +93,7 @@ Besides upstream tools, the gateway always offers Coffer's own tool, prefixed `c
 | Tool | What it does |
 | --- | --- |
 | `coffer__search_tools` | Ranks the full upstream catalogue against a plain-language query and returns real tool schemas the agent can then call. |
+| `coffer__channel_notify` | Sends you a message, and files, in your direct chat with a [channel](/guides/channels#notifications), for example when a long task in your terminal is done. |
 
 Inside a turn Coffer runs (from the **Conversations** page or a channel), the session also gets a turn-scoped tool, `coffer__channel_read_thread`, which reads a chat thread's earlier messages. An agent started in a terminal never sees it. When an agent needs something from you, it asks in its reply and your next message is the answer; there is no ask tool.
 

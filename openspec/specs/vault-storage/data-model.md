@@ -274,7 +274,7 @@ empty, because local state can be set again.
 
 | File | Shape | Spec |
 | --- | --- | --- |
-| `reach.json` | `{uid: {enabled, agents: [uid] \| null, projects: null}}` | resource-framework |
+| `reach.json` | `{uid: {enabled, agents: [uid] \| null}}` | resource-framework |
 | `engine.json` | `{updated_at}` | internal-engine |
 | `retention.json` | `{table: {retention_days, last_pruned_at, last_pruned_rows, updated_at}}` | resource-framework |
 | `memory-sync.json` | the memory sync's ledger: `{version, previewed, codex_imports_claude, sources, copies, delivered, last_synced_at, last_report}` | memory |

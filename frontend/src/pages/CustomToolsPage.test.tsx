@@ -1,6 +1,6 @@
 // src/pages/CustomToolsPage.test.tsx — the Custom tools page: groups by health, one Add custom tool action,
 // the group page's Overview · Tools tabs (exposure included), the tool drawer over it, and a hand-made request into an existing or a
-// new group (import and re-import: CustomToolsImport.test.tsx).
+// new group.
 import { beforeEach, describe, expect, vi } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 
@@ -118,12 +118,9 @@ describe("CustomToolsPage", () => {
     expect(within(dialog).getByRole("option", { name: /billing/ })).toBeInTheDocument();
     expect(within(dialog).queryByRole("option", { name: /New group/ })).toBeNull();
     fireEvent.click(putItIn);
-    const ways = within(dialog).getByRole("radiogroup", { name: "How to add it" });
-    expect(within(ways).getByRole("radio", { name: /Import an OpenAPI spec/ })).toBeInTheDocument();
-    expect(
-      within(ways).getByRole("radio", { name: /Add one request by hand/ }),
-    ).toBeInTheDocument();
-    expect(within(dialog).queryByText(/script/i)).not.toBeInTheDocument();
+    // A new group is made by hand: there is no other way to pick.
+    expect(within(dialog).queryByRole("radiogroup")).toBeNull();
+    expect(within(dialog).queryByText(/OpenAPI|script/i)).not.toBeInTheDocument();
   });
 
   acceptance("web-ui", "ticking a group puts the selection bar at the top", async () => {
@@ -216,7 +213,7 @@ describe("CustomToolsPage", () => {
       renderAt("/custom-tools");
       expect(await screen.findByText("No custom tools yet")).toBeInTheDocument();
       expect(screen.queryByPlaceholderText("Filter groups")).not.toBeInTheDocument();
-      // Only the page header's Add: the two cards are the way in.
+      // Only the page header's Add: the card is the way in.
       expect(screen.getAllByRole("button", { name: "Add custom tool" })).toHaveLength(1);
       fireEvent.click(screen.getByRole("button", { name: /Add one request by hand/ }));
       expect(await screen.findByRole("dialog", { name: "New group" })).toBeInTheDocument();
@@ -250,14 +247,14 @@ describe("CustomToolsPage", () => {
     expect(within(definition).queryByText("Authorization")).not.toBeInTheDocument();
     expect(within(definition).getByText("30 s per call")).toBeInTheDocument();
     expect(within(definition).queryByText(/Available to/)).not.toBeInTheDocument();
-    expect(within(definition).getByRole("button", { name: "Re-import" })).toBeInTheDocument();
+    expect(within(definition).queryByRole("button", { name: "Re-import" })).toBeNull();
     // The header: state pill, one meta line, then Reach · Edit group · ⋯ — no "?".
     const header = screen.getByTestId("custom-tool-group-tile").closest("header") as HTMLElement;
     expect(within(header).getByText("Healthy")).toBeInTheDocument();
     expect(within(header).getByTestId("scope-control")).toHaveTextContent("All agents");
     expect(within(header).getByRole("button", { name: "Edit group" })).toBeInTheDocument();
     expect(within(header).queryByRole("button", { name: /more info/i })).not.toBeInTheDocument();
-    // The header's ⋯ menu holds only Delete: Edit, Re-import and on/off are visible controls.
+    // The header's ⋯ menu holds only Delete: Edit and on/off are visible controls.
     fireEvent.click(screen.getByRole("button", { name: /more actions for billing/i }));
     expect(screen.getAllByRole("menuitem").map((i) => i.textContent)).toEqual(["Delete group…"]);
     fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
@@ -385,7 +382,6 @@ describe("CustomToolsPage", () => {
     let dialog = await screen.findByRole("dialog");
     fireEvent.click(within(dialog).getByRole("combobox", { name: "Put it in" }));
     fireEvent.click(within(dialog).getByRole("option", { name: /^billing/ }));
-    expect(within(dialog).queryByRole("radio", { name: /Import an OpenAPI spec/ })).toBeNull();
     expect(within(dialog).getByText(/runs in its environments, each with its own base URL and secret/)).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole("button", { name: "Continue" }));
 
@@ -432,7 +428,6 @@ describe("CustomToolsPage", () => {
     renderAt("/custom-tools");
     fireEvent.click(await screen.findByRole("button", { name: "Add custom tool" }));
     let dialog = await screen.findByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("radio", { name: /Add one request by hand/ }));
     fireEvent.click(within(dialog).getByRole("button", { name: "Continue" }));
 
     dialog = await screen.findByRole("dialog", { name: "New group" });

@@ -35,7 +35,7 @@ def _empty_schema() -> dict[str, Any]:
 
 
 class CustomToolIn(BaseModel):
-    """One tool as a request writes it — and as an OpenAPI reading drafts it."""
+    """One tool as a request writes it."""
 
     name: str
     description: str = ""
@@ -47,9 +47,6 @@ class CustomToolIn(BaseModel):
     enabled: bool = True
     #: ``null`` follows the method: on for every method but GET.
     changes_data: bool | None = None
-    operation: str | None = None
-    #: The operation's spec text, kept from an import for the re-import diff.
-    source_text: str | None = None
     #: The tool's own response rules; ``null`` follows the group's.
     response_rules: list[CustomToolResponseRule] | None = None
 
@@ -85,7 +82,6 @@ class CustomToolOut(BaseModel):
     changes_data: bool
     #: Whether the flag was set by hand rather than following the method.
     changes_data_set: bool
-    operation: str | None
     #: The tool's own response rules; ``null`` when it follows the group's.
     response_rules: list[CustomToolResponseRule] | None = None
     calls_24h: int
@@ -127,13 +123,11 @@ class CustomToolEnvironmentIn(BaseModel):
     headers: list[CustomToolHeaderIn] = Field(default_factory=list)
     #: Non-sensitive text a tool's template uses as ``{env:NAME}``.
     variables: dict[str, str] = Field(default_factory=dict)
-    #: ``null`` uses the group's timeout.
-    timeout_seconds: int | None = Field(default=None, ge=1, le=300)
 
 
 class CustomToolEnvironmentPatch(BaseModel):
     """A partial change to one environment; ``headers`` and ``variables``
-    replace the whole list, and ``timeout_seconds: null`` uses the group's."""
+    replace the whole list."""
 
     name: str | None = None
     description: str | None = None
@@ -141,7 +135,6 @@ class CustomToolEnvironmentPatch(BaseModel):
     base_url: str | None = None
     headers: list[CustomToolHeaderIn] | None = None
     variables: dict[str, str] | None = None
-    timeout_seconds: int | None = Field(default=None, ge=1, le=300)
 
 
 class CustomToolEnvironmentOut(BaseModel):
@@ -151,8 +144,6 @@ class CustomToolEnvironmentOut(BaseModel):
     base_url: str
     headers: list[CustomToolHeaderOut]
     variables: dict[str, str]
-    #: The environment's own timeout; ``null`` when it uses the group's.
-    timeout_seconds: int | None
     #: The worst state of its secret headers; ``none`` with none.
     secret_state: SecretStateName
     pending_approvals: list[str]
@@ -160,24 +151,6 @@ class CustomToolEnvironmentOut(BaseModel):
     #: The refused approvals that block it until asked again, and their secrets.
     rejected_approvals: list[str] = Field(default_factory=list)
     rejected_secrets: list[str] = Field(default_factory=list)
-
-
-class OpenApiSourceIn(BaseModel):
-    kind: Literal["url", "file"]
-    location: str
-    title: str | None = None
-    version: str | None = None
-    #: Operation keys (``"<METHOD> <path>"``) read and not imported.
-    skipped: list[str] = Field(default_factory=list)
-
-
-class OpenApiSourceOut(BaseModel):
-    kind: Literal["url", "file"]
-    location: str
-    title: str | None
-    version: str | None
-    fetched_at: datetime
-    skipped: list[str]
 
 
 class CustomToolGroupIn(BaseModel):
@@ -193,7 +166,6 @@ class CustomToolGroupIn(BaseModel):
     #: The group's reach: agent uids (at least one), or ``null`` for every agent.
     agents: list[str] | None = None
     tools: list[CustomToolIn] = Field(default_factory=list)
-    source: OpenApiSourceIn | None = None
     response: CustomToolResponse = Field(default_factory=CustomToolResponse)
 
     @model_validator(mode="after")
@@ -230,7 +202,6 @@ class CustomToolGroupOut(BaseModel):
     response: CustomToolResponse
     #: The group's reach as agent uids; ``null`` is every agent.
     scope: list[str] | None
-    source: OpenApiSourceOut | None
     health: GroupHealthName
     #: ``last_call_failed``, ``secret_missing``, ``approval_rejected`` or
     #: ``approval_pending``.
@@ -317,84 +288,3 @@ class CustomToolTestOut(BaseModel):
     body_bytes: int = 0
     #: The first response rule the answer broke; ``null`` when all held.
     rule_failure: CustomToolRuleFailureOut | None = None
-
-
-class OpenApiReadIn(BaseModel):
-    """A document to read: its URL (fetched through the SSRF guard) or its text."""
-
-    url: str | None = None
-    document: str | None = Field(default=None, max_length=5 * 1024 * 1024)
-    filename: str | None = None
-
-
-class OpenApiSourceTextOut(BaseModel):
-    """An operation's text in the document, for the viewer beside the list."""
-
-    #: 1-based, inclusive line numbers in the document.
-    start_line: int
-    end_line: int
-    text: str
-
-
-class OpenApiOperationOut(BaseModel):
-    key: str
-    summary: str | None
-    #: The operation's first tag, for grouping in the import form.
-    tag: str | None = None
-    tool: CustomToolIn
-    #: ``null`` when the operation could not be located in the document.
-    source: OpenApiSourceTextOut | None = None
-
-
-class OpenApiReadOut(BaseModel):
-    title: str | None
-    version: str | None
-    #: The spec's ``info.description``; the form pre-fills the group's description.
-    description: str | None = None
-    base_url: str | None
-    #: The header the spec's security scheme puts a credential in (``Authorization``
-    #: for bearer, basic and OAuth; the key's name for an API key); the form
-    #: pre-fills one such header row with no value.
-    auth_header: str | None
-    source_kind: Literal["url", "file"]
-    location: str
-    operations: list[OpenApiOperationOut]
-    warnings: list[str]
-
-
-class CustomToolReimportIn(BaseModel):
-    #: The document again, for a group imported from a file.
-    document: str | None = Field(default=None, max_length=5 * 1024 * 1024)
-    #: Keys of the added operations to import (switched on); the rest are skipped.
-    add: list[str] = Field(default_factory=list)
-
-
-class CustomToolReimportChangeOut(BaseModel):
-    """A kept tool whose request the spec changed."""
-
-    name: str
-    method: HttpMethodName
-    path: str
-    #: Arguments the spec now requires that the tool did not.
-    new_required: list[str]
-    #: The method, path or body template moved.
-    request_changed: bool
-    #: ``"<METHOD> <path>"`` of the operation.
-    operation: str
-    #: The operation's spec text as last imported; ``null`` for a tool imported
-    #: before Coffer kept it. The change preview diffs this against ``new_text``.
-    old_text: str | None = None
-    new_text: str | None = None
-    new_start_line: int | None = None
-    new_end_line: int | None = None
-
-
-class CustomToolReimportPreviewOut(BaseModel):
-    title: str | None
-    version: str | None
-    added: list[OpenApiOperationOut]
-    removed: list[str]
-    kept: list[str]
-    #: Kept tools the spec changed (a subset of ``kept``).
-    changed: list[CustomToolReimportChangeOut] = Field(default_factory=list)
-    warnings: list[str]

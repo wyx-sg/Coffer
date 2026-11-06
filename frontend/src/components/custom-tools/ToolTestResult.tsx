@@ -30,8 +30,6 @@ interface Props {
   group: string;
   secret: string | null;
   timeoutSeconds: number;
-  /** The environment whose own timeout applied; null when it was the group's. */
-  timeoutEnvironment?: string | null;
   /** A timeout offers "Change timeout" (opens Edit group); omit before the group exists. */
   onChangeTimeout?: () => void;
 }
@@ -84,7 +82,6 @@ export function ToolTestResult({
   group,
   secret,
   timeoutSeconds,
-  timeoutEnvironment = null,
   onChangeTimeout,
 }: Props) {
   const { t } = useTranslation();
@@ -109,13 +106,10 @@ export function ToolTestResult({
       });
   const hint = failed
     ? t(
-        result.failure === "timeout" && timeoutEnvironment
-          ? "customTools.test.hint.timeoutEnv"
-          : `customTools.test.hint.${result.failure}`,
+        `customTools.test.hint.${result.failure}`,
         {
           host,
           group,
-          environment: timeoutEnvironment,
           seconds: timeoutSeconds,
           reason: result.error ?? "",
           detail: result.error ? ` (${result.error})` : "",

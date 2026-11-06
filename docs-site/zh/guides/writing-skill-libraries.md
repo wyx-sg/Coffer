@@ -101,23 +101,9 @@ The organisation's log platform, reached through its own skill.
 
 更长的设计理由——某个键为什么存在、为什么要和另一个拆开——属于本指南或该领域的设计记录，而不是一个智能体每次运行都要读的文件。
 
-### profile 声明的依赖 {#requirements-a-profile-declares}
+### 依赖与 profile {#requirements-and-profiles}
 
-profile 的 frontmatter 可以带一个 `requires:`，形状和技能的一样（命令、密钥、工具）。用它写技能本身在该环境中运行或使用的东西：profile 的载体就是的那个 CLI、它的登录检查、它的命令读取的密钥。技能只声明自己运行的内容，绝不替它委托的其他技能声明：调用 `Skill(<carrier>)` 的领域不声明该载体的 CLI，因为由载体自己声明。例如，`carrier` 为裸命令 `gh` 的 profile 声明 `gh`；脚本加载另一个技能的认证模块的载体，声明该模块需要的东西。
-
-```markdown
----
-remote_hosts: [git.example.com]
-carrier: gh
-requires:
-  commands:
-    - command: gh
-      login_check: gh auth status
-      why: The carrier for this organisation's review requests.
----
-```
-
-智能体在运行时选定一个 profile，而 Coffer 无从得知选的是哪个。所以 Coffer 读取 `SKILL.md` 的 `requires:` 与每个 `profiles/*.md` 的 `requires:` 的并集，技能的**依赖**标签页和命令行工具页的**被谁需要**会写出声明每一项的 profile，例如 `coffer-investigating-logs · example-org`。多个来源都声明的命令合并为一条依赖，取最高的最低版本。每个环境都需要的通用命令留在 `SKILL.md`；只有环境专属的才写进 profile。见[命令行工具](/zh/guides/clis)和[技能](/zh/guides/skills#profile-declared-requirements)。
+Coffer 只从 `SKILL.md` 读取 `requires:`，从不读 profile。把技能本身在任何环境中运行或使用的命令、密钥和工具都列在那里：profile 的载体就是的那个 CLI、它的命令读取的密钥。只有某个环境才用的命令也会在每台机器上显示出来，这是如实的结果，因为 Coffer 无从得知智能体会选哪个 profile。技能只声明自己运行的内容，绝不替它委托的其他技能声明：调用 `Skill(<carrier>)` 的领域不声明该载体的 CLI，因为由载体自己声明。例如，某个 profile 把裸命令 `gh` 作为载体的领域，在 `SKILL.md` 里声明 `gh`；脚本加载另一个技能的认证模块的载体，声明该模块需要的东西。
 
 ### profile 里放什么，绝不放什么 {#what-a-profile-holds-and-what-it-never-does}
 
@@ -175,7 +161,7 @@ metadata:
 ---
 ```
 
-`metadata.profiles` 是该领域附带的 profile 文件的索引。`metadata.requires` 在[声明的依赖](#declared-dependencies)中介绍。顶层的 `requires:` 是另一回事：技能驱动的命令行工具（`gh`、`jq`），可带最低版本和登录检查，Coffer 会检查它们，缺失时交给你的智能体去安装——见[命令行工具](/zh/guides/clis)。封装某个 CLI 的载体技能在那里声明它；但只是把工作委托给载体技能的产品领域不声明它：技能只声明自己运行或使用的命令、密钥和工具，绝不替其他技能（无论是 Coffer 托管的还是外部的）声明。Coffer 只读取技能声明的内容，从不扫描技能去猜测，所以不遵守这些规则的技能要在技能里修好。同一个键的映射形式还可以按 id 写出技能的命令需要的 Coffer 密钥，如 `requires: {commands: [psql], secrets: [<id>]}`，这样技能的 **依赖** 标签页和总览会在某个密钥未设置时告诉使用者——见[技能需要的密钥](/zh/guides/skills#secrets-a-skill-needs)。同一个映射还可以在 `tools:` 下按名字（即它们在 Coffer 里的名字）写出技能调用的 MCP 服务器和自定义工具分组，如 `requires: {commands: [psql], secrets: [<id>], tools: [orders-api]}`：**依赖** 标签页会在**工具**下列出它们，工具关闭的技能会进入**需要处理**。Coffer 不认识的名字会被跳过，警告显示在[命令行工具](/zh/guides/clis)页面上——见[技能需要的工具](/zh/guides/skills#tools-a-skill-needs)。映射下的其他键会被拒绝并给出警告。profile 自己的 frontmatter 也可以带同样的 `requires:`，见[profile 声明的依赖](#requirements-a-profile-declares)。包含 `: `（冒号加空格）的描述要加引号；不加的话它是无效的 YAML，技能会解析失败。描述最多 1024 个字符；更长的 Coffer 会拒绝导入。
+`metadata.profiles` 是该领域附带的 profile 文件的索引。`metadata.requires` 在[声明的依赖](#declared-dependencies)中介绍。顶层的 `requires:` 是另一回事：技能驱动的命令行工具（`gh`、`jq`），Coffer 会在 `PATH` 上查找它们，缺失时交给你的智能体去安装——见[命令行工具](/zh/guides/clis)。封装某个 CLI 的载体技能在那里声明它；但只是把工作委托给载体技能的产品领域不声明它：技能只声明自己运行或使用的命令、密钥和工具，绝不替其他技能（无论是 Coffer 托管的还是外部的）声明。Coffer 只读取技能声明的内容，从不扫描技能去猜测，所以不遵守这些规则的技能要在技能里修好。同一个键的映射形式还可以按 id 写出技能的命令需要的 Coffer 密钥，如 `requires: {commands: [psql], secrets: [<id>]}`，这样技能的 **依赖** 标签页和总览会在某个密钥未设置时告诉使用者——见[技能需要的密钥](/zh/guides/skills#secrets-a-skill-needs)。同一个映射还可以在 `tools:` 下按名字（即它们在 Coffer 里的名字）写出技能调用的 MCP 服务器和自定义工具分组，如 `requires: {commands: [psql], secrets: [<id>], tools: [orders-api]}`：**依赖** 标签页会在**工具**下列出它们，工具关闭的技能会进入**需要处理**。Coffer 不认识的名字会被跳过，警告显示在[命令行工具](/zh/guides/clis)页面上——见[技能需要的工具](/zh/guides/skills#tools-a-skill-needs)。映射下的其他键会被拒绝并给出警告。profile 自己的 frontmatter 也可以带同样的 `requires:`，见[profile 声明的依赖](#requirements-a-profile-declares)。包含 `: `（冒号加空格）的描述要加引号；不加的话它是无效的 YAML，技能会解析失败。描述最多 1024 个字符；更长的 Coffer 会拒绝导入。
 
 ### 文件夹卫生 {#folder-hygiene}
 
@@ -331,7 +317,7 @@ cd ~/src/skills/<domain>
 6. **你用到的每个环境写一个文件。** 每个文件自身都是完整的；只有真的出现第二个环境时，才添加同级文件。
 7. **把共享的方法提取成基础技能。** 如果另一个领域已经有同样的规则，就把它们提取出来，按名称加载，并声明 `metadata.requires`。
 8. **写主体。** `SKILL.md` 只放 Profile 段落、路由和边界。加上运行时规则：先尝试载体再宣称它缺失、引用证据、写出没能解析的东西。
-9. **声明 Coffer 该看到的内容。** 把该领域自己运行的命令、密钥和工具列在顶层 `requires:` 下，把环境专属的列在各 profile 的 `requires:` 下。绝不列它委托的载体运行的内容。如果它确实什么都不需要，就写 `requires: []`：任何地方都没有 `requires:` 键的技能，在**依赖**标签页上显示为依赖未知，显式写空则显示为不需要任何东西。技能页面可以把技能交给智能体检查，见[声明与否](/zh/guides/skills#declared-or-not)。
+9. **声明 Coffer 该看到的内容。** 把该领域在任何环境中自己运行的命令、密钥和工具，都列在 `SKILL.md` 的顶层 `requires:` 下。绝不列它委托的载体运行的内容。如果它确实什么都不需要，就写 `requires: []`：`SKILL.md` 里没有 `requires:` 键的技能，在**依赖**标签页上显示为依赖未知，显式写空则显示为不需要任何东西。技能页面可以把技能交给智能体检查，见[声明与否](/zh/guides/skills#declared-or-not)。
 10. **检查。** 测试通过，`profiles/` 之外没有任何组织相关的内容，每个环境文件合并到 `default.md` 之上后得到你期望的值，文件夹里没有 venv、缓存或密钥，必需的基础技能的生效范围覆盖同样的智能体。然后导入并校验。
 
 ## 相关 {#related}

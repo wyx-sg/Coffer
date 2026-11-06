@@ -1,5 +1,5 @@
 // src/components/custom-tools/EditGroupDialog.tsx — Edit group (4.2.35, 640) in two parts: Basics (its description
-// and timeout) and Judging the response (the diagnostic headers and the response rules). Base URLs, headers,
+// and timeout) and Judging the response (the response rules). Base URLs, headers,
 // secrets and variables belong to the environments and are edited on the Environments tab.
 // The name is fixed: it is the prefix agents see. Reach is the header's Reach control, not a field here.
 import { useEffect, useId, useState } from "react";
@@ -17,7 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { translateApiError } from "@/lib/api/errors";
 import type { CustomToolGroup, ResponseRule } from "@/lib/api/customTools";
-import { diagnosticHeadersProblem, rulesValid, splitList } from "@/lib/customTools/responseRules";
+import { rulesValid } from "@/lib/customTools/responseRules";
 import { agentPrefix } from "@/lib/customTools/groups";
 import { useUpdateCustomToolGroup } from "@/lib/hooks/useCustomTools";
 import { FormField } from "./FormField";
@@ -36,7 +36,6 @@ export function EditGroupDialog({ group, open, onOpenChange }: Props) {
   const update = useUpdateCustomToolGroup(group.name);
   const [description, setDescription] = useState("");
   const [timeout, setTimeoutSeconds] = useState("30");
-  const [diagnostic, setDiagnostic] = useState("");
   const [rules, setRules] = useState<ResponseRule[]>([]);
   // The rule editor reads its rules once, so it starts over each time the dialog opens.
   const [opened, setOpened] = useState(0);
@@ -46,7 +45,6 @@ export function EditGroupDialog({ group, open, onOpenChange }: Props) {
     if (!open) return;
     setDescription(group.description ?? "");
     setTimeoutSeconds(String(group.timeout_seconds));
-    setDiagnostic((group.response?.diagnostic_headers ?? []).join(", "));
     setRules(group.response?.rules ?? []);
     setOpened((n) => n + 1);
     update.reset();
@@ -55,8 +53,7 @@ export function EditGroupDialog({ group, open, onOpenChange }: Props) {
 
   const seconds = Number(timeout.replace(/\s*s$/, ""));
   const timeoutOk = Number.isInteger(seconds) && seconds >= 1 && seconds <= 300;
-  const ready =
-    timeoutOk && rulesValid(rules) && diagnosticHeadersProblem(splitList(diagnostic)) === null;
+  const ready = timeoutOk && rulesValid(rules);
   const error = update.error;
   const onSave = () => {
     setSaving(true);
@@ -64,7 +61,7 @@ export function EditGroupDialog({ group, open, onOpenChange }: Props) {
       {
         description: description.trim() || null,
         timeout_seconds: seconds,
-        response: { diagnostic_headers: splitList(diagnostic), rules },
+        response: { rules },
       },
       {
         onSuccess: () => onOpenChange(false),
@@ -119,8 +116,6 @@ export function EditGroupDialog({ group, open, onOpenChange }: Props) {
           </h3>
           <GroupResponseFields
             key={opened}
-            headers={diagnostic}
-            onHeaders={setDiagnostic}
             rules={rules}
             onRules={setRules}
           />

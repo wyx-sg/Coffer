@@ -6,7 +6,6 @@ import {
   agentMemoryStorePath,
   agentTabPath,
   isAgentType,
-  unmanagedSkillPath,
 } from "./routes";
 
 describe("agent addresses", () => {
@@ -31,9 +30,6 @@ describe("agent addresses", () => {
   });
 
   test("pages opened from a tab are nested under it", () => {
-    expect(unmanagedSkillPath("codex", "skills", "a b")).toBe(
-      "/agents/codex/skills/unmanaged/skills/a%20b",
-    );
     expect(agentMemoryStorePath("codex", "/h/.codex/memories", "Global")).toBe(
       "/agents/codex/memory/store?dir=%2Fh%2F.codex%2Fmemories&project=Global",
     );

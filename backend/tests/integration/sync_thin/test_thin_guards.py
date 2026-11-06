@@ -151,6 +151,37 @@ def test_secrets_travel_only_when_carried_and_the_fresher_ciphertext_wins(
 
 
 @pytest.mark.acceptance(
+    spec="vault-sync",
+    scenario="machines whose master keys differ do not sync a remote that carries secrets",
+)
+def test_machines_whose_master_keys_differ_do_not_sync_secrets(tmp_path: Path) -> None:
+    from coffer.application.sync.round_join import join, preview
+
+    url = str(bare_remote(tmp_path))
+    carried = SyncRemote(url=url, include_secret=True)
+    mac = Machine(tmp_path / "mac", "MacBook Pro", carried)
+    mini = Machine(tmp_path / "mini", "Mac mini", carried)
+    mac.deps.machine.key = "aaaa"  # type: ignore[attr-defined]
+    mini.deps.machine.key = "bbbb"  # type: ignore[attr-defined]
+    mac.repo.set_carry_secret(True)
+    mac.put("secret/provider/p1/key.enc", _fernet(1000))
+    join(mac.engine, carried, None)
+    shown = preview(mini.engine, carried, None)
+    assert shown.refused and "MacBook Pro" in shown.refused
+    got = join(mini.engine, carried, None)
+    assert got.status is RoundStatus.KEY_MISMATCH
+    assert mini.disk("secret/provider/p1/key.enc") is None
+    # Once the keys match, the join goes through.
+    mini.deps.machine.key = "aaaa"  # type: ignore[attr-defined]
+    assert join(mini.engine, carried, None).status is not RoundStatus.KEY_MISMATCH
+    assert mini.disk("secret/provider/p1/key.enc") == _fernet(1000)
+    # A remote that does not carry secrets syncs whatever the keys.
+    mini.deps.machine.key = "bbbb"  # type: ignore[attr-defined]
+    plain = SyncRemote(url=url)
+    assert mini.engine.run(plain, None, trigger="manual").status is not RoundStatus.KEY_MISMATCH
+
+
+@pytest.mark.acceptance(
     spec="vault-sync", scenario="ciphertext travels only when the remote carries it"
 )
 def test_ciphertext_never_leaves_a_machine_whose_remote_does_not_carry_it(
@@ -209,6 +240,39 @@ def test_a_round_replaces_a_remote_at_an_older_layout(pair: tuple[Machine, Machi
 
 
 @pytest.mark.acceptance(
+    spec="vault-sync",
+    scenario="an older remote with changes this machine has not pulled is not replaced",
+)
+def test_a_joined_machine_does_not_replace_an_older_remote_it_has_not_pulled(
+    pair: tuple[Machine, Machine],
+) -> None:
+    mac, mini = pair
+    old_tip = _old_layout_remote(mac)
+    head = mini.repo.head()
+    got = mini.round()
+    assert got.status is RoundStatus.OLDER_REMOTE_HAS_CHANGES
+    assert got.detail and "upgrade Coffer on that machine" in got.detail
+    assert remote_ref(mini.remote) == old_tip
+    assert mini.repo.head() == head
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync",
+    scenario="an older remote with changes this machine has not pulled is not replaced",
+)
+def test_a_joined_machine_replaces_an_older_remote_it_already_merged(
+    pair: tuple[Machine, Machine],
+) -> None:
+    _mac, mini = pair
+    mini.put("manifest.json", '{\n  "schema_version": 2\n}\n')
+    assert mini.round().status is RoundStatus.PUSHED
+    old_tip = remote_ref(mini.remote) or ""
+    got = mini.round()
+    assert got.status is RoundStatus.PUSHED and got.join == "replace"
+    assert mini.git.is_ancestor(old_tip, remote_ref(mini.remote) or "")
+
+
+@pytest.mark.acceptance(
     spec="vault-sync", scenario="the join preview of an older remote lists what goes away"
 )
 def test_the_join_preview_reports_the_replace_and_the_join_does_it(
@@ -243,6 +307,7 @@ def test_replacing_an_older_remote_still_refuses_a_plaintext_secret(
         + "".join(random.Random(5).choices(string.ascii_letters + string.digits, k=28))
     )
     mini.put("knowledge/notes/leak.md", f"api_key = {key}\n")
+    mini.state.set_joined(False)  # a joined mini would wait for mac's unpulled commits
     got = mini.round()
     assert got.status is RoundStatus.PLAINTEXT_FOUND
     assert remote_ref(mini.remote) == old_tip

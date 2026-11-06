@@ -15,16 +15,11 @@ from coffer.domain.secrets import SecretApproval
 
 
 class _Probe:
-    def __init__(self, installed: dict[str, str | None]) -> None:
+    def __init__(self, installed: set[str]) -> None:
         self.installed = installed
-        self.version_runs = 0
 
     def locate(self, command: str) -> str | None:
         return f"/bin/{command}" if command in self.installed else None
-
-    def version(self, path: str) -> str | None:
-        self.version_runs += 1
-        return self.installed[path.rsplit("/", 1)[-1]]
 
 
 class _Secrets:
@@ -61,7 +56,7 @@ def _server(transport: dict[str, Any]) -> Resource:
 
 def _of(server: Resource, probe=None, stored=(), waiting=(), refused=()):
     reqs = ServerRequirements(
-        probe=probe or _Probe({"npx": "10.9.2"}),
+        probe=probe or _Probe({"npx"}),
         secrets=_Secrets(set(stored)),
         boundary=lambda: _Boundary(set(waiting), set(refused)),
     )
@@ -84,7 +79,7 @@ def test_a_stdio_server_requires_its_launcher_and_its_secrets():
         ("secret", "NOTION_TOKEN", "set"),
         ("secret", "DB_URL", "missing"),
     ]
-    assert rows[0].version == "10.9.2" and rows[1].secret == "notion"
+    assert rows[1].secret == "notion"
 
 
 @pytest.mark.acceptance(spec="mcp-gateway", scenario="a server's page lists what it requires")
@@ -116,15 +111,6 @@ def test_an_http_server_has_no_launcher_and_a_plain_secret_uri_counts():
     assert [(r.kind, r.name, r.status, r.secret) for r in rows] == [
         ("secret", "Authorization", "set", "gh")
     ]
-
-
-def test_a_found_launchers_version_is_read_once():
-    probe = _Probe({"npx": "10.9.2"})
-    reqs = ServerRequirements(probe=probe, secrets=_Secrets(set()), boundary=lambda: None)
-    server = _server({"type": "stdio", "command": "npx"})
-    asyncio.run(reqs.of(server))
-    asyncio.run(reqs.of(server))
-    assert probe.version_runs == 1
 
 
 def test_a_config_that_does_not_parse_requires_nothing():

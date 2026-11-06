@@ -4,9 +4,9 @@ Spec mcp-gateway "Show what an MCP server requires". The Requires section of a
 server's page lists, from the command and settings alone:
 
 - the **launcher CLI** a stdio server starts with (``npx``, ``uvx``, ``docker``,
-  ``bunx``, ``node``, ``python``, …), with whether it is found on this machine
-  and its version — checked the way the CLIs page checks a command, and cached
-  per launcher so reading a page never runs a program twice;
+  ``bunx``, ``node``, ``python``, …), with whether it is found on this machine —
+  looked up on ``PATH`` the way the CLIs page looks up a command; nothing is
+  run;
 - every **secret** the config cites — from ``secret_refs`` (an environment
   variable or header whose value is a stored secret) or a ``coffer://secret/<name>``
   written in a plain value — and whether it is set on this machine, missing
@@ -34,8 +34,6 @@ class CommandProbePort(Protocol):
 
     def locate(self, command: str) -> str | None: ...
 
-    def version(self, path: str) -> str | None: ...
-
 
 RequirementKind = Literal["cli", "secret"]
 RequirementStatus = Literal["found", "not_found", "set", "missing", "waiting_approval", "refused"]
@@ -47,8 +45,6 @@ class ServerRequirement:
     #: The launcher command, or the environment variable / header that holds the secret.
     name: str
     status: RequirementStatus
-    #: A CLI's version when it printed one.
-    version: str | None = None
     #: A secret's name on the Secrets page (``None`` for a CLI).
     secret: str | None = None
 
@@ -64,10 +60,6 @@ class ServerRequirements:
         self._probe = probe
         self._secrets = secrets
         self._boundary = boundary
-        #: launcher -> version of one found on this machine. A launcher that is
-        #: not found is looked up again on every read: finding it is one PATH
-        #: lookup, and installing it must show at once.
-        self._versions: dict[str, str | None] = {}
 
     async def of(self, resource: Resource) -> list[ServerRequirement]:
         try:
@@ -84,13 +76,8 @@ class ServerRequirements:
     async def _launcher(self, command: str) -> ServerRequirement:
         name = command.rsplit("/", 1)[-1] or command
         path = await asyncio.to_thread(self._probe.locate, command)
-        if path is None:
-            self._versions.pop(command, None)
-            return ServerRequirement(kind="cli", name=name, status="not_found")
-        if command not in self._versions:
-            self._versions[command] = await asyncio.to_thread(self._probe.version, path)
         return ServerRequirement(
-            kind="cli", name=name, status="found", version=self._versions[command]
+            kind="cli", name=name, status="not_found" if path is None else "found"
         )
 
     async def _secrets_of(

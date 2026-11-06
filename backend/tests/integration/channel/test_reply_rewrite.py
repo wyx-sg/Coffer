@@ -85,6 +85,42 @@ async def test_a_long_reply_is_not_sent_and_the_short_one_carries_the_button(
 
 
 @pytest.mark.acceptance(
+    spec="channels", scenario="a long reply's files are sent with its short version"
+)
+async def test_the_files_of_a_long_reply_ride_on_its_short_version(
+    env: ChannelEnv, tmp_path: Any
+) -> None:
+    chart = tmp_path / "chart.png"
+    chart.write_bytes(b"png")
+    # The short version repeats the file; it still goes out once.
+    agent = _Agent(
+        first=f"{_LONG}\nMEDIA:{chart} | the chart",
+        short=f"{_SHORT}\nMEDIA:{chart} | the chart",
+    )
+    adapter = await _setup(env, agent, supports_buttons=True)
+
+    await env.send(inbound("tg", "owner", "chart it"))
+    await wait_until(lambda: any(_SHORT in t for t in adapter.texts()) and bool(adapter.media))
+
+    assert "do not repeat them" in agent.prompts[1]
+    assert [m[1] for m in adapter.media] == [str(chart)]
+
+
+async def test_a_short_version_that_forgets_the_file_still_sends_it(
+    env: ChannelEnv, tmp_path: Any
+) -> None:
+    chart = tmp_path / "chart.png"
+    chart.write_bytes(b"png")
+    agent = _Agent(first=f"{_LONG}\nMEDIA:{chart}")
+    adapter = await _setup(env, agent, supports_buttons=True)
+
+    await env.send(inbound("tg", "owner", "chart it"))
+    await wait_until(lambda: any(_SHORT in t for t in adapter.texts()) and bool(adapter.media))
+
+    assert [m[1] for m in adapter.media] == [str(chart)]
+
+
+@pytest.mark.acceptance(
     spec="channels", scenario="the full-report button asks the agent for the file"
 )
 async def test_the_full_report_tap_is_the_owner_asking_for_the_file(env: ChannelEnv) -> None:

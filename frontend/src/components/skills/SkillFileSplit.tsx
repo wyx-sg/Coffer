@@ -5,9 +5,7 @@
 // strip (the skill's name, a lock when the folder is read-only, Reveal in
 // Finder) and the open file on the right. No root row: SKILL.md first, then
 // folders, then the other files; folders in the sans face, files in mono. In
-// a locked folder every file wears a lock. The managed skill (SkillFileTree) and the read-only
-// folders (SkillReadOnlyFiles — an unmanaged skill, a folder not in the
-// library) are this same card; only the file pane differs.
+// a locked folder (the built-in skill's) every file wears a lock.
 import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { FolderOpen } from "lucide-react";
@@ -27,7 +25,7 @@ const SKILL_TREE_MIN = 160;
 const SKILL_FILE_MIN = 320;
 
 /** The tree query's state, whichever route it came from. */
-export interface SkillFileTreeQuery {
+interface SkillFileTreeQuery {
   isPending: boolean;
   error: unknown;
   data: SkillFileNode | undefined;
