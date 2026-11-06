@@ -1,16 +1,14 @@
-# Channel Attachments: Bytes on Disk, a Reference in the Message, Materialised per Agent at Send
-
-> **Superseded in part (2026-10-04).** The change `move-agent-sessions-to-terminal` removed the web chat and Coffer's copy of conversation text. The attachment is no longer persisted in a message and re-materialised from history: it travels with the turn as a reference from the channel's media directory (spec channels "Hand inbound attachments to the turn as references"). The web Chat page entrance and its `chat-media` sibling directory are gone; the bytes-on-disk, per-agent materialisation and `channel-media` retention decisions stand. Citations of "Persist inbound attachments as references" and "Re-materialise attachments from persisted history" are history.
+# Channel Attachments Are Saved Files, Handed to Every Agent by Path
 
 **Status**: Accepted
-**Date**: 2026-07-09
+**Date**: 2026-11-06
 **Deciders**: Yuxing Wu
-**Related**: spec channels ("Hand inbound photos and files to the agent", "Persist inbound attachments as references", "Give documents to every agent as extracted text", "Transcribe inbound voice only when the user opted in", "Download the media a thread's messages carry");
-spec chat ("Re-materialise attachments from persisted history", "Extract document attachments to text", "Transcribe audio attachments when transcription is configured");
+**Related**: spec channels ("Hand inbound photos and files to the agent", "Hand inbound attachments to the turn as references", "Transcribe inbound voice only when the user opted in", "Download the media a thread's messages carry");
+spec chat ("Transcribe audio attachments when transcription is configured");
 [Channels Are Thin Transport Adapters](channel-adapter-framework.md), [Driving Agents Through the SDK and App-Server](driving-agents-through-sdk-and-app-server.md),
-[Audit and Retention](audit-and-retention.md), [Speech-to-Text Settings](internal-engine-settings.md),
-[Chat Attachment Uploads](chat-attachment-uploads.md) (the web Chat page's entrance to the same path);
-PRs #241, #265, #268
+[Audit and Retention](audit-and-retention.md), [Speech-to-Text Settings](internal-engine-settings.md);
+research [im-agent-bridges](../research/im-agent-bridges.md);
+PRs #241, #265, #268, #719
 
 ## Context
 
@@ -19,181 +17,128 @@ phone and expects the agent to use them ("here's the new time, change the
 invitation"). Every platform delivers these as an auth-gated file the
 transport must download; a URL alone is useless to the agent.
 
-The two agents take files differently:
+Both agents Coffer drives run on the owner's machine with their own file tools:
 
-- **Claude Code**, driven through the Claude Agent SDK, accepts an inline
-  base64 `image` content block in the user turn — the model sees the picture
-  directly. The Messages API accepts only JPEG, PNG, GIF and WebP inline; any
-  other image format fails the whole turn.
-- **Codex**, driven through `codex app-server`, has no inline-image path over
-  the RPC Coffer uses; it is path-native and opens files with its own tools.
-- **Neither can hear audio**, and a path-native agent handed a binary PDF
-  cannot read it.
+- **Claude Code** (Claude Agent SDK) reads images and PDFs with its `Read`
+  tool, and can run any converter installed on the machine for Office files.
+- **Codex** (`codex app-server`) is path-native: it opens files with its own
+  tools and has no inline-image path over the RPC Coffer uses.
+- **Neither can hear audio.**
+
+Coffer's principle is to be as lean as possible: what an agent can do itself,
+Coffer does not do. Until 2026-11-06 Coffer did more than hand over the file:
+it converted documents (PDF, Word, PowerPoint, Excel, RTF, EPUB, CSV) to text
+with MarkItDown for every agent and folded the text into the prompt, and it
+inlined JPEG/PNG/GIF/WebP images as base64 blocks for Claude Code, sniffing
+the bytes to keep a mislabelled file from failing the turn. Each of those was
+a code path, a dependency surface and a set of size and format limits to keep
+right, for work the agents already do.
 
 A survey of other agent front ends (aider, Cline, OpenHands, Continue, Open
-Interpreter and Goose inline base64; Codex and CLI bridges hand over paths)
-found no single mechanism that fits both agents.
-
-And the bytes have a cost: a 3–5 MB photo is 4–7 MB of base64. Storing that in
-the history database (`~/.coffer/runs.db`) would bloat it and resend it on every history read, yet an
-attachment that leaves no trace in the conversation is invisible on the web
-Chat page and lost after a daemon restart.
+Interpreter and Goose inline base64; Codex and the CLI bridges such as
+cc-connect and Claude-to-IM hand over paths) found both shapes in use. The
+inline ones are chat UIs over an API; the path ones drive an agent that has
+tools, which is what Coffer does.
 
 ## Options Considered
 
-### Option A — Bytes in a Coffer-managed directory; an `AttachmentBlock` reference persisted in the user message; each agent materialises the reference its own way at send time (chosen)
+### Option A — Path only, for every agent (chosen)
 
-- **Download.** The transport saves each file under `~/.coffer/content/channel-media`
-  and puts `InboundAttachment(path, mime, filename)` on the envelope
-  (`domain/channel/envelopes.py`). Files carried by a fetched thread or a
-  quoted message are downloaded the same way and join the turn.
-- **Persist a reference.** The orchestrator writes the user message as a text
-  block followed by one `AttachmentBlock(path, mime, filename)` per file —
-  never the bytes (`application/chat/turn_orchestrator.py`).
-- **Re-materialise from history.** The turn task reads the attachments back
-  from the last `USER`-role message in history, searched backwards
-  (`_attachments_from_history` in `application/chat/turn_runner.py`), rather
-  than having them threaded down as a parameter. The persisted reference is the
-  single source of truth, so a turn run after a restart materialises the same
-  files.
-- **Materialise per agent**, in each adapter:
-  - *Voice* is transcribed to text when the owner has configured a
-    transcription connection and model; otherwise the audio file is handed
-    over like any other file (`infrastructure/chat/transcribe.py`,
-    `infrastructure/llm/transcription.py`). Transcription is the one place
-    user content leaves the machine, so it is off until chosen.
-  - *Documents* (PDF, Word, PowerPoint, Excel, RTF, EPUB, CSV) are converted
-    to text for **every** agent and folded into the prompt
-    (`infrastructure/chat/document_extract.py`, MarkItDown, imported lazily
-    and run off the event loop); a failed conversion falls back to handing
-    over the file.
-  - *Images*: Claude Code gets a base64 `image` block for JPEG/PNG/GIF/WebP,
-    built in memory for the outbound request only
-    (`infrastructure/chat/claude_sdk_agent.py`); Codex gets the path in the
-    prompt (`infrastructure/chat/codex_agent.py`).
-  - *Anything else*, and any image format Claude cannot take inline, becomes a
-    text pointer to the saved path.
-- **The wire shows filename and mime only.** The API's content block exposes
-  `filename` and `mime` for a chip on the web page; the local path never
-  leaves the daemon (`surfaces/http/chat/conversation_routes.py`).
-- **Retention.** `~/.coffer/content/channel-media` is swept on the retention cadence:
-  files whose mtime is older than the `attachments` retention window (30 days by default, adjustable) are deleted
-  (`files_to_prune` in the kind-agnostic `domain/retention.py` decides,
-  `infrastructure/media_retention.py` does the I/O, bound into
-  `RetentionService` as one sweep per media directory). There is no size cap and no
-  reference check.
+How it works: the transport saves each file under
+`~/.coffer/content/channel-media` and puts `InboundAttachment(path, mime,
+filename)` on the envelope. Files carried by a fetched thread or a quoted
+message are downloaded the same way and join the turn. The turn carries the
+references, never the bytes. Each adapter adds one `[Attachments]` block to the
+prompt naming every file by name, type and saved path
+(`attachment_note` in `infrastructure/chat/adapter_support.py`); a file that is
+gone says so. The one exception is voice: it is transcribed to text when the
+owner has configured a transcription connection and model, because neither
+agent can hear; otherwise the audio file is handed over like any other.
 
-Pros: the database holds kilobytes per attachment, not megabytes; each agent
-gets its best native form; the attachment is visible in the conversation on
-every surface and survives a restart; a new modality is a new `mime`, not a new
-schema.
+Pros: one code path for both agents; no document parser, image sniffing or
+inline-size limit in Coffer; the agent reads a document the way it reads any
+file, with its own tools and judgement (a page range of a long PDF rather than
+all of it in the prompt); nothing in the prompt grows with the file.
 
-Cons: a reference can outlive its file — after 30 days, or if the owner clears
-the directory — and a later re-read then degrades to "could not be read". Only
-the current turn's attachments are materialised; an earlier turn's image
-reaches the agent only through its own resumed session. Absolute paths live in
-the database, so a vault moved to another home directory would carry stale
-references.
+Cons: Claude spends one tool call to look at a picture it could have been shown
+directly, so a photo turn is a few seconds slower. An Office file is only as
+readable as the converters on the machine; the agent may have to install or
+run one.
 
-Wins because it gets history, visibility and restart-safety without paying for
-bytes in the database, and adapts per agent where no common mechanism exists.
+Wins because both agents already read files, and the cost is one tool call,
+not a missing capability.
 
-### Option B — Out-of-band, this turn only (no persisted block)
+### Option B — Per-agent materialisation: text for documents, inline images for Claude (the design replaced)
 
-How it works — the design first shipped (PR #241): the bytes go to disk and
-the attachment references travel alongside `start_turn` into `run_turn` for
-that one turn; the persisted user message keeps only the caption or a short
-"(sent an image)" note.
+How it works: documents are converted to text for every agent and folded into
+the prompt (MarkItDown, lazily imported and run off the event loop); a failed
+conversion falls back to the path. Claude Code gets a base64 `image` block for
+the four formats the Messages API accepts inline; anything else, and every file
+for Codex, is a path.
 
-Pros: no change to the message model, persistence or the API contract.
+Pros: Claude sees a picture without a tool call; a path-native agent gets a
+binary document's text without converting it.
 
-Cons: the attachment was invisible on the web Chat page, lost if the daemon
-restarted mid-turn, and anything reading history later saw a note, not a file.
-Its reason for existing — keeping bytes out of the database — did not require
-keeping the *reference* out too.
+Cons: two materialisation paths plus a converter to keep correct; MarkItDown
+and its parsers stay in the frozen daemon for the channel's sake; a large
+document fills the prompt whether or not the agent needs it; an image whose
+bytes do not match its declared type failed the whole Claude turn until
+sniffing was added. All of it duplicates what the agents do themselves.
 
-Loses because a reference block removes the database objection and gains
-durability and visibility; it was replaced five days later (PR #268).
+Loses to the lean principle: it buys a tool call's worth of latency with code
+Coffer has to own.
 
-### Option C — Inline base64 persisted in the message
+### Option C — Inline base64 for every agent
 
-How it works: an attachment block carries the encoded bytes and is stored with
-the message.
+How it works: every attachment travels as encoded bytes in the turn.
 
-Pros: the conversation is self-contained; no files to manage or prune.
+Pros: the agent never has to open a file.
 
-Cons: megabytes per photo in the history database, reloaded on every history read; the web
-page would pull them over the wire; and the bytes would still need
-per-agent handling, since Codex cannot use them.
+Cons: Codex has no inline path over app-server, so it would still need the
+path; a 3–5 MB photo is 4–7 MB of base64 per turn; documents still need
+conversion.
 
-Loses on database size and on still needing per-agent materialisation.
+Loses because it does not work for Codex and costs the most.
 
-### Option D — Path only, for every agent
-
-How it works: every agent gets "the user attached X, saved at /path".
-
-Pros: one code path; no encoding.
-
-Cons: a vision model is made to call a tool to see an image it could have been
-shown directly, and a path-native agent handed a binary document cannot read
-it at all.
-
-Loses because it serves neither agent at its best.
-
-### Option E — Anthropic Files API (`file_id`)
+### Option D — Anthropic Files API (`file_id`)
 
 How it works: upload once, reference by id across turns.
 
 Pros: efficient for large files re-referenced many times.
 
 Cons: stateful and provider-locked; unavailable on Bedrock and Vertex; not a
-documented path through the SDK's streamed input, and file scoping under
-subscription auth is unclear. It helps Claude only.
+documented path through the SDK's streamed input. It helps Claude only.
 
 Loses because it solves a scale problem channel sends do not have, for one
 agent.
 
-### Option F — Store bytes in the database as BLOBs
-
-How it works: a table of attachment bytes keyed by id; the message references
-the id.
-
-Pros: one store, backed up and deleted with the conversation.
-
-Cons: the same size problem as Option C in a different table, plus every
-consumer must stream bytes out of SQLite to disk anyway, since Codex and the
-document converter need a path.
-
-Loses because the agents consume files, so the file is the natural store.
-
 ## Decision
 
-Inbound files are saved under `~/.coffer/content/channel-media`. The user message
-persists an `AttachmentBlock(path, mime, filename)` per file and never the
-bytes. Each turn re-materialises its attachments from the last user message in
-history, and each agent adapter turns them into its native form: voice is
-transcribed when opted in, documents become text for every agent, supported
-images are inlined as base64 for Claude Code and handed as paths to Codex, and
-everything else is a path pointer. The API exposes an attachment's filename
-and mime, never its path. Files older than the `attachments` retention window (30 days by default) by mtime are pruned.
+Inbound files are saved under `~/.coffer/content/channel-media`, and the turn
+carries a reference (path, mime, filename) per file, never the bytes. Every
+agent is handed every attachment as its saved path in one `[Attachments]`
+block of the prompt; the agent opens it with its own tools. Voice is the one
+thing Coffer converts: it is transcribed when the owner opted in. Files older
+than the `attachments` retention window (30 days by default) by mtime are
+pruned.
 
 Rules a future change must respect:
 
-- Bytes never enter the history database.
-- The local path never reaches the wire.
-- Materialisation is per agent and lives in the adapter; the block stays
-  agent-neutral.
+- Bytes never enter the history database or the prompt.
+- Coffer does not convert, inline or summarise a file an agent can open itself;
+  a new modality joins as a new path, or, like voice, as a conversion only when
+  no agent can take it at all.
 
 ## Consequences
 
-- A new agent decides its own materialisation in its adapter; nothing in the
-  message model changes.
-- A text-only message row needs no special case; the block is one more type
-  in the schemaless JSON content.
-- A reference whose file was pruned degrades to a text note on later reads;
-  bytes are re-sendable from the phone.
-- Enforced by: `AttachmentBlock` in `domain/chat/message.py`;
-  `turn_orchestrator.py` and `turn_runner.py` in `application/chat/`; the two
-  adapters and the transcription and extraction seams in
-  `infrastructure/chat/`; `domain/retention.py` and
-  `infrastructure/media_retention.py`.
+- A new agent gets attachments with no adapter work beyond the shared
+  `attachment_note`.
+- MarkItDown is imported only by the knowledge converter (import-linter
+  Contract 7 in `backend/pyproject.toml`).
+- A reference whose file was pruned is named as unreadable; the owner resends
+  from the phone.
+- Enforced by: `attachment_note` in `infrastructure/chat/adapter_support.py`;
+  `attachments_block` in `domain/chat/attachment.py`; `_build_content` in
+  `infrastructure/chat/claude_sdk_agent.py`; `codex_agent.py`; the
+  transcription seam in `infrastructure/chat/transcribe.py`;
+  `domain/retention.py` and `infrastructure/media_retention.py`.

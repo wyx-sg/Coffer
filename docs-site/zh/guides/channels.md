@@ -371,4 +371,4 @@ Coffer 可以在没有收到消息的情况下，通过 `POST /api/v1/channels/{
 - [保险库同步](/zh/guides/vault-sync)：哪些内容会在机器之间传播；消息渠道不会。
 - [安全模型](/zh/architecture/security)
 - [规格：channels](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/channels/spec.md)
-- [Channel Adapter Framework](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-adapter-framework.md)、[Channel Attachments: Bytes on Disk, a Reference in the Message, Materialised per Agent at Send](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-attachments.md)
+- [Channel Adapter Framework](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-adapter-framework.md)、[Channel Attachments Are Saved Files, Handed to Every Agent by Path](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-attachments.md)

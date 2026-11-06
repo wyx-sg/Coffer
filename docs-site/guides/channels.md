@@ -371,4 +371,4 @@ The channel layer meets the agents only at the turn platform's seams — convers
 - [Vault sync](/guides/vault-sync) — what travels between machines; a channel does not.
 - [Security model](/architecture/security)
 - [Spec: channels](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/channels/spec.md)
-- [Channel Adapter Framework](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-adapter-framework.md), [Channel Attachments: Bytes on Disk, a Reference in the Message, Materialised per Agent at Send](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-attachments.md)
+- [Channel Adapter Framework](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-adapter-framework.md), [Channel Attachments Are Saved Files, Handed to Every Agent by Path](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-attachments.md)
