@@ -152,7 +152,7 @@ describe("the tree", () => {
   test("no node shows a count and no Inbox node is listed; Collections strip holds New collection", async () => {
     renderKnowledge(`/knowledge/${UID}`);
     const nav = tree();
-    await within(nav).findByRole("button", { name: "Pages" });
+    await within(nav).findByRole("button", { name: "pages" });
     expect(within(nav).queryByRole("button", { name: /^Inbox/ })).toBeNull();
     // The collection rows carry no number.
     const row = within(nav).getByRole("button", { name: new RegExp(`^${COLLECTION.name}$`) });
@@ -194,8 +194,8 @@ describe("the tree", () => {
     });
     renderKnowledge(`/knowledge/${UID}`);
     const nav = tree();
-    fireEvent.click(await within(nav).findByRole("button", { name: "Pages" }));
-    fireEvent.click(within(nav).getByRole("button", { name: "Sources" }));
+    fireEvent.click(await within(nav).findByRole("button", { name: "pages" }));
+    fireEvent.click(within(nav).getByRole("button", { name: "sources" }));
     const icon = async (name: RegExp) =>
       (await within(nav).findByRole("button", { name })).querySelector("svg[data-icon]");
     expect(await icon(/^map\.md/)).toHaveAttribute("data-icon", "overview");
@@ -215,7 +215,7 @@ describe("the tree", () => {
     let nav = tree();
     // Open a collection, then its Sources folder, and open a second collection.
     fireEvent.click(await within(nav).findByRole("button", { name: `Expand ${COLLECTION.name}` }));
-    fireEvent.click(await within(nav).findByRole("button", { name: "Sources" }));
+    fireEvent.click(await within(nav).findByRole("button", { name: "sources" }));
     expect(await within(nav).findByRole("button", { name: /^release-notes\.md/ })).toBeVisible();
     fireEvent.click(within(nav).getByRole("button", { name: `Expand ${OTHER.name}` }));
     cleanup();
@@ -227,12 +227,12 @@ describe("the tree", () => {
       await within(nav).findByRole("button", { name: `Collapse ${COLLECTION.name}` }),
     ).toHaveAttribute("aria-expanded", "true");
     expect(within(nav).getByRole("button", { name: `Collapse ${OTHER.name}` })).toBeVisible();
-    expect(await within(nav).findByRole("button", { name: "Sources" })).toHaveAttribute(
+    expect(await within(nav).findByRole("button", { name: "sources" })).toHaveAttribute(
       "aria-expanded",
       "true",
     );
     expect(await within(nav).findByRole("button", { name: /^release-notes\.md/ })).toBeVisible();
-    expect(within(nav).getByRole("button", { name: "Pages" })).toHaveAttribute(
+    expect(within(nav).getByRole("button", { name: "pages" })).toHaveAttribute(
       "aria-expanded",
       "false",
     );

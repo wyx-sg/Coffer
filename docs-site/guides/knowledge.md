@@ -53,6 +53,8 @@ A file's path is where it is; its **slug** — the file name without `.md` — i
 
 The knowledge root is inside the vault repository, at `~/.coffer/vault/knowledge`; the `coffer-guide` skill names it to every agent. It cannot be moved elsewhere: a tree outside the vault would be a tree its history cannot see.
 
+The Knowledge tree shows every folder by its exact name on disk in every interface language: `pages`, `sources`, and any folders you add. The two wiki folders appear first.
+
 ### Frontmatter
 
 Every page carries YAML frontmatter:

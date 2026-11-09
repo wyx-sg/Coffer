@@ -96,7 +96,7 @@ test("a collection is one tree; an uploaded source is read, opened in the editor
   // its file as it is on disk.
   expect(submitted.path).toContain("/sources/");
   const fileName = submitted.path.split("/").pop() ?? "";
-  await tree.getByRole("button", { name: "Sources", exact: true }).click();
+  await tree.getByRole("button", { name: "sources", exact: true }).click();
   // No page cites it yet, so it is marked Waiting.
   await tree.getByRole("button", { name: `${fileName} Waiting`, exact: true }).click();
   await expect(page).toHaveURL(/\?file=/);

@@ -53,6 +53,8 @@ description: 把你和智能体对工作环境的了解，存成一个由保留�
 
 知识根目录位于保险库仓库里，即 `~/.coffer/vault/knowledge`，`coffer-guide` 技能会把它告诉每个智能体。它不能挪到别处：保险库外的目录树，它的历史就看不到了。
 
+知识目录树在所有界面语言下都显示文件夹的实际名称，例如 `pages`、`sources` 和你添加的目录；两个 wiki 文件夹排在最前面。
+
 ### Frontmatter {#frontmatter}
 
 每个页面都带 YAML frontmatter：
