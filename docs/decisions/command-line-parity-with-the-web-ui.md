@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-10-05
 **Deciders**: Yuxing Wu
-**Related**: [The Resource Framework Is Core Domain, Designed Before the Second Kind](resource-framework-upfront.md), [The Wire Contract Is Generated From the Pydantic Models, and the Frontend Client From the Contract](wire-contract-generated-from-the-pydantic-models.md), [Only a Present Human Sees a Secret or Sends It Somewhere New](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md), [The Desktop Shell Hosts the Shared Frontend and Owns Only What a Browser Cannot Do](desktop-shell-over-a-shared-frontend.md), spec resource-framework "Offer every management operation on the command line", spec mcp-gateway "Manage custom tools from the command line", spec secret "Approve from the command line with the person's own presence check", OpenSpec change align-cli-with-ui-and-add-tool-environments
+**Related**: [The Resource Framework Is Core Domain, Designed Before the Second Kind](resource-framework-upfront.md), [The Wire Contract Is Generated From the Pydantic Models, and the Frontend Client From the Contract](wire-contract-generated-from-the-pydantic-models.md), [Only a Present Human Sees a Secret or Sends It Somewhere New](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md), [The Desktop Shell Hosts the Shared Frontend and Owns Only What a Browser Cannot Do](desktop-shell-over-a-shared-frontend.md), spec resource-framework "Offer every management operation on the command line", spec mcp-gateway "Manage custom tools from the command line", spec secret "Answer a secret's approval only in the app", OpenSpec change align-cli-with-ui-and-add-tool-environments
 
 ## Context
 
