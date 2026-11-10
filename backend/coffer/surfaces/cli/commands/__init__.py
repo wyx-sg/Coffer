@@ -10,7 +10,6 @@ MODULES = (
     "custom_tool_groups",
     "custom_tool_tools",
     "custom_tool_envs",
-    "approvals",
     "desktop_ops",
     "resources",
     "agents",

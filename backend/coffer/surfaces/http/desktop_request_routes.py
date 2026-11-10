@@ -1,12 +1,11 @@
 """``/api/v1/desktop`` — the command line's requests to the desktop shell.
 
-Spec secret "Approve from the command line with the person's own presence
-check" and desktop-app "Serve the command line's desktop requests"; design
+Spec desktop-app "Serve the command line's desktop requests"; design
 align-cli-with-ui-and-add-tool-environments D8. The command line creates a
 request and waits on it; the shell claims it (each claim is its heartbeat),
-runs its own presence-checked flow and says how it ended. The daemon pins an
-approval request to each approval's target as it stands when asked, so the
-shell can refuse to sign for a target that moved.
+runs its own presence-checked flow and says how it ended. Approving a secret's
+binding is not among them: that is answered only on the app's own page (ADR
+only-the-person-answers-a-secret-approval-in-the-app).
 """
 
 from __future__ import annotations
@@ -22,9 +21,8 @@ from coffer.application.secret.desktop_requests import (
     DesktopRequests,
 )
 from coffer.domain.errors import ConfigValidationError
-from coffer.domain.secret_errors import ApprovalNotPending, SecretNotFound
+from coffer.domain.secret_errors import SecretNotFound
 from coffer.surfaces.http.auth import require_token
-from coffer.surfaces.http.secret_boundary_wiring import get_secret_boundary, refresh_approvals
 from coffer.surfaces.http.secret_composition import get_secret_store
 
 router = APIRouter(
@@ -32,7 +30,6 @@ router = APIRouter(
 )
 
 OpName = Literal[
-    "approve",
     "reveal",
     "export_master_key",
     "import_master_key",
@@ -59,8 +56,6 @@ def reset_desktop_requests() -> None:
 
 class DesktopRequestIn(BaseModel):
     op: OpName
-    #: ``approve``: the approvals to approve — exactly these, each still pending.
-    approval_ids: list[str] = Field(default_factory=list, max_length=50)
     #: ``reveal``: the secret to show in the app.
     ref: str | None = None
     #: ``update_auto_check``: switch the daily update check on or off;
@@ -68,17 +63,10 @@ class DesktopRequestIn(BaseModel):
     enabled: bool | None = None
 
 
-class PinnedApprovalOut(BaseModel):
-    id: str
-    #: The target the approval named when the request was made.
-    fingerprint: str
-
-
 class DesktopRequestOut(BaseModel):
     id: str
     op: OpName
     status: StatusName
-    approvals: list[PinnedApprovalOut]
     ref: str | None
     enabled: bool | None = None
     #: How it ended, in the shell's words (``cancelled``, a failure's reason).
@@ -108,7 +96,6 @@ def _out(r: DesktopRequest, requests: DesktopRequests) -> DesktopRequestOut:
         id=r.id,
         op=r.op,
         status=r.status,
-        approvals=[PinnedApprovalOut(id=i, fingerprint=f) for i, f in r.approvals.items()],
         ref=r.ref,
         enabled=r.enabled,
         message=r.message,
@@ -133,19 +120,6 @@ async def create_request(
     body: DesktopRequestIn, requests: DesktopRequests = _dep
 ) -> DesktopRequestOut:
     """Ask the desktop shell to do something only a present person may approve."""
-    approvals: dict[str, str] = {}
-    if body.op == "approve":
-        if not body.approval_ids:
-            raise ConfigValidationError("name the approvals to approve")
-        # Up to the configuration first, so a target that moved has already
-        # superseded its approval and is not offered to the person.
-        await refresh_approvals()
-        boundary = get_secret_boundary()
-        for approval_id in dict.fromkeys(body.approval_ids):
-            approval = await asyncio.to_thread(boundary.get, approval_id)
-            if approval.status != "pending":
-                raise ApprovalNotPending(approval_id, approval.status)
-            approvals[approval_id] = approval.target_fingerprint or ""
     if body.op == "reveal":
         if not body.ref:
             raise ConfigValidationError("name the secret to reveal")
@@ -153,7 +127,7 @@ async def create_request(
             raise SecretNotFound(body.ref)
     if body.op == "update_auto_check" and body.enabled is None:
         raise ConfigValidationError("say whether the update check is on or off")
-    created = requests.create(body.op, approvals=approvals, ref=body.ref, enabled=body.enabled)
+    created = requests.create(body.op, ref=body.ref, enabled=body.enabled)
     return _out(created, requests)
 
 

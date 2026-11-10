@@ -1,19 +1,15 @@
-//! The presence-checked flows, shared by the page's buttons (the IPC commands
-//! in `secrets.rs`) and the command line's requests (`desktop_requests.rs`):
-//! reveal a secret, approve one approval, approve several (spec desktop-app
-//! "Release plaintext and approvals only after a presence check in the shell"
-//! and "Serve the command line's desktop requests").
+//! The presence-checked flows: reveal a secret (the page's button and the
+//! command line's request, `desktop_requests.rs`), approve one approval and
+//! approve several (the page's buttons only: a secret's approval is answered on
+//! the app's own page). Spec desktop-app "Release plaintext and approvals only
+//! after a presence check in the shell".
 //!
 //! Each reads what it is about from the daemon itself — never from whoever
 //! asked — shows the operating system's prompt naming it, and only then asks
 //! for a challenge and signs. A single approval's grant is pinned to the target
 //! the person was shown (`<id>@<fingerprint>`, design D9 of
 //! `align-cli-with-ui-and-add-tool-environments`): the daemon applies it only
-//! while the approval still names that target. A caller may pin the target it
-//! expects as well (the command line pins what it asked for); a target that
-//! moved since is refused before any prompt.
-
-use std::collections::HashMap;
+//! while the approval still names that target.
 
 use serde_json::{json, Value};
 use tauri::AppHandle;
@@ -65,7 +61,6 @@ pub fn approve_one(
     daemon: &Daemon,
     development: bool,
     id: &str,
-    expected: Option<&str>,
 ) -> Result<Value, String> {
     let path = format!("/api/v1/secrets/approvals/{}", path_segment(id)?);
     let approval = daemon.get(&path)?;
@@ -73,13 +68,6 @@ pub fn approve_one(
         return Err(format!("approval {id} is no longer waiting"));
     }
     let fingerprint = text(&approval, "target_fingerprint");
-    if let Some(expected) = expected {
-        if expected != fingerprint {
-            return Err(format!(
-                "approval {id} now names another target than the one asked for; nothing was approved"
-            ));
-        }
-    }
     let description = text(&approval, "description");
     presence::confirm(
         app,
@@ -99,14 +87,12 @@ pub fn approve_one(
 
 /// Approve several under one presence check and one grant over a digest of
 /// exactly the `(id, fingerprint)` pairs shown. An approval gone, no longer
-/// pending, not batchable, or (with `expected`) naming another target than the
-/// one asked for is left out, and the daemon reports it skipped.
+/// pending or not batchable is left out, and the daemon reports it skipped.
 pub fn approve_batch(
     app: &AppHandle,
     daemon: &Daemon,
     development: bool,
     ids: &[String],
-    expected: Option<&HashMap<String, String>>,
 ) -> Result<Value, String> {
     let mut items: Vec<(String, String)> = Vec::new();
     let mut descriptions: Vec<String> = Vec::new();
@@ -116,9 +102,6 @@ pub fn approve_batch(
             continue;
         }
         let fingerprint = text(&approval, "target_fingerprint");
-        if expected.is_some_and(|pins| pins.get(id) != Some(&fingerprint)) {
-            continue;
-        }
         items.push((id.clone(), fingerprint));
         descriptions.push(text(&approval, "description"));
     }
@@ -171,7 +154,7 @@ mod tests {
     }
 
     /// The layout the daemon's `pinned_target` builds, byte for byte.
-    // acceptance(spec = "secret", scenario = "a moved target or a replayed grant approves nothing")
+    // acceptance(spec = "secret", scenario = "a stale or replayed grant approves nothing")
     #[test]
     fn a_pinned_target_names_the_approval_and_its_target() {
         assert_eq!(

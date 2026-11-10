@@ -7,7 +7,7 @@ description: How Coffer encrypts every secret it holds, how to store, cite, rota
 
 Coffer keeps every secret it needs — an MCP server's token, a provider's API key, a channel bot's token, a sync remote's push token — in one encrypted store, and everything else refers to a secret by its id. This page covers storing and citing secrets, rotating and deleting them, where the master key lives, and how to back it up or move it to another machine.
 
-No command, route or MCP tool prints a stored value. You see a value only in the desktop app, after Touch ID or your login password, and a secret goes somewhere it has not gone before only after you approve it there (an agent can ask with `coffer approval approve`, which brings the prompt to the app). [Secrets](/guides/secrets) explains that boundary, how approvals work, and how to allow a standalone secret to be handed to a command you run with `coffer run`.
+No command, route or MCP tool prints a stored value. You see a value only in the desktop app, after Touch ID or your login password, and a secret goes somewhere it has not gone before only after you approve it there. [Secrets](/guides/secrets) explains that boundary, how approvals work, and how to allow a standalone secret to be handed to a command you run with `coffer run`.
 
 ## How secrets are stored
 
@@ -163,7 +163,7 @@ Importing needs the desktop app: the daemon installs a key only against a presen
 | `SECRET_LOCKED` at startup | The Keychain refused to hand over the key — usually because it is locked | Unlock the Keychain and start the daemon again. |
 | `SECRET_UNREADABLE` naming a ref | The ciphertext does not decrypt with the current key — usually a key from another machine | Import the matching key, or set the ref again with its value. |
 | `SECRET_IN_USE` | A resource still cites the ref | Detach or delete the resources the message names. |
-| `waiting for approval: <id>`, exit `9` | A secret in the change goes somewhere it has not gone before | Run the `next:` command it printed, `coffer approval approve <id>`, and confirm in the desktop app, or approve it in the app's approvals dialog, which lists what waits. See [Secrets → Approvals](/guides/secrets#approvals). |
+| `waiting for approval: <id>`, exit `9` | A secret in the change goes somewhere it has not gone before | Approve it in the desktop app's approvals dialog, which lists what waits. See [Secrets → Approvals](/guides/secrets#approvals). |
 | `PRESENCE_GRANT_INVALID` | A reveal, key backup or approval was attempted outside the desktop app | Do it in the desktop app. |
 | An MCP server fails to start naming a missing secret | The cited ref is not in the store | `coffer secret set <ref>` to give an existing secret a value, or add the secret on the Secrets page. |
 

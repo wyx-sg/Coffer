@@ -9,7 +9,7 @@ Coffer 的 Web 界面是你管理保险库里一切的地方：智能体、MCP �
 
 ## Web 界面与命令行各做什么 {#what-the-web-ui-and-the-command-line-each-do}
 
-所有管理操作都在 Web 界面里，而且每一个都有一条调用同一路由的 `coffer` 命令，所以在终端里工作的智能体也能做：`coffer agent`、`coffer mcp`、`coffer custom-tool`、`coffer skill`、`coffer knowledge`、`coffer memory`、`coffer provider`、`coffer channel`、`coffer approval`、`coffer sync`、`coffer settings` 等等。无论谁来操作，校验、审计和生命周期都一样。[CLI 覆盖表](/zh/reference/cli-coverage)把每个页面操作对应到它的路由和命令，[CLI 参考](/zh/reference/cli)列出每个选项。每条命令都接受 `--json`，从 `--data '<json>'`、`--data @file` 或 `--data -`（标准输入）读取请求体，并可重复使用 `--set key=value`；守护进程的错误码原样透传，退出码稳定（见[退出码](/zh/reference/error-codes#cli-exit-codes)）。
+所有管理操作都在 Web 界面里，而且除了处理密钥审批（只能由你在应用里做）之外，每一个都有一条调用同一路由的 `coffer` 命令，所以在终端里工作的智能体也能做：`coffer agent`、`coffer mcp`、`coffer custom-tool`、`coffer skill`、`coffer knowledge`、`coffer memory`、`coffer provider`、`coffer channel`、`coffer sync`、`coffer settings` 等等。无论谁来操作，校验、审计和生命周期都一样。[CLI 覆盖表](/zh/reference/cli-coverage)把每个页面操作对应到它的路由和命令，[CLI 参考](/zh/reference/cli)列出每个选项。每条命令都接受 `--json`，从 `--data '<json>'`、`--data @file` 或 `--data -`（标准输入）读取请求体，并可重复使用 `--set key=value`；守护进程的错误码原样透传，退出码稳定（见[退出码](/zh/reference/error-codes#cli-exit-codes)）。
 
 只有两类事情没有命令。纯文件内容——知识文档、技能的文件、智能体自己的配置——用你或智能体自己的工具读写。只在窗口前才有意义的操作——文件夹选择器、在编辑器、终端或访达中打开文件、界面的语言和主题——留在窗口里。需要你本人在场的步骤（批准密钥、显示值、备份主密钥）交给[桌面应用](/zh/guides/desktop-app)自己的 Touch ID 验证，无论从哪个入口发起。
 

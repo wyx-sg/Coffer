@@ -70,12 +70,12 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `MASTER_KEY_FILE_INVALID` | 422 | 要导入的主密钥备份（`.cfk`）不存在或不是有效的备份，或者它的指纹与其主密钥不符。 | 导入桌面应用写出的主密钥备份。 |
 | `MASTER_KEY_PASSPHRASE_WRONG` | 422 | 导入受口令保护的主密钥备份（`.cfk`）时口令错误或没给口令。 | 输入在另一台 Mac 上导出主密钥时设置的口令。 |
 | `MASTER_KEY_PASSPHRASE_TOO_SHORT` | 422 | 请求主密钥备份时给的口令不足八个字符。什么都没写入。 | 选一个更长的口令。 |
-| `SECRET_BINDING_PENDING` | 409 | 某个密钥将发往一个没有人批准过的去处或目标。什么都没发送。`details.approval_ids` 列出等待中的审批。 | 运行 `coffer approval approve <id>` 并在 Coffer 桌面应用中确认（或直接在应用里批准），或用 `coffer approval reject <id>` 或在**设置 › 安全**（**审阅**）里拒绝。自定义工具的调用会以带内方式返回它，写明审批 id 和同一条命令，而且只影响在等待的那个环境。`coffer run` 遇到无人允许它使用的独立密钥时也会返回它，见[密钥 → 允许 `coffer run` 使用它](/zh/guides/secrets#allow-coffer-run-to-use-it)。 |
+| `SECRET_BINDING_PENDING` | 409 | 某个密钥将发往一个没有人批准过的去处或目标。什么都没发送。`details.approval_ids` 列出等待中的审批。 | 在 Coffer 桌面应用里批准或拒绝（**密钥**页，**审阅**）；智能体只告诉开发者有什么在等待。自定义工具的调用会以带内方式返回它，写明审批 id，而且只影响在等待的那个环境。`coffer run` 遇到无人允许它使用的独立密钥时也会返回它，见[密钥 → 允许 `coffer run` 使用它](/zh/guides/secrets#allow-coffer-run-to-use-it)。 |
 | `SECRET_BINDING_REJECTED` | 409 | 有人对这个目的地和目标拒绝过这个密钥，而且没有东西在等待。什么都没发送。`details.approval_ids` 列出被拒绝的审批。 | 更改去处，问题会重新摆到你面前（对 `coffer run`，在该密钥上再次点 **允许 `coffer run`…**）。见[密钥 → 审批](/zh/guides/secrets#approvals)。 |
-| `APPROVAL_NOT_FOUND` | 404 | 没有这个 id 的审批。 | 用 `coffer approval list` 或在**设置 › 安全**（**审阅**）里列出。 |
+| `APPROVAL_NOT_FOUND` | 404 | 没有这个 id 的审批。 | 在 Coffer 应用里列出（**密钥**页，**审阅**）。 |
 | `APPROVAL_NOT_PENDING` | 409 | 该审批已被批准、拒绝或取代。 | 无需操作；新的改动会产生新的审批。 |
 | `PRESENCE_GRANT_INVALID` | 403 | 一次查看、主密钥备份、主密钥导入或审批没有带有效的在场授权：缺失、过期、已用过、属于别的操作或目标，或者不是桌面应用签发的。 | 在 Coffer 桌面应用中操作，它会执行在场检查并签发授权。 |
-| `APPROVAL_TARGET_CHANGED` | 409 | 这条审批现在所指的目标已不是展示给本人的那个：在在场提示和批准请求之间，它的去处变了。什么都没批准；授权绑定的是旧目标。 | 重新查看这条审批（`coffer approval show <id>`），认得新目标的话再重新批准。 |
+| `APPROVAL_TARGET_CHANGED` | 409 | 这条审批现在所指的目标已不是展示给本人的那个：在在场提示和批准请求之间，它的去处变了。什么都没批准；授权绑定的是旧目标。 | 在 Coffer 应用里重新查看这条审批，认得新目标的话再重新批准。 |
 | `DESKTOP_REQUEST_NOT_FOUND` | 404 | 没有这个 id 的桌面请求：命令行发给桌面应用的请求（批准、显示、主密钥备份、更新）从未存在或已过期（请求的有效期为两分钟，主密钥备份的为十分钟）。 | 再运行一次命令；等待期间保持桌面应用打开。 |
 | `SECRET_NAME_INVALID` | 422 | 新建独立密钥的 ref 不是 `secret/<32 位十六进制>`，或它的标签超过 64 个字符、描述超过 200 个字符。 | 用 `coffer secret set --name "Orders DB"` 创建密钥，让 Coffer 来生成 id；缩短标签或描述。 |
 | `SECRET_NOT_FOUND` | 404 | `coffer run` 指定的独立密钥不在存储中。只有 `secret/<id>` 的值能这样解析；资源的密钥永远不能。 | 用 `coffer secret list` 核对 id，或用 `coffer secret set --name "<名称>"` 创建该密钥。 |
@@ -309,7 +309,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | 上游自己的错误码 | 上游服务器以 JSON-RPC 错误应答：保留它的错误码，消息换成 Coffer 自己的 `the upstream server answered with JSON-RPC error <code>`，不转发上游的文本。 |
 | `-32603` | 其他任何失败。Coffer 的错误会带上它的消息；其他错误一律报告为 `internal error: <ExceptionClass>`，以免泄漏任何上游内容。 |
 
-失败的内置工具则会返回一个带 `isError: true` 的带内结果；见[MCP 工具](/zh/reference/mcp-tools#how-built-in-tools-answer)。在任何请求之前就被拒绝的自定义工具也一样：它的文本以错误码开头（`CUSTOM_TOOL_ARGUMENTS_INVALID` 每个字段一行，`CUSTOM_TOOL_ENVIRONMENT_*`、`SECRET_MISSING`，或带审批 id 和 `next: coffer approval approve <id>` 的 `SECRET_BINDING_PENDING`）。
+失败的内置工具则会返回一个带 `isError: true` 的带内结果；见[MCP 工具](/zh/reference/mcp-tools#how-built-in-tools-answer)。在任何请求之前就被拒绝的自定义工具也一样：它的文本以错误码开头（`CUSTOM_TOOL_ARGUMENTS_INVALID` 每个字段一行，`CUSTOM_TOOL_ENVIRONMENT_*`、`SECRET_MISSING`，或带审批 id、并用 `next:` 说明由开发者在 Coffer 应用里处理的 `SECRET_BINDING_PENDING`）。
 
 ## 命令行退出码 {#cli-exit-codes}
 
@@ -326,9 +326,9 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `6` | Invalid input | 守护进程返回了 `400` 或 `422`，或者命令自己的输入无法解析（`CLI_INVALID_INPUT`）。参数违反 schema 的自定义工具测试在这里退出，每个字段一条错误。 |
 | `7` | Upstream test failed | `coffer mcp test` 无法初始化上游服务器，或者自定义工具测试（`coffer custom-tool tool test`、`test-draft`、`test-unsaved`）连到的 API 失败或以错误状态码回应。其他命令在守护进程因它调用的东西失败而返回 `502` 或 `504` 时也在这里退出（例如 `SYNC_REMOTE_FAILED`、`SKILL_SOURCE_UNREACHABLE`、`OPENAPI_UNREACHABLE`、`CHANNEL_SEND_FAILED` 或 `UPSTREAM_TIMEOUT`）；`UPSTREAM_UNAVAILABLE` 以 `1` 退出。 |
 | `8` | Secret issue | 错误码为 `SECRET_MISSING`、`SECRET_LOCKED`、`SECRET_UNREADABLE` 或 `SECRET_BINDING_REJECTED`。 |
-| `9` | Waiting for approval | 改动已保存，但其中的某个密钥在等待本人批准（`SECRET_BINDING_PENDING`）。命令打印了审批 id 和 `next: coffer approval approve <id>…`（加 `--json` 时为 `{"status": "pending_approval", "approval_ids", "next"}`）。不要重试：运行那条命令，它会在桌面应用里询问本人；或直接在应用里批准。见[密钥 → 在命令行上](/zh/guides/secrets#on-the-command-line)。 |
+| `9` | Waiting for approval | 改动已保存，但其中的某个密钥在等待本人批准（`SECRET_BINDING_PENDING`）。命令打印了审批 id，并说明由开发者在 Coffer 应用里处理（加 `--json` 时为 `{"status": "pending_approval", "approval_ids", "next"}`）。不要重试：告诉开发者有什么在等待。见[密钥 → 在命令行上](/zh/guides/secrets#on-the-command-line)。 |
 | `10` | Waiting for git | 守护进程在运行，但在等 git：没有找到，或版本低于 2.40。命令在发送任何请求之前打印了原因和一段给智能体的提示词。见 [Coffer 需要 git](/zh/guides/troubleshooting#coffer-needs-git)。 |
-| `11` | Presence not confirmed | 交给桌面应用在场验证的步骤（`coffer approval approve`、`coffer secret reveal`、`coffer secret backup-key`）被取消、失败或超时，或者守护进程拒绝了授权（`PRESENCE_GRANT_INVALID`）。每条审批都继续等待。 |
+| `11` | Presence not confirmed | 交给桌面应用在场验证的步骤（`coffer secret reveal`、`coffer secret backup-key`）被取消、失败或超时，或者守护进程拒绝了授权（`PRESENCE_GRANT_INVALID`）。 |
 | `12` | Desktop app unavailable | 这一步需要桌面应用，而它没在运行且在这里无法启动（没有应用、不是 Mac，或用了 `--no-launch`）：`CLI_APP_UNAVAILABLE`。什么都没批准。打开应用后再运行一次命令。 |
 | `13` | Wait timed out | 等待在操作完成之前就结束了：`coffer sync wait` 超过了它的 `--timeout`（`CLI_WAIT_TIMEOUT`），或者守护进程没有在命令的等待时间内回答请求（`CLI_REQUEST_TIMEOUT`）。操作可能仍在运行；先确认结果，或者加上 `coffer --request-timeout <秒数>`。 |
 

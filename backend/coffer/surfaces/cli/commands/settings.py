@@ -1,8 +1,8 @@
 """``coffer settings`` — the Settings modal, tab by tab.
 
 Spec web-ui "Open Settings as a modal from the sidebar footer" and the specs
-owning each setting. Turning approvals OFF is itself an approval (``coffer
-approval approve``); turning them on needs nobody.
+owning each setting. Turning approvals OFF is itself an approval, answered in the app; turning them
+on needs nobody.
 """
 
 from __future__ import annotations

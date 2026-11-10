@@ -273,6 +273,8 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`standalone-secrets-are-named-references-injected-into-one-child`](standalone-secrets-are-named-references-injected-into-one-child.md) | Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process |
 | [`a-secret-header-stores-the-credential-and-its-slot-names-the-scheme`](a-secret-header-stores-the-credential-and-its-slot-names-the-scheme.md) | A Secret Header Stores the Credential Alone, and Its Slot Names the Auth Scheme |
 | [`only-a-present-human-sees-a-secret-or-sends-it-somewhere-new`](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md) | Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New |
+| [`only-the-person-answers-a-secret-approval-in-the-app`](only-the-person-answers-a-secret-approval-in-the-app.md) | Only the Person Answers a Secret's Approval, and Only in the App |
+| [`a-tool-response-reaches-the-agent-as-the-upstream-sent-it`](a-tool-response-reaches-the-agent-as-the-upstream-sent-it.md) | A Tool Response Reaches the Agent as the Upstream Sent It |
 | [`a-copied-secret-is-marked-concealed-and-cleared-after-90-seconds`](a-copied-secret-is-marked-concealed-and-cleared-after-90-seconds.md) | A Copied Secret Is Marked Concealed and Cleared After 90 Seconds |
 | [`one-replace-dialog-for-every-secret`](one-replace-dialog-for-every-secret.md) | One Replace Dialog for Every Secret a Resource Uses, Shown Inline in Edit Dialogs |
 

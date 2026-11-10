@@ -68,7 +68,7 @@ def test_a_group_is_configured_end_to_end_from_the_command_line(
     )  # fmt: skip
     group = daemon.client.get("/api/v1/custom-tools/billing").json()
     [approval] = group["pending_approvals"]
-    assert f"next: coffer approval approve {approval}" in pending.output
+    assert approval in pending.output and "answer it in the Coffer app" in pending.output
     daemon.approve(approval)
     search = tmp_path / "search.json"
     search.write_text(

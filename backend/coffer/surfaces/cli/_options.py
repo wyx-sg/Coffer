@@ -31,9 +31,9 @@ class ExitCode(IntEnum):
     #: The daemon is running but waits in its setup state for git (spec daemon
     #: "Wait in a setup state when git is missing or too old").
     GIT_NEEDED = 10
-    #: The person cancelled, failed or did not answer the presence check; the
-    #: approval stays pending (spec secret "Approve from the command line with
-    #: the person's own presence check").
+    #: The person cancelled, failed or did not answer the presence check, or
+    #: closed the app's dialog (spec secret "Answer a secret's approval only in
+    #: the app").
     PRESENCE_NOT_CONFIRMED = 11
     #: The desktop app is not running and could not be started here.
     APP_UNAVAILABLE = 12

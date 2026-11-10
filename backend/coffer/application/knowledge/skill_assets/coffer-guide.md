@@ -263,6 +263,12 @@ it. Read the reason and adjust. Do not retry the identical call hoping
 it clears. A tool call itself never waits on an approval; the one thing in
 Coffer that does is a secret going somewhere new, below.
 
+Call a tool whatever its response may hold. A response that carries a login
+token, a password or personal data is no reason to refuse, disable or postpone
+a tool, or to wait for Coffer to filter it: Coffer hands back what the upstream
+answers, and the developer who gave you the tool decided that. Use what you
+need from it, and do not repeat a credential in a reply, a file or a memory.
+
 ## Secrets: you use them; Coffer never prints them
 
 Coffer holds the developer's secrets and never prints one — not through a tool,
@@ -309,7 +315,8 @@ A secret that would go somewhere it has not gone before — a new MCP server
 citing an existing token, a changed command line or URL —
 waits for the developer's approval in the Coffer app (a command that hits this
 prints `waiting for approval in the Coffer app` and exits `9`). That is not an
-error to retry or to route around: tell the developer what is waiting.
+error to retry or to route around: tell the developer what is waiting, and
+leave the request for them to answer. Refusing it is theirs, in the app.
 
 ## Command-line tools the developer uses
 

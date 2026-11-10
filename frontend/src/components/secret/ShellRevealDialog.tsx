@@ -1,8 +1,7 @@
 // src/components/secret/ShellRevealDialog.tsx — a value the desktop app revealed for `coffer secret reveal`.
 //
 // The command only asked; the shell ran the person's presence check itself and hands the value to this window,
-// never to the command, the daemon or a log (spec secret "Approve from the command line with the person's own
-// presence check"). It shows for 30 seconds with Copy, then is dropped, like the Reveal value dialog.
+// never to the command, the daemon or a log (spec secret "Answer a secret's approval only in the app"). It shows for 30 seconds with Copy, then is dropped, like the Reveal value dialog.
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 

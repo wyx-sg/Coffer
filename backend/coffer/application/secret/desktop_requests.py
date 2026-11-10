@@ -1,19 +1,16 @@
 """Desktop requests: what the command line asks the desktop shell to do.
 
-Spec secret "Approve from the command line with the person's own presence
-check" and desktop-app "Serve the command line's desktop requests"; design
+Spec desktop-app "Serve the command line's desktop requests"; design
 align-cli-with-ui-and-add-tool-environments D8.
 
-An agent cannot approve, reveal or back up anything itself: those take the
-operating system's presence check in the desktop shell. ``coffer approval
-approve <id>`` therefore leaves a request here, the shell (which polls every
-second — each poll is its heartbeat) claims it and runs the very flow its own
-buttons run: it reads the approvals from the daemon, shows the system prompt,
-signs a grant pinned to each approval's target and calls the approve route.
-The command waits on the request and then reports the approvals' REAL state as
-the boundary holds it, so nothing written here — a forged "done" included — can
-approve anything. A request carries no secret, grant or signature, and holds
-nothing the agent did not already know.
+An agent cannot reveal or back up anything itself: those take the operating
+system's presence check in the desktop shell. ``coffer secret reveal <ref>``
+therefore leaves a request here, the shell (which polls every second — each
+poll is its heartbeat) claims it and runs the very flow its own buttons run.
+The command waits on the request and learns only how it ended. A request
+carries no secret, grant or signature, and holds nothing the agent did not
+already know. A secret's approval is not among these: it is answered only on
+the app's own page (ADR only-the-person-answers-a-secret-approval-in-the-app).
 
 In memory only: a request lives two minutes and dies with the daemon, which is
 what a prompt waiting on a person should do. A key backup lives ten: its
@@ -27,13 +24,12 @@ from __future__ import annotations
 import secrets as _secrets
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Literal
 
 from coffer.domain.error_base import CofferError
 
 DesktopOp = Literal[
-    "approve",
     "reveal",
     "export_master_key",
     "import_master_key",
@@ -62,8 +58,6 @@ class DesktopRequest:
     op: DesktopOp
     created_at: float
     expires_at: float
-    #: ``approve``: the approvals, each pinned to the target it had when asked.
-    approvals: dict[str, str] = field(default_factory=dict)
     #: ``reveal``: the secret's ref.
     ref: str | None = None
     #: ``update_auto_check``: the switch's new position; ``uninstall``: whether
@@ -97,7 +91,6 @@ class DesktopRequests:
         self,
         op: DesktopOp,
         *,
-        approvals: dict[str, str] | None = None,
         ref: str | None = None,
         enabled: bool | None = None,
     ) -> DesktopRequest:
@@ -111,7 +104,6 @@ class DesktopRequests:
             created_at=now,
             expires_at=now
             + (BACKUP_TTL_SECONDS if op == "export_master_key" else REQUEST_TTL_SECONDS),
-            approvals=dict(approvals or {}),
             ref=ref,
             enabled=enabled,
         )

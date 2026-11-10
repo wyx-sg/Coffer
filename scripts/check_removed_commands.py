@@ -129,6 +129,9 @@ REMOVED: tuple[tuple[str, str], ...] = (
     # Removed by the OpenSpec change act-on-secret-approvals-where-they-show:
     # only the desktop app can sign the grant an install needs.
     ("coffer secret key-install", "coffer secret import-key"),
+    # Removed by the OpenSpec change answer-approvals-only-in-the-app: a
+    # secret's approval is the person's to answer, on the app's page.
+    ("coffer approval", "the Coffer app's approvals (Secrets page)"),
 )
 
 #: (command phrase, removed option, what replaces it). Matches the phrase with
@@ -146,6 +149,7 @@ ALLOWED: tuple[tuple[str, str, str], ...] = (
     ("openspec/specs/mcp-gateway/spec.md", "coffer__recall", _ABSENT),
     ("openspec/specs/mcp-gateway/spec.md", "coffer__diagnose", _ABSENT),
     ("openspec/specs/daemon/spec.md", "coffer daemon service", _ABSENT),
+    ("openspec/specs/secret/spec.md", "coffer approval", _ABSENT),
 )
 
 

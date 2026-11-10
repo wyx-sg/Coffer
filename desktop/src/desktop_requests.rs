@@ -2,14 +2,12 @@
 //! command line's desktop requests"; design D8 of
 //! `align-cli-with-ui-and-add-tool-environments`).
 //!
-//! `coffer approval approve <id>` cannot approve anything: it leaves a request
-//! with the daemon. Every second this watcher asks the daemon for the next one
-//! (the ask is also how the daemon knows the app is running), and runs the
-//! SAME presence-checked flow the page's buttons run (`presence_flows.rs`):
-//! the approvals are read from the daemon, the operating system's prompt names
-//! each one, and the grant is pinned to the target the request was made for.
-//! The request's own report — done, cancelled, failed — approves nothing; the
-//! command reads the approvals' state from the daemon afterwards.
+//! A command such as `coffer secret reveal <ref>` cannot show anything itself:
+//! it leaves a request with the daemon. Every second this watcher asks the
+//! daemon for the next one (the ask is also how the daemon knows the app is
+//! running), and runs the SAME presence-checked flow the page's buttons run
+//! (`presence_flows.rs`). A secret's approval is never among these requests:
+//! it is answered on the app's own page.
 //!
 //! A revealed value is shown in the window and goes nowhere else; a key backup
 //! opens the page's own dialog, where the person types the passphrase. A
@@ -17,10 +15,9 @@
 //! shell's own export has written the file — with the path and fingerprint the
 //! daemon answered, never anything the page says — and `cancelled` when the
 //! dialog closes without one (`master_key_backup_closed`), so the command
-//! reports what really happened (spec secret "Approve from the command line
-//! with the person's own presence check").
+//! reports what really happened (spec desktop-app "Serve the command line's
+//! desktop requests").
 
-use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -31,7 +28,7 @@ use crate::daemon_attest;
 use crate::daemon_client::Daemon;
 use crate::daemon_http::{self, DEFAULT_READ_TIMEOUT};
 use crate::discovery::read_daemon_info;
-use crate::presence_flows::{self, is_batchable};
+use crate::presence_flows;
 use crate::tray_nav;
 use crate::updater;
 
@@ -146,24 +143,6 @@ fn finish_id(port: u16, token: &str, id: &str, ending: &Ending) {
     );
 }
 
-/// The approvals a request names, each with the target it was asked for.
-pub fn pins_of(request: &Value) -> Vec<(String, String)> {
-    request
-        .get("approvals")
-        .and_then(Value::as_array)
-        .map(|list| {
-            list.iter()
-                .filter_map(|a| {
-                    Some((
-                        a.get("id")?.as_str()?.to_owned(),
-                        a.get("fingerprint")?.as_str()?.to_owned(),
-                    ))
-                })
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
 /// Hold a backup request open until the dialog it opens ends it. A request
 /// still held from before (none should be) is ended first, as cancelled.
 fn hold_backup(id: Option<&str>) {
@@ -235,7 +214,6 @@ fn handle(app: &AppHandle, request: &Value) -> Option<Ending> {
         return None;
     }
     Some(match op {
-        "approve" => approve(app, &pins_of(request)),
         "reveal" => reveal(
             app,
             request
@@ -282,35 +260,6 @@ fn handle(app: &AppHandle, request: &Value) -> Option<Ending> {
     })
 }
 
-fn approve(app: &AppHandle, pins: &[(String, String)]) -> Ending {
-    let run = || -> Result<(), String> {
-        let daemon = Daemon::find()?;
-        let development = daemon.development()?;
-        let expected: HashMap<String, String> = pins.iter().cloned().collect();
-        // Each approval that may not be one of several gets its own prompt.
-        let mut batch: Vec<String> = Vec::new();
-        for (id, pin) in pins {
-            let approval = daemon.get(&format!(
-                "/api/v1/secrets/approvals/{}",
-                crate::daemon_client::path_segment(id)?
-            ))?;
-            if pins.len() > 1 && is_batchable(&approval) {
-                batch.push(id.clone());
-            } else {
-                presence_flows::approve_one(app, &daemon, development, id, Some(pin))?;
-            }
-        }
-        if !batch.is_empty() {
-            presence_flows::approve_batch(app, &daemon, development, &batch, Some(&expected))?;
-        }
-        Ok(())
-    };
-    match run() {
-        Ok(()) => Ending::done(None, None),
-        Err(e) => ending_of(&e),
-    }
-}
-
 fn reveal(app: &AppHandle, secret_ref: &str) -> Ending {
     let run = || -> Result<(), String> {
         let daemon = Daemon::find()?;
@@ -334,21 +283,6 @@ fn reveal(app: &AppHandle, secret_ref: &str) -> Ending {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // acceptance(spec = "desktop-app", scenario = "the shell serves a command line approval")
-    #[test]
-    fn a_request_names_its_approvals_with_their_targets() {
-        let request = json!({"id": "r1", "op": "approve", "approvals": [
-            {"id": "a1", "fingerprint": "fp1"},
-            {"id": "a2", "fingerprint": "fp2"},
-            {"fingerprint": "no id"}
-        ]});
-        assert_eq!(
-            pins_of(&request),
-            vec![("a1".into(), "fp1".into()), ("a2".into(), "fp2".into())]
-        );
-        assert!(pins_of(&json!({"op": "approve"})).is_empty());
-    }
 
     // acceptance(spec = "secret", scenario = "a key backup started from the command line reports what was written")
     #[test]

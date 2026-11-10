@@ -113,7 +113,7 @@ pub async fn approve_pending(app: AppHandle, approval_id: String) -> Result<Valu
     blocking(move || {
         let daemon = Daemon::find()?;
         let development = daemon.development()?;
-        presence_flows::approve_one(&app, &daemon, development, &approval_id, None)
+        presence_flows::approve_one(&app, &daemon, development, &approval_id)
     })
     .await
 }
@@ -135,7 +135,7 @@ pub async fn approve_pending_batch(
     blocking(move || {
         let daemon = Daemon::find()?;
         let development = daemon.development()?;
-        presence_flows::approve_batch(&app, &daemon, development, &approval_ids, None)
+        presence_flows::approve_batch(&app, &daemon, development, &approval_ids)
     })
     .await
 }

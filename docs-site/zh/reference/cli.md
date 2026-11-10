@@ -43,12 +43,11 @@ coffer [OPTIONS] COMMAND [ARGS]...
 | [`coffer log`](/zh/reference/cli/log) | Read Coffer's audit, MCP and daemon logs. |
 | [`coffer path`](/zh/reference/cli/path) | Where Coffer keeps files you read directly. |
 | [`coffer mcp`](/zh/reference/cli/mcp) | MCP servers: register, change, test, their tools and logs. |
-| [`coffer secret`](/zh/reference/cli/secret) | Secrets: list, store, delete, reveal in the app, import, approvals. |
+| [`coffer secret`](/zh/reference/cli/secret) | Secrets: list, store, delete, reveal in the app, import. |
 | [`coffer cli`](/zh/reference/cli/cli) | Command-line tools Coffer manages for skills. |
 | [`coffer proxy`](/zh/reference/cli/proxy) | The local model proxy. |
 | [`coffer vault`](/zh/reference/cli/vault) | The vault's history and the hand edits it refused. |
 | [`coffer custom-tool`](/zh/reference/cli/custom-tool) | Custom tools: groups of HTTP API requests served as MCP tools. |
-| [`coffer approval`](/zh/reference/cli/approval) | Secret approvals: list, show, approve with Touch ID, reject, ask again. |
 | [`coffer app`](/zh/reference/cli/app) | The Coffer desktop app. |
 | [`coffer resource`](/zh/reference/cli/resource) | Any resource by uid: show, rename, switch on or off, reach, delete. |
 | [`coffer channel`](/zh/reference/cli/channel) | Messaging channels: status, pairing, people, notify, restart. |
