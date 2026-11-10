@@ -267,6 +267,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`sync-deletion-breaker`](sync-deletion-breaker.md) | A Sync Round That Would Lose Too Much Is Held, in Both Directions, Counting Losses Not Moves |
 | [`sync-machine-identity`](sync-machine-identity.md) | A Machine Is Identified by a Hash of Its Host's Own ID, and Owns One Descriptor in the Tree |
 | [`sync-withholds-derived-output`](sync-withholds-derived-output.md) | Sync Withholds Derived Output; Each Machine Renders Its Own |
+| [`timeouts-and-intervals-count-time-the-computer-slept`](timeouts-and-intervals-count-time-the-computer-slept.md) | Timeouts and Intervals Count Time the Computer Slept |
 | [`master-key-lives-in-the-macos-keychain`](master-key-lives-in-the-macos-keychain.md) | The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault |
 | [`credential-references`](credential-references.md) | Resources Cite Secrets by Opaque Reference, Resolved Only at the Moment of Use |
 | [`secrets-cross-machines-only-as-ciphertext`](secrets-cross-machines-only-as-ciphertext.md) | Secrets Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository |

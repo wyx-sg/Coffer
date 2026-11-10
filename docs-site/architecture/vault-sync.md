@@ -210,6 +210,19 @@ Coffer shells out to the real `git`, so the remote stays an ordinary repository 
 
 The sync worker runs one round 30 seconds after the daemon starts and then on the remote's interval, one hour by default and never shorter than 60 seconds. The interval is re-read before each wait, so a change needs no restart. With no remote, or a paused one, nothing runs; **Sync now** still runs a round on request.
 
+The wait counts time the computer slept. Python's own timers stop while a Mac or Linux machine sleeps, so an hour measured on them is an hour of awake time, which a closed laptop collects a couple of seconds at a time. The worker instead reads a clock that keeps running through sleep (`application/runtime/sleep_clock.py`) every 15 seconds of awake time, so a round that fell due while the lid was closed runs within 15 seconds of opening it.
+
+### Remote calls and sleep
+
+Every call that talks to the remote (fetch, push, **Check repository**) is guarded the same way:
+
+- **A 120-second deadline that counts sleep.** A call cut off by the machine sleeping is stopped soon after it wakes, not after another 120 seconds of awake time.
+- **A stalled transfer is abandoned.** Git gives up on a transfer slower than 1000 bytes a second for 30 seconds (`http.lowSpeedLimit`, `http.lowSpeedTime`), which is what a connection a sleep cut looks like.
+- **One retry after sleep.** A call that failed after the computer slept while it ran is tried once more: the dead connection was not the remote's answer.
+- **A timeout is `unreachable`.** It reaches the Sync page as **Remote unreachable**, with git's message saying whether the computer slept.
+
+See ADR [Timeouts and intervals count time the computer slept](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/timeouts-and-intervals-count-time-the-computer-slept.md).
+
 ## Trade-offs and alternatives
 
 - **Full automatic convergence** (the previous design): a second working tree, a translation layer from the database to files and back, a pointer table, a retry set and automatic conflict resolvers, one of them an agent. It never stopped for a person, and every piece of it was a place where Coffer changed data nobody had decided on. Thin sync deletes all of it.

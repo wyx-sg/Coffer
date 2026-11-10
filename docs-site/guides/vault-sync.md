@@ -221,7 +221,7 @@ The **Machines** tab lists every machine with when it was last seen, its last ro
 | --- | --- | --- |
 | `join required`, nothing moves | This machine has not joined the remote. | Press **Join and pull** on the **Sync** page. |
 | `sign-in refused` | No usable secret (your git config and keychain helper are not consulted), the token lacks push rights, or a token for a new URL is waiting for approval. | Store a token with the right scope and choose it under **Secret**, approve it in the desktop app, or use an SSH key that needs no prompt. |
-| `remote unreachable` | Network, VPN or a wrong URL. | Nothing is lost; the next round that gets through carries the changes. |
+| `remote unreachable` | Network, VPN or a wrong URL; or the computer slept in the middle of the round (git's message then says so). | Nothing is lost; the next round that gets through carries the changes. A round that fell due while the computer slept runs within 15 seconds of waking. |
 | `push failed` | Applied here, but the remote refused the push (a protected branch, a read-only token). | Fix the branch protection or the token; the next round retries. |
 | `plaintext found` | A file the round would push holds what looks like a plaintext secret; nothing was pushed. | **Move into secrets…** and sync again, or **Push anyway…** if it is not a secret. |
 | `git missing` | No `git` on the PATH the daemon uses. | Install git the way that fits the machine (**Hand off to &lt;Agent&gt;** on the card), then press **Check again**. |
