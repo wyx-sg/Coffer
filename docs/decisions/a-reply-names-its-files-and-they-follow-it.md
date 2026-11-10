@@ -55,14 +55,13 @@ their own. Two files: three messages instead of five.
 - ✅ Nothing lands in the chat until someone wants it; in a group the file could
   go privately to whoever tapped.
 - ❌ Coffer would have to keep every file for days, a card holds at most nine
-  buttons with 🗑 and 📄 already among them, and the tap still produces a
-  separate file message. Considered and set aside by the owner.
+  buttons, and the tap still produces a separate file message. Considered and
+  set aside by the owner.
 
 ### Option D — Drop the card and reply in plain text
 
-- ❌ Group replies are cards because SeaTalk can rewrite a card but delete
-  nothing; without cards a group reply could no longer be withdrawn. It also
-  does not reduce the file messages.
+- ❌ It does not reduce the file messages. (Replies have since become plain
+  text for their own reason; see [A Channel Reply Is Plain Text](a-channel-reply-is-plain-text.md).)
 
 ## Decision
 

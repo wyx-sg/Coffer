@@ -68,9 +68,9 @@ Send the bot a message. The first message opens a conversation on the channel's 
 
 ### What the reply looks like
 
-Coffer tells the agent which platform and kind of chat it is in and what renders there, and asks it to write the way a person texts a colleague: the answer first, in one or two plain sentences (the first line is what the notification shows), no step-by-step narration or list of caveats, a few lines at most, the whole answer after its last tool call, and diagrams as images. A full report arrives as a Markdown file only when you ask for one; the agent does not end its replies by offering it. Where the chat can collapse text, it is also asked to put anything long under a `## Details` heading. Coffer then fits the reply to the chat:
+Coffer tells the agent which platform and kind of chat it is in and what renders there, and asks it to write the way a person texts a colleague: the answer first, in one or two plain sentences (the first line is what the notification shows), no step-by-step narration or list of caveats, a few lines at most, the whole answer after its last tool call, and diagrams as images. A full report arrives as a Markdown file only when you ask for one; the agent does not end its replies by offering it, except for the short version of a reply that was too long (below). Where the chat can collapse text, it is also asked to put anything long under a `## Details` heading. Coffer then fits the reply to the chat:
 
-- **Too long for a chat** — a reply of more than 20 lines or 1,500 characters (files and a collapsed Details section not counted) is not sent. Coffer asks the agent, in the same conversation, to say it again in a few lines; that short reply arrives with a **📄 Full report** button, and tapping it asks the agent for the file. Files the long reply sent with `MEDIA:` lines are not lost: they follow the short reply. The short reply takes a little longer, because the agent writes it after the long one. A turn that failed or was stopped sends what it has, as before; so does a turn with another message of yours already waiting behind it.
+- **Too long for a chat** — a reply of more than 20 lines or 1,500 characters (files and a collapsed Details section not counted) is not sent. Coffer asks the agent, in the same conversation, to say it again in a few lines; that short reply ends by offering the full report, and you get the file by saying so, for example "send the full report". Files the long reply sent with `MEDIA:` lines are not lost: they follow the short reply. The short reply takes a little longer, because the agent writes it after the long one. A turn that failed or was stopped sends what it has, as before; so does a turn with another message of yours already waiting behind it.
 
 - **Details** — on Telegram, a `## Details` section arrives collapsed. SeaTalk cannot collapse text, so there the reply arrives whole.
 - **Tables and logs** — the reply arrives as the agent wrote it. The agent is told what the chat can show (SeaTalk has no tables, so it writes one bullet per row) and sends a long log as a file itself when that reads better.
@@ -180,7 +180,7 @@ Ten words are Coffer's commands. Everything else you type — including other te
 | `/resume [n]` | Reopen an earlier conversation from this chat. |
 | `/thread [title]` | In a direct chat, open a parallel conversation in its own thread. |
 | `/close` | Inside a parallel thread, close it. |
-| `/del` | Owner only. Withdraw the bot's reply: quote it and send `/del`, or send it bare for the most recent one. |
+| `/del` | Owner only. Withdraw the bot's reply where the platform can delete it (Telegram): quote it and send `/del`, or send it bare for the most recent one. |
 | `/help` | List the commands, one per line with what each does. |
 
 In a group only `/new`, `/stop`, `/help` and `/del` work, because they control the group's own conversation and replies. `/model`, `/dir`, `/status`, `/resume`, `/thread` and `/close` work only in a direct chat with the bot; sent in a group they get one private line, "This command works in a private chat with me.", and nothing else happens. To save something into [knowledge](/guides/knowledge#from-a-chat-ask-your-agent) from a chat, ask the agent.
@@ -242,7 +242,7 @@ Two channel settings tune when the bot answers in a group. They change when the 
 
 ### Others in the group {#others-in-the-group}
 
-A colleague in a group where you have already @mentioned the bot can @mention it too and get an answer: it searches, reads logs and checks for them as it would for you, and replies in their thread. It makes no change on their word. Asked to deploy, publish, change data, open a ticket, send a message or start a task, it says an owner has to ask; your own message in that thread, such as "go ahead", can. Their commands get `🚫 Commands are for <bot>’s owners.` and do nothing, and their taps on the bot's buttons do nothing.
+A colleague in a group where you have already @mentioned the bot can @mention it too and get an answer: it searches, reads logs and checks for them as it would for you, and replies in their thread. It makes no change on their word. Asked to deploy, publish, change data, open a ticket, send a message or start a task, it says an owner has to ask; your own message in that thread, such as "go ahead", can. Their commands get `🚫 Commands are for <bot>’s owners.` and do nothing, and their taps on the buttons of the bot's command cards do nothing.
 
 | Setting | Default | Effect |
 | --- | --- | --- |
@@ -255,12 +255,9 @@ The read-only limit is an instruction to the agent, not a restriction Coffer enf
 
 ### Withdrawing a reply {#withdrawing-a-reply}
 
-A reply the bot has sent can be taken back, by the owner only. Anyone else's tap or command does nothing.
+On a platform that lets a bot delete its own messages, the owner can take a reply back with `/del`. Anyone else's `/del` does nothing. Quote one of the bot's messages and send `/del` to withdraw that whole reply, with every part a long reply was split into. Without a quote it withdraws the bot's most recent reply in that chat, or in that thread. It works in direct chats and groups. The `/del` message is itself deleted where the platform allows it (Telegram, if the bot has the right); otherwise it stays.
 
-- **`/del`.** Quote one of the bot's messages and send `/del` to withdraw that whole reply, with every part a long reply was split into. Without a quote it withdraws the bot's most recent reply in that chat, or in that thread. It works in direct chats and groups. The `/del` message is itself deleted where the platform allows it (Telegram, if the bot has the right); otherwise it stays.
-- **The 🗑 button.** Under every bot reply in a group there is a 🗑 button. Only the owner's tap counts.
-
-How a reply is withdrawn depends on the platform. **Telegram** deletes the message; the platform allows this for 48 hours, and past that the owner is told privately that it can no longer be deleted. **SeaTalk** has no delete API, so group replies are sent as interactive cards, and withdrawing rewrites each card into a neutral “🗑 Withdrawn” card with no buttons; SeaTalk allows rewriting for 7 days, and past that the owner is told privately. A SeaTalk direct-chat reply is an ordinary message and cannot be withdrawn.
+Replies are plain text with no buttons, so there is no button to withdraw one. **Telegram** deletes the messages; the platform allows this for 48 hours, and past that the owner is told privately that it can no longer be deleted. **SeaTalk** can neither delete a bot's message nor edit a text message, so a SeaTalk reply cannot be withdrawn: `/del` answers “🗑 This chat cannot withdraw bot replies.”
 
 Coffer remembers which platform messages make up each reply, only as long as that window and across daemon restarts, and writes one audit entry per withdrawal: the owner, the channel and the number of messages, never the content.
 
@@ -337,7 +334,7 @@ Pairing codes issued and claimed are written to the audit log, together with the
 
 ### Group privacy {#group-privacy}
 
-In a group turn the agent can still read your memory, knowledge and files, as it can in a direct chat, and everyone in the group reads its reply. On SeaTalk the platform cannot recall a group reply. Coffer does not scan or filter reply content: it looks for no secrets, personal data or overlap with your memory. Your safeguard is deleting a reply you do not want to stay, with `/del` or the 🗑 button.
+In a group turn the agent can still read your memory, knowledge and files, as it can in a direct chat, and everyone in the group reads its reply. On SeaTalk the platform cannot recall a group reply. Coffer does not scan or filter reply content: it looks for no secrets, personal data or overlap with your memory. Your safeguard on Telegram is deleting a reply you do not want to stay, with `/del`. On SeaTalk a reply cannot be withdrawn, so think twice before having the bot answer in a group where it can reach things you would not share.
 
 An agent that is tricked by a group member can still say something private. If you need a stronger guarantee, do not pair the bot with a group that contains people you do not trust.
 

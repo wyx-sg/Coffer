@@ -371,7 +371,7 @@ Channel secrets are refs, resolved from the secret store when the adapter starts
 
 ### Group privacy {#group-privacy}
 
-A group is the one place where the agent's answer is read by people other than the owner. In a group turn the agent can still read the owner's memory, knowledge and files, exactly as in a direct chat, and a SeaTalk group reply cannot be recalled by the platform. Coffer does not filter reply content: there is no secret, personal-data or memory-overlap scanning. The owner's safeguard is deleting a reply with `/del` or the 🗑 button (Telegram deletes the message; SeaTalk rewrites the reply's cards into a neutral “Withdrawn” card). Each withdrawal is written to the audit log with the owner, the channel and the number of messages, never the content.
+A group is the one place where the agent's answer is read by people other than the owner. In a group turn the agent can still read the owner's memory, knowledge and files, exactly as in a direct chat, and a SeaTalk group reply cannot be recalled by the platform. Coffer does not filter reply content: there is no secret, personal-data or memory-overlap scanning. The owner's safeguard on Telegram is deleting a reply with `/del`; a SeaTalk reply is plain text, which SeaTalk can neither delete nor edit, so it cannot be withdrawn. Each withdrawal is written to the audit log with the owner, the channel and the number of messages, never the content.
 
 An agent that is tricked by a group member can still say something private. An owner who needs a stronger guarantee should not pair the bot with a group that contains people they do not trust. See [Channels](/guides/channels#group-privacy).
 

@@ -153,8 +153,7 @@ card stays an ordinary message.
 ### Requirement: Delete a withdrawn reply with deleteMessage
 Withdrawing a bot reply ([channels](../spec.md) "Withdraw a bot reply on the owner's command") MUST
 delete each of its messages with `deleteMessage`, which the Bot API allows for a
-bot's own message for **48 hours**; the adapter declares that window and that
-withdrawing removes the message. Every message a send produced is reported — a
+bot's own message for **48 hours**; the adapter declares that window. Every message a send produced is reported — a
 reply cut into chunks hands back each chunk's id, rich or plain — so the whole reply
 goes. The reply pointer of an inbound message (`reply_to_message`) is what `/del`
 reads as its quote, and the owner's own `/del` message is deleted too when the bot
