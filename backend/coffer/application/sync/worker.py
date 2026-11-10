@@ -3,8 +3,11 @@ user-owned sync remote").
 
 One round shortly after the daemon starts, then one every
 ``interval_seconds`` of the configured remote, re-read before each wait so a
-changed interval is believed without a restart. Nothing runs while no remote
-is configured or the remote is paused. A round that raises is logged and never
+changed interval is believed without a restart. Waits count time the computer
+slept (ADR timeouts-and-intervals-count-time-the-computer-slept), so a round
+that fell due during sleep runs within ``WAKE_POLL_S`` of waking instead of an
+hour of awake time later. Nothing runs while no remote is configured or the
+remote is paused. A round that raises is logged and never
 ends the loop; every other outcome is a recorded round the service already
 reported.
 """
@@ -18,6 +21,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
+from coffer.application.runtime import sleep_clock
 from coffer.application.runtime.cancellation import raise_if_stopping
 from coffer.application.runtime.supervisor import spawn_restarting
 from coffer.domain.sync.remote import DEFAULT_INTERVAL_SECONDS, SyncRemote
@@ -29,6 +33,8 @@ _log = logging.getLogger(__name__)
 START_DELAY_S = 30.0
 #: How often a vault with no remote (or a paused one) looks again.
 IDLE_POLL_S = 60.0
+#: How often a wait looks at the sleep-counting clock, in awake seconds.
+WAKE_POLL_S = 15.0
 
 
 class _Rounds(Protocol):
@@ -45,11 +51,15 @@ class SyncWorker:
         start_delay_s: float = START_DELAY_S,
         idle_poll_s: float = IDLE_POLL_S,
         clock: Callable[[], datetime] = lambda: datetime.now(tz=UTC),
+        ticks: Callable[[], float] = sleep_clock.now,
+        wake_poll_s: float = WAKE_POLL_S,
     ) -> None:
         self._service = service
         self._start_delay = start_delay_s
         self._idle_poll = idle_poll_s
         self._clock = clock
+        self._ticks = ticks
+        self._wake_poll = wake_poll_s
         self._stop = asyncio.Event()
         self._task: asyncio.Task[None] | None = None
 
@@ -90,8 +100,16 @@ class SyncWorker:
         return interval
 
     async def _sleep(self, seconds: float) -> None:
-        with contextlib.suppress(TimeoutError):
-            await asyncio.wait_for(self._stop.wait(), timeout=seconds)
+        """Wait ``seconds`` on the clock that counts sleep, or until stopped.
+        ``asyncio``'s timer counts only awake time, so it is asked in steps of
+        at most ``wake_poll_s`` and the clock read between them."""
+        due = self._ticks() + seconds
+        while not self._stop.is_set():
+            left = due - self._ticks()
+            if left <= 0:
+                return
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(self._stop.wait(), timeout=min(left, self._wake_poll))
 
 
-__all__ = ["IDLE_POLL_S", "START_DELAY_S", "SyncWorker"]
+__all__ = ["IDLE_POLL_S", "START_DELAY_S", "WAKE_POLL_S", "SyncWorker"]

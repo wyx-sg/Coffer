@@ -42,6 +42,7 @@ _NETWORK = (
     "could not connect",
     "no route to host",
     "timed out after",
+    "operation too slow",
 )
 
 
@@ -92,9 +93,7 @@ def fetch(
         REMOTE,
         f"+refs/heads/{branch}:{tracking_ref(branch)}",
     )
-    done = git.run(
-        repo.root, *args, token=token, username=username, timeout=git.NETWORK_TIMEOUT_S, check=False
-    )
+    done = git.run(repo.root, *args, token=token, username=username, network=True, check=False)
     if done.returncode != 0:
         detail = git.failure_message(args, done, token)
         if "couldn't find remote ref" in detail.lower():
@@ -108,9 +107,7 @@ def push(
     repo: VaultRepository, commit: str, branch: str, token: str | None, username: str | None = None
 ) -> None:
     args = ("push", "--quiet", REMOTE, f"{commit}:refs/heads/{branch}")
-    done = git.run(
-        repo.root, *args, token=token, username=username, timeout=git.NETWORK_TIMEOUT_S, check=False
-    )
+    done = git.run(repo.root, *args, token=token, username=username, network=True, check=False)
     if done.returncode != 0:
         detail = git.failure_message(args, done, token)
         problem = classify(detail)
@@ -126,9 +123,7 @@ def probe(
     """The remote branch's tip without fetching (``ls-remote``); ``None`` for
     an empty remote. For the setup form's "Check repository"."""
     args = ("ls-remote", "--heads", "--", url, f"refs/heads/{branch}")
-    done = git.run(
-        repo.root, *args, token=token, username=username, timeout=git.NETWORK_TIMEOUT_S, check=False
-    )
+    done = git.run(repo.root, *args, token=token, username=username, network=True, check=False)
     if done.returncode != 0:
         detail = git.failure_message(args, done, token)
         raise RemoteFailed(classify(detail), detail)

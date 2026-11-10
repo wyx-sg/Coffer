@@ -13,8 +13,9 @@ never in argv, never in ``.git/config`` — and every captured stderr is
 redacted of it before it is raised (ADR secrets-cross-machines-only-as-ciphertext).
 
 Synchronous on purpose: local calls take milliseconds and every caller runs
-them off the event loop (``asyncio.to_thread``) or inside a thread already;
-a network call is the same call with a longer timeout.
+them off the event loop (``asyncio.to_thread``) or inside a thread already.
+A network call (``network=True``) also abandons a stalled transfer and counts
+its deadline through time the computer slept.
 """
 
 from __future__ import annotations
@@ -23,16 +24,29 @@ import functools
 import os
 import shutil
 import subprocess
+import time
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from coffer.application.runtime import sleep_clock
 from coffer.domain.error_base import CofferError
 from coffer.domain.git_handoff import VAULT_NEEDS_GIT_FOR, git_missing_details
 from coffer.domain.vault.writers import author_name
 from coffer.infrastructure.platform.host import machine_label
 
 LOCAL_TIMEOUT_S = 60.0
+#: A network call's deadline, counted on a clock that runs while the computer
+#: sleeps (ADR timeouts-and-intervals-count-time-the-computer-slept).
 NETWORK_TIMEOUT_S = 120.0
+#: A transfer slower than this many bytes a second for ``STALL_SECONDS`` is
+#: abandoned: a connection a sleep cut is dead, and waiting on it is pointless.
+STALL_BYTES_PER_S = 1000
+STALL_SECONDS = 30
+#: How often a network call looks at its deadline, in awake seconds: after a
+#: sleep, the deadline is noticed within this long of waking.
+_DEADLINE_POLL_S = 5.0
+#: A call that slept longer than this is retried once instead of failing.
+_SLEPT_RETRY_S = 5.0
 
 _EMAIL = "coffer@localhost"
 _TOKEN_ENV = "COFFER_GIT_TOKEN"
@@ -199,15 +213,27 @@ def run(
     literal: bool = False,
     token: str | None = None,
     username: str | None = None,
-    timeout: float = LOCAL_TIMEOUT_S,
+    timeout: float | None = None,
     extra_env: dict[str, str] | None = None,
+    network: bool = False,
 ) -> subprocess.CompletedProcess[bytes]:
     """``git <args>`` over the repository at ``root``, output captured.
 
     ``literal`` turns pathspec magic off, so a path is always the path it
     names. ``token`` adds the credential helper for a remote call.
+    ``network`` marks a call that talks to a remote: it abandons a stalled
+    transfer, counts ``timeout`` (default ``NETWORK_TIMEOUT_S``) through time
+    asleep, answers a timeout as a failed process whose message says so, and
+    is tried once more when the computer slept while it ran.
     """
     argv = [_executable(os.environ.get("PATH")), *_PINNED]
+    if network:
+        argv += [
+            "-c",
+            f"http.lowSpeedLimit={STALL_BYTES_PER_S}",
+            "-c",
+            f"http.lowSpeedTime={STALL_SECONDS}",
+        ]
     if token:
         argv += ["-c", "credential.helper=", "-c", f"credential.helper={_CREDENTIAL_HELPER}"]
     if literal:
@@ -220,6 +246,11 @@ def run(
             env[_PROTOCOL_ENV], env[_HOST_ENV] = origin
     if extra_env:
         env.update(extra_env)
+    if network:
+        done = _run_network(argv, root, env, stdin, timeout or NETWORK_TIMEOUT_S, args)
+        if check and done.returncode != 0:
+            raise VaultGitError(failure_message(args, done, token))
+        return done
     try:
         done = subprocess.run(
             argv,
@@ -227,16 +258,79 @@ def run(
             env=env,
             input=stdin if stdin is not None else b"",
             capture_output=True,
-            timeout=timeout,
+            timeout=timeout or LOCAL_TIMEOUT_S,
             check=False,
         )
     except FileNotFoundError as exc:
         raise GitMissing() from exc
     except subprocess.TimeoutExpired as exc:
-        raise VaultGitError(f"git {_subcommand(args)} timed out after {timeout:.0f}s") from exc
+        limit = timeout or LOCAL_TIMEOUT_S
+        raise VaultGitError(f"git {_subcommand(args)} timed out after {limit:.0f}s") from exc
     if check and done.returncode != 0:
         raise VaultGitError(failure_message(args, done, token))
     return done
+
+
+def _run_network(
+    argv: list[str],
+    root: Path,
+    env: dict[str, str],
+    stdin: bytes | None,
+    timeout: float,
+    args: tuple[str, ...],
+) -> subprocess.CompletedProcess[bytes]:
+    """A remote call, tried once more when the computer slept while it ran:
+    the connection a sleep cut is not the remote's answer."""
+    started, started_awake = sleep_clock.now(), time.monotonic()
+    done = _run_until(argv, root, env, stdin, timeout, args)
+    if done.returncode != 0 and sleep_clock.slept_since(started, started_awake) > _SLEPT_RETRY_S:
+        done = _run_until(argv, root, env, stdin, timeout, args)
+    return done
+
+
+def _run_until(
+    argv: list[str],
+    root: Path,
+    env: dict[str, str],
+    stdin: bytes | None,
+    timeout: float,
+    args: tuple[str, ...],
+) -> subprocess.CompletedProcess[bytes]:
+    """One git process, killed once ``timeout`` seconds have passed on the
+    clock that counts sleep. ``subprocess``'s own timeout counts only awake
+    seconds, so it is asked in short steps and the deadline checked between."""
+    started, started_awake = sleep_clock.now(), time.monotonic()
+    deadline = started + timeout
+    try:
+        proc = subprocess.Popen(
+            argv,
+            cwd=root if root.is_dir() else None,
+            env=env,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    except FileNotFoundError as exc:
+        raise GitMissing() from exc
+    with proc:
+        payload: bytes | None = stdin if stdin is not None else b""
+        while True:
+            step = min(_DEADLINE_POLL_S, max(deadline - sleep_clock.now(), 0.01))
+            try:
+                out, err = proc.communicate(input=payload, timeout=step)
+                break
+            except subprocess.TimeoutExpired:
+                payload = None
+                if sleep_clock.now() < deadline:
+                    continue
+                proc.kill()
+                proc.communicate()
+                slept = sleep_clock.slept_since(started, started_awake) > _SLEPT_RETRY_S
+                reason = f"git {_subcommand(args)} timed out after {timeout:.0f}s"
+                if slept:
+                    reason += " (the computer slept while it ran)"
+                return subprocess.CompletedProcess(argv, -9, b"", reason.encode())
+    return subprocess.CompletedProcess(argv, proc.returncode, out, err)
 
 
 def failure_message(
@@ -263,6 +357,8 @@ def text(done: subprocess.CompletedProcess[bytes]) -> str:
 __all__ = [
     "LOCAL_TIMEOUT_S",
     "NETWORK_TIMEOUT_S",
+    "STALL_BYTES_PER_S",
+    "STALL_SECONDS",
     "GitMissing",
     "VaultGitError",
     "failure_message",
