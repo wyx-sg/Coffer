@@ -1,15 +1,15 @@
-"""Hand an operation only a present person may approve to the desktop app.
+"""Hand an operation only a present person may carry out to the desktop app.
 
-Spec secret "Approve from the command line with the person's own presence
-check"; design align-cli-with-ui-and-add-tool-environments D8. The command
+Spec desktop-app "Serve the command line's desktop requests"; design
+align-cli-with-ui-and-add-tool-environments D8. The command
 leaves a desktop request with the daemon and waits; the app's shell runs the
 operating system's presence check itself. When no shell has polled lately the
 app is started (``open -b`` on macOS) and given a moment to come up; where it
 cannot be started — no app, not a Mac, a session with no person at it — the
-command says so and exits 12, and nothing is approved.
+command says so and exits 12, and nothing is done.
 
 Nothing here touches a key, a grant or a value: the command learns only how
-the request ended, and then reads the approvals' real state from the daemon.
+the request ended.
 """
 
 from __future__ import annotations
@@ -62,7 +62,7 @@ def ensure_shell(*, as_json: bool, launch: bool = True) -> None:
         "CLI_APP_UNAVAILABLE",
         "the Coffer desktop app is not running"
         + ("" if launch else " (--no-launch)")
-        + "; open it on this Mac and run the command again — nothing was approved",
+        + "; open it on this Mac and run the command again — nothing was done",
         ExitCode.APP_UNAVAILABLE,
         as_json=as_json,
     )

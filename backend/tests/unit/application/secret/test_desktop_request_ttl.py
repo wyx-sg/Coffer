@@ -1,6 +1,6 @@
-"""A key backup's desktop request outlives a prompt's (spec secret "Approve
-from the command line with the person's own presence check"): the person types
-a passphrase and picks a folder in the dialog the request keeps open."""
+"""A key backup's desktop request outlives a prompt's (spec secret "Answer a
+secret's approval only in the app"): the person types a passphrase and picks
+a folder in the dialog the request keeps open."""
 
 from __future__ import annotations
 

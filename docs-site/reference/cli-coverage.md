@@ -53,20 +53,6 @@ Every management operation a person does on a Coffer page or in the desktop app 
 | Settings · About · Install and restart | `POST /desktop/requests` | `coffer app update install` | `test_approval_cli.py` |
 | Settings · About · update status | `POST /desktop/requests` | `coffer app update status` | `test_approval_cli.py` |
 
-## `coffer approval` {#approval}
-
-| UI operation | Route | Command | Acceptance |
-| --- | --- | --- | --- |
-| Secrets · approvals · Approve (desktop app, after Touch ID or the login password) | `POST /desktop/requests` | `coffer approval approve` | `test_approval_cli.py` |
-| Secrets · approvals · Approve (desktop app, after Touch ID or the login password) | `GET /desktop/requests/{request_id}` | `coffer approval approve` | `test_approval_cli.py` |
-| Secrets · approvals · Approve (desktop app, after Touch ID or the login password) | `POST /secrets/approvals/approve` | `coffer approval approve` | `test_approval_cli.py` |
-| Secrets · approvals · Approve (desktop app, after Touch ID or the login password) | `POST /secrets/approvals/{approval_id}/approve` | `coffer approval approve` | `test_approval_cli.py` |
-| Secrets · approvals · Ask again | `POST /secrets/approvals/{approval_id}/ask-again` | `coffer approval ask-again` | `test_approval_cli.py` |
-| Secrets · approvals · list (Secrets page, Overview) | `GET /secrets/approvals` | `coffer approval list` | `test_approval_cli.py` |
-| Secrets · approvals · Reject | `POST /secrets/approvals/reject` | `coffer approval reject` | `test_approval_cli.py` |
-| Secrets · approvals · Reject | `POST /secrets/approvals/{approval_id}/reject` | `coffer approval reject` | `test_approval_cli.py` |
-| Secrets · approvals · open one | `GET /secrets/approvals/{approval_id}` | `coffer approval show` | `test_approval_cli.py` |
-
 ## `coffer attention` {#attention}
 
 | UI operation | Route | Command | Acceptance |
@@ -456,6 +442,10 @@ Plain files are read and edited with your own tools, and a few acts only make se
 | `GET /knowledge/asset` | plain file: a knowledge picture is a plain file |
 | `DELETE /knowledge/file` | plain file: a knowledge document is a plain file |
 | `GET /knowledge/file` | plain file: a knowledge document is a plain file |
+| `GET /secrets/approvals` | the window: a secret's approval is answered on the app's own page |
+| `POST /secrets/approvals/reject` | the window: a secret's approval is answered on the app's own page |
+| `POST /secrets/approvals/{approval_id}/ask-again` | the window: a secret's approval is answered on the app's own page |
+| `POST /secrets/approvals/{approval_id}/reject` | the window: a secret's approval is answered on the app's own page |
 | `GET /skills/{uid}/files/content` | plain file: a skill's files are plain files |
 | `POST /sync/join-choices/editor` | the window: opens a conflicting file in the editor |
 | `POST /sync/stop/files/editor` | the window: opens a conflicting file in the editor |
@@ -464,8 +454,8 @@ Plain files are read and edited with your own tools, and a few acts only make se
 
 | Desktop command | Command |
 | --- | --- |
-| `approve_pending` | `coffer approval approve` |
-| `approve_pending_batch` | `coffer approval approve` |
+| `approve_pending` | the window: a secret's approval is answered on the app's own page |
+| `approve_pending_batch` | the window: a secret's approval is answered on the app's own page |
 | `check_for_updates` | `coffer app update check` |
 | `copy_secret` | the window: copies a revealed value onto this Mac's pasteboard |
 | `daemon_version_matches` | the page's plumbing: the page's handshake with the shell |

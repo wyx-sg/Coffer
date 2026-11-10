@@ -888,22 +888,18 @@ export interface components {
         };
         /** DesktopRequestIn */
         DesktopRequestIn: {
-            /** Approval Ids */
-            approval_ids?: string[];
             /** Enabled */
             enabled?: boolean | null;
             /**
              * Op
              * @enum {string}
              */
-            op: "approve" | "reveal" | "export_master_key" | "import_master_key" | "update_status" | "update_check" | "update_install" | "update_auto_check" | "uninstall";
+            op: "reveal" | "export_master_key" | "import_master_key" | "update_status" | "update_check" | "update_install" | "update_auto_check" | "uninstall";
             /** Ref */
             ref?: string | null;
         };
         /** DesktopRequestOut */
         DesktopRequestOut: {
-            /** Approvals */
-            approvals: components["schemas"]["PinnedApprovalOut"][];
             /** Enabled */
             enabled: boolean | null;
             /** Expires In Seconds */
@@ -916,7 +912,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "approve" | "reveal" | "export_master_key" | "import_master_key" | "update_status" | "update_check" | "update_install" | "update_auto_check" | "uninstall";
+            op: "reveal" | "export_master_key" | "import_master_key" | "update_status" | "update_check" | "update_install" | "update_auto_check" | "uninstall";
             /** Ref */
             ref: string | null;
             /** Result */
@@ -1040,13 +1036,6 @@ export interface components {
             fingerprint: string;
             /** Path */
             path: string;
-        };
-        /** PinnedApprovalOut */
-        PinnedApprovalOut: {
-            /** Fingerprint */
-            fingerprint: string;
-            /** Id */
-            id: string;
         };
         /** PresenceChallengeIn */
         PresenceChallengeIn: {
