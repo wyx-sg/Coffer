@@ -79,5 +79,4 @@ def test_channel_capabilities_carries_strategy_fields():
         "render_notes",
         "collapses_details",
         "withdraw_window_hours",
-        "withdraw_removes",
     }

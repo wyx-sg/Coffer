@@ -357,38 +357,38 @@ the agent").
 
 ### Requirement: Withdraw a bot reply on the owner's command
 A reply in a group cannot be unsaid by the platform on its own, and the agent can
-read everything the owner keeps in Coffer, so the owner MUST be able to take any bot
-reply back. Two owner-only ways do it, and both end the same way. The command
-`/del` withdraws the reply it QUOTES (the platform's reply pointer or quote), the
-whole reply — every part a long answer was cut into and the files it carried — and `/del` with no quote withdraws the bot's most recent reply in
-that chat (in a thread, in that thread). It works in groups and in direct chats. And every bot reply in a group
-carries a 🗑 button on its last text message, where the transport has buttons and
-can withdraw at all.
+read everything the owner keeps in Coffer, so where the platform lets a bot delete
+its own message the owner MUST be able to take any bot reply back. The owner-only
+command `/del` withdraws the reply it QUOTES (the platform's reply pointer or
+quote), the whole reply — every part a long answer was cut into and the files it
+carried — and `/del` with no quote withdraws the bot's most recent reply in that
+chat (in a thread, in that thread). It works in groups and in direct chats. A
+reply is plain text with no buttons (see "Send only the answer, once the turn is
+done"), so there is no button to withdraw it.
 
-Both are owner-only: `/del` passes the same owner gate as every command, and a tap on
-🗑 by anyone else does nothing and says nothing. What "withdraw" does is the
-transport's own fact, declared as capabilities: Telegram deletes the messages
-(`withdraw_removes`), SeaTalk — which has no delete — rewrites each card into a
-neutral "🗑 Withdrawn" card without buttons. Each platform has a window after which
-it refuses (`withdraw_window_hours`: 48 for Telegram, 168 for SeaTalk); a reply past
-it is not touched and the owner is told so in their direct chat, never in the group.
-The owner's own `/del` message is deleted too where the platform lets the bot remove
-it (Telegram, given the right), and left alone otherwise. A direct-chat reply a
-transport cannot take back (SeaTalk's direct-chat text, which it can neither
-delete nor rewrite) is not recorded, and `/del` says there is nothing to
-withdraw.
+`/del` passes the same owner gate as every command. Whether a transport can
+withdraw, and for how long, is its own fact, declared as a capability
+(`withdraw_window_hours`: 48 for Telegram, whose `deleteMessage` removes the
+message; 0 for SeaTalk, which can neither delete a message nor rewrite text). On a
+transport with no window `/del` answers "🗑 This chat cannot withdraw bot
+replies." and no reply is ever put on record. A reply past the window is not
+touched and the owner is told so in their direct chat, never in the group. The
+owner's own `/del` message is deleted too where the platform lets the bot remove
+it (Telegram, given the right), and left alone otherwise.
 
-To make that reliable the channel records, for every reply, which platform messages
-it was delivered as — in `runs.db` (`channel_replies`: chat, thread, reply id, the
-message ids, the time sent; never the text), so a daemon restart inside the window
-loses nothing — and forgets a reply once it is older than the longest window. Each
+To make that reliable the channel records, for every reply on a transport that
+can withdraw, which platform messages it was delivered as — in `runs.db`
+(`channel_replies`: chat, thread, reply id, the message ids, the time sent; never
+the text), so a daemon restart inside the window loses nothing — and forgets a
+reply once it is older than three days (the window plus a margin). Each
 withdrawal is audited as `channel_reply_withdrawn` with the actor (the owner), the
-channel and how many messages went, and no content.
+channel and how many messages went, and no content. A tap on a 🗑 button left on
+a reply sent before replies became plain text does nothing.
 
 #### Scenario: /del with a quote withdraws that whole reply
 - **GIVEN** a paired group where the bot answered the owner in a reply sent as several messages
 - **WHEN** the owner sends `/del` quoting one of those messages
-- **THEN** every message of that reply is withdrawn through the adapter
+- **THEN** every message of that reply is deleted through the adapter
 - **AND** the reply is no longer on record
 
 #### Scenario: /del without a quote withdraws the latest reply
@@ -399,22 +399,22 @@ channel and how many messages went, and no content.
 #### Scenario: a long reply is withdrawn in every part
 - **GIVEN** a reply cut into several messages and followed by an uploaded file
 - **WHEN** the owner withdraws it
-- **THEN** each text part, and a file on a transport that can delete one, is withdrawn
+- **THEN** each text part and the file are deleted
 
 #### Scenario: nobody but the owner can withdraw a reply
 - **GIVEN** a paired group with a bot reply on record
-- **WHEN** someone who is not the owner sends `/del` or taps the reply's 🗑
-- **THEN** nothing is withdrawn and nothing is said in the group
+- **WHEN** someone who is not the owner sends `/del` quoting it
+- **THEN** nothing is withdrawn
 
-#### Scenario: a group reply carries a trash button the owner can tap
-- **GIVEN** a paired group on a button-capable transport that can withdraw
-- **WHEN** the bot answers and the owner taps 🗑 under the reply
-- **THEN** the last message of the reply carries that button, and the tap withdraws the whole reply
-
-#### Scenario: a direct chat reply carries no trash button
-- **GIVEN** a paired direct chat
+#### Scenario: a reply carries no buttons
+- **GIVEN** a paired group on a transport that has buttons and can withdraw
 - **WHEN** the bot answers
-- **THEN** the reply has no 🗑 button, and `/del` still withdraws it
+- **THEN** the reply is plain text with no button, and it is on record for `/del`
+
+#### Scenario: /del withdraws a direct-chat reply too
+- **GIVEN** a paired direct chat on a transport that can withdraw
+- **WHEN** the bot answers and the owner sends `/del`
+- **THEN** the reply is deleted
 
 #### Scenario: a reply past the platform window is reported privately
 - **GIVEN** a reply on record that was sent longer ago than the transport's withdraw window
@@ -432,12 +432,11 @@ channel and how many messages went, and no content.
 - **WHEN** a new ledger opens the same database
 - **THEN** the reply and every message id of it are found by any of its messages, and replies past the retention are pruned
 
-#### Scenario: a direct-chat reply the transport cannot take back is not recorded
-- **GIVEN** a transport that can rewrite only cards and not delete, in a direct
-  chat
-- **WHEN** the bot answers in plain text and the owner then sends `/del`
-- **THEN** the reply was never put on record, nothing is withdrawn, and the owner
-  is told there is no reply to withdraw
+#### Scenario: a transport that cannot delete records nothing and says so
+- **GIVEN** a transport that cannot delete a bot message (SeaTalk), in a group
+- **WHEN** the bot answers and the owner then sends `/del`
+- **THEN** the reply was never put on record, nothing is touched, and the chat is
+  told "🗑 This chat cannot withdraw bot replies."
 
 ### Requirement: Notify the paired owner on demand
 A notify entry point (`POST /api/v1/channels/{uid}/notify`) MUST deliver arbitrary text to a
@@ -2883,8 +2882,8 @@ than 20 lines with text, or more than 1,500 characters, not counting `MEDIA:`
 lines or a `## Details` section the transport collapses — MUST NOT be sent.
 Instead Coffer asks the same conversation, in a follow-up turn of its own, to say
 it again short: only the conclusion and what the reader needs to act on, in at
-most 5 lines and the same language, without offering the full report — the
-button below it does that. The follow-up's text opens with `[Coffer]`, never names the
+most 5 lines and the same language, ending with one short line that offers the
+full report as a file. The follow-up's text opens with `[Coffer]`, never names the
 conversation, and runs through the conversation's ordinary queue; its reply is
 rendered into the same chat and thread, and is never held back again however
 long it is. Cutting the long reply would leave half a message, and Coffer keeps
@@ -2895,30 +2894,30 @@ The long reply's files are not lost with its text: its `MEDIA:` lines are
 carried to the follow-up, whose reply sends them (once, even when the short
 version repeats a line), and the follow-up's text tells the agent so.
 
-The follow-up's reply carries a **📄 Full report** button where the transport
-has buttons. A tap by the owner is the owner asking, in a message of its own,
-"Send me the full report as a Markdown file." — through every gate a typed
-message passes — and the agent answers it with the file. A tap by anyone else
-asks nothing.
+The follow-up's reply is plain text like every reply, with no button. The owner
+who wants the full report says so in a message of their own, as to a colleague,
+and the agent answers it with the file. A tap on a **📄 Full report** button left
+on a reply sent before replies became plain text does nothing.
 
 A failed or stopped turn's reply goes out as it always did, with its notice. When
 a message is already waiting in the conversation's queue, the long reply goes
 out as it is: the waiting message would run first and make "your last reply"
 mean something else. See [A Long Channel Reply Is Rewritten Short by the
-Agent](../../../docs/decisions/long-channel-reply-is-rewritten-short.md).
+Agent](../../../docs/decisions/long-channel-reply-is-rewritten-short.md) and [A
+Channel Reply Is Plain Text](../../../docs/decisions/a-channel-reply-is-plain-text.md).
 
 #### Scenario: a reply too long for a chat is said again short
 - **GIVEN** a channel whose agent answers in 40 lines
 - **WHEN** the turn ends cleanly
 - **THEN** the 40 lines are not sent, the conversation is asked in a turn opening
-  with `[Coffer] Your last reply (40 lines)` for the short version, and that
-  reply arrives carrying the **📄 Full report** button
+  with `[Coffer] Your last reply (40 lines)` for the short version that offers
+  the full report in its last line, and that reply arrives as plain text with no
+  button
 
-#### Scenario: the full-report button asks the agent for the file
-- **GIVEN** a shortened reply carrying the **📄 Full report** button
-- **WHEN** the owner taps it
-- **THEN** the conversation runs a turn asking "Send me the full report as a
-  Markdown file." and its answer is delivered
+#### Scenario: the owner asks for the full report in a message
+- **GIVEN** a shortened reply that offers the full report
+- **WHEN** the owner answers "yes, send the full report"
+- **THEN** that message runs a turn like any other and its answer is delivered
 
 #### Scenario: a long reply's files are sent with its short version
 - **GIVEN** an agent whose 40-line answer ends with a `MEDIA:` line for a chart

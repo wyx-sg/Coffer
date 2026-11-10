@@ -25,7 +25,6 @@ from typing import Any
 from coffer.application.channel.held_queue import held_buttons
 from coffer.application.channel.ports import ChannelAdapter
 from coffer.application.channel.reply_rewrite import (
-    full_report_button,
     measure,
     media_lines,
     too_long,
@@ -86,7 +85,7 @@ class TurnRenderer:
     mention_user_email: str = ""
     mention_user_name: str = ""  # for a transport whose mention shows a name
     # The typing cadence, injectable so a test can drive it fast.
-    #: What the reply was delivered as, filed for ``/del`` and the 🗑 button; ``None``
+    #: What the reply was delivered as, filed for ``/del``; ``None``
     #: (a renderer built without a ledger) tracks nothing.
     tracker: ReplyTracker | None = None
     #: Asked when a cleanly finished reply is too long for a chat, with its line
@@ -94,8 +93,6 @@ class TurnRenderer:
     #: whether it did. The long reply is then not sent (see ``reply_rewrite``).
     #: ``None`` sends every reply as it is — the follow-up turn's own renderer.
     rewrite: Callable[[int, str], Awaitable[bool]] | None = None
-    #: This turn IS that follow-up: its reply carries the full-report button.
-    offer_full_report: bool = False
     #: The long reply's ``MEDIA:`` lines, which this follow-up's reply sends.
     carried_media: str = ""
     heartbeat_seconds: float = _TYPING_HEARTBEAT_SECONDS
@@ -152,8 +149,6 @@ class TurnRenderer:
             answer = "\n\n".join(part for part in (answer, "\n".join(carried)) if part)
         if await self._shortened(answer, end):
             return end.outcome
-        if self.offer_full_report and self.tracker is not None:
-            self.tracker.extra.append(full_report_button())
         stop_line, stop_noted = await self._rewrite_stop_notice(end)
         await deliver_reply(
             adapter=self.adapter,

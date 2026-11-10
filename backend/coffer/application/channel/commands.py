@@ -82,7 +82,7 @@ class ChannelCommands:
         #: — a SeaTalk group's main chat stops and reports them all.
         self.running_in_chat = running_in_chat
         #: The replies the bot can still take back, and what takes them back
-        #: (``/del`` and the 🗑 button).
+        #: (``/del``).
         self.replies = replies
         self.withdrawal = withdrawal
         self._threads = threads

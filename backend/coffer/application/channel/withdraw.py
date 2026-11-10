@@ -1,15 +1,14 @@
-"""Taking a bot reply back: ``/del`` and the 🗑 button (spec channels "Withdraw a
-bot reply on the owner's command").
+"""Taking a bot reply back: ``/del`` (spec channels "Withdraw a bot reply on the
+owner's command").
 
 A reply in a group cannot be unsaid by the platform on its own, so the owner can
-withdraw it: Telegram deletes the messages, SeaTalk (which has no delete)
-rewrites each card into a neutral "Withdrawn" card. Both reach the same
-``ReplyWithdrawal.withdraw``, which also owns the platform's window — past it
+withdraw it where the platform can delete a bot's message (Telegram). A reply is
+plain text, which SeaTalk can neither delete nor rewrite, so there ``/del`` says
+it cannot. ``ReplyWithdrawal.withdraw`` also owns the platform's window — past it
 nothing can be done, and the owner is told so privately rather than in the chat.
 
-Owner-only by construction: a typed command passes the same owner gate as every
-command, and a button tap passes the card gate that refuses a non-owner before it
-reaches here. Application layer only: no infrastructure import here.
+Owner-only by construction: the command passes the same owner gate as every
+command. Application layer only: no infrastructure import here.
 """
 
 from __future__ import annotations
@@ -32,9 +31,12 @@ from coffer.domain.audit import AuditEventType
 if TYPE_CHECKING:
     from coffer.application.channel.command_context import CommandContext
 
-__all__ = ["ReplyWithdrawal", "cmd_del"]
+__all__ = ["CANNOT_WITHDRAW", "ReplyWithdrawal", "cmd_del"]
 
 _logger = logging.getLogger(__name__)
+
+#: ``/del`` on a transport that cannot take a bot message back (SeaTalk).
+CANNOT_WITHDRAW = "🗑 This chat cannot withdraw bot replies."
 
 
 def _window_words(hours: float) -> str:
@@ -65,7 +67,7 @@ class ReplyWithdrawal:
         caps = binding.adapter.capabilities
         window = timedelta(hours=caps.withdraw_window_hours)
         if caps.withdraw_window_hours <= 0:
-            await self._tell_owner(binding, "🗑 This chat cannot withdraw bot replies.")
+            await self._tell_owner(binding, CANNOT_WITHDRAW)
             return False
         if datetime.now(tz=UTC) - record.sent_at > window:
             await self._ledger.remove(record.reply_id)
@@ -78,9 +80,7 @@ class ReplyWithdrawal:
         failed: list[str] = []
         for message_id in record.message_ids:
             try:
-                await binding.adapter.withdraw_message(
-                    record.chat_id, message_id, chat_kind=record.chat_kind
-                )
+                await binding.adapter.delete_message(record.chat_id, message_id)
             except Exception:
                 _logger.warning(
                     "channel.withdraw.failed",
@@ -116,20 +116,6 @@ class ReplyWithdrawal:
             )
         return not failed
 
-    async def tap(self, ctx: CommandContext, reply_id: str) -> None:
-        """The 🗑 button under a reply. The card gate has already proved the tapper
-        the owner; a reply this chat does not hold is ignored, and one the ledger has
-        forgotten (past every window) is told privately."""
-        record = await self._ledger.get(reply_id)
-        if record is None:
-            await self._tell_owner(
-                ctx.binding, "🗑 That reply can no longer be withdrawn — it is past the window."
-            )
-            return
-        if record.resource_uid != ctx.resource_uid or record.chat_id != ctx.chat_id:
-            return
-        await self.withdraw(ctx.binding, record, via="button")
-
     async def _tell_owner(self, binding: ChannelBinding, text: str) -> None:
         """Say ``text`` in the owner's direct chat."""
         owner = await self._peers.owner_peer(binding.resource.uid)
@@ -142,6 +128,10 @@ async def cmd_del(ctx: CommandContext, text: str) -> None:
     """``/del``: withdraw the reply the command quotes, else the latest one in this
     chat or thread. Silent on success — the reply disappearing is the answer."""
     del text
+    caps = ctx.binding.adapter.capabilities
+    if caps.withdraw_window_hours <= 0:
+        await ctx.say(CANNOT_WITHDRAW)
+        return
     ledger = ctx.commands.replies
     if ctx.quoted_message_id:
         record = await ledger.find_by_message(ctx.resource_uid, ctx.chat_id, ctx.quoted_message_id)
@@ -155,8 +145,7 @@ async def cmd_del(ctx: CommandContext, text: str) -> None:
             await ctx.say("There is no reply of mine to withdraw here.")
             return
     await ctx.commands.withdrawal.withdraw(ctx.binding, record, via="command")
-    caps = ctx.binding.adapter.capabilities
-    if caps.withdraw_removes and ctx.command_message_id:
+    if ctx.command_message_id:
         # The owner's own ``/del`` goes too, where the platform lets the bot remove it.
         with contextlib.suppress(Exception):
             await ctx.binding.adapter.delete_message(ctx.chat_id, ctx.command_message_id)

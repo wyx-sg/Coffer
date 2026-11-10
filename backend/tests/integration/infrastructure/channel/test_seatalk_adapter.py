@@ -1678,26 +1678,42 @@ async def test_a_mention_target_with_an_underscore_is_never_escaped(
     assert contents == [f"{by_id} thinking", f"{by_email} done\\_here"]
 
 
-# -- group replies as withdrawable cards ---------------------------------------
+# -- group replies as text ------------------------------------------------------
 
 
 @pytest.mark.acceptance(
-    spec="channels/seatalk", scenario="a group reply is cards with the trash button on the last"
+    spec="channels/seatalk", scenario="a group reply is text with markdown rendered"
 )
-async def test_a_long_group_reply_is_cards_with_the_trash_button_on_the_last(
+async def test_a_group_reply_is_text_with_markdown_rendered(fake_seatalk: FakeSeaTalk) -> None:
+    adapter = make_seatalk_adapter(fake_seatalk)
+    try:
+        await adapter.send_text(
+            "gid-1", "Deploy is **green**.\n\n```\nok\n```", chat_kind="group", thread_id="t1"
+        )
+    finally:
+        await adapter.stop()
+
+    [(body, _auth)] = fake_seatalk.group_chat_calls
+    message = body["message"]
+    assert message["tag"] == "text"
+    assert message["text"]["format"] == 1
+    assert "**green**" in message["text"]["content"] and "```" in message["text"]["content"]
+
+
+async def test_a_card_too_long_for_one_runs_on_with_its_buttons_on_the_last(
     fake_seatalk: FakeSeaTalk,
 ) -> None:
     from coffer.domain.channel.envelopes import ChoiceButton
 
-    reply = "\n\n".join(f"paragraph {i} " + "word " * 120 for i in range(12))
+    body_text = "\n\n".join(f"paragraph {i} " + "word " * 120 for i in range(12))
     adapter = make_seatalk_adapter(fake_seatalk)
     try:
         sent = await adapter.send_text(
             "gid-1",
-            reply,
+            body_text,
             chat_kind="group",
             thread_id="t1",
-            buttons=[ChoiceButton(label="🗑", value="del:r1")],
+            buttons=[ChoiceButton(label="Model", value="cmd:model")],
         )
     finally:
         await adapter.stop()
@@ -1714,54 +1730,6 @@ async def test_a_long_group_reply_is_cards_with_the_trash_button_on_the_last(
     has_buttons = [any(e["element_type"] == "button_group" for e in els) for els in elements]
     assert has_buttons == [False] * (len(cards) - 1) + [True]
     assert elements[1][0]["description"]["text"].startswith("(2/")
-
-
-@pytest.mark.acceptance(
-    spec="channels/seatalk", scenario="a short group reply is one card with markdown rendered"
-)
-async def test_a_short_group_reply_is_one_rendered_card(fake_seatalk: FakeSeaTalk) -> None:
-    from coffer.domain.channel.envelopes import ChoiceButton
-
-    adapter = make_seatalk_adapter(fake_seatalk)
-    try:
-        await adapter.send_text(
-            "gid-1",
-            "Deploy is **green**.\n\n```\nok\n```",
-            chat_kind="group",
-            buttons=[ChoiceButton(label="🗑", value="del:r1")],
-        )
-    finally:
-        await adapter.stop()
-
-    [(body, _auth)] = fake_seatalk.group_chat_calls
-    description = body["message"]["interactive_message"]["elements"][0]["description"]
-    assert description["format"] == 1
-    assert "**green**" in description["text"] and "```" in description["text"]
-
-
-@pytest.mark.acceptance(spec="channels/seatalk", scenario="withdrawing rewrites each card blank")
-async def test_withdrawing_rewrites_the_card_blank_through_update_message(
-    fake_seatalk: FakeSeaTalk,
-) -> None:
-    updates: list[dict[str, Any]] = []
-
-    async def handler(request: Request) -> JSONResponse:
-        updates.append(await request.json())
-        return JSONResponse(content={"code": 0})
-
-    fake_seatalk.app.post("/messaging/v2/update")(handler)
-    adapter = make_seatalk_adapter(fake_seatalk)
-    try:
-        await adapter.withdraw_message("gid-1", "mid-9", chat_kind="group")
-    finally:
-        await adapter.stop()
-
-    [body] = updates
-    assert body["message_id"] == "mid-9"
-    elements = body["message"]["interactive_message"]["elements"]
-    assert elements == [
-        {"element_type": "description", "description": {"format": 1, "text": "🗑 Withdrawn"}}
-    ]
 
 
 async def test_open_thread_anchored_replies_in_the_owners_message_thread(
@@ -1784,11 +1752,13 @@ async def test_open_thread_anchored_replies_in_the_owners_message_thread(
     assert rooted != "u-1" and rooted
 
 
-async def test_seatalk_declares_a_seven_day_card_window(fake_seatalk: FakeSeaTalk) -> None:
+@pytest.mark.acceptance(
+    spec="channels/seatalk", scenario="SeaTalk declares that it cannot withdraw a reply"
+)
+async def test_seatalk_declares_that_it_cannot_withdraw(fake_seatalk: FakeSeaTalk) -> None:
     adapter = make_seatalk_adapter(fake_seatalk)
     try:
         caps = adapter.capabilities
     finally:
         await adapter.stop()
-    assert caps.withdraw_window_hours == 168
-    assert caps.withdraw_removes is False
+    assert caps.withdraw_window_hours == 0

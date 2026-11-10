@@ -19,7 +19,7 @@ The table lists the ten words. How each reads, where it works and the cards it a
 | `/resume [n]` | Reopen an earlier conversation from this chat. |
 | `/thread [title]` | In a direct chat, open a parallel conversation in its own thread. |
 | `/close` | Inside a parallel thread, close it (see [Closing a parallel thread](#closing-a-parallel-thread)). |
-| `/del` | Owner only. Withdraw the bot's reply: quote one of its messages and send `/del` to withdraw that whole reply, or send it bare to withdraw the bot's most recent reply in this chat or thread. |
+| `/del` | Owner only. Withdraw the bot's reply where the platform can delete it (Telegram): quote one of its messages and send `/del` to withdraw that whole reply, or send it bare to withdraw the bot's most recent reply in this chat or thread. On SeaTalk it answers that the chat cannot withdraw bot replies. |
 | `/help` | List the commands, one per line with what each does (the four group commands in a group). No buttons. |
 
 In a group only `/new`, `/stop`, `/help` and `/del` work; the other six work only in a direct chat (see [Where each command works](#where-each-command-works)). `/new` and `/stop` take effect even while a turn is running. A command first releases any messages still waiting out their pause, so they run before it; `/stop` discards them instead.
@@ -57,7 +57,7 @@ Sent in a group by the owner, a direct-chat-only command is answered privately t
 
 `/del` is for the owner only; anyone else's `/del` does nothing. Quote one of the bot's messages and send `/del`, and the whole reply that message belongs to is withdrawn, including every part a long reply was split into. Sent without a quote, `/del` withdraws the bot's most recent reply in that chat, or in that thread when you send it inside one. It works in direct chats and in groups.
 
-The `/del` message itself is deleted where the platform allows it: on Telegram when the bot has the right to delete messages in that chat, otherwise it stays. How a reply is withdrawn, and how long it can be, differs by platform; see [Withdrawing a reply](/guides/channels#withdrawing-a-reply). In a group, every reply also carries a 🗑 button that does the same for the owner.
+The `/del` message itself is deleted where the platform allows it: on Telegram when the bot has the right to delete messages in that chat, otherwise it stays. Telegram deletes the reply's messages within 48 hours of sending; SeaTalk cannot delete or edit a bot's text, so there `/del` answers “🗑 This chat cannot withdraw bot replies.” See [Withdrawing a reply](/guides/channels#withdrawing-a-reply).
 
 ## Other slash text goes to the agent
 

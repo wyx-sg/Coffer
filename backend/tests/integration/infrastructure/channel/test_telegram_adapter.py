@@ -1206,7 +1206,7 @@ async def test_every_chunk_of_a_reply_is_reported_and_withdrawn_with_delete_mess
     try:
         sent = await adapter.send_text("555", f"{para1}\n\n{para2}")
         for message_id in sent.all_ids:
-            await adapter.withdraw_message("555", message_id, chat_kind="group")
+            await adapter.delete_message("555", message_id)
         caps = adapter.capabilities
     finally:
         await adapter.stop()
@@ -1216,4 +1216,4 @@ async def test_every_chunk_of_a_reply_is_reported_and_withdrawn_with_delete_mess
         {"chat_id": "555", "message_id": "101"},
         {"chat_id": "555", "message_id": "102"},
     ]
-    assert caps.withdraw_window_hours == 48 and caps.withdraw_removes is True
+    assert caps.withdraw_window_hours == 48

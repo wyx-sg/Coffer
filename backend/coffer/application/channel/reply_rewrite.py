@@ -1,31 +1,25 @@
 """A reply too long for a chat is not sent: the agent is asked for the short
-version, and the full one waits behind a button (spec channels "Ask for the
-short version of a reply too long for a chat"; ADR
-long-channel-reply-is-rewritten-short).
+version, which ends by offering the full one (spec channels "Ask for the short
+version of a reply too long for a chat"; ADRs long-channel-reply-is-rewritten-short,
+a-channel-reply-is-plain-text).
 
 The reply style already asks for the answer in a few lines and a full report
 only as a file on request. A model that ignores it would otherwise land a wall
 of text on a phone. Cutting it would leave half a message; storing it would keep
 reply text Coffer never keeps. So the same conversation is asked, once, to say
 it again short and to offer the full report — which the agent still holds in its
-own session and sends as a file when the owner taps for it.
+own session and sends as a file when the owner asks for it in a message.
 
-Pure: no I/O. The renderer measures, the driver runs the follow-up turn, and a
-tap on the button becomes the owner asking for the file.
+Pure: no I/O. The renderer measures and the driver runs the follow-up turn.
 """
 
 from __future__ import annotations
 
 import re
 
-from coffer.domain.channel.envelopes import ChoiceButton
-
 __all__ = [
-    "FULL_REPORT_KIND",
-    "FULL_REPORT_REQUEST",
     "MAX_REPLY_CHARS",
     "MAX_REPLY_LINES",
-    "full_report_button",
     "measure",
     "media_lines",
     "rewrite_prompt",
@@ -37,12 +31,6 @@ __all__ = [
 #: so a dense paragraph of CJK text trips the bound as surely as many lines do.
 MAX_REPLY_LINES = 20
 MAX_REPLY_CHARS = 1500
-
-#: The callback namespace of the full-report button: ``full:report``.
-FULL_REPORT_KIND = "full"
-
-#: What a tap on the full-report button says to the agent, as the owner's message.
-FULL_REPORT_REQUEST = "Send me the full report as a Markdown file."
 
 _MEDIA_LINE = re.compile(r"^\s*MEDIA:.*$", re.MULTILINE)
 _DETAILS = re.compile(r"^#{1,3}[ \t]+details[ \t]*:?[ \t]*$", re.IGNORECASE | re.MULTILINE)
@@ -79,13 +67,9 @@ def rewrite_prompt(lines: int) -> str:
     return (
         f"[Coffer] Your last reply ({lines} lines) was too long for a chat, so it "
         "was not sent. Write it again for the chat: only the conclusion and what "
-        "the reader needs to act on, in at most 5 lines, in the same language. Do "
-        "not offer the full report; a button under your reply does. Files you "
+        "the reader needs to act on, in at most 5 lines, in the same language, "
+        "ending with one short line that offers the full report as a file if the "
+        "reader wants it. Files you "
         "attached with MEDIA: lines are sent with it, so do not repeat them. Do "
         "not call tools and do not mention this note."
     )
-
-
-def full_report_button() -> ChoiceButton:
-    """The button under a rewritten reply: tapping it asks for the full report."""
-    return ChoiceButton(label="📄 Full report", value=f"{FULL_REPORT_KIND}:report")

@@ -57,5 +57,4 @@ def telegram_capabilities(features: FeatureSet) -> ChannelCapabilities:
         collapses_details=True,
         # deleteMessage works on a bot's own message for 48 hours.
         withdraw_window_hours=48,
-        withdraw_removes=True,
     )

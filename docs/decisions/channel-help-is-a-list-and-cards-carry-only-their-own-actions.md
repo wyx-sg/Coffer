@@ -93,8 +93,8 @@ Every command was kept; none was added or merged:
   has providers *and* agents; Coffer has one dimension.
 - `/resume [n]` both lists and picks, where cc-connect has `/list` + `/switch`.
 - `/thread` needs no `/threads`: `/status` already lists the parallel threads.
-- `/del` stays beside the 🗑 button: 🗑 rides only group replies, so a direct
-  chat and a platform without buttons have only `/del`.
+- `/del` is the only way to withdraw a reply: replies carry no buttons (see
+  [A Channel Reply Is Plain Text](a-channel-reply-is-plain-text.md)).
 - Commands other bridges add are not needed: `/mode` (permissions are Coffer's
   approval cards), `/provider` (connections are set in Coffer), `/cron`,
   `/usage`; an agent's own slash commands (`/compact`, `/cost`) already pass

@@ -271,14 +271,15 @@ Indexes on `(resource_uid, delivered_at)` and `conversation_id`.
 ### `channel_replies`
 
 Which platform messages make up each bot reply, so the owner can withdraw it with
-`/del` or the 🗑 button (spec channels "Withdraw a bot reply on the owner's command").
-Ids and times only — never the reply's text. A row is removed when its reply is
-withdrawn, when it is older than eight days (the longest platform window plus a
-day), and with its channel.
+`/del` (spec channels "Withdraw a bot reply on the owner's command"). Only a
+transport that can delete a bot message (Telegram) records replies. Ids and times
+only — never the reply's text. A row is removed when its reply is withdrawn, when
+it is older than three days (Telegram's 48-hour window plus a margin), and with
+its channel.
 
 | column         | type             | notes                                                     |
 | -------------- | ---------------- | --------------------------------------------------------- |
-| `reply_id`     | VARCHAR PK       | a random id, also the payload of the reply's 🗑 button    |
+| `reply_id`     | VARCHAR PK       | a random id                                               |
 | `resource_uid` | VARCHAR NOT NULL | the channel's uid                                         |
 | `chat_id`      | VARCHAR NOT NULL |                                                           |
 | `thread_id`    | VARCHAR NOT NULL | `""` for a direct chat or a group's main chat             |
@@ -333,8 +334,8 @@ SentMessage:        what a send returned — the last message's id and the ids o
 ChannelCapabilities: supports_card_update, supports_buttons, supports_typing,
                     supports_reactions, supports_media,
                     supports_history_fetch, max_message_chars,
-                    withdraw_window_hours, withdraw_removes (can a bot message be
-                    taken back, for how long, and does that remove it),
+                    withdraw_window_hours (how long a bot message can be
+                    deleted; 0 when it cannot),
                     collapses_details (does the transport fold a reply's
                     `## Details` section itself),
                     mention_template, mention_email_template — how the
@@ -353,7 +354,7 @@ is done").
 | ------------------------ | --------------------------------------------------------------------- |
 | `channel_pairing_issued` | a pairing code is generated                                           |
 | `channel_paired`         | a sender claims the code and becomes the peer; carries the chat id, the sender id and the display name |
-| `channel_reply_withdrawn` | the owner withdraws a bot reply (`/del` or 🗑); actor `owner`, carries the chat id, how many messages went and `via` (`command` / `button`) — never the text |
+| `channel_reply_withdrawn` | the owner withdraws a bot reply (`/del`); actor `owner`, carries the chat id, how many messages went and `via` (`command`) — never the text |
 
 Resource lifecycle events (`resource_created` … `resource_deleted`) come from
 the framework automatically. Turn activity is **not** audited: a turn happening

@@ -51,8 +51,7 @@ SEATALK_CAPABILITIES = ChannelCapabilities(
     # Any DM message can root a thread, so a DM thread is a casual reply.
     direct_threads_are_replies=True,
     render_notes=SEATALK_RENDER_NOTES,
-    # A SeaTalk bot cannot delete a message, but it can rewrite a card it sent for 7
-    # days (``/messaging/v2/update``): a group reply is therefore a card (never
-    # plain text, which cannot be rewritten) and "withdrawing" it rewrites it blank.
-    withdraw_window_hours=168,
+    # A SeaTalk bot can neither delete a message nor rewrite text (Update Message
+    # covers cards only), and a reply is plain text, so no reply can be withdrawn:
+    # withdraw_window_hours stays 0 and ``/del`` says so.
 )

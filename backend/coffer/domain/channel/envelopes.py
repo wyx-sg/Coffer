@@ -176,13 +176,9 @@ class ChannelCapabilities:
     # chat channel"); elsewhere the reply goes out whole.
     collapses_details: bool = False
     # "Withdraw a bot reply on the owner's command": how many hours after it was
-    # sent a bot message can still be taken back (Telegram's deleteMessage: 48;
-    # SeaTalk's card rewrite: 168). 0 means the transport cannot withdraw at all.
+    # sent a bot message can still be deleted (Telegram's deleteMessage: 48).
+    # 0 means the transport cannot withdraw at all (SeaTalk: no delete API).
     withdraw_window_hours: float = 0.0
-    # Withdrawing REMOVES the message (Telegram) rather than rewriting it into a
-    # "Withdrawn" card (SeaTalk); only a transport that removes messages can also
-    # remove the owner's own ``/del`` message.
-    withdraw_removes: bool = False
 
 
 @dataclass(frozen=True)

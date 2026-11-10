@@ -30,7 +30,6 @@ from coffer.application.channel.command_cards import PICK_AGENT
 from coffer.application.channel.command_context import deliver_card
 from coffer.application.channel.dir_switch import apply_dir, current_dir_card
 from coffer.application.channel.held_queue import HELD_KIND, apply_held
-from coffer.application.channel.reply_tracking import WITHDRAW_KIND
 from coffer.application.channel.resume_switch import apply_resume, current_resume_card
 from coffer.application.channel.selection_cards import (
     DEFAULT_CHOICE,
@@ -79,10 +78,6 @@ async def dispatch_card_tap(ctx: CommandContext, data: str) -> None:
         # A card of a direct-chat command still on screen in a group (spec
         # channels "Answer the conversation commands from any paired chat").
         await ctx.say(DM_ONLY_NOTICE)
-        return
-    if kind == WITHDRAW_KIND:
-        # The 🗑 under a reply (spec channels "Withdraw a bot reply on the owner's command").
-        await ctx.commands.withdrawal.tap(ctx, value)
         return
     if kind == HELD_KIND:
         # Continue or Discard under a stopped line or a `/status` card (spec
