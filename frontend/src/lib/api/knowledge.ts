@@ -55,6 +55,8 @@ export function listCollections(): Promise<CollectionListOut> {
 export function createCollection(payload: {
   name: string;
   description?: string | null;
+  /** The template it starts from; the daemon's default is `llm-wiki`. */
+  template?: "llm-wiki" | "blank";
 }): Promise<CollectionOut> {
   return unwrap(getApiClient().POST("/knowledge/collections", { body: payload }));
 }
@@ -117,17 +119,16 @@ export function deleteFile(path: string): Promise<void> {
   return unwrapVoid(getApiClient().DELETE("/knowledge/file", { params: { query: { path } } }));
 }
 
-/** A collection's mechanical check (see "Check a collection mechanically on
- *  every read"): its findings, computed from its files on this read. */
+/** A collection's check (see "Check every link in a collection"): its broken
+ *  links, computed from its files on this read. */
 export function getCheck(uid: string): Promise<CheckOut> {
   return unwrap(
     getApiClient().GET("/knowledge/collections/{uid}/check", { params: { path: { uid } } }),
   );
 }
 
-/** Every page and source of a collection with its title, page type and
- *  waiting mark: a collection page's Contents, and the titles its To do and
- *  Change log show (see "Show a collection's contents by page type"). */
+/** Every Markdown file of a collection with its title: the titles its Broken
+ *  links and Change log show (see "List a collection's files"). */
 export function getCollectionFiles(uid: string): Promise<CollectionFilesOut> {
   return unwrap(
     getApiClient().GET("/knowledge/collections/{uid}/files", { params: { path: { uid } } }),

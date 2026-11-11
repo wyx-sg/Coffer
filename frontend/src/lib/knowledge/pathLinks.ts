@@ -1,7 +1,7 @@
 // frontend/src/lib/knowledge/pathLinks.ts
 //
-// A knowledge file's ordinary Markdown links (spec knowledge "Link pages by
-// slug or relative path and check every link"), sorted the way the reader
+// A knowledge file's ordinary Markdown links (spec knowledge "Resolve links
+// by slug or relative path"), sorted the way the reader
 // opens them: a web link goes to the browser, a link by relative path to the
 // file it names inside the knowledge root — checked by the daemon (the file's
 // `links`, kind `path`) — and an anchor stays on the page.

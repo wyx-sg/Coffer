@@ -356,8 +356,8 @@ paths:
   /api/v1/knowledge/collections/{uid}/check:
     get:
       description: |-
-        One collection's mechanical findings, computed now from its files and
-        fixed by nothing here ("Check a collection mechanically on every read").
+        One collection's broken links, computed now from its files and fixed by
+        nothing here ("Check every link in a collection").
       operationId: check_collection_api_v1_knowledge_collections__uid__check_get
       parameters:
       - in: path
@@ -454,8 +454,8 @@ paths:
   /api/v1/knowledge/collections/{uid}/files:
     get:
       description: |-
-        Every page and source of a collection with its title, page type and
-        waiting mark ("Show a collection's contents by page type").
+        Every Markdown file of a collection with its title and description
+        ("List a collection's files").
       operationId: collection_files_api_v1_knowledge_collections__uid__files_get
       parameters:
       - in: path
@@ -945,10 +945,7 @@ components:
       title: ChangesOut
       type: object
     CheckOut:
-      description: |-
-        One collection's mechanical check ("Check a collection mechanically on
-        every read"): what Coffer found, and the prompt that hands the rest to the
-        agent.
+      description: One collection's broken links ("Check every link in a collection").
       properties:
         collection:
           $ref: '#/components/schemas/CollectionOut'
@@ -974,6 +971,13 @@ components:
           minLength: 1
           title: Name
           type: string
+        template:
+          default: llm-wiki
+          enum:
+          - llm-wiki
+          - blank
+          title: Template
+          type: string
       required:
       - name
       title: CollectionCreate
@@ -992,8 +996,8 @@ components:
       type: object
     CollectionFilesOut:
       description: |-
-        Every page and source of one collection, for its page's Contents
-        ("Show a collection's contents by page type").
+        Every Markdown file of one collection but its README, each with its
+        title and description ("List a collection's files").
       properties:
         files:
           items:
@@ -1038,6 +1042,10 @@ components:
         description:
           title: Description
           type: string
+        entry_file:
+          default: ''
+          title: Entry File
+          type: string
         finding_count:
           default: 0
           title: Finding Count
@@ -1057,18 +1065,10 @@ components:
           default: 0
           title: Note Count
           type: integer
-        page_count:
-          default: 0
-          title: Page Count
-          type: integer
         rules_file:
           default: ''
           title: Rules File
           type: string
-        source_count:
-          default: 0
-          title: Source Count
-          type: integer
         tidy_handoff:
           $ref: '#/components/schemas/HandoffOut'
         tidy_running:
@@ -1083,17 +1083,14 @@ components:
           - type: string
           - type: 'null'
           title: Updated At
-        waiting_source_count:
-          default: 0
-          title: Waiting Source Count
-          type: integer
+        uploads_dir:
+          default: ''
+          title: Uploads Dir
+          type: string
       required:
       - uid
       - name
       - description
-      - page_count
-      - source_count
-      - waiting_source_count
       - finding_count
       - folder_path
       - updated_at
@@ -1102,6 +1099,8 @@ components:
       - linked
       - note_count
       - rules_file
+      - entry_file
+      - uploads_dir
       title: CollectionOut
       type: object
     DirectoryOut:
@@ -1185,19 +1184,9 @@ components:
         actor:
           title: Actor
           type: string
-        aliases:
-          items:
-            type: string
-          title: Aliases
-          type: array
         body:
           title: Body
           type: string
-        cited_by:
-          items:
-            $ref: '#/components/schemas/PageRefOut'
-          title: Cited By
-          type: array
         created_at:
           title: Created At
           type: string
@@ -1214,14 +1203,6 @@ components:
           additionalProperties: true
           title: Import Report
           type: object
-        kind:
-          default: file
-          enum:
-          - page
-          - source
-          - file
-          title: Kind
-          type: string
         links:
           items:
             $ref: '#/components/schemas/LinkRefOut'
@@ -1241,10 +1222,6 @@ components:
           - type: string
           - type: 'null'
           title: Original Path
-        page_type:
-          default: ''
-          title: Page Type
-          type: string
         path:
           title: Path
           type: string
@@ -1253,37 +1230,12 @@ components:
           - type: string
           - type: 'null'
           title: Readable Body
-        sources:
-          items:
-            $ref: '#/components/schemas/SourceRefOut'
-          title: Sources
-          type: array
-        stale:
-          default: false
-          title: Stale
-          type: boolean
-        summary:
-          default: ''
-          title: Summary
-          type: string
-        superseded_by:
-          anyOf:
-          - $ref: '#/components/schemas/SourceRefOut'
-          - type: 'null'
         title:
           title: Title
           type: string
         updated_at:
           title: Updated At
           type: string
-        verified:
-          default: ''
-          title: Verified
-          type: string
-        waiting:
-          default: false
-          title: Waiting
-          type: boolean
       required:
       - path
       - title
@@ -1294,17 +1246,7 @@ components:
       - body
       - file_path
       - folder_path
-      - kind
-      - page_type
-      - aliases
-      - verified
-      - stale
-      - sources
       - links
-      - cited_by
-      - waiting
-      - superseded_by
-      - summary
       - original
       - original_path
       - readable_body
@@ -1317,43 +1259,11 @@ components:
         actor:
           title: Actor
           type: string
-        cited_count:
-          default: 0
-          title: Cited Count
-          type: integer
         description:
           title: Description
           type: string
-        kind:
-          default: file
-          enum:
-          - page
-          - source
-          - file
-          title: Kind
-          type: string
-        page_type:
-          default: ''
-          title: Page Type
-          type: string
         path:
           title: Path
-          type: string
-        skipped:
-          default: false
-          title: Skipped
-          type: boolean
-        stale:
-          default: false
-          title: Stale
-          type: boolean
-        summary:
-          default: ''
-          title: Summary
-          type: string
-        superseded_by:
-          default: ''
-          title: Superseded By
           type: string
         title:
           title: Title
@@ -1361,24 +1271,12 @@ components:
         updated_at:
           title: Updated At
           type: string
-        waiting:
-          default: false
-          title: Waiting
-          type: boolean
       required:
       - path
       - title
       - description
       - actor
       - updated_at
-      - kind
-      - page_type
-      - waiting
-      - stale
-      - superseded_by
-      - summary
-      - cited_count
-      - skipped
       title: FileSummaryOut
       type: object
     FindingOut:
@@ -1388,14 +1286,6 @@ components:
           - dead_link
           - ambiguous_link
           - outside_link
-          - duplicate_slug
-          - missing_source
-          - superseded_source
-          - incomplete_page
-          - unsourced_page
-          - stale_page
-          - orphan_page
-          - waiting_source
           title: Kind
           type: string
         others:
@@ -1568,39 +1458,6 @@ components:
       - kind
       - outside
       title: LinkRefOut
-      type: object
-    PageRefOut:
-      properties:
-        path:
-          title: Path
-          type: string
-        title:
-          title: Title
-          type: string
-      required:
-      - path
-      - title
-      title: PageRefOut
-      type: object
-    SourceRefOut:
-      properties:
-        path:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Path
-        slug:
-          title: Slug
-          type: string
-        title:
-          default: ''
-          title: Title
-          type: string
-      required:
-      - slug
-      - path
-      - title
-      title: SourceRefOut
       type: object
     TidyFinishIn:
       description: The agent's report on the tidy it finished.

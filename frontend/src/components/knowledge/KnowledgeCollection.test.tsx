@@ -3,8 +3,8 @@
 // A collection's own page (boards 5.1.10, 5.1.11, 5.1.12, 5.1.14), mocked only
 // at the network boundary: the folder name as the heading, the description
 // edited in place (blur / ⌘Enter saves, Esc cancels, the toast offers Undo),
-// the summary line and what Coffer does with the collection, its To do,
-// Contents and Change log, Open in Obsidian when it is installed, the empty
+// the summary line, its rules file and start page, what Coffer does with the
+// collection, its Broken links and Change log, Open in Obsidian when it is installed, the empty
 // collection's one muted line, Rename… from the
 // ⋯ menu (a dialog that closes only on success), and Delete collection… from
 // the same menu — which asks first, then offers Undo in a toast.
@@ -76,7 +76,7 @@ describe("the summary", () => {
   test("one line of counts, folder and update time, and what Coffer does with it — no table, no danger zone", async () => {
     renderKnowledge(`/knowledge/${UID}`);
     const summary = await screen.findByTestId("knowledge-summary");
-    expect(summary).toHaveTextContent("2 pages · 1 sources (1 waiting)");
+    expect(summary).toHaveTextContent("3 Markdown files");
     expect(within(summary).getByText("~/.coffer/knowledge/shopee")).toBeInTheDocument();
     expect(summary).toHaveTextContent(/updated /);
     expect(summary).toHaveTextContent(
@@ -111,18 +111,14 @@ describe("the summary", () => {
 
   acceptance(
     "knowledge",
-    "the collection page shows a summary line, its to-do list, its contents and its change log",
+    "the collection page shows a summary line, its rules, its broken links and its change log",
     async () => {
       api.getCheck.mockResolvedValue({
         collection: COLLECTION,
-        findings: [
-          { kind: "unsourced_page", path: GATEWAY.path, target: null, others: [] },
-          { kind: "waiting_source", path: RELEASE.path, target: null, others: [] },
-          { kind: "dead_link", path: SESSION.path, target: "nowhere", others: [] },
-        ],
+        findings: [{ kind: "dead_link", path: SESSION.path, target: "nowhere", others: [] }],
       });
       api.getCollectionFiles.mockResolvedValue({
-        files: [GATEWAY, { ...SESSION, page_type: "how-to" }, RELEASE].map(summaryOf),
+        files: [GATEWAY, SESSION, RELEASE].map(summaryOf),
       });
       api.listChanges.mockResolvedValue({
         changes: [
@@ -140,35 +136,30 @@ describe("the summary", () => {
       expect(await screen.findByRole("heading", { name: NAME })).toBeInTheDocument();
       expect(screen.getByText(COLLECTION.description)).toBeInTheDocument();
       const summary = screen.getByTestId("knowledge-summary");
-      expect(summary).toHaveTextContent("2 pages · 1 sources (1 waiting)");
+      expect(summary).toHaveTextContent("3 Markdown files");
       expect(within(summary).getByRole("button", { name: "Copy path" })).toBeInTheDocument();
       expect(summary).toHaveTextContent(/Kept in Coffer/);
 
-      // To do: the dead link before the waiting source, each page by title;
-      // the page without sources folded into one collapsed row.
-      const todo = screen.getByRole("region", { name: "To do" });
-      const dead = await within(todo).findByText("Dead links");
-      const waiting = within(todo).getByText("Waiting sources");
-      expect(dead.compareDocumentPosition(waiting) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-      expect(await within(todo).findByRole("link", { name: "Session ownership" })).toHaveAttribute(
-        "title",
-        "pages/account/session.md",
+      // Its rules file and start page, each opening that file.
+      const rules = screen.getByTestId("knowledge-rules");
+      expect(within(rules).getByRole("link", { name: "AGENTS.md" })).toHaveAttribute(
+        "href",
+        `/knowledge/${UID}?file=${encodeURIComponent(`${NAME}/AGENTS.md`)}`,
       );
-      expect(within(todo).getByRole("link", { name: "Release notes" })).toBeInTheDocument();
-      const folded = within(todo).getByRole("button", { name: "Pages without sources 1" });
-      expect(folded).toHaveAttribute("aria-expanded", "false");
-      expect(within(todo).queryByRole("link", { name: "Account Gateway" })).toBeNull();
-      fireEvent.click(folded);
-      expect(within(todo).getByRole("link", { name: "Account Gateway" })).toBeInTheDocument();
+      expect(within(rules).getByRole("link", { name: "index.md" })).toHaveAttribute(
+        "href",
+        `/knowledge/${UID}?file=${encodeURIComponent(`${NAME}/index.md`)}`,
+      );
 
-      // Contents: a card per page type, then Sources.
-      const contents = screen.getByRole("region", { name: "Contents" });
-      const concepts = within(contents).getByRole("region", { name: "Concepts" });
-      expect(within(concepts).getByRole("link", { name: "Account Gateway" })).toBeInTheDocument();
-      const howTos = within(contents).getByRole("region", { name: "How-tos" });
-      expect(within(howTos).getByRole("link", { name: "Session ownership" })).toBeInTheDocument();
-      const sources = within(contents).getByRole("region", { name: "Sources" });
-      expect(within(sources).getByText("Waiting")).toBeInTheDocument();
+      // Broken links: the dead link, its file by title and the link it writes.
+      const broken = screen.getByRole("region", { name: "Broken links" });
+      expect(await within(broken).findByText("Dead links")).toBeInTheDocument();
+      expect(
+        await within(broken).findByRole("link", { name: "Session ownership" }),
+      ).toHaveAttribute("title", "pages/account/session.md");
+      expect(within(broken).getByText("→ nowhere")).toBeInTheDocument();
+      expect(screen.queryByRole("region", { name: "To do" })).toBeNull();
+      expect(screen.queryByRole("region", { name: "Contents" })).toBeNull();
 
       // A Change log.
       const log = screen.getByRole("region", { name: "Change log" });
@@ -232,7 +223,7 @@ describe("a just created, empty collection", () => {
     expect(await screen.findByRole("heading", { name: OTHER.name })).toBeInTheDocument();
     expect(
       screen.getByText(
-        /No pages or sources yet\. Upload a document, or drop Markdown files into the folder\./,
+        /No files yet\. Upload a document, or drop Markdown files into the folder\./,
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Reveal in Finder" })).toBeInTheDocument();

@@ -137,12 +137,12 @@ def test_the_readme_is_never_a_document(root: pathlib.Path) -> None:
 
     level = catalogue.list_level("shopee/pages")
     assert [f.path for f in level.files] == [document]
-    # Listed where it is, as the plain file it is: never a page or a source.
+    # Listed where it is, as the plain file it is, but never counted.
     [readme] = catalogue.list_level("shopee").files
-    assert (readme.path, readme.kind) == ("shopee/README.md", "file")
+    assert readme.path == "shopee/README.md"
     [entry] = catalogue.list_collections()
-    # Without sources and never checked: unsourced_page and stale_page.
-    assert (entry.page_count, entry.source_count, entry.finding_count) == (1, 0, 3)
+    assert (entry.note_count, entry.finding_count) == (1, 0)
+    assert [f.path for f in catalogue.walk_files(paths.collection_dir("shopee"))] == [document]
 
 
 # ----- presented as files --------------------------------------------------
@@ -160,7 +160,9 @@ def test_the_catalogue_says_read_the_files_with_your_own_tool(root: pathlib.Path
 
     text = render_catalogue("~/.coffer/knowledge", catalogue_)
 
-    assert "Read one at `~/.coffer/knowledge/<collection>/<path>` with your own file tool" in text
+    assert (
+        "Read any file at `~/.coffer/knowledge/<collection>/<path>` with your own file tool" in text
+    )
     assert "Files live under `~/.coffer/knowledge/shopee/`" in text
     assert "coffer__" not in text
 

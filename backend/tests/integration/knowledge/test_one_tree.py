@@ -87,20 +87,20 @@ def test_traversal_and_hidden_entries_are_refused(bad: str) -> None:
         paths.resolve(bad)
 
 
-def test_collections_count_pages_and_sources_and_not_the_inbox(knowledge_root) -> None:  # type: ignore[no-untyped-def]
+def test_collections_count_markdown_files_and_not_the_inbox(knowledge_root) -> None:  # type: ignore[no-untyped-def]
     fs.write_file(directory="shopee/pages", title="One", description="d", body="b")
     fs.write_file(directory="shopee/pages", title="Two", description="d", body="b")
     fs.write_file(directory="shopee/sources", title="Src", description="d", body="b")
     inbox.submit_material("shopee", title="Waiting", description="d", body="b")
     entry = next(c for c in catalogue.list_collections() if c.name == "shopee")
-    assert (entry.page_count, entry.source_count, entry.waiting_source_count) == (2, 1, 1)
+    assert entry.note_count == 3
 
 
 def test_readme_stays_out_of_the_documents_and_the_counts(knowledge_root) -> None:  # type: ignore[no-untyped-def]
     paths.readme_path("shopee").write_text("# shopee\n\nInternal systems.\n", encoding="utf-8")
     entry = next(c for c in catalogue.list_collections() if c.name == "shopee")
     assert entry.description == "Internal systems."
-    assert (entry.page_count, entry.source_count) == (0, 0)
+    assert entry.note_count == 0
     assert catalogue.walk_files(paths.collection_dir("shopee")) == ()
 
 

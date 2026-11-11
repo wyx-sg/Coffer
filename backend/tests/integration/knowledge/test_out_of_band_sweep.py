@@ -123,8 +123,10 @@ async def test_a_second_sweep_finds_nothing_to_do() -> None:
 async def test_a_document_dropped_in_by_hand_is_committed_as_a_disk_write() -> None:
     service, history, _ = _world()
     guide = _Guide()
-    paths.pages_dir("shopee").mkdir(parents=True)
-    (paths.pages_dir("shopee") / "by-hand.md").write_text(_DROPPED, encoding="utf-8")
+    (paths.collection_dir("shopee") / "pages").mkdir(parents=True)
+    ((paths.collection_dir("shopee") / "pages") / "by-hand.md").write_text(
+        _DROPPED, encoding="utf-8"
+    )
 
     await sweep_once(service, guide.refresh)
     assert guide.refreshes == 1
@@ -152,8 +154,8 @@ async def test_a_failing_guide_refresh_does_not_stop_the_sweep() -> None:
 )
 async def test_an_agents_new_document_is_readable_before_any_sweep() -> None:
     service, history, _ = _world()
-    paths.pages_dir("shopee").mkdir(parents=True)
-    (paths.pages_dir("shopee") / "agent.md").write_text(
+    (paths.collection_dir("shopee") / "pages").mkdir(parents=True)
+    ((paths.collection_dir("shopee") / "pages") / "agent.md").write_text(
         f"---\ntitle: Agent\ndescription: d\nactor: agent\n---\n\n{_DROPPED}",
         encoding="utf-8",
     )

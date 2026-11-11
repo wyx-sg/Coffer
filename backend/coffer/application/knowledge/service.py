@@ -18,6 +18,7 @@ from pathlib import PurePosixPath
 from typing import Any
 
 from coffer.application.audit_service import AuditService
+from coffer.application.knowledge import templates
 from coffer.application.knowledge.recording import recording, writer_of
 from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
@@ -49,12 +50,12 @@ from coffer.infrastructure.knowledge import (
     assets,
     catalogue,
     collection_files,
+    file_links,
     fs,
     inbox,
     linked,
     paths,
     source_imports,
-    wiki_reads,
 )
 from coffer.infrastructure.knowledge.history import KnowledgeHistory
 
@@ -161,9 +162,12 @@ class KnowledgeService:
         *,
         actor: str,
         description: str | None = None,
+        template: str = templates.DEFAULT_TEMPLATE,
     ) -> CollectionEntry:
-        """Register a collection and create its directory and README — only ever on
-        purpose (see "Create collections only deliberately")."""
+        """Register a collection and create its directory and the files of the
+        template it starts from — only ever on purpose (see "Create collections
+        only deliberately", "Start a collection from a template")."""
+        files = templates.render(template, name, description)
         directory = paths.collection_dir(name)
         if directory.exists() or name in await self.collection_names():
             raise CollectionExists(name)
@@ -171,16 +175,11 @@ class KnowledgeService:
         meta = CommitMeta(WRITER_USER, OP_CREATE, f"Create collection {name}", actor=actor)
         async with recording(self.history, meta) as tx:
             fs.create_collection_dir(name)
-            readme = collection_files.default_readme(name, description)
-            paths.readme_path(name).write_text(readme, encoding="utf-8")
+            collection_files.write_template(name, files)
             tx.touch(name)
         await self.catalogue_changed()
-        return CollectionEntry(
-            uid=registered.uid,
-            name=name,
-            description=catalogue.readme_description(name),
-            folder_path=str(paths.collection_dir(name)),
-        )
+        entry = await asyncio.to_thread(catalogue.collection_entry, paths.collection_dir(name))
+        return dataclasses.replace(entry, uid=registered.uid)
 
     async def register_row(
         self, name: str, *, actor: str, config: dict[str, object] | None = None
@@ -250,13 +249,13 @@ class KnowledgeService:
         if folder is not None:
             return await asyncio.to_thread(linked.read_file, row.name, folder, relpath)
         file = fs.read_file(relpath)
-        return await asyncio.to_thread(wiki_reads.describe, file)
+        return await asyncio.to_thread(file_links.describe, file)
 
     async def check(self, uid: str) -> CollectionEntry:
-        """One collection's entry with its mechanical findings (spec knowledge
-        "Check a collection mechanically on every read"). Computed on every call
-        from the files; nothing is stored. A linked folder has no wiki rules
-        to check, so it is refused."""
+        """One collection's entry with its broken links (spec knowledge "Check
+        every link in a collection"). Computed on every call from the files;
+        nothing is stored. Coffer checks nothing in a linked folder, so it is
+        refused."""
         row = await self.owned_collection(uid)
         directory = paths.collection_dir(row.name)
         if not directory.is_dir():
@@ -265,10 +264,9 @@ class KnowledgeService:
         return dataclasses.replace(entry, uid=row.uid)
 
     async def files(self, uid: str) -> tuple[FileEntry, ...]:
-        """Every file of one collection with its title, type and waiting mark,
-        for the collection page's Contents (spec knowledge "Show a collection's
-        contents by page type"). Read off disk on every call; a linked
-        folder's Markdown files, each with its title."""
+        """Every Markdown file of one collection with its title and description
+        (spec knowledge "List a collection's files"). Read off disk on every
+        call; a linked folder's Markdown files, each with its title."""
         row = await self.collection(uid)
         folder = linked_folder(row.config)
         if folder is not None:
@@ -315,9 +313,10 @@ class KnowledgeService:
     ) -> Submission:
         """Add new material to a collection ("Promote submitted material at once"):
         a source under ``sources/`` on the spot, waiting until an agent compiles it.
-        ``extra`` adds frontmatter keys; ``files`` (knowledge-root-relative path to
-        bytes, an upload's pictures) land in the same commit, as does marking each
-        source in ``supersede`` replaced by the new one (a page imported again)."""
+        ``extra`` adds frontmatter keys; ``files`` (bare name to bytes) land in
+        the same commit in the upload's own folder, the source beside them —
+        picked here with no await before the writes, so no two uploads share
+        it — as does marking each ``supersede`` source replaced by the new one."""
         row = await self.require_collection(collection)
         meta = CommitMeta(
             writer_of(actor_kind),
@@ -328,7 +327,8 @@ class KnowledgeService:
             collection=row.name,
         )
         async with recording(self.history, meta) as tx:
-            for relpath, data in (files or {}).items():
+            folder = assets.free_folder(row.name, title, files) if files else None
+            for relpath, data in assets.bundle_paths(row.name, folder, files or {}).items():
                 tx.touch(relpath)
                 assets.write_bytes(relpath, data)
             name = inbox.submit_material(
@@ -340,7 +340,7 @@ class KnowledgeService:
                 extra=extra,
             )
             tx.touch(f"{row.name}/{paths.INBOX_DIR_NAME}/{name}")
-            document = inbox.promote(row.name, name)
+            document = inbox.promote(row.name, name, folder)
             tx.touch(document.path)
             for older in supersede:
                 tx.touch(older)

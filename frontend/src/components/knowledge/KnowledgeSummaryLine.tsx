@@ -2,20 +2,24 @@
 //
 // A collection's summary (spec knowledge "Show a collection as one tree of
 // read-only documents in the web UI"): one muted line under its description —
-// how many pages, how many sources and how many of them wait, its folder (the
-// home directory as ~, with a copy button) and when it last changed — and
-// under it one line saying what Coffer does with it, so nobody has to guess
-// what is kept, synced and tidied: it is kept in Coffer, synced to the
+// how many Markdown files it holds, its folder (the home directory as ~, with
+// a copy button) and when it last changed — then a line naming the rules file
+// its README declares (or the one found at its root) and its start page, each
+// opening that file (spec knowledge "Let each collection declare its own
+// rules"), and one line saying what Coffer does with it, so nobody has to
+// guess what is kept, synced and tidied: it is kept in Coffer, synced to the
 // person's other Macs, every change is in its history, and their agent tidies
 // it.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Copy, ShieldCheck } from "lucide-react";
+import { Link } from "react-router-dom";
+import { BookOpen, Check, Copy, ShieldCheck } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import type { CollectionOut } from "@/lib/api/knowledge";
 import { whenLabel } from "@/lib/knowledge/changes";
+import { collectionPath } from "@/lib/knowledge/routes";
 
 interface Props {
   collection: CollectionOut;
@@ -24,6 +28,53 @@ interface Props {
 /** `/Users/me/.coffer/…` as `~/.coffer/…`: how the board writes the folder. */
 function homeRelative(path: string): string {
   return path.replace(/^\/(?:Users|home)\/[^/]+(?=\/)/, "~");
+}
+
+/** A collection-relative path as a knowledge-root-relative one: `AGENTS.md`
+ *  in `shopee` is `shopee/AGENTS.md`, `../shared/rules.md` is `shared/rules.md`. */
+function rootRelative(collection: string, relpath: string): string {
+  const parts: string[] = [collection];
+  for (const part of relpath.split("/")) {
+    if (part === "..") parts.pop();
+    else if (part && part !== ".") parts.push(part);
+  }
+  return parts.join("/");
+}
+
+/** The rules file and the start page, each opening its file; null when the
+ *  collection has neither. */
+function KnowledgeRulesLine({ collection }: Props) {
+  const { t } = useTranslation();
+  if (!collection.rules_file && !collection.entry_file) return null;
+  const open = (relpath: string) => (
+    <Link
+      to={collectionPath(collection.uid, rootRelative(collection.name, relpath))}
+      className="font-mono text-text underline decoration-border underline-offset-2 hover:decoration-text"
+    >
+      {relpath}
+    </Link>
+  );
+  return (
+    <p
+      className="flex items-start gap-1.5 text-xs leading-[1.5] text-text-muted"
+      data-testid="knowledge-rules"
+    >
+      <BookOpen className="mt-px size-3.5 shrink-0 text-text-subtle" aria-hidden />
+      <span className="flex flex-wrap items-center gap-x-1.5">
+        {collection.rules_file ? (
+          <span className="inline-flex items-center gap-x-1">
+            {t("knowledge.summary.rules")} {open(collection.rules_file)}
+          </span>
+        ) : null}
+        {collection.rules_file && collection.entry_file ? <span aria-hidden>·</span> : null}
+        {collection.entry_file ? (
+          <span className="inline-flex items-center gap-x-1">
+            {t("knowledge.summary.start")} {open(collection.entry_file)}
+          </span>
+        ) : null}
+      </span>
+    </p>
+  );
 }
 
 export function KnowledgeSummaryLine({ collection }: Props) {
@@ -40,15 +91,7 @@ export function KnowledgeSummaryLine({ collection }: Props) {
       () => toast.error(t("knowledge.collection.copyFailed")),
     );
 
-  const parts = [
-    t("knowledge.summary.pages", { count: collection.page_count }),
-    collection.waiting_source_count > 0
-      ? t("knowledge.summary.sourcesWaiting", {
-          count: collection.source_count,
-          waiting: collection.waiting_source_count,
-        })
-      : t("knowledge.summary.sources", { count: collection.source_count }),
-  ];
+  const parts = [t("knowledge.summary.files", { count: collection.note_count })];
 
   return (
     <div className="flex flex-col gap-1.5" data-testid="knowledge-summary">
@@ -80,6 +123,7 @@ export function KnowledgeSummaryLine({ collection }: Props) {
           </>
         ) : null}
       </p>
+      <KnowledgeRulesLine collection={collection} />
       <p className="flex items-start gap-1.5 text-xs leading-[1.5] text-text-muted">
         <ShieldCheck className="mt-px size-3.5 shrink-0 text-text-subtle" aria-hidden />
         <span>{t("knowledge.summary.managed")}</span>

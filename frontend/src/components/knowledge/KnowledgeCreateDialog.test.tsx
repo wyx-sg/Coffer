@@ -7,7 +7,7 @@
 // assertion here is on the RENDERED label — the only place the mistake was
 // visible — with the real locale bundles that `src/test/setup.ts` installs.
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
@@ -60,17 +60,16 @@ describe("KnowledgeCreateDialog", () => {
       uid: "kn-9b04",
       name: "team-notes",
       description: "what we know",
-      page_count: 0,
-      source_count: 0,
-      waiting_source_count: 0,
       finding_count: 0,
       folder_path: "/home/u/.coffer/knowledge/team-notes",
       updated_at: null,
       tidy_handoff: { prompt: "Tidy the team-notes collection." },
       tidy_running: false,
       linked: false,
-      note_count: 0,
-      rules_file: "",
+      note_count: 2,
+      rules_file: "AGENTS.md",
+      entry_file: "index.md",
+      uploads_dir: "sources",
     });
     const onOpenChange = renderDialog();
 
@@ -84,10 +83,51 @@ describe("KnowledgeCreateDialog", () => {
       expect(createCollectionMock).toHaveBeenCalledWith({
         name: "team-notes",
         description: "what we know",
+        template: "llm-wiki",
       }),
     );
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
     expect(await screen.findByText("opened the new collection")).toBeInTheDocument();
+  });
+
+  test("the dialog starts from the LLM-wiki template and offers a blank one", async () => {
+    createCollectionMock.mockResolvedValue({
+      uid: "kn-1",
+      name: "notes",
+      description: "d",
+      finding_count: 0,
+      folder_path: "/home/u/.coffer/knowledge/notes",
+      updated_at: null,
+      tidy_handoff: { prompt: "Tidy." },
+      tidy_running: false,
+      linked: false,
+      note_count: 0,
+      rules_file: "README.md",
+      entry_file: "",
+      uploads_dir: "sources",
+    });
+    renderDialog();
+    const group = screen.getByRole("group", { name: "Start from" });
+    expect(within(group).getByRole("button", { name: "LLM wiki" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByTestId("knowledge-template-hint")).toHaveTextContent("AGENTS.md");
+    fireEvent.click(within(group).getByRole("button", { name: "Blank" }));
+    expect(screen.getByTestId("knowledge-template-hint")).toHaveTextContent("Only the README.");
+
+    fireEvent.change(screen.getByLabelText(/^name/i), { target: { value: "notes" } });
+    fireEvent.change(screen.getByLabelText(/^what belongs in here/i), {
+      target: { value: "d" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create collection" }));
+    await waitFor(() =>
+      expect(createCollectionMock).toHaveBeenCalledWith({
+        name: "notes",
+        description: "d",
+        template: "blank",
+      }),
+    );
   });
 
   test("a blank name or a blank description cannot be submitted", () => {

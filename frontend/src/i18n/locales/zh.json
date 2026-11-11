@@ -3163,7 +3163,7 @@
     }
   },
   "knowledge": {
-    "subtitle": "智能体根据你保存的来源编写的页面，每个智能体都能读取。",
+    "subtitle": "你和智能体编写的 Markdown，每个知识集按它自己的规则维护，每个智能体都能读取。",
     "title": "知识",
     "nav": {
       "label": "知识集与文档",
@@ -3172,15 +3172,13 @@
       "collapse": "收起 {{name}}"
     },
     "tree": {
-      "empty": "还没有页面或来源",
-      "emptyFolder": "这里还没有内容",
-      "pages": "页面",
-      "sources": "来源"
+      "empty": "还没有文件",
+      "emptyFolder": "这里还没有内容"
     },
     "collection": {
       "descriptionLabel": "这个知识集收录什么",
       "noDescription": "还没有描述。写下这里收录什么，智能体才认得出它。",
-      "emptyLine": "还没有页面或来源。上传一个文档，或把 Markdown 文件放进这个文件夹。",
+      "emptyLine": "还没有文件。上传一个文档，或把 Markdown 文件放进这个文件夹。",
       "more": "{{name}} 的更多操作",
       "copyPath": "复制路径",
       "descriptionSaved": "描述已更新",
@@ -3190,14 +3188,23 @@
     },
     "create": {
       "title": "新建知识集",
-      "body": "一个由你和智能体共同编写的 Markdown 文档文件夹。",
+      "body": "一个由你和智能体共同编写的 Markdown 文件夹，按它自己的规则维护。",
       "name": "名称",
       "folder": "文件夹：~/.coffer/vault/knowledge/{{name}}/",
       "description": "这里放什么",
       "descriptionHint": "一句话说明这个知识集收录什么",
       "everyAgent": "每个智能体都会通过 coffer-guide 技能看到它。",
       "submit": "创建知识集",
-      "created": "已创建 {{name}}"
+      "created": "已创建 {{name}}",
+      "template": "起步模板",
+      "templates": {
+        "llm-wiki": "LLM wiki",
+        "blank": "空白"
+      },
+      "templateHints": {
+        "llm-wiki": "附带 `AGENTS.md`（智能体从来源编译 wiki 的规则）和作为阅读入口的 `index.md`，之后可随意修改。",
+        "blank": "只有 README。需要时再自己加规则文件。"
+      }
     },
     "rename": {
       "menu": "重命名…",
@@ -3262,14 +3269,6 @@
       "preview": "预览",
       "source": "源码",
       "created": "{{date}}创建",
-      "sources": "来源：",
-      "missingSource": "没有名为 {{slug}} 的来源",
-      "citedBy_one": "被 {{count}} 个页面引用：",
-      "citedBy_other": "被 {{count}} 个页面引用：",
-      "verified": "{{date}} 核对过",
-      "stale": "需要重新核对",
-      "neverVerified": "从未核对",
-      "supersededBy": "已被替换为",
       "original": "原文件",
       "originalFailed": "无法打开原文件。",
       "originalElsewhere": "原文件 {{name}} 在上传的那台 Mac 上",
@@ -3311,7 +3310,6 @@
       "title": "选择一个知识集",
       "body": "在左侧选择一个知识集来阅读其中的文档，或新建一个。"
     },
-    "waiting": "待整理",
     "operation": {
       "save": "已保存",
       "delete": "已删除",
@@ -3340,31 +3338,19 @@
       "close": "关闭历史"
     },
     "check": {
-      "title": "待处理",
-      "description": "Coffer 每次读取时在知识集文件里发现的问题。点“整理”交给你的智能体处理。",
-      "none": "没有待处理的问题。",
+      "title": "失效链接",
+      "description": "Coffer 每次读取时在知识集文件里发现的失效链接。点“整理”交给你的智能体处理。",
+      "none": "没有失效链接。",
       "failed": "无法检查这个知识集",
       "target": "→ {{target}}",
       "others": "另见 {{paths}}",
       "kinds": {
         "dead_link": "失效链接",
         "ambiguous_link": "有歧义的链接",
-        "outside_link": "指向知识库之外的链接",
-        "duplicate_slug": "重复的名称",
-        "missing_source": "缺失的来源",
-        "superseded_source": "引用了过期来源的页面",
-        "incomplete_page": "不完整的页面",
-        "unsourced_page": "没有来源的页面",
-        "stale_page": "需要重新核对的页面",
-        "orphan_page": "没有被链接的页面",
-        "waiting_source": "待整理的来源"
+        "outside_link": "指向知识库之外的链接"
       },
-      "missing": "缺少 {{target}}",
       "more": "还有 {{count}} 个",
-      "fewer": "收起",
-      "replaced": "引用的 {{target}} 已被 {{newest}} 替换",
-      "lastChecked": "上次核对 {{date}}",
-      "neverChecked": "从未核对"
+      "fewer": "收起"
     },
     "changeLog": {
       "title": "改动记录",
@@ -3381,31 +3367,12 @@
       "tidyExpired": "没有报告就结束了：知识集 30 分钟没有变化。"
     },
     "summary": {
-      "pages_one": "{{count}} 个页面",
-      "pages_other": "{{count}} 个页面",
-      "sources_one": "{{count}} 个来源",
-      "sources_other": "{{count}} 个来源",
-      "sourcesWaiting": "{{count}} 个来源（{{waiting}} 个待整理）",
       "updated": "{{when}} 更新",
-      "managed": "由 Coffer 管理：同步到你的其他 Mac，每次改动都留在历史里，由你的智能体整理。"
-    },
-    "contents": {
-      "title": "内容",
-      "description": "按类型列出的页面，以及来源。点击标题打开文件。",
-      "none": "还没有页面或来源。",
-      "failed": "无法读取内容",
-      "used_one": "被 {{count}} 页引用",
-      "used_other": "被 {{count}} 页引用",
-      "skipped": "已跳过",
-      "superseded": "已被替换"
-    },
-    "types": {
-      "overview": "概览",
-      "concept": "概念",
-      "entity": "实体",
-      "how-to": "操作指南",
-      "decision": "决策",
-      "none": "未分类"
+      "managed": "由 Coffer 管理：同步到你的其他 Mac，每次改动都留在历史里，由你的智能体整理。",
+      "files_one": "{{count}} 个 Markdown 文件",
+      "files_other": "{{count}} 个 Markdown 文件",
+      "rules": "规则：",
+      "start": "入口："
     },
     "tidyUndo": {
       "button": "撤销这次整理…",
@@ -3457,7 +3424,8 @@
       "rules": "规则文件",
       "noRules": "无",
       "managed": "管理方式",
-      "managedBy": "由它自己的工具维护。Coffer 只把它共享给智能体，不复制、不同步、不整理，也不记录历史。"
+      "managedBy": "由它自己的工具维护。Coffer 只把它共享给智能体，不复制、不同步、不整理，也不记录历史。",
+      "start": "入口页"
     },
     "disconnect": {
       "menu": "断开接入…",

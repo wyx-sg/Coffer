@@ -1,9 +1,9 @@
 // frontend/src/components/knowledge/KnowledgeCollectionLog.test.tsx
 //
-// A collection page's To do and Change log (spec knowledge "Show a collection
-// as one tree of read-only documents in the web UI", "Record a tidy as one
-// change", "Undo a tidy"): the findings grouped by kind, most severe first,
-// each page by title opening its file; the changes feed for the collection on
+// A collection page's Broken links and Change log (spec knowledge "Show a
+// collection as one tree of read-only documents in the web UI", "Record a tidy
+// as one change", "Undo a tidy"): the broken links grouped by kind, each file
+// by title opening it; the changes feed for the collection on
 // a timeline — what each did, its writer and time, its files by title, each
 // opening that file at its history — a tidy as one entry with its report and
 // Undo this tidy…, edits on disk close together as one entry, and Show more
@@ -237,30 +237,29 @@ describe("a tidy in the Change log", () => {
   });
 });
 
-describe("To do", () => {
-  test("lists the findings grouped by kind, most severe first, each page by title opening its file", async () => {
+describe("Broken links", () => {
+  test("lists the broken links grouped by kind, each file by title opening it", async () => {
     api.getCheck.mockResolvedValue({
       collection: COLLECTION,
       findings: [
-        { kind: "waiting_source", path: RELEASE.path, target: null, others: [] },
         { kind: "dead_link", path: GATEWAY.path, target: "gone", others: [] },
-        { kind: "orphan_page", path: GATEWAY.path, target: null, others: [] },
+        {
+          kind: "ambiguous_link",
+          path: RELEASE.path,
+          target: "design",
+          others: [SESSION.path],
+        },
       ],
     });
     renderKnowledge(ROOT);
-    const todo = await screen.findByRole("region", { name: "To do" });
-    // The kinds that break a reader first; the minor ones folded into a row.
-    const groups = (await within(todo).findAllByRole("heading", { level: 3 })).map(
+    const broken = await screen.findByRole("region", { name: "Broken links" });
+    const groups = (await within(broken).findAllByRole("heading", { level: 3 })).map(
       (h) => h.firstChild?.textContent,
     );
-    expect(groups).toEqual(["Dead links", "Waiting sources"]);
-    expect(within(todo).getByText("→ gone")).toBeInTheDocument();
-    expect(within(todo).getByRole("button", { name: "Pages nothing links to 1" })).toHaveAttribute(
-      "aria-expanded",
-      "false",
-    );
+    expect(groups).toEqual(["Dead links", "Ambiguous links"]);
+    expect(within(broken).getByText("→ gone")).toBeInTheDocument();
 
-    fireEvent.click(await within(todo).findByRole("link", { name: RELEASE.title }));
+    fireEvent.click(await within(broken).findByRole("link", { name: RELEASE.title }));
     await waitFor(() =>
       expect(screen.getByTestId("where")).toHaveTextContent(
         `${ROOT}?file=${encodeURIComponent(RELEASE.path)}`,
@@ -269,10 +268,10 @@ describe("To do", () => {
     expect(await screen.findByRole("heading", { level: 1, name: RELEASE.title })).toBeVisible();
   });
 
-  test("says when there is nothing to do", async () => {
+  test("says when there is no broken link", async () => {
     renderKnowledge(ROOT);
-    const todo = await screen.findByRole("region", { name: "To do" });
-    expect(await within(todo).findByText("Nothing to do.")).toBeInTheDocument();
+    const broken = await screen.findByRole("region", { name: "Broken links" });
+    expect(await within(broken).findByText("No broken links.")).toBeInTheDocument();
     expect(api.getCheck).toHaveBeenCalledWith(UID);
   });
 });

@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-10-13
 **Deciders**: Yuxing Wu
-**Related**: [Knowledge Sources Keep Their Images; Originals Stay on This Mac](knowledge-sources-keep-their-images-and-originals-stay-on-this-mac.md); [Knowledge Is a Wiki of Pages Compiled From Kept Sources](knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md); [Knowledge Files Stay Where Their Writer Put Them, and Every Link Is Checked](knowledge-files-stay-where-their-writer-put-them.md); [The Loopback Daemon Performs OS File Actions for the UI](daemon-proxies-os-file-actions.md); spec knowledge "Import a Confluence page as a readable source with its attachments", spec daemon "Open web links in the default browser"; OpenSpec changes `respect-knowledge-file-locations-and-import-confluence`, `keep-confluence-export-as-original`
+**Related**: [Knowledge Sources Keep Their Images; Originals Stay on This Mac](knowledge-sources-keep-their-images-and-originals-stay-on-this-mac.md); [Knowledge Collections Own Their Format; Coffer Checks Only Links](knowledge-collections-own-their-format.md); [Knowledge Files Stay Where Their Writer Put Them, and Every Link Is Checked](knowledge-files-stay-where-their-writer-put-them.md); [The Loopback Daemon Performs OS File Actions for the UI](daemon-proxies-os-file-actions.md); spec knowledge "Import a Confluence page as a readable source with its attachments", spec daemon "Open web links in the default browser"; OpenSpec changes `respect-knowledge-file-locations-and-import-confluence`, `keep-confluence-export-as-original`
 
 ## Context
 
@@ -185,3 +185,15 @@ keeps on the uploading Mac only. Now:
 
 Old imports keep their `storage.xml` and diagram files; nothing is deleted
 from the vault.
+
+## Amendment (2026-11-11): an upload with pictures is one folder
+
+With [Knowledge Collections Own Their Format](knowledge-collections-own-their-format.md)
+a collection declares its own uploads folder (`sources/` by default). An
+upload that keeps pictures or attachments is now one folder there,
+`<uploads>/<slug>/`, holding the source as `<slug>.md` and its files beside
+it, linked by bare name (`image-1.png`), so the upload moves, renames and
+deletes as a whole. An upload with no pictures is still a single
+`<uploads>/<slug>.md`. The root `assets/` this record describes is gone:
+existing collections were migrated once, and Coffer keeps no code for it. The
+layouts weighed are in that record's sub-choices.

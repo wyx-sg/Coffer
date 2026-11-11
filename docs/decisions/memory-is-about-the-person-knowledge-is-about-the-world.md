@@ -5,7 +5,7 @@
 **Status**: Accepted
 **Date**: 2026-11-03
 **Deciders**: Yuxing Wu
-**Related**: [Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault](sync-memory-into-each-agents-own-memory.md) (amended by this decision), [Claude Code Reads Other Agents' Memories as Text It Loads](claude-code-reads-other-agents-memories-as-text.md) (how what is left reaches Claude Code), [Knowledge Is a Wiki of Pages Compiled From Kept Sources](knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md), [Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](tidying-knowledge-is-the-agents-job.md), [Curate Claude Code's Memory in the Open](curate-claude-memory-in-the-open.md), research notes [agent memory](../research/agent-memory.md) and [knowledge structures](../research/knowledge-structures.md)
+**Related**: [Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault](sync-memory-into-each-agents-own-memory.md) (amended by this decision), [Claude Code Reads Other Agents' Memories as Text It Loads](claude-code-reads-other-agents-memories-as-text.md) (how what is left reaches Claude Code), [Knowledge Collections Own Their Format; Coffer Checks Only Links](knowledge-collections-own-their-format.md), [Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](tidying-knowledge-is-the-agents-job.md), [Curate Claude Code's Memory in the Open](curate-claude-memory-in-the-open.md), research notes [agent memory](../research/agent-memory.md) and [knowledge structures](../research/knowledge-structures.md)
 
 ## Context
 

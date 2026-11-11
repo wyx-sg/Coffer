@@ -4,9 +4,11 @@ An upload is one of the entrances new knowledge arrives by — the Knowledge pag
 button and a channel attachment (see "Keep every upload as a Markdown source"
 and "Ingest documents sent to a channel"). The document is converted to Markdown and
 **submitted as material**: it goes through :meth:`KnowledgeService.submit`, which keeps
-it as a source under ``sources/`` on the spot (see "Promote submitted material at
-once"). The pictures the converter took out are kept beside it under ``assets/``,
-in the same commit, and the uploaded file itself is kept on this Mac only (ADR
+it as a source in the collection's uploads folder (``sources/`` by default) on
+the spot (see "Promote submitted material at once"). An upload that keeps
+pictures or attachments becomes a folder of its own there, the source beside
+its files, in the same commit; the
+uploaded file itself is kept on this Mac only (ADR
 knowledge-sources-keep-their-images-and-originals-stay-on-this-mac).
 
 What this module owns that ``submit`` does not need to think about: **the
@@ -17,7 +19,7 @@ drawn from its own opening prose (see "Fill frontmatter on converted material").
 
 A structured import (a Confluence page) also brings: the keys its converter
 read (where it came from, its version), the files it keeps beside the source
-under ``assets/``, a report of every part, and the page's identity — so the
+in its folder, a report of every part, and the page's identity — so the
 same page is not imported twice by accident, and importing it again on purpose
 keeps the older source, marked replaced (spec knowledge "Import a Confluence
 page as a readable source with its attachments").
@@ -31,7 +33,6 @@ import pathlib
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
-from urllib.parse import quote
 
 from coffer.application.knowledge.service import KnowledgeService
 from coffer.domain.knowledge.converter import (
@@ -176,14 +177,16 @@ class IngestService:
             raise KnowledgeSourceExists(page_id, older[0])
 
         sha = originals.digest(data)
-        folder, body = await asyncio.to_thread(_free_folder, row.name, conversion, sha)
-        files = {
-            **assets.picture_paths(row.name, folder, conversion.images),
-            **{
-                f"{row.name}/{paths.ASSETS_DIR_NAME}/{folder}/{f.name}": f.data
-                for f in conversion.files
-            },
+        kept = {
+            **{image.name: image.data for image in conversion.images},
+            **{f.name: f.data for f in conversion.files},
         }
+        # Where it would land, for a preview; ``submit`` picks the folder itself.
+        folder = (
+            await asyncio.to_thread(assets.free_folder, row.name, conversion.title, kept)
+            if kept
+            else None
+        )
         name = pathlib.PurePosixPath(filename).name or "upload"
         # A Markdown or text upload *is* its source: there is no other original,
         # unless converting it rewrote it (an export's markers expanded).
@@ -195,14 +198,14 @@ class IngestService:
             extra[REPORT_KEY] = report_summary(conversion.report)
         if preview:
             return IngestedDocument(
-                path=f"{row.name}/{paths.SOURCES_DIR_NAME}/{slugify(conversion.title)}.md",
+                path=_preview_path(row.name, folder, conversion.title),
                 title=conversion.title,
                 description=description,
                 converter=conversion.converter,
                 report=conversion.report,
                 page_id=page_id,
                 replaces=older,
-                files=tuple(files),
+                files=tuple(assets.bundle_paths(row.name, folder, kept)),
                 preview=True,
             )
 
@@ -210,13 +213,14 @@ class IngestService:
             collection=collection,
             title=conversion.title,
             description=description,
-            body=assets.link_pictures(body, folder, conversion.images),
+            body=conversion.markdown,
             actor_kind=ACTOR_USER,
             actor=actor,
             extra=extra,
-            files=files,
+            files=kept,
             supersede=older,
         )
+        landed = pathlib.PurePosixPath(submitted.document.path).parent
         # After the source is in: a failure here loses the local copy, not the upload.
         try:
             if keeps_original:
@@ -231,7 +235,7 @@ class IngestService:
             report=conversion.report,
             page_id=page_id,
             replaces=older,
-            files=tuple(files),
+            files=tuple(f"{landed}/{name}" for name in kept),
         )
 
 
@@ -254,21 +258,10 @@ def report_summary(report: ImportReport) -> dict[str, Any]:
     return summary
 
 
-def _free_folder(collection: str, conversion: Conversion, sha: str) -> tuple[str, str]:
-    """The folder under ``assets/`` this upload's files go in, and its
-    Markdown pointed there. A folder the converter named that is already
-    taken (the same page and version imported again) gets a ``-2`` of its
-    own, so no kept file is ever overwritten."""
-    wanted = conversion.asset_folder or assets.folder_for(conversion.title, sha)
-    base = paths.collection_dir(collection) / paths.ASSETS_DIR_NAME
-    folder, n = wanted, 2
-    while (conversion.files or conversion.images) and (base / folder).exists():
-        folder, n = f"{wanted}-{n}", n + 1
-    body = conversion.markdown
-    if folder != wanted and conversion.asset_folder:
-        prefix = f"../{paths.ASSETS_DIR_NAME}/"
-        body = body.replace(prefix + quote(wanted) + "/", prefix + quote(folder) + "/")
-    return folder, body
+def _preview_path(collection: str, folder: str | None, title: str) -> str:
+    """Where the source would land: in its own folder when it keeps files."""
+    base = paths.relative_of(paths.uploads_dir(collection))
+    return f"{base}/{folder}/{folder}.md" if folder else f"{base}/{slugify(title)}.md"
 
 
 def _description(meta: Mapping[str, Any], markdown: str, *, title: str) -> str:

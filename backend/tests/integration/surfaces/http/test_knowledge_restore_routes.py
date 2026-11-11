@@ -63,7 +63,8 @@ def test_a_deleted_collection_comes_back_with_its_documents_and_readme(  # type:
     rows = client.get("/api/v1/knowledge/collections").json()["collections"]
     row = next(r for r in rows if r["name"] == "shopee")
     assert row["uid"] != old_uid
-    assert (row["description"], row["source_count"]) == ("Shopee services.", 1)
+    # The template's AGENTS.md and index.md come back with the upload.
+    assert (row["description"], row["note_count"]) == ("Shopee services.", 3)
     body = client.get("/api/v1/knowledge/file", params={"path": doc}).json()["body"]
     assert body.strip() == "kept text"
     (edit,) = [e for e in _edited(client) if e["details"].get("restored_from")]

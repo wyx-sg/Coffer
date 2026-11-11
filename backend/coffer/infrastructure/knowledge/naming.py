@@ -27,13 +27,12 @@ def slugify(title: str) -> str:
 
 
 def unique_name(directory: pathlib.Path, slug: str) -> str:
-    """``<slug>.md``, suffixed only when that name is already taken."""
-    if not (directory / f"{slug}.md").exists():
-        return f"{slug}.md"
-    for n in range(2, 1000):
-        candidate = f"{slug}-{n}.md"
-        if not (directory / candidate).exists():
-            return candidate
+    """``<slug>.md``, suffixed only when that name is already taken — by a
+    file, or by an upload's folder ``<slug>/`` whose source has that slug."""
+    for n in range(1, 1000):
+        stem = slug if n == 1 else f"{slug}-{n}"
+        if not (directory / f"{stem}.md").exists() and not (directory / stem).is_dir():
+            return f"{stem}.md"
     raise ValueError(f"cannot find a free name for {slug!r}")
 
 

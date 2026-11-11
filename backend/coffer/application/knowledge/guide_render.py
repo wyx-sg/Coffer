@@ -149,11 +149,7 @@ def render_description(catalogue: Catalogue | None) -> str:
         lead = _lead(knowledge=False)
         return f"{lead}. {_TAIL}"[:MAX_DESCRIPTION_CHARS]
     lead = _lead(knowledge=True)
-    subjects = [
-        _subject(entry)
-        for entry, _ in catalogue
-        if entry.page_count or entry.source_count or entry.note_count
-    ]
+    subjects = [_subject(entry) for entry, _ in catalogue if entry.note_count]
     while subjects:
         joined = "; ".join(subjects)
         candidate = f"{lead}, covering {joined}. {_TAIL}"
@@ -203,125 +199,91 @@ def _manual(root: str, *, knowledge: bool) -> str:
 #: the skill body"): the body is paid for whenever an agent opens the skill.
 MAX_CATALOGUE_CHARS = 60_000
 
-#: How a page with no ``type`` is grouped.
-_UNTYPED = "untyped"
-
 #: The three levels of detail, most first.
 _FULL, _TITLES, _COUNTS = "full", "titles", "counts"
 
 
-def _pages_by_type(files: Sequence[FileEntry]) -> list[tuple[str, list[FileEntry]]]:
-    groups: dict[str, list[FileEntry]] = {}
-    for file in files:
-        if file.kind == "page":
-            groups.setdefault(file.page_type or _UNTYPED, []).append(file)
-    return sorted(groups.items(), key=lambda item: (item[0] == _UNTYPED, item[0]))
-
-
-def _entry_line(file: FileEntry, *, describe: bool) -> str:
+def _entry_line(file: FileEntry, *, describe: bool, base: str) -> str:
     relative = file.path.split("/", 1)[-1]
-    line = f"- `{relative}` — **{file.title}**"
+    shown = relative[len(base) + 1 :] if base and relative.startswith(base + "/") else relative
+    line = f"- `{shown}` — **{file.title}**"
     description = " ".join(file.description.split()) if describe else ""
     return line + (f": {description}" if description else "")
 
 
-def _source_line(file: FileEntry, *, describe: bool) -> str:
-    """A source, marked waiting or superseded, with its summary when ``describe``."""
-    line = _entry_line(file, describe=False)
-    if file.superseded_by:
-        line += f" (superseded by `{file.superseded_by.split('/', 1)[-1]}`)"
-    elif file.waiting:
-        line += " (waiting)"
-    return line + (f": {file.summary}" if describe and file.summary else "")
+def _by_folder(files: Sequence[FileEntry]) -> list[tuple[str, list[FileEntry]]]:
+    """Files grouped by the folder they sit in, inside the collection; the
+    root first."""
+    groups: dict[str, list[FileEntry]] = {}
+    for file in files:
+        relative = file.path.split("/", 1)[-1]
+        folder = relative.rsplit("/", 1)[0] if "/" in relative else ""
+        groups.setdefault(folder, []).append(file)
+    return sorted(groups.items(), key=lambda item: (item[0] != "", item[0]))
 
 
-def _linked_lines(entry: CollectionEntry, files: Sequence[FileEntry], detail: str) -> list[str]:
-    """A linked folder: kept by the developer's own tools and only shared, so
-    it is described by its own rules rather than Coffer's wiki layout (ADR
-    linked-knowledge-folders-are-read-only-and-machine-local)."""
-    folder = _display(pathlib.Path(entry.folder_path), home=None)
-    lines = [f"### {entry.name} (linked folder)"]
-    if entry.description:
-        lines += ["", " ".join(entry.description.split())]
-    rules = (
-        f"Follow its own `{entry.rules_file}` before writing anything in it"
-        if entry.rules_file
-        else "Write in it only the way its existing notes are written"
-    )
-    lines += [
-        "",
-        f"A folder the developer keeps with their own tools, at `{folder}/`. Coffer only "
-        f"shares it with you. {rules}; Coffer's `pages/`, `sources/`, inbox and tidy "
-        "do not apply here.",
-    ]
-    if not files:
-        return [*lines, "", "_No Markdown notes here._"]
-    if detail == _COUNTS:
-        return [*lines, "", f"{len(files)} Markdown notes. Search the folder."]
-    return [*lines, "", *(_entry_line(f, describe=False) for f in files)]
+def _how_to_read(entry: CollectionEntry, where: str) -> str:
+    """The one line that tells an agent which file holds the collection's
+    rules and where to start reading it."""
+    parts = [f"Files live under `{where}/`."]
+    if entry.rules_file:
+        parts.append(
+            f"Its rules are in `{entry.rules_file}`: read them before you write here, "
+            "and follow them over anything this file says about format."
+        )
+    else:
+        parts.append("It names no rules file: write in it the way its existing files are written.")
+    if entry.entry_file:
+        parts.append(f"Start reading at `{entry.entry_file}`.")
+    return " ".join(parts)
 
 
 def _catalogue_lines(
     root: str, entry: CollectionEntry, files: Sequence[FileEntry], detail: str
 ) -> list[str]:
+    """One collection: its description, its rules file and entry page, and —
+    when it names no entry page — its files by folder (spec knowledge "Merge
+    the manual and the catalogue in the skill body")."""
     if entry.linked:
-        return _linked_lines(entry, files, detail)
-    lines = [f"### {entry.name}"]
+        heading = f"### {entry.name} (linked folder)"
+        where = _display(pathlib.Path(entry.folder_path), home=None)
+        kept = (
+            "A folder the developer keeps with their own tools; Coffer only shares it "
+            "with you, so do not tidy it, upload into it or drop files for its inbox."
+        )
+    else:
+        heading = f"### {entry.name}"
+        where = f"{root}/{entry.name}"
+        kept = ""
+    lines = [heading]
     if entry.description:
         lines += ["", " ".join(entry.description.split())]
-    lines += ["", f"Files live under `{root}/{entry.name}/`; its `README.md` is the schema."]
-    pages = [f for f in files if f.kind == "page"]
-    waiting = [f for f in files if f.kind == "source" and f.waiting]
-    sources = sum(1 for f in files if f.kind == "source")
-    if not pages and not sources:
-        lines += ["", "_No pages or sources here yet._"]
-        return lines
-    if detail == _COUNTS:
-        lines += [
-            "",
-            f"{len(pages)} pages under `pages/`, {sources} sources under `sources/` "
-            f"({len(waiting)} waiting). Search those directories.",
-        ]
-        return lines
+    lines += ["", " ".join(p for p in (_how_to_read(entry, where), kept) if p)]
+    if not files:
+        return [*lines, "", "_No Markdown files here yet._"]
+    if entry.entry_file or detail == _COUNTS:
+        return [*lines, "", f"{len(files)} Markdown files. Search the folder for the rest."]
     describe = detail == _FULL
-    for page_type, group in _pages_by_type(files):
-        lines += ["", f"**Pages: {page_type}**", ""]
-        lines += [_entry_line(page, describe=describe) for page in group]
-    if describe and sources:
-        # Every source with its summary; a superseded one is no longer evidence.
-        lines += ["", "**Sources**", ""]
-        lines += [_source_line(f, describe=True) for f in files if f.kind == "source"]
-    elif waiting:
-        lines += ["", "**Sources waiting to be integrated**", ""]
-        lines += [_source_line(source, describe=False) for source in waiting]
-    lines += ["", f"{sources} sources in all under `sources/`; grep them for an exact fact."]
+    for folder, group in _by_folder(files):
+        lines += ["", f"**{folder}/**" if folder else "**(root)**", ""]
+        lines += [_entry_line(f, describe=describe, base=folder) for f in group]
     return lines
 
 
 def _render_catalogue_at(root: str, catalogue: Catalogue, detail: str) -> str:
-    pages = sum(1 for _, files in catalogue for f in files if f.kind == "page")
     lines = [
         "## What is in this developer's knowledge",
         "",
-        f"Every page, {pages} in all, and the sources, each marked when it waits to be "
-        "integrated or another source supersedes it. Read one at "
-        f"`{root}/<collection>/<path>` with your own file tool.",
+        "Each collection, where its rules are and where to start reading it. A "
+        "collection that names no start page lists its files. Read any file at "
+        f"`{root}/<collection>/<path>` with your own file tool; a linked folder lives "
+        "where its own section says.",
         "",
     ]
-    if any(entry.linked for entry, _ in catalogue):
-        lines += [
-            "A linked folder lives where its own section says, not under that root; read "
-            "its notes at that folder's path.",
-            "",
-        ]
     if detail == _TITLES:
-        lines += ["_Shortened: descriptions are left out. Read a page for its own._", ""]
+        lines += ["_Shortened: descriptions are left out. Read a file for its own._", ""]
     elif detail == _COUNTS:
-        lines += [
-            "_Shortened: only counts are listed. Search each collection's `pages/` and "
-            "`sources/` with your own tools._",
-            "",
-        ]
+        lines += ["_Shortened: only counts are listed. Search each collection yourself._", ""]
     if not catalogue:
         lines.append("_No collections have been created yet._")
     for entry, files in catalogue:
@@ -331,8 +293,8 @@ def _render_catalogue_at(root: str, catalogue: Catalogue, detail: str) -> str:
 
 
 def render_catalogue(root: str, catalogue: Catalogue) -> str:
-    """The generated half: every collection, its pages by type and its waiting
-    sources, shortened to fit :data:`MAX_CATALOGUE_CHARS`."""
+    """The generated half: every collection with its rules file and start
+    page, shortened to fit :data:`MAX_CATALOGUE_CHARS`."""
     for detail in (_FULL, _TITLES):
         text = _render_catalogue_at(root, catalogue, detail)
         if len(text) <= MAX_CATALOGUE_CHARS:

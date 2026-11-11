@@ -29,7 +29,7 @@ from typing import Any
 
 from coffer.domain.knowledge.entry import ACTOR_AGENT, KnowledgeFile
 from coffer.domain.knowledge.errors import KnowledgeFileNotFound
-from coffer.infrastructure.knowledge import originals, paths, source_view
+from coffer.infrastructure.knowledge import collection_settings, originals, paths, source_view
 from coffer.infrastructure.knowledge.frontmatter import render_frontmatter, split_frontmatter
 from coffer.infrastructure.knowledge.naming import slugify, unique_name
 
@@ -61,7 +61,7 @@ def read_file(relpath: str) -> KnowledgeFile:
     sha = str(fm.get(originals.ORIGINAL_SHA_KEY) or "")
     return KnowledgeFile(
         path=paths.relative_of(path),
-        title=str(fm.get("title") or path.stem),
+        title=collection_settings.title_of(fm, body, path.stem),
         description=str(fm.get("description") or ""),
         actor=str(fm.get("actor") or ACTOR_AGENT),
         created_at=str(fm.get("created_at") or ""),

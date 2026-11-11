@@ -1,8 +1,13 @@
 // frontend/src/components/knowledge/KnowledgeCreateDialog.tsx
 // New collection (board 5.1.13): a name (its folder under the knowledge
-// root) and what belongs in it — both required. A collection has no title: it
-// is shown by its folder name, and what belongs in it is the opening paragraph
-// of the folder's README, which the coffer-guide skill carries to every agent.
+// root) and what belongs in it — both required — and the template it starts
+// from (spec knowledge "Start a collection from a template"): LLM wiki, the
+// default, gives it a README declaring its rules file and start page, an
+// AGENTS.md of rules and an index.md; Blank gives it the README alone. Either
+// way the files are the collection's own from then on. A collection has no
+// title: it is shown by its folder name, and what belongs in it is the opening
+// paragraph of the folder's README, which the coffer-guide skill carries to
+// every agent.
 // The hook toasts a failure; on success the dialog closes, says so, and opens
 // the new collection.
 import { useEffect, useState } from "react";
@@ -20,10 +25,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Segmented } from "@/components/ui/segmented";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import { useCreateCollection } from "@/lib/hooks/useKnowledge";
 import { collectionPath } from "@/lib/knowledge/routes";
+
+type Template = "llm-wiki" | "blank";
 
 interface Props {
   open: boolean;
@@ -37,17 +45,19 @@ export function KnowledgeCreateDialog({ open, onOpenChange }: Props) {
   const { toast } = useToast();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [template, setTemplate] = useState<Template>("llm-wiki");
 
   useEffect(() => {
     if (open) {
       setName("");
       setDescription("");
+      setTemplate("llm-wiki");
     }
   }, [open]);
 
   const submit = () =>
     create.mutate(
-      { name: name.trim(), description: description.trim() },
+      { name: name.trim(), description: description.trim(), template },
       {
         onSuccess: (created) => {
           onOpenChange(false);
@@ -91,6 +101,23 @@ export function KnowledgeCreateDialog({ open, onOpenChange }: Props) {
               placeholder={t("knowledge.create.descriptionHint")}
             />
             <p className="text-xs text-text-muted">{t("knowledge.create.everyAgent")}</p>
+          </div>
+          <div className="space-y-1.5">
+            <Label>{t("knowledge.create.template")}</Label>
+            <div>
+              <Segmented
+                label={t("knowledge.create.template")}
+                value={template}
+                onChange={setTemplate}
+                options={[
+                  { value: "llm-wiki", label: t("knowledge.create.templates.llm-wiki") },
+                  { value: "blank", label: t("knowledge.create.templates.blank") },
+                ]}
+              />
+            </div>
+            <p className="text-xs text-text-muted" data-testid="knowledge-template-hint">
+              {t(`knowledge.create.templateHints.${template}`)}
+            </p>
           </div>
         </div>
         <DialogFooter>

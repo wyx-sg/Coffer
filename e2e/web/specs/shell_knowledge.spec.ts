@@ -3,11 +3,11 @@
 // The one /knowledge page end-to-end, against a live daemon: create a
 // collection and upload an item over the REST API, then walk the page in the
 // real DOM — the collection in the tree, the upload opened read-only from its
-// Sources folder, and listed as a version in the file's history.
+// sources/ folder, and listed as a version in the file's history.
 //
 // Nothing auto-provisions a collection (spec knowledge "Create collections
 // only deliberately"), so a walk starts by making one. An upload is kept as a
-// source on the spot, so the tree lists it under Sources at once, with no
+// source on the spot, so the tree lists it under sources/ at once, with no
 // Inbox and no curation control; the page offers Tidy (or Copy prompt when no
 // managed agent is available) in place of them.
 //
@@ -92,13 +92,12 @@ test("a collection is one tree; an uploaded source is read, opened in the editor
   ).toBeVisible();
   await expect(tree.getByRole("button", { name: /^Inbox/ })).toHaveCount(0);
   await expect(page.getByTestId("knowledge-automatic")).toHaveCount(0);
-  // The upload is a source: the tree lists it under the Sources folder, by
-  // its file as it is on disk.
+  // The upload lands in the uploads folder: the tree lists it under the
+  // collection's own sources/ folder, by its file as it is on disk.
   expect(submitted.path).toContain("/sources/");
   const fileName = submitted.path.split("/").pop() ?? "";
-  await tree.getByRole("button", { name: "Sources", exact: true }).click();
-  // No page cites it yet, so it is marked Waiting.
-  await tree.getByRole("button", { name: `${fileName} Waiting`, exact: true }).click();
+  await tree.getByRole("button", { name: "sources", exact: true }).click();
+  await tree.getByRole("button", { name: fileName, exact: true }).click();
   await expect(page).toHaveURL(/\?file=/);
   await expect(page.getByText("The first body.")).toBeVisible();
 

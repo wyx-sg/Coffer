@@ -77,7 +77,6 @@ def test_an_upload_becomes_a_markdown_source_and_nothing_else(client, tmp_path) 
     assert file_out["title"] == doc["title"]
     assert file_out["description"] == doc["description"]
     assert "| session | account |" in file_out["body"]
-    assert (file_out["kind"], file_out["waiting"]) == ("source", True)
     assert file_out["original"] == "team.csv"
 
 
@@ -221,7 +220,7 @@ def _with_pictures(monkeypatch) -> bytes:  # type: ignore[no-untyped-def]
 @pytest.mark.acceptance(
     spec="knowledge", scenario="an upload's pictures are kept beside its source"
 )
-def test_an_uploads_pictures_land_under_assets_and_the_source_links_them(  # type: ignore[no-untyped-def]
+def test_an_uploads_pictures_land_in_its_own_folder_beside_the_source(  # type: ignore[no-untyped-def]
     client, tmp_path, monkeypatch
 ) -> None:
     _create_collection(client, "shopee")
@@ -233,27 +232,59 @@ def test_an_uploads_pictures_land_under_assets_and_the_source_links_them(  # typ
         files={"file": ("deck.pptx", b"PK fake deck bytes")},
     )
     assert resp.status_code == 201, resp.text
-    on_disk = _files_on_disk(tmp_path)
-    assert on_disk[0] == "assets/deck-" + on_disk[0].split("deck-")[1]
-    folder = on_disk[0].split("/")[1]
-    assert on_disk == [
-        f"assets/{folder}/image-1.png",
-        f"assets/{folder}/image-2.png",
-        "sources/deck.md",
+    assert resp.json()["path"] == "shopee/sources/deck/deck.md"
+    assert _files_on_disk(tmp_path) == [
+        "sources/deck/deck.md",
+        "sources/deck/image-1.png",
+        "sources/deck/image-2.png",
     ]
-    body = client.get("/api/v1/knowledge/file", params={"path": "shopee/sources/deck.md"}).json()[
-        "body"
-    ]
-    assert f"![flow](../assets/{folder}/image-1.png)" in body
-    assert f"![](../assets/{folder}/image-2.png)" in body
+    body = client.get(
+        "/api/v1/knowledge/file", params={"path": "shopee/sources/deck/deck.md"}
+    ).json()["body"]
+    assert "![flow](image-1.png)" in body
+    assert "![](image-2.png)" in body
 
     # The pictures are in the same commit as the source: one change.
     changes = client.get("/api/v1/knowledge/changes", params={"limit": 5}).json()["changes"]
     added = next(c for c in changes if c["summary"] == "Add Deck")
     assert {d["path"] for d in added["documents"]} >= {
-        "shopee/sources/deck.md",
-        f"shopee/assets/{folder}/image-1.png",
+        "shopee/sources/deck/deck.md",
+        "shopee/sources/deck/image-1.png",
     }
+
+    # A second upload of the same title gets a folder of its own.
+    again = client.post(
+        "/api/v1/knowledge/upload",
+        data={"collection": "shopee"},
+        files={"file": ("deck.pptx", b"PK other deck bytes")},
+    )
+    assert again.json()["path"] == "shopee/sources/deck-2/deck-2.md"
+
+
+@pytest.mark.acceptance(spec="knowledge", scenario="an upload lands in the folder the README names")
+def test_an_upload_lands_in_the_folder_the_readme_names(  # type: ignore[no-untyped-def]
+    client, tmp_path, monkeypatch
+) -> None:
+    _create_collection(client, "shopee")
+    readme = tmp_path / ".coffer" / "vault" / "knowledge" / "shopee" / "README.md"
+    readme.write_text("---\nuploads: material/raw\n---\n\n# shopee\n", encoding="utf-8")
+    _with_pictures(monkeypatch)
+
+    resp = client.post(
+        "/api/v1/knowledge/upload",
+        data={"collection": "shopee"},
+        files={"file": ("deck.pptx", b"PK fake deck bytes")},
+    )
+
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["path"] == "shopee/material/raw/deck/deck.md"
+    assert _files_on_disk(tmp_path) == [
+        "material/raw/deck/deck.md",
+        "material/raw/deck/image-1.png",
+        "material/raw/deck/image-2.png",
+    ]
+    body = (readme.parent / "material" / "raw" / "deck" / "deck.md").read_text(encoding="utf-8")
+    assert "![flow](image-1.png)" in body
 
 
 @pytest.mark.acceptance(spec="knowledge", scenario="a picture is read through the knowledge routes")
@@ -305,7 +336,7 @@ def test_the_original_is_kept_locally_and_named_by_the_source(  # type: ignore[n
     assert kept.read_bytes() == data
 
     file_out = client.get(
-        "/api/v1/knowledge/file", params={"path": "shopee/sources/deck.md"}
+        "/api/v1/knowledge/file", params={"path": "shopee/sources/deck/deck.md"}
     ).json()
     assert file_out["original"] == "deck.pptx"
     assert file_out["original_path"] == str(kept)
@@ -331,7 +362,7 @@ def test_a_source_whose_original_is_elsewhere_names_it_without_a_path(  # type: 
         kept.unlink()
 
     file_out = client.get(
-        "/api/v1/knowledge/file", params={"path": "shopee/sources/deck.md"}
+        "/api/v1/knowledge/file", params={"path": "shopee/sources/deck/deck.md"}
     ).json()
     assert file_out["original"] == "deck.pptx"
     assert file_out["original_path"] is None
@@ -403,7 +434,7 @@ def test_a_confluence_page_imports_previews_and_replaces_over_http(client, tmp_p
     read = client.get("/api/v1/knowledge/file", params={"path": doc["path"]}).json()
     assert read["origin"]["page_id"] == "77"
     assert "# Overview" in read["body"]
-    assert "![map.png](../assets/confluence-77-v3/map.png)" in read["body"]
+    assert "![map.png](map.png)" in read["body"]
 
     again = client.post(
         "/api/v1/knowledge/upload",
@@ -420,8 +451,12 @@ def test_a_confluence_page_imports_previews_and_replaces_over_http(client, tmp_p
     )
     assert replaced.status_code == 201, replaced.text
     assert replaced.json()["replaces"] == [doc["path"]]
-    older = client.get("/api/v1/knowledge/file", params={"path": doc["path"]}).json()
-    assert older["superseded_by"]["path"] == replaced.json()["path"]
+    from coffer.infrastructure.knowledge import paths
+    from coffer.infrastructure.knowledge.frontmatter import split_frontmatter
+
+    older, _ = split_frontmatter((paths.knowledge_root() / doc["path"]).read_text())
+    new_slug = replaced.json()["path"].rsplit("/", 1)[-1].removesuffix(".md")
+    assert older["superseded_by"] == new_slug
 
 
 def test_a_source_with_storage_markers_reads_converted_but_stays_as_written(  # type: ignore[no-untyped-def]

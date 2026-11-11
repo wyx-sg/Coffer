@@ -75,15 +75,13 @@ describe("the reader", () => {
     expect(screen.getByText("The text.")).toBeVisible();
   });
 
-  test("a page's verified date is in its line, and inline code wraps a long path at its separators", async () => {
+  test("inline code wraps a long path at its separators", async () => {
     api.getFile.mockResolvedValue({
       ...GATEWAY,
-      verified: "2026-10-12",
       body: "# Account Gateway\n\nIt lives in `services/account/gateway/internal/orchestrator.go`.\n",
     });
     renderKnowledge(OPEN);
-    expect(await screen.findByTestId("page-verified")).toHaveTextContent("verified Oct 12, 2026");
-    const code = screen.getByTestId("inline-code");
+    const code = await screen.findByTestId("inline-code");
     expect(code).toHaveTextContent("services/account/gateway/internal/orchestrator.go");
     expect(code.querySelectorAll("wbr").length).toBeGreaterThan(3);
   });
@@ -224,11 +222,10 @@ describe("the history", () => {
   });
 });
 
-describe("a page's line and links", () => {
+describe("a file's line and links", () => {
   const CACHE = file(`${NAME}/pages/cache-ttl.md`, { title: "Cache TTL" });
   const PAGE = file(`${NAME}/pages/session-ownership.md`, {
     title: "Session ownership",
-    page_type: "decision",
     body: [
       "# Session ownership",
       "",
@@ -238,34 +235,23 @@ describe("a page's line and links", () => {
       "[[cache-ttl]]",
       "```",
     ].join("\n"),
-    sources: [
-      { slug: "release-notes", path: RELEASE.path, title: "Release notes" },
-      { slug: "old-spec", path: null, title: "" },
-    ],
     links: [
       { target: "cache-ttl", path: CACHE.path, ambiguous: false, kind: "wiki", outside: false },
       { target: "gone", path: null, ambiguous: false, kind: "wiki", outside: false },
     ],
   });
 
-  acceptance("knowledge", "a page shows its sources and resolves its links", async () => {
+  acceptance("knowledge", "a file resolves its links", async () => {
     api.getFile.mockImplementation(async (path: string) =>
       path === PAGE.path ? PAGE : path === CACHE.path ? CACHE : RELEASE,
     );
     renderKnowledge(`/knowledge/${UID}?file=${encodeURIComponent(PAGE.path)}`);
     expect(await screen.findByRole("heading", { level: 1, name: PAGE.title })).toBeVisible();
 
-    // The line under the title: its type, then both sources — the existing one
-    // opening it, the missing one struck through.
+    // The line under the title names no type, sources or check of Coffer's own.
     const line = screen.getByTestId("file-line");
-    expect(within(line).getByTestId("page-type")).toHaveTextContent("decision");
-    expect(within(line).getByRole("link", { name: "Release notes" })).toHaveAttribute(
-      "href",
-      `/knowledge/${UID}?file=${encodeURIComponent(RELEASE.path)}`,
-    );
-    const missing = within(line).getByText("old-spec");
-    expect(missing.tagName).toBe("S");
-    expect(within(line).queryByRole("link", { name: "old-spec" })).toBeNull();
+    expect(within(line).queryByTestId("page-type")).toBeNull();
+    expect(within(line).queryByText(/Sources/)).toBeNull();
 
     // The existing link opens the page it names; the dead one is in the danger tone.
     const link = screen.getByRole("link", { name: "the cache" });
@@ -285,27 +271,11 @@ describe("a page's line and links", () => {
     expect(screen.getByTestId("where")).toHaveTextContent(encodeURIComponent(CACHE.path));
   });
 
-  test("a waiting source shows the Waiting mark", async () => {
+  test("material in the uploads folder shows its [[ text as written", async () => {
+    api.getFile.mockResolvedValue({ ...RELEASE, body: "Macro [[TD-12 text.", links: [] });
     renderKnowledge(`/knowledge/${UID}?file=${encodeURIComponent(RELEASE.path)}`);
-    const line = await screen.findByTestId("file-line");
-    expect(within(line).getByText("Waiting")).toBeInTheDocument();
-    expect(within(line).queryByText(/Cited by/)).toBeNull();
-  });
-
-  test("a cited source names the pages that cite it, each opening the page", async () => {
-    api.getFile.mockResolvedValue({
-      ...RELEASE,
-      waiting: false,
-      cited_by: [{ path: GATEWAY.path, title: GATEWAY.title }],
-    });
-    renderKnowledge(`/knowledge/${UID}?file=${encodeURIComponent(RELEASE.path)}`);
-    const line = await screen.findByTestId("file-line");
-    expect(within(line).getByText(/Cited by 1 page/)).toBeInTheDocument();
-    expect(within(line).getByRole("link", { name: GATEWAY.title })).toHaveAttribute(
-      "href",
-      `/knowledge/${UID}?file=${encodeURIComponent(GATEWAY.path)}`,
-    );
-    expect(within(line).queryByText("Waiting")).toBeNull();
+    expect(await screen.findByText("Macro [[TD-12 text.")).toBeInTheDocument();
+    expect(screen.queryByText("TD-12")).toBeNull();
   });
 });
 

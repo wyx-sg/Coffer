@@ -145,12 +145,13 @@ def test_an_ingested_document_names_the_source_it_became() -> None:
     )
 
 
-def test_a_collection_reports_its_pages_sources_and_its_one_handoff() -> None:
+def test_a_collection_reports_its_files_declarations_and_its_one_handoff() -> None:
     fields = set(schemas.CollectionOut.model_fields)
     assert {
-        "page_count",
-        "source_count",
-        "waiting_source_count",
+        "note_count",
+        "rules_file",
+        "entry_file",
+        "uploads_dir",
         "finding_count",
         "tidy_handoff",
         "tidy_running",
@@ -162,6 +163,9 @@ def test_a_collection_reports_its_pages_sources_and_its_one_handoff() -> None:
         "file_count",
         "topic_count",
         "check_handoff",
+        "page_count",
+        "source_count",
+        "waiting_source_count",
     }
 
 
@@ -195,6 +199,6 @@ def test_every_finding_the_check_makes_is_a_kind_the_wire_carries() -> None:
     would fail the whole check response, not just that finding."""
     from typing import get_args
 
-    from coffer.infrastructure.knowledge.wiki_findings import FINDING_KINDS
+    from coffer.infrastructure.knowledge.link_graph import FINDING_KINDS
 
     assert set(get_args(schemas.FindingKind)) == set(FINDING_KINDS)
