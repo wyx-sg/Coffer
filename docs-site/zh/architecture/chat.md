@@ -307,7 +307,7 @@ flowchart TD
 [定时任务](/zh/guides/scheduled-tasks)是 Coffer 按时间发给智能体的一段提示词，每次运行都是一个新会话（ADR [automation-is-a-scheduled-prompt](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/automation-is-a-scheduled-prompt.md)）。任务是一个只在本机的 `scheduled_task` 资源：计划（一次、每小时、每天、每周、cron、手动，都可以带一个 IANA 时区）、提示词、智能体，以及可选的模型和目录。机制就这么多：它不绑聊天，也没有模板；一次运行要怎么用聊天、写报告或走流程，写在提示词里，或者交给提示词点名的 skill。
 
 - **调度器**是一个可唤醒循环 `scheduled-tasks`，睡到最早的到期时间；任何任务被写入都会唤醒它。在宽限期内到期的时间点交给执行器；超过宽限期的记为已跳过。一次性任务的宽限期是它等待时长的一半（15 分钟到 2 小时）；重复任务的到当天结束。任务上一次运行还没结束时到期的那一次会被跳过。一次性任务运行后被关闭，连续失败三次的重复任务会被暂停。
-- **执行器**用任务的智能体、模型和目录（默认主目录）开一个不属于任何渠道的对话，经编排器发出提示词，和在对话页新开一样。迟到的运行会在提示词后面加一行，说明原定时间和实际运行时间。这次运行随轮次结束记为 `done`、`failed` 或 `stopped`，什么都不发出；需要通知所有者时，由智能体自己用 `coffer__channel_notify`。
+- **执行器**用任务的智能体、模型和目录（默认是 Coffer 工作区）开一个不属于任何渠道的对话，经编排器发出提示词，和在对话页新开一样。迟到的运行会在提示词后面加一行，说明原定时间和实际运行时间。这次运行随轮次结束记为 `done`、`failed` 或 `stopped`，什么都不发出；需要通知所有者时，由智能体自己用 `coffer__channel_notify`。
 - **运行记录。** 每次运行是 `runs.db` 里 `scheduled_task_runs` 的一行（原定、开始、结束、结果、原因、对话），由保留期清理。
 
 ### 聊天之后对话去哪里 {#where-a-conversation-goes-after-the-chat}

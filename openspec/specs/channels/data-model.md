@@ -118,7 +118,7 @@ directory are this machine's. `name` is the task's label (free text);
 | `schedule` | object | one of `{kind: once, at}`, `{kind: hourly, minute}`, `{kind: daily, time: "HH:MM"}`, `{kind: weekly, weekday: 0-6 (Monday 0), time}`, `{kind: cron, expr}`, `{kind: manual}`; a repeating one may add `timezone` (IANA), this machine's local time otherwise; at most every 15 min |
 | `prompt` | string | what the agent is asked; non-empty, at most 8000 characters |
 | `agent` | `claude_code` \| `codex` | required |
-| `model`, `cwd` | string \| null | null is the agent's default model and the home folder |
+| `model`, `cwd` | string \| null | null is the agent's default model and Coffer's workspace (`~/.coffer/content/workspace`) |
 | `catch_up` | bool | default `true` |
 
 A file an older Coffer wrote may carry `chat`, `session`, `mention`,

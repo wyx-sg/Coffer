@@ -2,7 +2,7 @@
 //
 // The agent is required; the model lists the agent's catalogue, with the
 // agent's own default first; the directory is picked like every other folder
-// in Coffer (the native dialog, or typed), and left empty is the home folder.
+// in Coffer (the native dialog, or typed), and left empty is Coffer's workspace.
 import { useTranslation } from "react-i18next";
 
 import { FolderPickerField } from "@/components/FolderPickerField";
@@ -91,7 +91,7 @@ export function TaskSessionFields({ form, set }: Props) {
           inputId="task-cwd"
           value={form.cwd || null}
           onChange={(cwd) => set({ cwd: cwd ?? "" })}
-          placeholder={t("scheduledTasks.dialog.homeFolder")}
+          placeholder={t("scheduledTasks.dialog.workspaceFolder")}
           clearable
           typeable
         />

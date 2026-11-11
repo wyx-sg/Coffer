@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from fastapi import FastAPI
@@ -29,6 +28,7 @@ from coffer.domain.chat.errors import ConversationNotFound
 from coffer.domain.chat.events import AgentEvent, TurnDone, TurnError
 from coffer.domain.features import SCHEDULED_TASKS
 from coffer.infrastructure.channel.persistence import ScheduledRunRepo
+from coffer.infrastructure.chat.default_workspace import default_workspace_dir
 from coffer.surfaces.http.chat_wiring import ChatWiring
 from coffer.surfaces.http.event_wiring import EventStream
 from coffer.surfaces.http.feature_dependencies import get_feature_service_optional
@@ -59,7 +59,7 @@ class FreshTurns:
         text: str,
         on_end: Callable[[RunOutcome, str], Awaitable[None]],
     ) -> str:
-        config: dict[str, Any] = {"cwd": cwd or str(Path.home())}
+        config: dict[str, Any] = {"cwd": cwd or default_workspace_dir()}
         if model:
             config["model"] = model
         conv = await self._chat_service.create_conversation(agent_key=agent, agent_config=config)

@@ -69,7 +69,7 @@ export function TaskPane({ task, onDeleted }: Props) {
             </Row>
             <Row label={t("scheduledTasks.dialog.agent")}>{agentText(task)}</Row>
             <Row label={t("scheduledTasks.dialog.cwd")}>
-              <span className="font-mono">{c.cwd || t("scheduledTasks.dialog.homeFolder")}</span>
+              <span className="font-mono">{c.cwd || t("scheduledTasks.dialog.workspaceFolder")}</span>
             </Row>
             <Row label={t("scheduledTasks.dialog.catchUp")}>
               {c.catch_up ? t("scheduledTasks.on") : t("scheduledTasks.off")}

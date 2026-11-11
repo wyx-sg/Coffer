@@ -21,6 +21,7 @@ from coffer.application.channel.schedule.kind import KIND
 from coffer.domain.chat.events import TurnError, TurnStarted
 from coffer.domain.errors import ConfigValidationError
 from coffer.domain.resource import Kind, StorageClass
+from coffer.infrastructure.chat.default_workspace import default_workspace_dir
 from coffer.surfaces.http.schedule_wiring import _Reads
 from tests.unit.chat.conftest import FakeAgentAdapter
 
@@ -345,6 +346,25 @@ async def test_a_task_runs_in_a_new_conversation_each_time(
     # Nothing was posted to any chat, and the chat's own conversation is untouched.
     assert adapter.texts() == []
     assert await env.active_conversation(channel) is None
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="a task that names no directory runs in Coffer's workspace"
+)
+async def test_a_task_without_a_directory_runs_in_the_coffer_workspace(
+    env: ChannelEnv, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    s = build_scheduling(env, monkeypatch)
+    env.provider.adapter = default_reply_adapter("Done.")
+    task = await s.tasks.create("Tidy", task_config(schedule=daily("10:30")), actor="t")
+
+    s.clock.advance(timedelta(minutes=30))
+    await s.tick()
+    (run,) = await s.settled(task.uid)
+
+    conversation = await env.chat.get_conversation(run.conversation_id)
+    assert conversation.agent_config.cwd == default_workspace_dir()
+    assert conversation.agent_config.cwd.endswith("/.coffer/content/workspace")
 
 
 @pytest.mark.acceptance(spec="channels", scenario="a task whose turn fails is recorded failed")

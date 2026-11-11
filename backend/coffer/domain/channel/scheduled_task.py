@@ -85,7 +85,7 @@ class ScheduledTaskConfig(BaseModel):
     prompt: str = Field(min_length=1, max_length=PROMPT_MAX_LENGTH)
     #: The agent (its key, ``claude_code`` or ``codex`` — one agent per type),
     #: model and directory every run opens a new conversation with. No model
-    #: is the agent's default; no directory is the home folder.
+    #: is the agent's default; no directory is the Coffer workspace.
     agent: str = Field(min_length=1)
     model: str | None = None
     cwd: str | None = None

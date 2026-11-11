@@ -6783,7 +6783,7 @@
       "addFailed": "Couldn’t create the task",
       "editFailed": "Couldn’t save the task",
       "agentDefault": "Agent default",
-      "homeFolder": "Home folder",
+      "workspaceFolder": "Coffer workspace",
       "timezone": "Timezone",
       "timezonePlaceholder": "This Mac's time",
       "timezoneHint": "In the timezone you name (an IANA name such as Asia/Singapore), or this Mac's local time.",

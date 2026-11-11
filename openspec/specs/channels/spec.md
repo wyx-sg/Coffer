@@ -2993,8 +2993,8 @@ machine (`local/resources/scheduled_task/<uid>.json`) and never synced, since
 the agent and directory it names are this machine's. Its config MUST carry a
 schedule, the prompt the run is given (at most 8000 characters) and the agent
 every run opens on (`claude_code` or `codex`), and MAY carry the model (the
-agent's default otherwise) and the working directory (the home folder
-otherwise). That is the whole task: it names no chat and no template, and what
+agent's default otherwise) and the working directory (Coffer's own
+workspace, `~/.coffer/content/workspace`, otherwise). That is the whole task: it names no chat and no template, and what
 it does with a chat, a report or a flow is its prompt's (ADR
 automation-is-a-scheduled-prompt). A schedule is one of: once at a time, every
 hour at a minute, every day at a time, one weekday at a time, a five-field
@@ -3106,7 +3106,7 @@ run.
 
 ### Requirement: Run a scheduled task in a fresh conversation of its own
 Every run MUST open a new conversation on the task's agent, with its model
-when it names one and in its directory, or the home folder when it names none,
+when it names one and in its directory, or Coffer's workspace when it names none,
 titled after the task; that conversation MUST be listed on the Conversations
 page like any other and MUST be the run's conversation in its history. Its one
 turn MUST be given the task's prompt as written, followed only by the late
@@ -3123,6 +3123,11 @@ the reason. A repeating task whose last three runs all failed MUST be paused.
 - **WHEN** its slot comes twice, on two days
 - **THEN** each run opens a new Claude Code conversation in `~/work/site`, titled after the task, whose turn is the task's prompt
 - **AND** each run is closed `done` with its own conversation, and no chat receives anything
+
+#### Scenario: a task that names no directory runs in Coffer's workspace
+- **GIVEN** a task that names no working directory
+- **WHEN** it runs
+- **THEN** its conversation opens in `~/.coffer/content/workspace`, the directory a channel or chat turn without one uses
 
 #### Scenario: a task whose turn fails is recorded failed
 - **GIVEN** a task whose agent's turn ends with an error

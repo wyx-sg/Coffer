@@ -6783,7 +6783,7 @@
       "addFailed": "无法创建任务",
       "editFailed": "无法保存任务",
       "agentDefault": "智能体默认",
-      "homeFolder": "主目录",
+      "workspaceFolder": "Coffer 工作区",
       "timezone": "时区",
       "timezonePlaceholder": "这台 Mac 的时间",
       "timezoneHint": "按你填的时区（IANA 名称，例如 Asia/Singapore），不填就按这台 Mac 的本地时间。",

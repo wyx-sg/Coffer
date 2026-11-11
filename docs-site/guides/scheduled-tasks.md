@@ -19,7 +19,7 @@ A task holds:
 - **Prompt**: what the agent is asked. To use a skill, name it in the prompt.
 - **Agent**: Claude Code or Codex.
 - **Model**: one from the agent's list, or the agent's default.
-- **Directory**: where the conversation opens; left empty, the home folder.
+- **Directory**: where the conversation opens; left empty, Coffer's workspace (`~/.coffer/content/workspace`), the same folder a chat or channel conversation without a directory uses.
 - **Catch up**: on by default. See [When the Mac was asleep](#when-the-mac-was-asleep).
 
 Tasks are kept on this Mac only and never synced: a task names an agent and a directory on this machine, and two Macs must not both run it.
