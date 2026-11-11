@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import os
 import pathlib
+from collections.abc import Iterable, Mapping
 
 from coffer.domain.knowledge.errors import KnowledgeFileNotFound
 from coffer.infrastructure.knowledge import linked, paths
@@ -39,8 +40,27 @@ def folder_for(title: str) -> str:
     return slugify(title)[:60].strip("-") or "upload"
 
 
-def bundle_paths(collection: str, folder: str, files: dict[str, bytes]) -> dict[str, bytes]:
-    """Each kept file by its knowledge-root-relative path in the upload's folder."""
+def free_folder(collection: str, title: str, names: Iterable[str]) -> str:
+    """The folder under the uploads folder an upload keeping ``names`` goes
+    in: its title as a slug, with a ``-2`` of its own when that name is taken
+    — by a folder, by a source of the same slug (so ``[[slug]]`` stays one
+    file), or by a kept file the source would overwrite."""
+    wanted = folder_for(title)
+    base = paths.uploads_dir(collection)
+    kept = set(names)
+    folder, n = wanted, 2
+    while (base / folder).exists() or (base / f"{folder}.md").exists() or f"{folder}.md" in kept:
+        folder, n = f"{wanted}-{n}", n + 1
+    return folder
+
+
+def bundle_paths(
+    collection: str, folder: str | None, files: Mapping[str, bytes]
+) -> dict[str, bytes]:
+    """Each kept file by its knowledge-root-relative path in the upload's
+    folder; none without a folder."""
+    if not folder:
+        return {}
     base = f"{paths.relative_of(paths.uploads_dir(collection))}/{folder}"
     return {f"{base}/{name}": data for name, data in files.items()}
 

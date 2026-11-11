@@ -14,7 +14,14 @@ import pytest
 
 from coffer.application.knowledge import templates
 from coffer.application.knowledge.guide_render import render_catalogue
-from coffer.infrastructure.knowledge import catalogue, collection_settings, fs, paths
+from coffer.infrastructure.knowledge import (
+    assets,
+    catalogue,
+    collection_settings,
+    fs,
+    naming,
+    paths,
+)
 from coffer.infrastructure.knowledge.frontmatter import split_frontmatter
 
 
@@ -133,3 +140,24 @@ def test_the_blank_template_is_a_readme_alone() -> None:
     assert templates.render(templates.LLM_WIKI, "x", None)["README.md"].count("\n\n\n") == 0
     with pytest.raises(ValueError):
         templates.render("nope", "x", None)
+
+
+def test_an_uploads_folder_that_is_a_file_or_holds_control_characters_falls_back() -> None:
+    directory = _collection(
+        "odd",
+        {"README.md": "---\nuploads: index.md\n---\n# Odd\n", "index.md": "# Index\n"},
+    )
+    assert collection_settings.read(directory).uploads == "sources"
+    (directory / "README.md").write_text('---\nuploads: "raw\\u0007"\n---\n# Odd\n')
+    assert collection_settings.read(directory).uploads == "sources"
+
+
+def test_an_uploads_folder_never_takes_a_name_a_source_or_its_own_file_holds() -> None:
+    directory = _collection("deck", {"sources/report.md": "# Report\n", "sources/spec/x.png": ""})
+    uploads = directory / "sources"
+    # A plain source "report" exists: the folder skips it, so [[report]] stays one file.
+    assert assets.free_folder("deck", "Report", ["a.png"]) == "report-2"
+    # A kept attachment named like the source would be overwritten by it.
+    assert assets.free_folder("deck", "Notes", ["notes.md"]) == "notes-2"
+    # And a plain source skips the slug an upload's folder holds.
+    assert naming.unique_name(uploads, "spec") == "spec-2.md"

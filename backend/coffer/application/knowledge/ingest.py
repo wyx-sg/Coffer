@@ -181,8 +181,12 @@ class IngestService:
             **{image.name: image.data for image in conversion.images},
             **{f.name: f.data for f in conversion.files},
         }
-        folder = await asyncio.to_thread(_free_folder, row.name, conversion) if kept else None
-        files = assets.bundle_paths(row.name, folder, kept) if folder else {}
+        # Where it would land, for a preview; ``submit`` picks the folder itself.
+        folder = (
+            await asyncio.to_thread(assets.free_folder, row.name, conversion.title, kept)
+            if kept
+            else None
+        )
         name = pathlib.PurePosixPath(filename).name or "upload"
         # A Markdown or text upload *is* its source: there is no other original,
         # unless converting it rewrote it (an export's markers expanded).
@@ -201,7 +205,7 @@ class IngestService:
                 report=conversion.report,
                 page_id=page_id,
                 replaces=older,
-                files=tuple(files),
+                files=tuple(assets.bundle_paths(row.name, folder, kept)),
                 preview=True,
             )
 
@@ -213,10 +217,10 @@ class IngestService:
             actor_kind=ACTOR_USER,
             actor=actor,
             extra=extra,
-            files=files,
+            files=kept,
             supersede=older,
-            folder=folder,
         )
+        landed = pathlib.PurePosixPath(submitted.document.path).parent
         # After the source is in: a failure here loses the local copy, not the upload.
         try:
             if keeps_original:
@@ -231,7 +235,7 @@ class IngestService:
             report=conversion.report,
             page_id=page_id,
             replaces=older,
-            files=tuple(files),
+            files=tuple(f"{landed}/{name}" for name in kept),
         )
 
 
@@ -252,18 +256,6 @@ def report_summary(report: ImportReport) -> dict[str, Any]:
         if named:
             summary[status] = named
     return summary
-
-
-def _free_folder(collection: str, conversion: Conversion) -> str:
-    """The folder under the uploads folder this upload and its files go in:
-    its title as a slug, with a ``-2`` of its own when that name is taken, so
-    no kept file is ever overwritten."""
-    wanted = assets.folder_for(conversion.title)
-    base = paths.uploads_dir(collection)
-    folder, n = wanted, 2
-    while (base / folder).exists():
-        folder, n = f"{wanted}-{n}", n + 1
-    return folder
 
 
 def _preview_path(collection: str, folder: str | None, title: str) -> str:

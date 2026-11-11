@@ -310,14 +310,13 @@ class KnowledgeService:
         extra: Mapping[str, Any] | None = None,
         files: Mapping[str, bytes] | None = None,
         supersede: Sequence[str] = (),
-        folder: str | None = None,
     ) -> Submission:
         """Add new material to a collection ("Promote submitted material at once"):
         a source under ``sources/`` on the spot, waiting until an agent compiles it.
-        ``extra`` adds frontmatter keys; ``files`` (knowledge-root-relative path to
-        bytes, an upload's pictures) land in the same commit — the source beside
-        them in ``folder`` under the uploads folder when one is named — as does marking each
-        source in ``supersede`` replaced by the new one (a page imported again)."""
+        ``extra`` adds frontmatter keys; ``files`` (bare name to bytes) land in
+        the same commit in the upload's own folder, the source beside them —
+        picked here with no await before the writes, so no two uploads share
+        it — as does marking each ``supersede`` source replaced by the new one."""
         row = await self.require_collection(collection)
         meta = CommitMeta(
             writer_of(actor_kind),
@@ -328,7 +327,8 @@ class KnowledgeService:
             collection=row.name,
         )
         async with recording(self.history, meta) as tx:
-            for relpath, data in (files or {}).items():
+            folder = assets.free_folder(row.name, title, files) if files else None
+            for relpath, data in assets.bundle_paths(row.name, folder, files or {}).items():
                 tx.touch(relpath)
                 assets.write_bytes(relpath, data)
             name = inbox.submit_material(

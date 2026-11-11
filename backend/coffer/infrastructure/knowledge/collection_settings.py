@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import pathlib
 import posixpath
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -93,6 +94,11 @@ def _inside(base: pathlib.Path, relpath: str, *, bound: pathlib.Path) -> str:
     return posixpath.relpath(joined, base.as_posix())
 
 
+#: What a declared uploads folder's segment may not hold: the same characters
+#: a knowledge path refuses (``paths.check_segment``).
+_UNSAFE = re.compile(r"[\\\x00-\x1f\x7f]")
+
+
 def _uploads(value: str) -> str:
     """The declared uploads folder when it is a plain folder inside the
     collection, else the default."""
@@ -100,7 +106,7 @@ def _uploads(value: str) -> str:
     if text.startswith("/"):
         return DEFAULT_UPLOADS
     parts = [p for p in text.strip("/").split("/") if p]
-    if not parts or any(p.startswith(".") or p in ("..",) or "\\" in p for p in parts):
+    if not parts or any(p.startswith(".") or _UNSAFE.search(p) for p in parts):
         return DEFAULT_UPLOADS
     if parts == [README_NAME]:
         return DEFAULT_UPLOADS
@@ -122,7 +128,10 @@ def read(directory: pathlib.Path, *, bound: pathlib.Path | None = None) -> Setti
     if not rules:
         rules = next((name for name in RULES_FILES if (directory / name).is_file()), "")
     entry = _inside(directory, _declared(fm, ENTRY_KEY), bound=limit)
-    return Settings(rules=rules, entry=entry, uploads=_uploads(_declared(fm, UPLOADS_KEY)))
+    uploads = _uploads(_declared(fm, UPLOADS_KEY))
+    if (directory / uploads).exists() and not (directory / uploads).is_dir():
+        uploads = DEFAULT_UPLOADS
+    return Settings(rules=rules, entry=entry, uploads=uploads)
 
 
 def description(directory: pathlib.Path) -> str:
