@@ -15,6 +15,9 @@
 // rehype-sanitize): structure, links and pictures stay; scripts, iframes,
 // styles, event handlers and HTML comments go, so a document never runs code
 // and a fidelity comment never shows as text.
+//
+// A ```mermaid fenced block is drawn as its diagram (MermaidDiagram), in every
+// mode; when it cannot be drawn it stays the code block it is written as.
 import ReactMarkdown, { type Components, type Options } from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import rehypeRaw from "rehype-raw";
@@ -23,6 +26,7 @@ import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 
 import { CodeBlock } from "@/components/CodeBlock";
+import { withDiagrams } from "@/components/markdownDiagrams";
 import { cn } from "@/lib/utils";
 
 type Plugins = NonNullable<Options["rehypePlugins"]>;
@@ -217,6 +221,7 @@ export function Markdown({
         }),
     ...components,
   };
+  overrides.pre = withDiagrams(overrides.pre);
   return (
     <div className={cn("text-sm text-foreground", density === "chat" && "markdown-body")}>
       <ReactMarkdown
