@@ -123,7 +123,8 @@ Rules a change must keep:
   was due, started and ended, how it ended (`done`, `skipped`, `failed`,
   `stopped`) and why, and the conversation it used; pruned by retention. The
   page names that conversation as a link to the Conversations page, which
-  selects it and opens its session in the terminal (`/conversations?open=<id>`);
+  selects it without opening it (`/conversations?open=<id>`; 2026-11-11, the owner:
+  "只需要跳转到对应对话就好，不需要自动打开"), and its row opens the session in the terminal;
   Coffer has no transcript view of its own, so conversations open from one
   place.
 - **Machine-local.** A task is a `scheduled_task` resource on this Mac only,

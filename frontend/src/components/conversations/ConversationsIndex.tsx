@@ -3,11 +3,11 @@
 // every agent's sessions on the Conversations page"). A header with New
 // conversation, the filter row, one quiet line naming any agent whose sessions
 // could not be read, then the sessions grouped by day; with none at all, one
-// empty state. Rows are the shared SessionRow: pressing one opens its session in
-// the preferred terminal (spec chat "Open a conversation in the terminal").
+// empty state. Rows are the shared SessionRow: its split button opens its session
+// in the preferred terminal (spec chat "Open a conversation in the terminal").
 // `?open=<conversation id>` (a scheduled run's History links here) lands on that
-// conversation in the full list: later pages load until its row shows, the row
-// is selected and scrolled to, and its session opens.
+// conversation in the full list: later pages load until its row shows, and the
+// row is selected and scrolled to. Nothing opens by itself.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -66,10 +66,9 @@ export function ConversationsIndex() {
   );
   const rows = useMemo(() => list.items.map(sessionRow), [list.items]);
 
-  // Land on `?open=`: page on until its row shows, then select it, open it once
-  // and drop the parameter so a reload does not open it again.
+  // Land on `?open=`: page on until its row shows, then select it and drop the
+  // parameter. Nothing opens: the row's own button does that.
   const { isLoading, isLoadingMore, hasMore, loadMore } = list;
-  const { open: openRow, canOpen } = opener;
   const landed = useRef<string | null>(null);
   useEffect(() => {
     if (!target || landed.current === target || isLoading || isLoadingMore) return;
@@ -81,11 +80,10 @@ export function ConversationsIndex() {
     landed.current = target;
     setSelectedId(row?.id ?? null);
     setMissing(!row);
-    if (row && canOpen(row)) openRow(row);
     const next = new URLSearchParams(params);
     next.delete("open");
     setParams(next, { replace: true });
-  }, [target, rows, isLoading, isLoadingMore, hasMore, loadMore, canOpen, openRow, params, setParams]);
+  }, [target, rows, isLoading, isLoadingMore, hasMore, loadMore, params, setParams]);
   // The agents whose sessions could not be read, once each, named as the registry does.
   const unavailable = useMemo(
     () => [...new Set(list.extras.flat().map((u) => u.agent))].map((k) => agentNames.get(k) ?? k),

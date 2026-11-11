@@ -82,7 +82,7 @@ Open a task for its header (**Run now**, **Pause** or **Resume**, **Edit**, and 
 - **History**: every run as a table — when it started, how it ended (**Done**, **Skipped**, **Failed**, **Stopped**), whether the schedule, a catch-up or you started it, and how long it took — with the reason under a skipped or failed run. Search it, filter by result and by what started it, and sort by start or duration.
 - **Files**: the task's folder, read-only, with the open file beside the tree.
 
-Each run in the history names its conversation as a link: it takes you to that conversation on the **Conversations** page, selected in the list, and opens it in your terminal, so you can read what the run did and carry the conversation on. Runs are kept for 90 days by default; change it in Settings › Data.
+Each run in the history names its conversation as a link: it takes you to that conversation on the **Conversations** page, selected in the list; open it in your terminal from its row to read what the run did and carry the conversation on. Runs are kept for 90 days by default; change it in Settings › Data.
 
 ## Related
 

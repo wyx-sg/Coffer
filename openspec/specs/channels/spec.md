@@ -3197,8 +3197,8 @@ and whether a turn is running on it, or none when the run started no
 conversation or it has since been removed. On the Scheduled tasks page every
 history row with a conversation MUST show its title as a link to the
 Conversations page, which lands on that conversation in its full list and
-opens it there ([chat](../chat/spec.md) "Open a conversation in the terminal"),
-so the owner can read the run and carry it on. The history row has no open
+selects it without opening it; the row's own button opens it ([chat](../chat/spec.md)
+"Open a conversation in the terminal"), so the owner can read the run and carry it on. The history row has no open
 button of its own: conversations open from one place.
 
 #### Scenario: a run's history row says how it ended
