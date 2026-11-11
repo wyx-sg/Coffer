@@ -77,8 +77,8 @@ _STATUS: dict[str, int] = {
     "PRESENCE_GRANT_INVALID": 403,
     "APPROVAL_NOT_FOUND": 404,
     "APPROVAL_NOT_PENDING": 409,
-    # The command line's requests to the desktop shell (spec secret "Approve
-    # from the command line with the person's own presence check").
+    # The command line's requests to the desktop shell (spec desktop-app "Serve the
+    # command line's desktop requests").
     "DESKTOP_REQUEST_NOT_FOUND": 404,
     "APPROVAL_TARGET_CHANGED": 409,
     "SECRET_NAME_INVALID": 422,

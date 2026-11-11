@@ -1,12 +1,12 @@
 ---
 title: coffer secret
-description: "Secrets: list, store, delete, reveal in the app, import, approvals."
+description: "Secrets: list, store, delete, reveal in the app, import."
 pageClass: cli-ref
 ---
 
 # coffer secret
 
-Secrets: list, store, delete, reveal in the app, import, approvals.
+Secrets: list, store, delete, reveal in the app, import.
 
 ```sh
 coffer secret [OPTIONS] COMMAND [ARGS]...

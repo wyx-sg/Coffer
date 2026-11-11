@@ -67,7 +67,7 @@ def test_a_second_destination_waits_for_approval_then_receives_the_secret(
     error = refused.json()["error"]
     assert error["code"] == -32603
     assert "waiting for approval" in error["message"]
-    assert f"coffer approval approve {pending['id']}" in error["message"]
+    assert "answer it in the Coffer app" in error["message"]
     assert SECRET not in refused.text
     # The child never ran a tool: the call was refused before it got the secret.
     assert events(second, "start", "environment") == []

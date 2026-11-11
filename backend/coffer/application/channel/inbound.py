@@ -135,7 +135,6 @@ class InboundProcessor:
             stop_chat_sessions=self._stop_chat_sessions,
             session=self._session,
             burst=self._burst,
-            on_message=self.on_message,
         )
 
     # -- runtime registry ------------------------------------------------

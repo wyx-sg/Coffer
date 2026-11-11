@@ -114,9 +114,7 @@ async def test_a_newer_codex_memory_folder_is_reported_not_written(
     assert row.writer["path"] == str(codex / "memories_v3")
 
 
-@pytest.mark.acceptance(
-    spec="memory", scenario="a Codex v2 topic reaches Claude Code once sorted into memory"
-)
+@pytest.mark.acceptance(spec="memory", scenario="a Codex v2 topic reaches Claude Code")
 async def test_a_codex_v2_topic_reaches_claude_code(
     tmp_path: pathlib.Path, payments: pathlib.Path
 ) -> None:
@@ -129,16 +127,8 @@ async def test_a_codex_v2_topic_reaches_claude_code(
     claude = a.claude()
     await a.sync()
 
-    rules = (claude / "rules" / "coffer-memory.md").read_text(encoding="utf-8")
-    assert "Lead with the point" in rules
-    assert "Separate evidence from hypotheses" in rules
+    assert not (claude / "rules" / "coffer-memory.md").exists()
     index = cc_memory_dir(claude, payments) / "MEMORY.md"
-    assert not index.exists()
-    (topic,) = await a.view.to_sort()
-
-    await a.view.mark_sorted([topic.id], "memory", "", "agent")
-    await a.sync()
-
     text = index.read_text(encoding="utf-8")
     assert "Ledger retries are idempotent" in text
     assert "PR: payments!42 merged." in text

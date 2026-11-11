@@ -1,9 +1,9 @@
 """Desktop-app operations started from the command line.
 
-Spec secret "Approve from the command line with the person's own presence
-check" and desktop-app "Serve the command line's desktop requests". Revealing a
-secret and writing a master key backup take the person's presence check, and
-what they produce stays in the app: the value is shown in the Coffer window and
+Spec secret "Answer a secret's approval only in the app" and desktop-app
+"Serve the command line's desktop requests". Revealing a secret and writing a
+master key backup take the person's presence check, and what they produce
+stays in the app: the value is shown in the Coffer window and
 the backup's passphrase is typed there. A reveal's and a backup's command
 learn whether the person went through with it — a backup's with the path the
 file was written to; the import command learns only that the app opened it.

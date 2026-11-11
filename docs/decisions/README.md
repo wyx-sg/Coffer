@@ -221,6 +221,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`channel-attachments`](channel-attachments.md) | Channel Attachments Are Saved Files, Handed to Every Agent by Path |
 | [`channel-prompt-fixed-note-and-editable-style`](channel-prompt-fixed-note-and-editable-style.md) | A Channel's System Prompt Is a Fixed Channel Note Plus a Reply Style the Owner Can Rewrite |
 | [`long-channel-reply-is-rewritten-short`](long-channel-reply-is-rewritten-short.md) | A Long Channel Reply Is Rewritten Short by the Agent |
+| [`a-channel-reply-is-plain-text`](a-channel-reply-is-plain-text.md) | A Channel Reply Is Plain Text, With No Card or Button |
 | [`a-channel-reply-goes-out-as-the-agent-wrote-it`](a-channel-reply-goes-out-as-the-agent-wrote-it.md) | A Channel Reply Goes Out as the Agent Wrote It; Coffer Does Not Reshape Tables or Code |
 | [`channel-help-is-a-list-and-cards-carry-only-their-own-actions`](channel-help-is-a-list-and-cards-carry-only-their-own-actions.md) | Channel `/help` Is a List to Read, and a Card Carries Only the Buttons That Act on It |
 | [`held-channel-messages-are-continued-or-discarded`](held-channel-messages-are-continued-or-discarded.md) | Held Channel Messages Are Settled by Continue and Discard |
@@ -258,6 +259,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`memory-page-lists-memories-by-scope`](memory-page-lists-memories-by-scope.md) | The Memory Page Lists the Memories by Scope; the Sync Shows Only When It Needs the Person |
 | [`follow-codex-memory-into-every-version-folder`](follow-codex-memory-into-every-version-folder.md) | Follow Codex's Memory Into Every Version Folder It Keeps |
 | [`memory-is-about-the-person-knowledge-is-about-the-world`](memory-is-about-the-person-knowledge-is-about-the-world.md) | Memory Is About the Person, Knowledge Is About the World; Task Notes Are Sorted Into Knowledge on Request |
+| [`sync-only-project-memories`](sync-only-project-memories.md) | Sync Only Project Memories; Task Notes Sync Like Any Other |
 | [`claude-code-reads-other-agents-memories-as-text`](claude-code-reads-other-agents-memories-as-text.md) | Claude Code Reads Other Agents' Memories as Text It Loads |
 
 ### Sync & secrets
@@ -268,12 +270,15 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`sync-deletion-breaker`](sync-deletion-breaker.md) | A Sync Round That Would Lose Too Much Is Held, in Both Directions, Counting Losses Not Moves |
 | [`sync-machine-identity`](sync-machine-identity.md) | A Machine Is Identified by a Hash of Its Host's Own ID, and Owns One Descriptor in the Tree |
 | [`sync-withholds-derived-output`](sync-withholds-derived-output.md) | Sync Withholds Derived Output; Each Machine Renders Its Own |
+| [`timeouts-and-intervals-count-time-the-computer-slept`](timeouts-and-intervals-count-time-the-computer-slept.md) | Timeouts and Intervals Count Time the Computer Slept |
 | [`master-key-lives-in-the-macos-keychain`](master-key-lives-in-the-macos-keychain.md) | The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault |
 | [`credential-references`](credential-references.md) | Resources Cite Secrets by Opaque Reference, Resolved Only at the Moment of Use |
 | [`secrets-cross-machines-only-as-ciphertext`](secrets-cross-machines-only-as-ciphertext.md) | Secrets Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository |
 | [`standalone-secrets-are-named-references-injected-into-one-child`](standalone-secrets-are-named-references-injected-into-one-child.md) | Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process |
 | [`a-secret-header-stores-the-credential-and-its-slot-names-the-scheme`](a-secret-header-stores-the-credential-and-its-slot-names-the-scheme.md) | A Secret Header Stores the Credential Alone, and Its Slot Names the Auth Scheme |
 | [`only-a-present-human-sees-a-secret-or-sends-it-somewhere-new`](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md) | Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New |
+| [`only-the-person-answers-a-secret-approval-in-the-app`](only-the-person-answers-a-secret-approval-in-the-app.md) | Only the Person Answers a Secret's Approval, and Only in the App |
+| [`a-tool-response-reaches-the-agent-as-the-upstream-sent-it`](a-tool-response-reaches-the-agent-as-the-upstream-sent-it.md) | A Tool Response Reaches the Agent as the Upstream Sent It |
 | [`a-copied-secret-is-marked-concealed-and-cleared-after-90-seconds`](a-copied-secret-is-marked-concealed-and-cleared-after-90-seconds.md) | A Copied Secret Is Marked Concealed and Cleared After 90 Seconds |
 | [`one-replace-dialog-for-every-secret`](one-replace-dialog-for-every-secret.md) | One Replace Dialog for Every Secret a Resource Uses, Shown Inline in Edit Dialogs |
 

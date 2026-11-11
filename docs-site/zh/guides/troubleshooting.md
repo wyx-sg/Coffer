@@ -157,9 +157,9 @@ Coffer needs git, and git isn't installed on this machine. The vault keeps its h
 
 ### 命令以 9 退出："waiting for approval" {#a-command-exits-9-waiting-for-approval}
 
-**原因。** 这次改动把一个密钥发往了它从没去过的地方（第二个引用同一个令牌的 MCP 服务器、改过的命令行或 URL、指向新远端的推送令牌），或者把 `secrets.require_approval` 关掉了，或者让 `coffer run` 去用一个你还没允许它使用的独立密钥（该密钥的页面会显示 **允许 `coffer run`…**，见[密钥](/zh/guides/secrets#allow-coffer-run-to-use-it)）。改动已经保存；在你批准之前，密钥会被扣住。命令已经打印了审批 id 和批准它们的命令（`next: coffer approval approve <id>`）。处于这种状态的 MCP 服务器不会启动，它的工具会以 `SECRET_BINDING_PENDING` 失败；自定义工具的调用会返回同样的工具错误，写明审批 id 和同一条命令，而且只影响在等待的那个环境。
+**原因。** 这次改动把一个密钥发往了它从没去过的地方（第二个引用同一个令牌的 MCP 服务器、改过的命令行或 URL、指向新远端的推送令牌），或者把 `secrets.require_approval` 关掉了，或者让 `coffer run` 去用一个你还没允许它使用的独立密钥（该密钥的页面会显示 **允许 `coffer run`…**，见[密钥](/zh/guides/secrets#allow-coffer-run-to-use-it)）。改动已经保存；在你批准之前，密钥会被扣住。命令已经打印了审批 id，并说明由你在 Coffer 应用里处理。处于这种状态的 MCP 服务器不会启动，它的工具会以 `SECRET_BINDING_PENDING` 失败；自定义工具的调用会返回同样的工具错误，写明审批 id，而且只影响在等待的那个环境。
 
-**解决办法。** 运行打印出来的 `coffer approval approve <id>`（或让智能体运行），并确认桌面应用弹出的 Touch ID 或密码提示；也可以打开桌面应用直接回应（在**密钥**页面，点**查看**会打开审批对话框）。只批准你认识的目标；其余的用**拒绝**或 `coffer approval reject <id>` 拒绝。改动已经保存，无需重新运行。如果 `coffer approval approve` 以 `11` 退出，说明验证被取消或超时，审批仍在等待；以 `12` 退出，说明桌面应用没在运行且无法启动——打开它再运行一次。见[密钥 → 批准](/zh/guides/secrets#approvals)。
+**解决办法。** 打开桌面应用直接处理（在**密钥**页面，点**查看**会打开审批对话框），没有对应的命令。只批准你认识的目标；其余的用**拒绝**拒绝。改动已经保存，无需重新运行。见[密钥 → 批准](/zh/guides/secrets#approvals)。
 
 ### 应用提示“This is not Coffer's daemon — nothing was sent” {#the-app-says-this-is-not-coffer-s-daemon-—-nothing-was-sent}
 

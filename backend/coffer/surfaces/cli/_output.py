@@ -15,6 +15,10 @@ import typer
 
 from coffer.surfaces.cli._options import ExitCode
 
+#: What to do about a change that waits on approvals: only the person answers
+#: one, in the app (ADR only-the-person-answers-a-secret-approval-in-the-app).
+NEXT_STEP = "ask the developer to answer it in the Coffer app (Secrets page)"
+
 
 def emit(value: Any, *, as_json: bool, human: Callable[[Any], None] | None = None) -> None:
     if as_json:
@@ -78,11 +82,11 @@ def pending_approvals(value: Any) -> list[str]:
 
 
 def report_pending(value: Any, *, as_json: bool) -> None:
-    """Exit 9 with the approve command when ``value`` waits on approvals."""
+    """Exit 9, saying who answers, when ``value`` waits on approvals."""
     ids = pending_approvals(value)
     if not ids:
         return
-    command = "coffer approval approve " + " ".join(ids)
+    command = NEXT_STEP
     if as_json:
         typer.echo(
             json.dumps(
@@ -97,4 +101,4 @@ def report_pending(value: Any, *, as_json: bool) -> None:
     raise typer.Exit(int(ExitCode.APPROVAL_PENDING))
 
 
-__all__ = ["emit", "pending_approvals", "report_pending", "table"]
+__all__ = ["NEXT_STEP", "emit", "pending_approvals", "report_pending", "table"]

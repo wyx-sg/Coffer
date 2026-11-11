@@ -189,7 +189,7 @@ async def _deliver_reply(
             await tracker.send(mention(body))
         else:
             await send(mention(body))
-    on_sent = tracker.note_file if tracker is not None else None
+    on_sent = tracker.note if tracker is not None else None
     failed = await send_media_files(
         adapter, chat_id, media, thread_id=thread_id, chat_kind=chat_kind, on_sent=on_sent
     )

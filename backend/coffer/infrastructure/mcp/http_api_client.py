@@ -112,7 +112,7 @@ def refusal_text(error: CofferError | RenderError) -> str:
         ids = " ".join(error.approval_ids)
         text = f"{error.code}: {error}"
         if ids and error.code == "SECRET_BINDING_PENDING":
-            text += f"\napproval ids: {ids}\nnext: coffer approval approve {ids}"
+            text += f"\napproval ids: {ids}\nnext: ask the developer to answer it in the Coffer app"
         return text
     code = getattr(error, "code", "CUSTOM_TOOL_REQUEST_INVALID")
     return f"{code}: {error}"

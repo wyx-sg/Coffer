@@ -170,7 +170,7 @@ pub fn run() {
             // (spec desktop-app "Release plaintext and approvals only after a
             // presence check in the shell").
             approval_watch::start(app.handle().clone());
-            // What `coffer approval approve`, `coffer secret reveal` and the
+            // What `coffer secret reveal`, the key backup and the
             // update commands ask of this app (spec desktop-app "Serve the
             // command line's desktop requests").
             desktop_requests::start(app.handle().clone());

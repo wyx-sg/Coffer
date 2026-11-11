@@ -122,10 +122,10 @@ async def send_text_pieces(
     """Deliver ``markdown`` as a card (when ``buttons`` are given) or as one or
     more text messages; return the last delivered message's handle."""
     if buttons:
-        # A card is the one SeaTalk message the bot can rewrite afterwards, so a reply
-        # that must stay withdrawable goes out as cards. A selection prompt is short
-        # and is one card; a long reply runs on into further cards, the buttons on the
-        # last. (A card description renders SeaTalk markdown but NOT tables.)
+        # Only a command's card carries buttons — an agent's reply is always text.
+        # A card is short and is one; one that outgrows it runs on into further
+        # cards, the buttons on the last. (A card description renders SeaTalk
+        # markdown but NOT tables.)
         cards = card_blocks(markdown)
         ids: list[str] = []
         for i, blocks in enumerate(cards):

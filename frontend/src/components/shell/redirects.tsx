@@ -7,10 +7,9 @@ export function SettingsIndexRedirect() {
   return <Navigate to="/settings/general" replace state={state} />;
 }
 
-/** The old per-project Memory addresses (`/memory/global`, `/memory/projects/<folder>`)
- *  open the same scope on the Memory page (`/memory?scope=`). */
+/** The old per-project Memory addresses (`/memory/projects/<folder>`) open the
+ *  same scope on the Memory page (`/memory?scope=`); `/memory/global` opens the page. */
 export function MemoryScopeRedirect() {
   const { folder } = useParams<{ folder?: string }>();
-  const scope = encodeURIComponent(folder ?? "global");
-  return <Navigate to={`/memory?scope=${scope}`} replace />;
+  return <Navigate to={folder ? `/memory?scope=${encodeURIComponent(folder)}` : "/memory"} replace />;
 }

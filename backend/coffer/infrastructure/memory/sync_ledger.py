@@ -29,7 +29,7 @@ LEDGER_VERSION = 1
 #: differently. A ledger written under another revision forgets its source
 #: digests, so the next sync re-reads every source once instead of skipping them
 #: as unchanged and leaving the old filing in the hub.
-READER_REVISION = 2
+READER_REVISION = 3
 
 
 def ledger_path() -> Path:

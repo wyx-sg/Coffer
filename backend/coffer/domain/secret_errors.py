@@ -83,12 +83,9 @@ class SecretBindingPending(CofferError):  # noqa: N818
 
     def __init__(self, approval_ids: list[str], descriptions: list[str]) -> None:
         joined = "; ".join(descriptions)
-        ids = " ".join(approval_ids)
         super().__init__(
             f"waiting for approval in the Coffer app: {joined}. Nothing was sent; "
-            f"approve with Touch ID by running: coffer approval approve {ids} — or "
-            "in the Coffer desktop app (a rejected one stays refused until the "
-            "destination changes)"
+            "ask the developer to answer it in the Coffer app (Secrets page)"
         )
         self.approval_ids = approval_ids
 
@@ -109,7 +106,8 @@ class SecretBindingRejected(SecretBindingPending):
         CofferError.__init__(
             self,
             f"refused in the Coffer app: {joined}. Nothing was sent, and nothing waits; "
-            "it stays refused until the destination changes",
+            "it stays refused until the destination changes or the developer presses "
+            "Ask again in the Coffer app",
         )
         self.approval_ids = approval_ids
 

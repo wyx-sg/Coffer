@@ -300,7 +300,7 @@ def test_each_environment_waits_on_its_own_secret(daemon: BoundaryDaemon, api: F
     agent.call("billing__ping", {"coffer_environment": "test"})
     assert api.seen[-1].headers["authorization"] == f"Bearer {TEST_TOKEN}"
     said = refusal(agent.call("billing__ping", {"coffer_environment": "live"}))
-    assert "SECRET_BINDING_PENDING" in said and f"coffer approval approve {live_approval}" in said
+    assert "SECRET_BINDING_PENDING" in said and live_approval in said
     assert len(api.seen) == 1
     # Moving ``test`` asks again for ``test`` only.
     r = daemon.client.patch(

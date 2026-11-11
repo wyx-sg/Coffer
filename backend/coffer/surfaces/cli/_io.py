@@ -18,7 +18,7 @@ line"; design align-cli-with-ui-and-add-tool-environments D3.
 * Nothing prompts: a command reads stdin only when told to with ``-``.
 
 A change the daemon saved but that waits for a person's approval is reported
-with the approval ids and the command that approves them, exit 9.
+with the approval ids and who answers them (the person, in the app), exit 9.
 """
 
 from __future__ import annotations
@@ -109,7 +109,7 @@ def render_failure(
         typer.echo(str(handoff["prompt"]), err=True)
     ids = (details or {}).get("approval_ids")
     if ids and code == "SECRET_BINDING_PENDING":
-        typer.echo(f"next: coffer approval approve {' '.join(ids)}", err=True)
+        typer.echo(f"next: {NEXT_STEP}", err=True)
 
 
 def exit_code_for(status: int, code: str | None) -> ExitCode:
@@ -326,6 +326,7 @@ def body_from(
 # --- output: in ``_output``, re-exported here as every command imports ``_io`` ---
 
 from coffer.surfaces.cli._output import (  # noqa: E402
+    NEXT_STEP,
     emit,
     pending_approvals,
     report_pending,

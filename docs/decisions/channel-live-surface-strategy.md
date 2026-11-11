@@ -52,7 +52,8 @@ reactions (👀 received, then working, then done / failed / stopped), and the
 typing indicator, re-sent every 3 s by a heartbeat
 (`application/channel/turn_surface.py`), wherever the transport can type. When
 the turn ends, the reply goes out as one new message — cut at paragraphs when
-long, withdrawable cards in a SeaTalk group — and that message is what notifies.
+long, always plain text with no button (see [A Channel Reply Is Plain
+Text](a-channel-reply-is-plain-text.md)) — and that message is what notifies.
 
 - **The reply is the answer alone:** the text written after the last tool call
   (or, when nothing followed it, the last text written); messages the agent

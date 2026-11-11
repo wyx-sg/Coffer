@@ -50,6 +50,8 @@ def maps(command: str, *routes: tuple[str, str], ui: str) -> Callable[[F], F]:
     return mark
 
 
+_APPROVAL = "a secret's approval is answered on the app's own page"
+
 #: Routes the web UI calls that carry no command, each with why. Nothing else
 #: may be missing (spec resource-framework "Offer every management operation on
 #: the command line").
@@ -82,6 +84,12 @@ EXEMPT: dict[tuple[str, str], tuple[Category, str]] = {
     ("POST", "/fs/pick-folder"): ("window", "a native folder picker for the person"),
     ("POST", "/sync/join-choices/editor"): ("window", "opens a conflicting file in the editor"),
     ("POST", "/sync/stop/files/editor"): ("window", "opens a conflicting file in the editor"),
+    # A secret's approval is the person's to answer, on the app's own page
+    # (ADR only-the-person-answers-a-secret-approval-in-the-app).
+    ("GET", "/secrets/approvals"): ("window", _APPROVAL),
+    ("POST", "/secrets/approvals/{approval_id}/reject"): ("window", _APPROVAL),
+    ("POST", "/secrets/approvals/reject"): ("window", _APPROVAL),
+    ("POST", "/secrets/approvals/{approval_id}/ask-again"): ("window", _APPROVAL),
 }
 
 #: The desktop shell's IPC commands: the command that does the same, or why none.
@@ -103,8 +111,8 @@ SHELL_COMMANDS: dict[str, str | tuple[Category, str]] = {
         "the backup dialog closing ends the command's waiting request",
     ),
     "import_master_key": "secret import-key",
-    "approve_pending": "approval approve",
-    "approve_pending_batch": "approval approve",
+    "approve_pending": ("window", _APPROVAL),
+    "approve_pending_batch": ("window", _APPROVAL),
     "update_status": "app update status",
     "check_for_updates": "app update check",
     "install_update": "app update install",

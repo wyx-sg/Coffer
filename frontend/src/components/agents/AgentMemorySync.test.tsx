@@ -49,14 +49,12 @@ function state(agents: SyncAgent[]): MemorySyncState {
   return {
     agents,
     codex_imports_claude: null,
-    global_memories: 0,
     last_report: {},
     last_synced_at: "",
     machine: "m",
     preview: null,
     projects: [],
     running: false,
-    to_sort: 0,
   };
 }
 

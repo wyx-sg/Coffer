@@ -256,38 +256,29 @@ so a long body degrades to a truncated card instead of a refused one.
 - **WHEN** it is built as a SeaTalk interactive card
 - **THEN** that button sits alone in its button group, while short labels still share one
 
-### Requirement: Send group replies as withdrawable cards
-SeaTalk has no delete API, but a card its bot sent can be rewritten by that bot for 7
-days ([channels](../spec.md) "Withdraw a bot reply on the owner's command"). So a
-reply in a **group** MUST be sent as interactive cards and never as plain text,
-which cannot be rewritten. While the turn runs the group sees only the typing
-indication (see "Show only typing while a turn runs"); a direct chat's reply is
-ordinary text. The reply is
-markdown rendered as SeaTalk's own, in description blocks of at most 1000 characters
-(a card holds up to four such blocks here), cut on paragraph and never inside a code
-fence; a reply that does not fit one card runs on into further cards, numbered
-`(2/3)` after the first, and the 🗑 button rides on the last. Every card id is
-reported so the whole reply can be withdrawn.
+### Requirement: Send every reply as text
+An agent's reply MUST go out as ordinary text messages in a direct chat and in a
+group alike, never as a card ([channels](../spec.md) "Send only the answer, once
+the turn is done"): markdown rendered as SeaTalk's own (`format: 1`), cut at
+paragraph boundaries and never inside a code fence, every message after the first
+opening with its place, `(2/3)`; in a group the first opens by @mentioning
+whoever asked. Only a command's answer that carries buttons is a card.
 
-Withdrawing rewrites each card through Update Message into a neutral "🗑 Withdrawn"
-card with no buttons and no title; the adapter declares a window of 7 days and that
-withdrawing does not remove the message. Past 7 days the platform refuses and the
-core tells the owner privately.
+SeaTalk can neither delete a bot's message nor rewrite a text message (Update
+Message covers interactive cards only), so the adapter declares a withdraw window
+of 0: no reply is put on record and `/del` says the chat cannot withdraw bot
+replies ([channels](../spec.md) "Withdraw a bot reply on the owner's command").
+See [A Channel Reply Is Plain Text](../../../docs/decisions/a-channel-reply-is-plain-text.md).
 
-#### Scenario: a group reply is cards with the trash button on the last
-- **GIVEN** a SeaTalk group reply longer than one card holds
-- **WHEN** it is sent
-- **THEN** it goes out as interactive cards, never as text, each card id is reported, and only the last carries the 🗑 button
-
-#### Scenario: a short group reply is one card with markdown rendered
+#### Scenario: a group reply is text with markdown rendered
 - **GIVEN** a SeaTalk group reply of a few lines with bold text and a code fence
 - **WHEN** it is sent
-- **THEN** one card carries it rendered as SeaTalk markdown
+- **THEN** it goes out as a `text` message in `format: 1` with the markdown rendered, never as a card
 
-#### Scenario: withdrawing rewrites each card blank
-- **GIVEN** a SeaTalk reply sent as several cards
-- **WHEN** it is withdrawn
-- **THEN** each card is rewritten through Update Message into a "🗑 Withdrawn" card with no buttons
+#### Scenario: SeaTalk declares that it cannot withdraw a reply
+- **GIVEN** a SeaTalk adapter
+- **WHEN** its capabilities are read
+- **THEN** its withdraw window is 0
 
 ### Requirement: Degrade card rewrites outside SeaTalk's update window
 A card rewrite ([channels](../spec.md) "Switch the agent with /new", [channels](../spec.md) "Offer choices and actions as owner-gated cards") reaches only
@@ -560,10 +551,10 @@ A SeaTalk turn MUST show its progress through the typing indicator alone (see
 "Keep a typing heartbeat alive in DMs and group threads"): like every channel
 ([channels](../spec.md) "Send only the answer, once the turn is done") nothing
 is posted while the turn runs, and no message stream is ever opened. When the turn ends the
-reply goes out as new messages — in a direct chat, ordinary text messages
+reply goes out as new messages — ordinary text messages
 rendered as SeaTalk markdown and cut at paragraph boundaries, every message after
-the first opening with its place, `(2/3)`; in a group, withdrawable cards (see
-"Send group replies as withdrawable cards").
+the first opening with its place, `(2/3)`, in a group as in a direct chat (see
+"Send every reply as text").
 
 SeaTalk can stream a message, but its client re-types the whole message whenever
 a snapshot changes anything already on screen — the step count, the clock

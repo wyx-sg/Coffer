@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
@@ -91,3 +92,22 @@ async def test_nothing_runs_without_a_remote_or_while_it_is_paused() -> None:
         worker = SyncWorker(svc, idle_poll_s=5, clock=lambda: NOW)  # type: ignore[arg-type]
         assert await worker.tick() == 5
         assert svc.runs == [] and svc.next_at is None
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a round that fell due during sleep runs soon after waking"
+)
+async def test_a_wait_that_fell_due_during_sleep_ends_at_the_next_poll() -> None:
+    ticks = [0.0]
+    svc = _Service(SyncRemote(url="https://example.com/v.git"))
+    worker = SyncWorker(
+        svc,  # type: ignore[arg-type]
+        clock=lambda: NOW,
+        ticks=lambda: ticks[0],
+        wake_poll_s=0.01,
+    )
+    waiting = asyncio.create_task(worker._sleep(3600))
+    await asyncio.sleep(0.05)
+    assert not waiting.done()
+    ticks[0] += 2 * 3600  # the computer slept two hours
+    await asyncio.wait_for(waiting, timeout=1)

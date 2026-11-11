@@ -1,5 +1,5 @@
 """Withdraw a bot reply on the owner's command (spec channels "Withdraw a bot reply
-on the owner's command"): ``/del``, the 🗑 button, the reply ledger behind them."""
+on the owner's command"): ``/del`` and the reply ledger behind it."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from typing import Any
 import pytest
 
 from coffer.application.channel.store_ports import ReplyRecord
+from coffer.application.channel.withdraw import CANNOT_WITHDRAW
 from coffer.domain.channel.envelopes import ChoiceButton, SentMessage
 from coffer.infrastructure.channel.persistence import ChannelReplyRepo
 from coffer.infrastructure.persistence.engine import session_maker
@@ -38,7 +39,12 @@ class _ChunkingAdapter(FakeChannelAdapter):
 
 
 def _withdrawing(cls: type[FakeChannelAdapter] = FakeChannelAdapter) -> FakeChannelAdapter:
-    return cls(supports_buttons=True, withdraw_window_hours=48, withdraw_removes=True)
+    return cls(supports_buttons=True, withdraw_window_hours=48)
+
+
+def _gone(adapter: FakeChannelAdapter) -> list[str]:
+    """The reply messages deleted — the owner's own ``/del`` message left out."""
+    return [m for _c, m in adapter.deleted if not m.startswith(("d", "pm-"))]
 
 
 def _ledger(env: ChannelEnv) -> ChannelReplyRepo:
@@ -78,40 +84,36 @@ async def _wait_record(env: ChannelEnv, uid: str, chat: str = _GROUP) -> ReplyRe
     raise AssertionError("no reply was recorded")
 
 
-@pytest.mark.acceptance(
-    spec="channels", scenario="a group reply carries a trash button the owner can tap"
-)
-async def test_the_group_reply_carries_a_trash_button_and_the_owner_tap_withdraws_it(
-    env: ChannelEnv,
-) -> None:
+@pytest.mark.acceptance(spec="channels", scenario="a reply carries no buttons")
+async def test_a_group_reply_is_plain_text_with_no_buttons(env: ChannelEnv) -> None:
     adapter = _withdrawing()
-    uid, record = await _group_reply(env, adapter)
+    _uid, record = await _group_reply(env, adapter)
 
-    reply_index = adapter.texts().index("Hello world")
-    buttons = adapter.sent_buttons[reply_index]
-    assert [b.label for b in buttons] == ["🗑"]
-    assert buttons[0].value == f"del:{record.reply_id}"
-
-    await env.processor.on_callback(
-        tap_event("tg", _GROUP, buttons[0].value, chat_kind="group", sender_id=_OWNER)
-    )
-
-    assert [m for _c, m, _k in adapter.withdrawn] == list(record.message_ids)
-    assert await _ledger(env).get(record.reply_id) is None
-    assert uid
+    assert adapter.sent_buttons[adapter.texts().index("Hello world")] == []
+    assert record.message_ids
 
 
-@pytest.mark.acceptance(spec="channels", scenario="nobody but the owner can withdraw a reply")
-async def test_a_tap_or_command_from_anyone_else_withdraws_nothing_and_says_nothing(
-    env: ChannelEnv,
-) -> None:
+async def test_a_tap_on_a_retired_trash_button_does_nothing(env: ChannelEnv) -> None:
     adapter = _withdrawing()
     _uid, record = await _group_reply(env, adapter)
     sent_before = len(adapter.sent)
 
-    await env.processor.on_callback(
-        tap_event("tg", _GROUP, f"del:{record.reply_id}", chat_kind="group", sender_id="intruder")
-    )
+    for sender in (_OWNER, "intruder"):
+        await env.processor.on_callback(
+            tap_event("tg", _GROUP, f"del:{record.reply_id}", chat_kind="group", sender_id=sender)
+        )
+
+    assert adapter.deleted == []
+    assert len(adapter.sent) == sent_before
+    assert await _ledger(env).get(record.reply_id) is not None
+
+
+@pytest.mark.acceptance(spec="channels", scenario="nobody but the owner can withdraw a reply")
+async def test_a_command_from_anyone_else_withdraws_nothing(env: ChannelEnv) -> None:
+    adapter = _withdrawing()
+    _uid, record = await _group_reply(env, adapter)
+    sent_before = len(adapter.sent)
+
     await env.processor.on_message(
         inbound(
             "tg",
@@ -124,9 +126,9 @@ async def test_a_tap_or_command_from_anyone_else_withdraws_nothing_and_says_noth
         )
     )
 
-    assert adapter.withdrawn == []
+    assert adapter.deleted == []
     assert await _ledger(env).get(record.reply_id) is not None
-    # The command from a stranger meets the ordinary refusal; the tap meets silence.
+    # The command from a stranger meets the ordinary refusal, never a withdrawal.
     assert all("🗑" not in text for text in adapter.texts()[sent_before:])
 
 
@@ -149,7 +151,7 @@ async def test_del_with_a_quote_withdraws_every_message_of_that_reply(env: Chann
         )
     )
 
-    assert [m for _c, m, _k in adapter.withdrawn] == list(record.message_ids)
+    assert _gone(adapter) == list(record.message_ids)
     assert await _ledger(env).get(record.reply_id) is None
     # The owner's own command goes too, on a transport that removes messages.
     assert (_GROUP, "d1") in adapter.deleted
@@ -184,7 +186,7 @@ async def test_a_reply_and_its_uploaded_file_are_withdrawn_together(env: Channel
         )
     )
 
-    assert [m for _c, m, _k in adapter.withdrawn] == ["a", "b", "file-1"]
+    assert _gone(adapter) == ["a", "b", "file-1"]
 
 
 @pytest.mark.acceptance(spec="channels", scenario="/del without a quote withdraws the latest reply")
@@ -212,13 +214,13 @@ async def test_del_without_a_quote_withdraws_only_the_latest_reply(env: ChannelE
         inbound("tg", _GROUP, "/del", chat_kind="group", sender_id=_OWNER)
     )
 
-    assert [m for _c, m, _k in adapter.withdrawn] == ["n1", "n2"]
+    assert _gone(adapter) == ["n1", "n2"]
     assert await ledger.get("old") is not None
     assert await ledger.get("new") is None
 
 
-@pytest.mark.acceptance(spec="channels", scenario="a direct chat reply carries no trash button")
-async def test_a_direct_reply_has_no_button_and_del_still_withdraws_it(env: ChannelEnv) -> None:
+@pytest.mark.acceptance(spec="channels", scenario="/del withdraws a direct-chat reply too")
+async def test_del_withdraws_a_direct_reply(env: ChannelEnv) -> None:
     adapter = _withdrawing()
     resource = await env.register_channel("tg")
     env.bind(resource, adapter)
@@ -231,7 +233,7 @@ async def test_a_direct_reply_has_no_button_and_del_still_withdraws_it(env: Chan
 
     await env.processor.on_message(inbound("tg", "owner", "/del", platform_message_id="d1"))
 
-    assert [m for _c, m, _k in adapter.withdrawn] == list(record.message_ids)
+    assert _gone(adapter) == list(record.message_ids)
 
 
 @pytest.mark.acceptance(
@@ -258,7 +260,7 @@ async def test_a_reply_past_the_window_is_told_to_the_owner_alone(env: ChannelEn
         inbound("tg", _GROUP, "/del", chat_kind="group", sender_id=_OWNER, quoted_message_id="s1")
     )
 
-    assert adapter.withdrawn == []
+    assert _gone(adapter) == []
     told = [(chat, text) for chat, text in adapter.sent if "no longer be withdrawn" in text]
     assert [chat for chat, _t in told] == ["owner"]
     assert all(chat != _GROUP for chat, _t in adapter.sent)
@@ -272,7 +274,7 @@ async def test_del_with_nothing_on_record_says_so(env: ChannelEnv) -> None:
 
     await env.processor.on_message(inbound("tg", "owner", "/del"))
 
-    assert adapter.withdrawn == []
+    assert _gone(adapter) == []
     assert any("no reply of mine" in text for text in adapter.texts())
 
 
@@ -297,29 +299,27 @@ async def test_the_ledger_finds_a_reply_by_any_message_and_prunes_the_old(
 
 
 @pytest.mark.acceptance(
-    spec="channels",
-    scenario="a direct-chat reply the transport cannot take back is not recorded",
+    spec="channels", scenario="a transport that cannot delete records nothing and says so"
 )
-async def test_a_direct_reply_a_transport_cannot_withdraw_is_not_recorded(
+async def test_a_transport_that_cannot_delete_records_nothing_and_says_so(
     env: ChannelEnv,
 ) -> None:
-    # SeaTalk-shaped: it can rewrite a card for 168 hours but cannot delete, so a
-    # plain text reply in a direct chat is beyond its reach.
-    adapter = FakeChannelAdapter(
-        supports_buttons=True,
-        withdraw_window_hours=168,
-        withdraw_removes=False,
-    )
+    # SeaTalk-shaped: no delete API, and a text reply cannot be rewritten.
+    adapter = FakeChannelAdapter(supports_buttons=True, withdraw_window_hours=0)
     resource = await env.register_channel("st")
     env.bind(resource, adapter)
-    await env.pair(resource, "owner")
+    await env.pair(resource, "owner", sender_id=_OWNER)
 
-    await env.processor.on_message(inbound("st", "owner", "hello"))
+    await env.processor.on_message(
+        inbound("st", _GROUP, "hello", chat_kind="group", sender_id=_OWNER)
+    )
     await wait_until(lambda: "Hello world" in adapter.texts())
     await asyncio.sleep(0.05)
-    assert await _ledger(env).latest(resource.uid, "owner", None) is None
+    assert await _ledger(env).latest(resource.uid, _GROUP, None) is None
 
-    await env.processor.on_message(inbound("st", "owner", "/del"))
+    await env.processor.on_message(
+        inbound("st", _GROUP, "/del", chat_kind="group", sender_id=_OWNER)
+    )
 
-    assert adapter.withdrawn == []
-    assert any("no reply of mine" in text for text in adapter.texts())
+    assert adapter.deleted == []
+    assert CANNOT_WITHDRAW in adapter.texts()

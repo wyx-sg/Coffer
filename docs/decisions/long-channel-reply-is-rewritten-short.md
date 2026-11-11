@@ -1,9 +1,9 @@
 # A Long Channel Reply Is Rewritten Short by the Agent
 
 **Status**: Accepted
-**Date**: 2026-10-20
+**Date**: 2026-11-10 (first taken 2026-10-20)
 **Deciders**: Yuxing Wu
-**Related**: [A Channel's System Prompt Is a Fixed Channel Note Plus a Reply Style the Owner Can Rewrite](channel-prompt-fixed-note-and-editable-style.md), [A Channel Turn Posts Nothing Until It Is Done, and the Reply Is the Answer Alone](channel-live-surface-strategy.md), spec channels "Ask for the short version of a reply too long for a chat"
+**Related**: [A Channel's System Prompt Is a Fixed Channel Note Plus a Reply Style the Owner Can Rewrite](channel-prompt-fixed-note-and-editable-style.md), [A Channel Turn Posts Nothing Until It Is Done, and the Reply Is the Answer Alone](channel-live-surface-strategy.md), [A Channel Reply Is Plain Text, With No Card or Button](a-channel-reply-is-plain-text.md), spec channels "Ask for the short version of a reply too long for a chat"
 
 ## Context
 
@@ -36,32 +36,46 @@ as of 2026-10; see also [docs/research](../research/README.md)):
   product; not found stated in its docs).
 
 None truncates a reply silently; the ones that keep chat readable move the long
-part somewhere else and say so.
+part somewhere else and say so. Claude in Slack and Devin keep the long material
+behind a link or a page the reader opens on demand.
 
 ## Options Considered
 
-### Option A — Ask the agent for the short version, the full one behind a button (chosen)
+### Option A — Ask the agent for the short version, which offers the full one (chosen)
 
 A cleanly finished reply past the bound (20 lines with text or 1,500
 characters, not counting `MEDIA:` lines or a collapsed `## Details`) is not
 sent. Coffer queues a follow-up turn in the same conversation, opening with
-`[Coffer]`: say it again in at most 5 lines, end by asking whether they want the
-full report as a file, no tools. That reply is sent with a **📄 Full report**
-button; a tap is the owner asking for the file in a message of their own. The
-follow-up's reply is never held back again.
+`[Coffer]`: say it again in at most 5 lines, end with one short line offering
+the full report as a file, no tools. That reply is plain text like every reply;
+the owner who wants the file says so in a message. The follow-up's reply is
+never held back again.
 
 - Pros: what reaches the chat is always a whole message written by the agent,
   in its own words and the asker's language. Coffer stores nothing: the agent
   still has the full answer in its session. It follows the owner's exact ask —
-  conclusion first, then a question about the file.
+  conclusion first, then a question about the file — and asking for the file is
+  answering a colleague.
 - Cons: one more model call, and the short version arrives seconds to tens of
   seconds later (the typing indicator keeps running). The follow-up is a real
-  turn, so the session (and the web view of it) shows Coffer's note. The tap
-  costs a further turn to produce the file.
+  turn, so the session (and the web view of it) shows Coffer's note. Asking for
+  the file costs a further turn.
 
 Wins because it is the only option that never leaves half a message and needs
 no reply text kept. With the reply style asking for short replies, it should
 fire rarely.
+
+### Option A′ — As A, the offer as a 📄 Full report button (the design until 2026-11-10)
+
+The short version ended on its answer and carried a **📄 Full report** button,
+whose tap reached the agent as the owner's message "Send me the full report as
+a Markdown file." (Before 2026-10-28 it carried both the button and a closing
+question, which said the same thing twice.)
+
+- Pros: one tap to the file; the reply itself ends on its answer.
+- Cons: the button made the reply a card on SeaTalk, and the owner asked for
+  replies in plain text with no cards (see the plain-text ADR); the tap needed
+  its own path into the inbound pipeline.
 
 ### Option B — Cut at the first paragraph, mark it, full text behind a button
 
@@ -104,9 +118,8 @@ summary.
 
 A channel reply that finished cleanly and is past the bound is replaced by a
 follow-up turn asking the same conversation for the short version
-(`application/channel/reply_rewrite.py`, `rewrite_turn.py`). Its reply carries
-the **📄 Full report** button (`full:report`), whose tap reaches the agent as the
-owner's message "Send me the full report as a Markdown file."
+(`application/channel/reply_rewrite.py`, `rewrite_turn.py`), which ends with one
+line offering the full report. The reply carries no button.
 
 - The follow-up runs through the conversation's ordinary queue and never names
   the conversation. When a message already waits in that queue, the long reply
@@ -114,38 +127,14 @@ owner's message "Send me the full report as a Markdown file."
   last reply" means.
 - A failed or stopped turn's partial reply is sent as before, with its notice.
 - The bound is a constant, not a setting: about two phone screens.
+- Coffer's default reply style still says to send a full report only when asked
+  and not to end a reply by offering it; the short version is the one exception,
+  because there the full answer is the one the reader did not get.
 
 ## Consequences
 
 - A long answer costs one extra turn; a full report costs one more.
 - The agent's session holds Coffer's `[Coffer]` note between the long answer and
   the short one; the agent is told not to mention it.
-- The button is a card on SeaTalk (as the 🗑 of a group reply already is); on a
-  transport without buttons the reader asks for the file in words.
 - The reply style remains the first line of defence; this only catches what it
   missed.
-
-## Addendum (2026-10-28): the button is the only offer
-
-The short version no longer ends by asking whether the reader wants the full
-report, and Coffer's default reply style no longer asks for that question
-either: a full report is sent only when the reader asks for one. Three places
-had said three things — the reply style asked the agent to offer the report,
-the vault skills that write investigation reports said to send it only on
-request, and the short version carried both the question and the button — and
-the agent picked one at random.
-
-- **Offer in the text and the button (before).** Pros: works on a transport
-  without buttons. Cons: the same offer twice under a short reply, and a
-  form-letter line at the end of every report.
-- **Only on request, the button under a too-long reply (chosen).** Pros: one
-  rule everywhere; replies end on their answer, as a person's would; the
-  button still gives a one-tap way to the file where it matters. Cons: a reader
-  who wants the full report of a short reply must ask in words.
-- **Always attach the file.** Pros: no extra turn. Cons: a file under most
-  investigation replies, nearly all unread.
-
-Comparable products: Claude in Slack and Devin answer in the thread and keep
-the long material behind a link or a page the reader opens on demand; neither
-ends a reply by asking whether to send more.
-

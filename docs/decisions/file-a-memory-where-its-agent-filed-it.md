@@ -1,5 +1,7 @@
 # File a Memory Where Its Agent Filed It
 
+> **Superseded in part (2026-11-11).** [Sync Only Project Memories](sync-only-project-memories.md): a memory learned outside any repository is no longer filed under `global`; it is not published. Filing a project memory where its agent filed it stands.
+
 **Status**: Accepted
 **Date**: 2026-10-16
 **Deciders**: Yuxing Wu

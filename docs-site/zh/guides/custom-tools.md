@@ -56,7 +56,7 @@ flowchart LR
 没有方案的请求头会原样发送它的密钥，所以保存着 `Bearer <key>` 的旧密钥仍然可用。要切换过去，打开该环境的**编辑…**对话框，把 `Authorization` 行的方案设为 **Bearer**，并在同一次保存里把值**替换**为原始密钥。只做其中一步，会发出 `Bearer Bearer …` 或者根本没有 `Bearer`，API 通常会回 401。
 :::
 
-把已存储的密钥发给一个分组，等于把它发到一个新地方，所以分组第一次使用它时，该密钥**会等待你在 Coffer 桌面应用里批准**（见[密钥 → 审批](/zh/guides/secrets#approvals)）。批准之前，分组显示*等待批准*，它的调用什么都不发送。每个环境都是一个独立的去处：为 `live` 批准一个密钥，对 `test` 什么都不批准；修改某个环境的 base URL 或它的某个密钥请求头，只会为这个环境再次请求批准。在密钥等待批准的环境里发出的调用会以 `SECRET_BINDING_PENDING` 失败，写明审批 id 和 `coffer approval approve <id>`，智能体可以运行这条命令把提示带到你的屏幕上；分组的其他环境照常工作。如果你拒绝了这条审批，分组会显示该密钥**已拒绝**而不是等待批准，调用以 `SECRET_BINDING_REJECTED` 失败；横幅上的**重新申请**会重新提出请求（在桌面应用里会直接弹出 Touch ID 并批准），`coffer approval ask-again <id>` 也一样。
+把已存储的密钥发给一个分组，等于把它发到一个新地方，所以分组第一次使用它时，该密钥**会等待你在 Coffer 桌面应用里批准**（见[密钥 → 审批](/zh/guides/secrets#approvals)）。批准之前，分组显示*等待批准*，它的调用什么都不发送。每个环境都是一个独立的去处：为 `live` 批准一个密钥，对 `test` 什么都不批准；修改某个环境的 base URL 或它的某个密钥请求头，只会为这个环境再次请求批准。在密钥等待批准的环境里发出的调用会以 `SECRET_BINDING_PENDING` 失败，写明审批 id，智能体会把它转告给你；分组的其他环境照常工作。如果你拒绝了这条审批，分组会显示该密钥**已拒绝**而不是等待批准，调用以 `SECRET_BINDING_REJECTED` 失败；横幅上的**重新申请**会重新提出请求（在桌面应用里会直接弹出 Touch ID 并批准）。
 
 ## 环境 {#environments}
 
@@ -184,7 +184,7 @@ coffer custom-tool tool test billing search --env test --args '{"q": "x"}' --dry
 
 工具的定义、请求模板和参数 schema 可以来自参数、文件（`--data @search.json`）或标准输入（`--data -`），`--set key=value` 在其上修改单个字段。每条命令都接受 `--json`。`--env` 选择测试所在的环境，开启了不止一个环境时必须给；`--args` 以 JSON 给出参数（文本、`@file` 或 `-`）。参数违反 schema 的测试或 dry run 以 `6` 退出，每个字段一条错误，什么都不发送；在该环境中无法构建请求的 dry run（`CUSTOM_TOOL_REQUEST_INVALID`）也以 `6` 退出；API 以错误状态码回应的测试以 `7` 退出。
 
-让某个密钥进入等待的命令——把已存储的密钥绑定到环境的请求头，或修改环境的 base URL——会保存改动，打印审批 id 和 `next: coffer approval approve <id>`，并以 `9` 退出。运行那条命令会在桌面应用里弹出 Touch ID 或密码提示；见[密钥 → 在命令行上](/zh/guides/secrets#on-the-command-line)。[`coffer custom-tool` 参考](/zh/reference/cli/custom-tool)列出了每个选项。
+让某个密钥进入等待的命令——把已存储的密钥绑定到环境的请求头，或修改环境的 base URL——会保存改动，打印审批 id，说明由你在 Coffer 应用里处理，并以 `9` 退出；见[密钥 → 在命令行上](/zh/guides/secrets#on-the-command-line)。[`coffer custom-tool` 参考](/zh/reference/cli/custom-tool)列出了每个选项。
 
 ## 相关 {#related}
 

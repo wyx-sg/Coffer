@@ -245,10 +245,11 @@ def test_a_single_pending_approval_exits_9_with_the_next_step(
         assert json.loads(result.stderr) == {
             "status": "pending_approval",
             "approval_ids": ["appr-1"],
-            "next": "coffer approval approve appr-1",
+            "next": "ask the developer to answer it in the Coffer app (Secrets page)",
         }
     else:
-        assert "next: coffer approval approve appr-1" in result.stderr
+        assert "waiting for approval: appr-1" in result.stderr
+        assert "next: ask the developer to answer it in the Coffer app" in result.stderr
 
 
 def test_a_grant_already_on_is_not_pending(daemon: Callable[[Handler], _Daemon]) -> None:

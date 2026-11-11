@@ -58,8 +58,8 @@ OWNERS: tuple[tuple[str, str], ...] = (
     ("/api/v1/chat", "chat"),
     ("/api/v1/clis", "skill-manager"),
     ("/api/v1/secrets", "secret"),
-    # The command line's requests to the desktop shell (spec secret "Approve from
-    # the command line with the person's own presence check").
+    # The command line's requests to the desktop shell (spec desktop-app "Serve the
+    # command line's desktop requests").
     ("/api/v1/desktop", "secret"),
     ("/api/v1/custom-tools", "mcp-gateway"),
     ("/api/v1/daemon", "daemon"),

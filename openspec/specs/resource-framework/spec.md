@@ -1096,7 +1096,7 @@ the entire command tree across every spec and so has no narrower home.
 #### Scenario: a single pending approval exits 9
 - **GIVEN** a change whose answer names one approval as `pending_approval_id`, or as `approval_id` beside a `pending` state
 - **WHEN** the command that made it ends
-- **THEN** it exits 9 printing `next: coffer approval approve <id>`
+- **THEN** it exits 9 printing the id and `next: ask the developer to answer it in the Coffer app (Secrets page)`
 
 #### Scenario: management commands are visible in help
 - **GIVEN** the CLI's live command tree

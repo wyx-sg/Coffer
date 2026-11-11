@@ -5,7 +5,7 @@ description: Set up a SeaTalk channel for Coffer — create a SeaTalk Open Platf
 
 # SeaTalk
 
-This guide sets up a SeaTalk channel: create a bot app on the SeaTalk Open Platform, supply SeaTalk's WebSocket SDK, register the channel in Coffer, switch the app to WebSocket delivery, and pair your account. It then covers groups, threads, quoted messages, cards, limits and troubleshooting. For what every channel shares — commands, scope, security — see [Channels](/guides/channels).
+This guide sets up a SeaTalk channel: create a bot app on the SeaTalk Open Platform, supply SeaTalk's WebSocket SDK, register the channel in Coffer, switch the app to WebSocket delivery, and pair your account. It then covers groups, threads, quoted messages, command cards, limits and troubleshooting. For what every channel shares — commands, scope, security — see [Channels](/guides/channels).
 
 No agent has an official SeaTalk integration, so everything you do with an agent in SeaTalk goes through this channel.
 
@@ -99,10 +99,10 @@ Before the first attempt there is no connection state: the daemon starts a chann
 
 - **While the turn runs** — SeaTalk has no reactions and cannot edit a text message, so the only sign of work is the typing indicator. It appears at once and is kept alive every 3 seconds until the reply is sent, in direct chats and group threads alike. SeaTalk silently skips group typing in groups of more than 200 members.
 - **Direct chats** — the answer arrives as one ordinary new message, so SeaTalk notifies you the way it does for any message. Only what the agent writes after its last tool call is sent; its earlier remarks between steps are not. A long answer is split at paragraph boundaries into several messages, and every message after the first is numbered `(2/3)`, `(3/3)`.
-- **Groups** — the finished answer arrives as one interactive card, split into several cards if it is long, and it opens by @mentioning whoever asked. When the agent needs something from someone else in the thread, it @mentions them too, by the email the thread names them by, so they are notified. Cards are used because SeaTalk can rewrite a card but cannot delete or edit anything else, and that is what lets the owner withdraw a group reply (see below). Each card carries a 🗑 button.
+- **Groups** — the finished answer arrives as ordinary text, split into several messages if it is long, and it opens by @mentioning whoever asked. When the agent needs something from someone else in the thread, it @mentions them too, by the email the thread names them by, so they are notified. No reply carries a button.
 - **Formatting** — the agent's Markdown is converted to SeaTalk Markdown: bold, italic, inline code, code fences and lists. Headings become bold and links become `label (url)`, since SeaTalk supports neither. SeaTalk has no tables either, so the agent is told to write one bullet per row instead. Messages are split to stay under SeaTalk's 4,096-byte cap.
 - **Long sections** — SeaTalk cannot collapse text, so the answer arrives whole, including any section the agent puts under a heading such as `## Details`.
-- **Withdrawing a reply.** SeaTalk's Open Platform has no API to delete a bot's message, and only interactive cards can be rewritten, and only by the bot that sent them. So when the owner withdraws a group reply — by tapping its 🗑 button, or by quoting it and sending `/del` — Coffer rewrites each card of that reply into a neutral “🗑 Withdrawn” card with no buttons. The text is gone from the chat, but the card stays. SeaTalk allows rewriting for 7 days; past that the owner is told privately that the reply can no longer be withdrawn. Only the owner's tap or command counts, and `/del` without a quote withdraws the most recent reply in the group or thread. A direct-chat reply is an ordinary message and cannot be withdrawn on SeaTalk. See [Withdrawing a reply](/guides/channels#withdrawing-a-reply).
+- **No withdrawing.** SeaTalk's Open Platform has no API to delete a bot's message, and a text message cannot be edited, so a reply cannot be taken back. `/del` answers “🗑 This chat cannot withdraw bot replies.” See [Withdrawing a reply](/guides/channels#withdrawing-a-reply).
 
 ## Groups and threads
 
@@ -120,7 +120,7 @@ Where the answer goes:
 
 Each group thread is its own conversation, so you can run Claude Code in one thread and Codex in another. A group answer opens by @mentioning you, so SeaTalk notifies you.
 
-Because a main-chat @mention always roots a new thread, a command sent there, like `@bot /new <agent>`, applies to that new thread. `/del` withdraws a reply, as described under [How replies look](#how-replies-look). `/model`, `/dir`, `/status`, `/resume`, `/thread` and `/close` work only in a direct chat; sent in a group they get one private line saying so. Inside a group thread, `/new` and `/stop` apply to that thread, and a new thread starts on the channel's default agent.
+Because a main-chat @mention always roots a new thread, a command sent there, like `@bot /new <agent>`, applies to that new thread. `/del` cannot withdraw a reply on SeaTalk; see [How replies look](#how-replies-look). `/model`, `/dir`, `/status`, `/resume`, `/thread` and `/close` work only in a direct chat; sent in a group they get one private line saying so. Inside a group thread, `/new` and `/stop` apply to that thread, and a new thread starts on the channel's default agent.
 
 SeaTalk has no **Answer only when @mentioned** switch: it already delivers only @mentions, and the bot answers each one, even when it also @mentions someone else.
 
@@ -170,7 +170,7 @@ On the channel's page choose **Replace secret** in the banner when SeaTalk rejec
 | Card content | 6 buttons in up to 3 rows; title 120 characters, description 1,000 |
 | Thread pages | 100 messages per page, bounded page count |
 | Thread history | Replies from the last 7 days only; no whispers or deleted messages |
-| Withdrawing a bot message | No delete API; a group reply card is rewritten to “🗑 Withdrawn” within 7 days |
+| Withdrawing a bot message | Not possible: no delete API, and text cannot be edited |
 | Connections per app | 1 |
 
 ## Troubleshooting

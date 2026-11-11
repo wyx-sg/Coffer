@@ -1,6 +1,5 @@
-"""The text Coffer writes into Claude Code: a project's ``MEMORY.md`` block and
-``rules/coffer-memory.md`` (spec memory "Write the hub into Claude Code as text
-it loads")."""
+"""The text Coffer writes into Claude Code: a project's ``MEMORY.md`` block
+(spec memory "Write the hub into Claude Code as text it loads")."""
 
 from __future__ import annotations
 
@@ -20,11 +19,9 @@ from coffer.infrastructure.memory.writers.claude_code import (
 from coffer.infrastructure.memory.writers.claude_code_lines import (
     BLOCK_MAX_BYTES,
     MEMORY_TEXT_MAX,
-    RULES_MAX_BYTES,
 )
 
 _PREFERENCE = "memories/memory_summary.md::profile::User preferences::1"
-_PROFILE = "memories/memory_summary.md::profile::user-profile"
 _PROJECT = "github.com/acme/payments"
 
 # A Codex bullet: its title is its first clause, its description all of it.
@@ -68,73 +65,69 @@ def _aux(
     return {w.path: w.content or "" for w in writes}
 
 
-def _rules(tmp_path: pathlib.Path) -> str:
-    return str(tmp_path / "rules" / "coffer-memory.md")
+_ROOT = "/work/payments"
+
+
+def _block(tmp_path: pathlib.Path, entries: list[HubEntry]) -> str:
+    """The block written into the payments project's ``MEMORY.md``."""
+    project = [
+        HubEntry(**{**e.__dict__, "project": _PROJECT}) if not e.project else e for e in entries
+    ]
+    return _aux(tmp_path, project, root=_ROOT)[str(memory_dir(str(tmp_path), _ROOT) / "MEMORY.md")]
 
 
 def test_no_memory_is_written_as_a_file_of_its_own() -> None:
-    entry = _entry("a1", "Reply in Chinese", "Reply in Chinese")
-    assert not ClaudeCodeMemoryWriter().wants(Target(entry, None, entry.body))
+    entry = _entry("a1", "Reply in Chinese", "Reply in Chinese", project=_PROJECT)
+    assert not ClaudeCodeMemoryWriter().wants(Target(entry, _ROOT, entry.body))
 
 
-@pytest.mark.acceptance(spec="memory", scenario="a Codex profile reaches every Claude Code session")
-def test_the_rules_file_holds_each_global_memory_s_text_profile_first(
-    tmp_path: pathlib.Path,
-) -> None:
-    rules = _aux(
+def test_the_block_holds_each_memory_s_text_newest_first(tmp_path: pathlib.Path) -> None:
+    block = _block(
         tmp_path,
         [
+            _entry("a1", "Sessions", "Session TTL is 30 minutes."),
             _entry("a2", "Reply in Chinese", "Reply in Chinese, keep code identifiers in English."),
-            _entry(
-                "a1",
-                "User Profile",
-                "A backend engineer who works on Shopee accounts.",
-                source=_PROFILE,
-            ),
         ],
-    )[_rules(tmp_path)]
-    body = rules.split("\n\n", 3)[-1]
-    lines = [line for line in body.splitlines() if line.startswith("- ")]
-    assert "A backend engineer who works on Shopee accounts." in lines[0]
-    assert "Reply in Chinese, keep code identifiers in English. (from Codex)" in lines[1]
-    assert "coffer_" not in rules
+    )
+    lines = [line for line in block.splitlines() if line.startswith("- ")]
+    assert "Reply in Chinese, keep code identifiers in English. (from Codex)" in lines[0]
+    assert "Session TTL is 30 minutes." in lines[1]
+    assert "coffer_" not in block
 
 
 def test_a_title_that_opens_its_text_is_not_repeated(tmp_path: pathlib.Path) -> None:
-    rules = _aux(tmp_path, [_entry("a1", "keep account knowledge in `shopee-account`", _BULLET)])
-    assert f"- {_BULLET} (from Codex)" in rules[_rules(tmp_path)]
+    block = _block(tmp_path, [_entry("a1", "keep account knowledge in `shopee-account`", _BULLET)])
+    assert f"- {_BULLET} (from Codex)" in block
 
 
 def test_a_title_the_text_does_not_open_with_leads_in_bold(tmp_path: pathlib.Path) -> None:
-    rules = _aux(
+    block = _block(
         tmp_path,
         [_entry("a1", "Testing", "Integration tests hit a real database.", agent=CLAUDE_CODE)],
     )
-    assert (
-        "- **Testing**: Integration tests hit a real database. (from Claude Code)"
-        in rules[_rules(tmp_path)]
-    )
+    assert "- **Testing**: Integration tests hit a real database. (from Claude Code)" in block
 
 
 def test_one_memory_s_text_is_bounded(tmp_path: pathlib.Path) -> None:
-    rules = _aux(tmp_path, [_entry("a1", "Long", "word " * 1000)])[_rules(tmp_path)]
-    line = next(line for line in rules.splitlines() if line.startswith("- "))
+    block = _block(tmp_path, [_entry("a1", "Long", "word " * 1000)])
+    line = next(line for line in block.splitlines() if line.startswith("- "))
     assert len(line) <= MEMORY_TEXT_MAX + len("- ") + len(" (from Codex)")
 
 
-@pytest.mark.acceptance(spec="memory", scenario="the rules file stays bounded")
-def test_the_rules_file_is_bounded_and_names_the_rest(tmp_path: pathlib.Path) -> None:
-    entries = [_entry(f"b{i:02d}", f"Preference {i}", "x" * 400) for i in range(40)]
-    rules = _aux(tmp_path, entries)[_rules(tmp_path)]
-    assert len(rules.encode("utf-8")) <= RULES_MAX_BYTES
-    assert "more: `coffer memory entries --project global` lists them." in rules
+@pytest.mark.acceptance(spec="memory", scenario="an earlier build's global rules file is deleted")
+def test_an_earlier_build_s_global_rules_file_is_deleted(tmp_path: pathlib.Path) -> None:
+    rules = tmp_path / "rules" / "coffer-memory.md"
+    rules.parent.mkdir(parents=True)
+    rules.write_text("# Memories from your other agents\n\n- Reply in Chinese\n")
+    writes = ClaudeCodeMemoryWriter().aux(str(tmp_path), {}, {}, [])
+    assert [(w.path, w.content) for w in writes] == [(str(rules), None)]
 
 
 @pytest.mark.acceptance(spec="memory", scenario="a project's memories reach only that project")
 def test_project_memories_go_into_that_project_s_block_not_the_rules_file(
     tmp_path: pathlib.Path,
 ) -> None:
-    root = "/work/payments"
+    root = _ROOT
     writes = _aux(
         tmp_path,
         [_entry("p1", "Sessions", "Session TTL is 30 minutes.", project=_PROJECT)],
@@ -149,7 +142,7 @@ def test_project_memories_go_into_that_project_s_block_not_the_rules_file(
 
 
 def test_a_project_block_is_bounded(tmp_path: pathlib.Path) -> None:
-    root = "/work/payments"
+    root = _ROOT
     entries = [_entry(f"p{i:02d}", f"Note {i}", "y" * 400, project=_PROJECT) for i in range(30)]
     block = next(iter(_aux(tmp_path, entries, root=root).values()))
     inner = block.split(BLOCK_BEGIN, 1)[1].split(BLOCK_END, 1)[0]
@@ -161,5 +154,5 @@ def test_an_earlier_build_s_global_folder_block_is_emptied(tmp_path: pathlib.Pat
     folder = memory_dir(str(tmp_path), GLOBAL_ROOT)
     folder.mkdir(parents=True)
     (folder / "MEMORY.md").write_text(f"{BLOCK_BEGIN}\n- old line\n{BLOCK_END}\n")
-    writes = _aux(tmp_path, [_entry("a1", "Reply in Chinese", "Reply in Chinese")])
+    writes = _aux(tmp_path, [])
     assert writes[str(folder / "MEMORY.md")] == ""

@@ -321,9 +321,15 @@ class TurnDriver:
             )
             return sent
 
-        # What the reply turns out to be, so ``/del`` and the 🗑 button can take it back.
+        # What the reply turns out to be, so ``/del`` can take it back. A reply
+        # is plain text: no buttons ride on it.
         tracker = ReplyTracker.for_turn(
-            self._replies, binding, peer.chat_id, item.thread_id, item.chat_kind, _send_card
+            self._replies,
+            binding,
+            peer.chat_id,
+            item.thread_id,
+            item.chat_kind,
+            partial(_send_card, buttons=()),
         )
         # A reply too long for the chat is said again short by a follow-up turn.
         render = partial(self._spawn_render, binding, peer)
@@ -342,7 +348,6 @@ class TurnDriver:
             mention_user_name=item.mention_user_name,
             tracker=tracker,
             rewrite=None if item.rewrite else rewrite,
-            offer_full_report=item.rewrite,
             carried_media=item.carried_media,
         )
         outcome: TurnOutcome = "failed"

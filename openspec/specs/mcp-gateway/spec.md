@@ -1238,7 +1238,7 @@ unknown or switched-off environment are likewise refused before any request.
 #### Scenario: a missing or unapproved secret is refused before any request
 - **GIVEN** a group whose `live` environment cites a secret with no value and whose `test` environment waits for approval of its secret
 - **WHEN** a tool is called in each environment
-- **THEN** the `live` call answers `SECRET_MISSING` and the `test` call `SECRET_BINDING_PENDING` naming its approval and `coffer approval approve <id>`, and the upstream receives no request
+- **THEN** the `live` call answers `SECRET_MISSING` and the `test` call `SECRET_BINDING_PENDING` naming its approval and that the developer answers it in the Coffer app, and the upstream receives no request
 
 ### Requirement: Manage custom tools from the command line
 Every custom-tool operation of the Custom tools page MUST be available as a
@@ -1261,7 +1261,7 @@ calls the upstream API itself.
 #### Scenario: a group is configured end to end from the command line
 - **GIVEN** a running daemon, a stored secret `billing-test-token` and an HTTP API answering on two base URLs
 - **WHEN** an agent runs, one command at a time, `coffer custom-tool group create billing --env test=https://test.billing.example`, `coffer custom-tool env add billing live --base-url https://billing.example`, `coffer custom-tool env set-header billing test Authorization --secret billing-test-token --scheme Bearer`, `coffer custom-tool tool add billing --data @search.json` (a `POST /search` with `changes_data` false), `coffer custom-tool group reach billing --agent claude-code`, and `coffer custom-tool tool test billing search --env test --args '{"q":"x"}' --json`
-- **THEN** each command exits `0` except a binding that waits for approval, which prints its approval id and `coffer approval approve <id>` and exits `9`
+- **THEN** each command exits `0` except a binding that waits for approval, which prints its approval id and that the developer answers it in the Coffer app, and exits `9`
 - **AND** the group, its two environments, the tool with `changes_data` false and the reach are what the Custom tools page shows, and the test's JSON carries the upstream's status line and the environment's actual target
 
 #### Scenario: a change made on the page is read back by the command line

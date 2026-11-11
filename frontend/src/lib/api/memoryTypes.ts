@@ -34,6 +34,4 @@ export type HubEntryDetail = Schemas["HubEntryDetailOut"];
 export type EntryCopy = Schemas["EntryCopyOut"];
 
 export type CurationHandoff = Schemas["CurationHandoffOut"];
-/** Sort into knowledge: the prompt that hands the waiting task notes to Claude Code. */
-export type SortHandoff = Schemas["SortHandoffOut"];
 export type CurationEnableResult = Schemas["CurationEnableOut"];

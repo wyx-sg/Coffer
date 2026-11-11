@@ -343,7 +343,6 @@ function install(setup: Setup = {}) {
               agents: {},
             },
           ],
-          global_memories: 2,
           last_synced_at: "",
           agents: [],
           preview: null,
@@ -611,7 +610,6 @@ describe("each health tile carries the numbers and lines the board shows", () =>
               agents: {},
             },
           ],
-          global_memories: 2,
           last_synced_at: minutes(14),
           agents: [],
           preview: null,
@@ -655,7 +653,7 @@ describe("each health tile carries the numbers and lines the board shows", () =>
       expect(await tile("Knowledge")).toHaveTextContent(/1 collection · edited (today )?\d/),
     );
     await waitFor(async () =>
-      expect(await tile("Memory")).toHaveTextContent(/9memories.*Last synced 14 min ago/),
+      expect(await tile("Memory")).toHaveTextContent(/7memories.*Last synced 14 min ago/),
     );
     const sync = await tile("Sync");
     await waitFor(() => expect(sync).toHaveTextContent("4 min ago"));

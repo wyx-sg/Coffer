@@ -376,7 +376,7 @@ MCP 领域包用 `jsonschema` 库的 draft 2020-12 校验器检查 schema（[Cus
 
 ### 密钥边界 {#the-secret-boundary}
 
-每个已开启的环境都是一个独立的目的地：同样的类型和 uid（就是这个组，所以每个按资源查看审批的视图仍然能找到它们）、标签 `<group> · <environment>`、**target** `http_api <base_url>`，以及槽位 `<key>:<header>`（提升出的环境用 `<header>`，保留它原来的槽位和目标，所以它的审批在升级后仍然有效）。绑定已存储的密钥、改动某个环境的基础 URL、给密钥 header 改名，都只为那个环境等人批准；批准 `live` 对 `test` 什么都不批准。组按环境报告密钥状态为 `present`、`missing` 或 `pending_approval`（带审批 id）。被扣住的密钥会让智能体的调用以带内的 `SECRET_BINDING_PENDING` 失败，写明审批 id 和 `coffer approval approve <id>`，什么都没发出去，而且只影响那个环境。组绑定的独立密钥在组被删除时从不会被释放：它属于密钥页面。
+每个已开启的环境都是一个独立的目的地：同样的类型和 uid（就是这个组，所以每个按资源查看审批的视图仍然能找到它们）、标签 `<group> · <environment>`、**target** `http_api <base_url>`，以及槽位 `<key>:<header>`（提升出的环境用 `<header>`，保留它原来的槽位和目标，所以它的审批在升级后仍然有效）。绑定已存储的密钥、改动某个环境的基础 URL、给密钥 header 改名，都只为那个环境等人批准；批准 `live` 对 `test` 什么都不批准。组按环境报告密钥状态为 `present`、`missing` 或 `pending_approval`（带审批 id）。被扣住的密钥会让智能体的调用以带内的 `SECRET_BINDING_PENDING` 失败，写明审批 id 并说明由开发者在 Coffer 应用里处理，什么都没发出去，而且只影响那个环境。组绑定的独立密钥在组被删除时从不会被释放：它属于密钥页面。
 
 ### 测试一个请求 {#testing-a-request}
 

@@ -248,7 +248,7 @@ def test_binding_a_stored_secret_waits_for_approval(daemon: BoundaryDaemon, api:
     assert pending["target"] == f"http_api {api.base_url}/"
     failed = refusal(Agent(daemon, CLAUDE).call("billing__list_invoices"))
     assert "SECRET_BINDING_PENDING" in failed and "waiting for approval" in failed
-    assert f"coffer approval approve {group['pending_approvals'][0]}" in failed
+    assert group["pending_approvals"][0] in failed and "answer it in the Coffer app" in failed
     assert api.seen == []
     daemon.approve(group["pending_approvals"][0])
     assert get_group(daemon, "billing")["secret_state"] == "present"

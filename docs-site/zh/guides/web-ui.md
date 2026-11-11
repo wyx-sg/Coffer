@@ -9,7 +9,7 @@ Coffer 的 Web 界面是你管理保险库里一切的地方：智能体、MCP �
 
 ## Web 界面与命令行各做什么 {#what-the-web-ui-and-the-command-line-each-do}
 
-所有管理操作都在 Web 界面里，而且每一个都有一条调用同一路由的 `coffer` 命令，所以在终端里工作的智能体也能做：`coffer agent`、`coffer mcp`、`coffer custom-tool`、`coffer skill`、`coffer knowledge`、`coffer memory`、`coffer provider`、`coffer channel`、`coffer approval`、`coffer sync`、`coffer settings` 等等。无论谁来操作，校验、审计和生命周期都一样。[CLI 覆盖表](/zh/reference/cli-coverage)把每个页面操作对应到它的路由和命令，[CLI 参考](/zh/reference/cli)列出每个选项。每条命令都接受 `--json`，从 `--data '<json>'`、`--data @file` 或 `--data -`（标准输入）读取请求体，并可重复使用 `--set key=value`；守护进程的错误码原样透传，退出码稳定（见[退出码](/zh/reference/error-codes#cli-exit-codes)）。
+所有管理操作都在 Web 界面里，而且除了处理密钥审批（只能由你在应用里做）之外，每一个都有一条调用同一路由的 `coffer` 命令，所以在终端里工作的智能体也能做：`coffer agent`、`coffer mcp`、`coffer custom-tool`、`coffer skill`、`coffer knowledge`、`coffer memory`、`coffer provider`、`coffer channel`、`coffer sync`、`coffer settings` 等等。无论谁来操作，校验、审计和生命周期都一样。[CLI 覆盖表](/zh/reference/cli-coverage)把每个页面操作对应到它的路由和命令，[CLI 参考](/zh/reference/cli)列出每个选项。每条命令都接受 `--json`，从 `--data '<json>'`、`--data @file` 或 `--data -`（标准输入）读取请求体，并可重复使用 `--set key=value`；守护进程的错误码原样透传，退出码稳定（见[退出码](/zh/reference/error-codes#cli-exit-codes)）。
 
 只有两类事情没有命令。纯文件内容——知识文档、技能的文件、智能体自己的配置——用你或智能体自己的工具读写。只在窗口前才有意义的操作——文件夹选择器、在编辑器、终端或访达中打开文件、界面的语言和主题——留在窗口里。需要你本人在场的步骤（批准密钥、显示值、备份主密钥）交给[桌面应用](/zh/guides/desktop-app)自己的 Touch ID 验证，无论从哪个入口发起。
 
@@ -50,7 +50,7 @@ Coffer 的 Web 界面是你管理保险库里一切的地方：智能体、MCP �
 | 能力 | **技能** | `/skills` | Coffer 投递给智能体的技能库。见[技能](/zh/guides/skills)。 |
 | 能力 | **命令行工具** | `/clis` | 你的技能需要的命令行工具，以及每个是否已安装，见[命令行工具](/zh/guides/clis)。 |
 | 上下文 | **知识** | `/knowledge` | `~/.coffer/vault/knowledge/` 下的知识集，每个都是由**页面**和**来源**组成的 wiki：一棵树旁边是只读的阅读器，可以在你的编辑器里打开文件，旁边有**历史**抽屉；每个知识集上有**整理**按钮、一行概要、列出 Coffer 发现的问题的**待办**、按页面类型排列的**内容**，以及**改动记录**（一次整理是一条，可以撤销）；页头有作用于所有知识集的**整理全部**，以及**添加**菜单，用来上传文档、新建知识集，或**接入外部文件夹…**：你用自己的工具维护的文件夹（比如 Obsidian 库）原地共享给智能体，不会复制进 Coffer，也不同步、不整理，并标着**外部**。见[知识](/zh/guides/knowledge)。 |
-| 上下文 | **记忆** | `/memory` | 智能体之间的记忆同步：**立即同步**和**撤销同步…**、一条横幅列出等你处理的事，左边是范围（**全局记忆**，然后是中心库里的项目），右边是所选范围的记忆（`/memory?scope=<folder>`）。一条记忆在抽屉里打开（`&memory=<id>`），显示每个智能体在哪里持有它以及它的正文。每个智能体自己的记忆开关和**立即整理**在它的记忆标签页上。见[记忆](/zh/guides/memory#the-memory-page)。 |
+| 上下文 | **记忆** | `/memory` | 智能体之间的记忆同步：**立即同步**和**撤销同步…**、一条横幅列出等你处理的事，左边是中心库里的项目，右边是所选项目的记忆（`/memory?scope=<folder>`）。一条记忆在抽屉里打开（`&memory=<id>`），显示每个智能体在哪里持有它以及它的正文。每个智能体自己的记忆开关和**立即整理**在它的记忆标签页上。见[记忆](/zh/guides/memory#the-memory-page)。 |
 | 系统 | **密钥** | `/secrets` | 每个已保存的密钥及其使用者：添加、更换、删除，补上这台 Mac 上缺失的值、答复审批。见[密钥](/zh/guides/secrets)。 |
 | 系统 | **活动** | `/activity` | 改了什么、智能体调用了什么、守护进程记录了什么：**全部**合并成一条流，然后是**变更**、**工具调用**和**守护进程日志**。见[活动与审计](/zh/guides/activity)。 |
 | 系统 | **同步** | `/sync` | 让这个保险库和你自己的 git 远端收敛，分为**状态**、**机器**和**远端**标签页，另有**查看待推送的改动**（`/sync/pending`）、**解决冲突**（`/sync/conflicts`）和**审阅暂停的删除**（`/sync/deletions`）视图，都是左边文件列表、右边选中文件的 diff。见[保险库同步](/zh/guides/vault-sync)。 |

@@ -27,9 +27,6 @@ coffer memory [OPTIONS] COMMAND [ARGS]...
 | [`memory entries`](#memory-entries) | A project's memories with their origin and where each was written. |
 | [`memory show`](#memory-show) | One memory's text and the file each agent on this machine holds it in. |
 | [`memory curate`](#memory-curate) | The prompt that asks Claude Code to consolidate its memory; give it to the agent. |
-| [`memory to-sort`](#memory-to-sort) | The memories your agents filed as task notes that no one has sorted yet. |
-| [`memory sort`](#memory-sort) | The prompt that asks Claude Code to sort the waiting task notes into knowledge, a skill, memory or nothing; give it to the agent. |
-| [`memory sorted`](#memory-sorted) | Record where memories were sorted. |
 | [`memory curation-enable`](#memory-curation-enable) | Turn on an agent's own curation in its settings, backed up first. |
 
 ## memory state
@@ -144,7 +141,7 @@ coffer memory entries [OPTIONS]
 
 | 名称 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `--project` <span class="cli-chip">选项</span> | text |  | The project key, or `global` |
+| `--project` <span class="cli-chip">选项</span> | text |  | The project key |
 | `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
 
 ## memory show
@@ -172,56 +169,6 @@ The prompt that asks Claude Code to consolidate its memory; give it to the agent
 
 ```sh
 coffer memory curate [OPTIONS]
-```
-
-<p class="cli-label">参数与选项</p>
-
-| 名称 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- |
-| `--data, -d` <span class="cli-chip">选项</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
-| `--set` <span class="cli-chip">选项</span> | text（可重复） |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
-| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
-
-## memory to-sort
-
-The memories your agents filed as task notes that no one has sorted yet.
-
-<p class="cli-label">概要</p>
-
-```sh
-coffer memory to-sort [OPTIONS]
-```
-
-<p class="cli-label">参数与选项</p>
-
-| 名称 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- |
-| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
-
-## memory sort
-
-The prompt that asks Claude Code to sort the waiting task notes into knowledge, a skill, memory or nothing; give it to the agent.
-
-<p class="cli-label">概要</p>
-
-```sh
-coffer memory sort [OPTIONS]
-```
-
-<p class="cli-label">参数与选项</p>
-
-| 名称 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- |
-| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
-
-## memory sorted
-
-Record where memories were sorted. Body: ids, outcome (knowledge, skill, memory, drop), where.
-
-<p class="cli-label">概要</p>
-
-```sh
-coffer memory sorted [OPTIONS]
 ```
 
 <p class="cli-label">参数与选项</p>

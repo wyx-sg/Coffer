@@ -7,7 +7,7 @@ description: Coffer 如何加密它保管的每个密钥；如何存入、引用
 
 Coffer 需要的每个密钥——MCP 服务器的令牌、提供商的 API 密钥、消息渠道机器人的令牌、同步远端的推送令牌——都放在同一个加密存储里，其他地方一律按 id 引用密钥。本页介绍如何存入和引用密钥、如何轮换和删除、主密钥放在哪里，以及如何备份主密钥或把它迁到另一台机器。
 
-没有任何命令、路由或 MCP 工具会打印已存储的值。只有在桌面应用里、通过 Touch ID 或登录密码验证之后，你才能看到一个值；密钥要发往一个从未去过的地方，也必须先由你在桌面应用里批准（智能体可以用 `coffer approval approve` 请求，它会把提示带到应用里）。这条边界、审批的工作方式，以及如何允许把独立密钥交给你用 `coffer run` 运行的命令，见[密钥](/zh/guides/secrets)。
+没有任何命令、路由或 MCP 工具会打印已存储的值。只有在桌面应用里、通过 Touch ID 或登录密码验证之后，你才能看到一个值；密钥要发往一个从未去过的地方，也必须先由你在桌面应用里批准。这条边界、审批的工作方式，以及如何允许把独立密钥交给你用 `coffer run` 运行的命令，见[密钥](/zh/guides/secrets)。
 
 ## 密钥如何存储 {#how-secrets-are-stored}
 
@@ -163,7 +163,7 @@ printf '%s' "$NEW_TOKEN" | coffer secret set secret/<id>
 | 启动时报 `SECRET_LOCKED` | 钥匙串拒绝交出主密钥——通常是因为它被锁住了 | 解锁钥匙串，再次启动守护进程。 |
 | `SECRET_UNREADABLE`，并指出某个 ref | 密文用当前主密钥解不开——通常是另一台机器的主密钥加密的 | 导入对应的主密钥，或者重新设置该 ref 的值。 |
 | `SECRET_IN_USE` | 仍有资源引用该 ref | 解除或删除报错中列出的资源。 |
-| `waiting for approval: <id>`，退出码 `9` | 改动中的某个密钥要发往一个从未去过的地方 | 运行它打印的 `next:` 命令 `coffer approval approve <id>` 并在桌面应用里确认，或在应用的审批对话框中批准，对话框列出正在等待的项。见[密钥 → 审批](/zh/guides/secrets#approvals)。 |
+| `waiting for approval: <id>`，退出码 `9` | 改动中的某个密钥要发往一个从未去过的地方 | 在桌面应用的审批对话框中批准，对话框列出正在等待的项。见[密钥 → 审批](/zh/guides/secrets#approvals)。 |
 | `PRESENCE_GRANT_INVALID` | 在桌面应用之外尝试了显示值、备份主密钥或审批 | 到桌面应用里去做。 |
 | MCP 服务器启动失败，提示缺少某个密钥 | 引用的 ref 不在存储中 | 用 `coffer secret set <ref>` 给一个已有的密钥设置值，或到密钥页面添加该密钥。 |
 
