@@ -13,12 +13,12 @@ practice it does not. So Coffer writes no file per memory:
   :func:`coffer.domain.agent.native_memory.encode_slug` of the root, shared by
   every worktree of it). Only the bytes between the markers change; the file
   is backed up before each change.
-- **Global memories** go, as text, into ``<config_dir>/rules/coffer-memory.md``,
-  a file Coffer owns.
 
-Copies earlier builds wrote (``coffer_*.md`` files, and a ``-coffer-global``
-project) are no longer targets, so the first sync removes the ones still as
-written and empties their blocks.
+There is no global memory ("Sync only project memories"). What earlier builds
+wrote (``coffer_*.md`` files, a ``-coffer-global`` project, and the global
+rules file ``<config_dir>/rules/coffer-memory.md``) is no longer a target, so
+the first sync removes the copies still as written, empties their blocks and
+deletes the rules file.
 """
 
 from __future__ import annotations
@@ -43,7 +43,6 @@ from coffer.infrastructure.memory.writers.claude_code_lines import (
     COPY_PREFIX,
     INDEX_NAME,
     block_lines,
-    render_rules,
 )
 
 RULES_NAME = "coffer-memory.md"
@@ -158,12 +157,9 @@ class ClaudeCodeMemoryWriter:
         by_dir: dict[pathlib.Path, list[Target]] = {
             folder: [] for folder in _block_folders(config_dir)
         }
-        everywhere: list[Target] = []
         for target in global_targets:
             if target.root:
                 by_dir.setdefault(memory_dir(config_dir, target.root), []).append(target)
-            else:
-                everywhere.append(target)
         for folder, held in sorted(by_dir.items()):
             index = folder / INDEX_NAME
             current = native_files.read(index) or ""
@@ -171,10 +167,9 @@ class ClaudeCodeMemoryWriter:
             new = replace_block(current, lines)
             if new != current:
                 out.append(AuxWrite(str(index), new or None, backup=bool(current)))
+        # An earlier build's global rules file.
         rules = rules_path(config_dir)
-        if everywhere:
-            out.append(AuxWrite(str(rules), render_rules(everywhere)))
-        elif rules.exists():
+        if rules.exists():
             out.append(AuxWrite(str(rules), None))
         return out
 

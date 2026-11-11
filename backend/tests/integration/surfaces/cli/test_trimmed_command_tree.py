@@ -115,9 +115,6 @@ def test_memory_sync_is_managed_on_the_command_line() -> None:
         "show",
         "curate",
         "curation-enable",
-        "to-sort",
-        "sort",
-        "sorted",
     }
     # A memory's text is edited in the agent's own memory directory, never here.
     assert not memory & _FILE_VERBS

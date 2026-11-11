@@ -111,8 +111,6 @@ const COPY_STATES = [
   "origin",
   "written",
   "block",
-  "rules",
-  "stays_home",
   "pending",
   "held_back",
   "deferred",
@@ -122,12 +120,9 @@ const COPY_STATES = [
 export type CopyState = (typeof COPY_STATES)[number];
 
 const COPY_TONE: Record<CopyState, StatusTone> = {
-  // Written into the agent: a copy, or text in Claude Code's project block or rules file.
+  // Written into the agent: a copy, or text in Claude Code's project block.
   written: "ok",
   block: "ok",
-  rules: "ok",
-  // Task notes stay with the agent that filed them until they are sorted.
-  stays_home: "off",
   // Nothing to do, or the agent's own business: none of these is a problem.
   origin: "off",
   pending: "off",
@@ -146,26 +141,20 @@ export function copyStateTone(state: CopyState): StatusTone {
   return COPY_TONE[state];
 }
 
-/** The `?scope=` of global memories, beside each project's hub folder. */
-export const GLOBAL_SCOPE = "global";
-
 /** A project's short name: the last segment of its key (`github.com/acme/payments` → `payments`). */
 export function projectName(key: string): string {
   const parts = key.split("/").filter(Boolean);
   return parts[parts.length - 1] ?? key;
 }
 
-/** The scope a page opens on when the URL names none: global memories when
- *  there are any, else the first project, else global (an empty hub). */
-export function defaultScope(
-  state: Pick<MemorySyncState, "projects" | "global_memories">,
-): string {
-  if (state.global_memories > 0) return GLOBAL_SCOPE;
-  return state.projects[0]?.folder ?? GLOBAL_SCOPE;
+/** The scope a page opens on when the URL names none: the first project
+ *  checked out here, else the first project, else none (an empty hub). */
+export function defaultScope(state: Pick<MemorySyncState, "projects">): string | null {
+  return (state.projects.find((p) => p.checked_out) ?? state.projects[0])?.folder ?? null;
 }
 
 /** The copy states that mean something needs a look: everything else (the
- *  origin, written, the rules file, Codex's own import, held back with its
+ *  origin, written, Claude Code's block, Codex's own import, held back with its
  *  whole project) is how a copy normally is, and the list says nothing. */
 const NOTABLE: readonly CopyState[] = ["pending", "edited", "removed"];
 
@@ -178,8 +167,6 @@ export function notableCopies(copies: Record<string, string>): [string, CopyStat
 }
 
 /** How many memories the hub holds in all. */
-export function totalMemories(
-  state: Pick<MemorySyncState, "projects" | "global_memories">,
-): number {
-  return state.projects.reduce((n, p) => n + p.memories, state.global_memories);
+export function totalMemories(state: Pick<MemorySyncState, "projects">): number {
+  return state.projects.reduce((n, p) => n + p.memories, 0);
 }

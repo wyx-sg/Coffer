@@ -3636,7 +3636,6 @@
       "done_other": "Removed {{count}} copies. Automatic sync is off."
     },
     "detail": {
-      "global": "Written into every agent on every machine",
       "notHere": "Not checked out on this machine: written here once it is",
       "memories_one": "{{count}} memory",
       "memories_other": "{{count}} memories"
@@ -3658,14 +3657,12 @@
     "copy": {
       "origin": "Its own",
       "written": "Written",
-      "rules": "In rules file",
       "pending": "Next sync",
       "held_back": "Held back",
       "deferred": "Codex imports it",
       "edited": "Edited by agent",
       "removed": "Removed by agent",
-      "block": "In project memory",
-      "stays_home": "Stays with its agent"
+      "block": "In project memory"
     },
     "scopes": {
       "label": "Memory scopes",
@@ -3700,13 +3697,6 @@
       "openAgent": "Open {{agent}}'s memory",
       "blocked_one": "{{count}} agent cannot be written into",
       "blocked_other": "{{count}} agents cannot be written into"
-    },
-    "toSort": {
-      "line_one": "{{count}} memory looks like task notes and waits to be sorted",
-      "line_other": "{{count}} memories look like task notes and wait to be sorted",
-      "hint": "Your agents filed these as task notes, so Coffer keeps them with the agent that wrote them. Sorting asks Claude Code, in your terminal, to move what is about outside systems into knowledge, procedures into skills, and to keep what is about you as memory.",
-      "button": "Sort into knowledge",
-      "badge": "To sort"
     },
     "sortOutcome": {
       "knowledge": "knowledge",

@@ -65,10 +65,6 @@ describe("pages", () => {
       "/skills/code-review",
     );
     expect(itemPage(item({ kind: "provider", uid: "p1" }))).toBe("/model-providers/p1");
-    // Task notes to sort: the Memory page carries Sort into knowledge.
-    expect(itemPage(item({ kind: "memory", uid: null, reason_code: "memory_to_sort" }))).toBe(
-      "/memory",
-    );
     expect(itemPage(item({ kind: "sync", uid: null }))).toBe("/sync");
     expect(itemPage(item({ kind: "reconcile", uid: null }))).toBe("/activity?tab=daemon");
     expect(itemPage(item({ kind: "mystery" }))).toBe("/activity");

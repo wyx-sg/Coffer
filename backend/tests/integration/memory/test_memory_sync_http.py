@@ -65,9 +65,8 @@ def test_a_requested_sync_records_one_event_naming_the_user(
     assert len(r.json()["details"]["hub"]["created"]) == 2
 
     state = client.get("/api/v1/memory/sync/state").json()
-    # Codex's task note stays with Codex; Claude Code's memory is copied into Codex.
+    # Codex's memory is written into Claude Code's block; Claude Code's is copied into Codex.
     assert state["preview"]["copies"] == 1
-    assert state["to_sort"] == 1
     assert {p["key"] for p in state["projects"]} == {"github.com/acme/payments"}
     r = client.post("/api/v1/memory/sync/preview/write")
     assert r.status_code == 200, r.text
@@ -79,35 +78,8 @@ def test_a_requested_sync_records_one_event_naming_the_user(
         "/api/v1/memory/sync/entries", params={"project": "github.com/acme/payments"}
     ).json()["entries"]
     by_agent = {e["origin_agent"]: e["copies"] for e in listed}
-    assert by_agent["codex"] == {"claude_code": "stays_home", "codex": "origin"}
+    assert by_agent["codex"] == {"claude_code": "block", "codex": "origin"}
     assert by_agent["claude_code"] == {"claude_code": "origin", "codex": "written"}
-
-
-@pytest.mark.acceptance(spec="memory", scenario="sorting is handed off and recorded")
-def test_sorting_is_handed_off_and_recorded(client: TestClient, home: pathlib.Path) -> None:
-    _seed(client, home)
-    client.post("/api/v1/memory/sync/run")
-    (waiting,) = client.get("/api/v1/memory/sync/to-sort").json()["entries"]
-    assert waiting["origin_agent"] == "codex"
-
-    r = client.post("/api/v1/memory/sync/sort/handoff")
-    assert r.status_code == 200, r.text
-    prompt = r.json()["handoff"]["prompt"]
-    assert waiting["id"] in prompt and "coffer memory sorted" in prompt
-
-    r = client.post(
-        "/api/v1/memory/sync/sorted",
-        json={"ids": [waiting["id"]], "outcome": "knowledge", "where": "payments/ledger"},
-    )
-    assert r.status_code == 200, r.text
-    assert client.get("/api/v1/memory/sync/to-sort").json()["entries"] == []
-    assert client.get("/api/v1/memory/sync/state").json()["to_sort"] == 0
-    r = client.post(
-        "/api/v1/memory/sync/sorted", json={"ids": ["0123456789abcdef"], "outcome": "drop"}
-    )
-    assert r.status_code == 404
-    events = client.get("/api/v1/audit", params={"event_type": "memory_sorted"}).json()["entries"]
-    assert len(events) == 1
 
 
 def test_cancel_with_no_preview_is_a_conflict(client: TestClient, home: pathlib.Path) -> None:

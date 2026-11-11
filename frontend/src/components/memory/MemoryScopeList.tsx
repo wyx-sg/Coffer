@@ -1,21 +1,20 @@
 // frontend/src/components/memory/MemoryScopeList.tsx
 //
 // The Memory page's list pane (spec memory "Manage memory sync in the web UI
-// and on the command line"): global memories first — written into every agent
-// on every machine — then the hub's projects, each by its short name with how
+// and on the command line"): the hub's projects, each by its short name with how
 // many memories it holds. A project not checked out on this machine is dimmed:
 // its memories wait in the hub. A row opens its memories beside the list
 // (`?scope=`); the full project key is the row's tooltip.
 import { useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { FolderGit2, Globe } from "lucide-react";
+import { FolderGit2 } from "lucide-react";
 
 import { ListLoadingRows } from "@/components/ListPaneStates";
 import { SearchInput } from "@/components/SearchInput";
 import { NAV_ICON, NAV_ROW_ACTIVE, NAV_ROW_IDLE } from "@/components/knowledge/navRow";
 import type { SyncProject } from "@/lib/api/memoryTypes";
-import { GLOBAL_SCOPE, projectName } from "@/lib/memory/syncFacts";
+import { projectName } from "@/lib/memory/syncFacts";
 import { cn } from "@/lib/utils";
 
 /** More projects than this and a search appears. */
@@ -23,8 +22,7 @@ const SEARCH_FROM = 8;
 
 interface Props {
   projects: readonly SyncProject[];
-  globalMemories: number;
-  /** The open scope: `global` or a project's hub folder. */
+  /** The open scope: a project's hub folder. */
   selected: string | null;
   isLoading?: boolean;
 }
@@ -40,7 +38,7 @@ function ScopeRow({
 }: {
   to: string;
   current: boolean;
-  icon: typeof Globe;
+  icon: typeof FolderGit2;
   name: string;
   title?: string;
   count: number;
@@ -66,7 +64,7 @@ function ScopeRow({
   );
 }
 
-export function MemoryScopeList({ projects, globalMemories, selected, isLoading = false }: Props) {
+export function MemoryScopeList({ projects, selected, isLoading = false }: Props) {
   const { t } = useTranslation();
   const { search } = useLocation();
   const [query, setQuery] = useState("");
@@ -103,15 +101,6 @@ export function MemoryScopeList({ projects, globalMemories, selected, isLoading 
           <ListLoadingRows />
         ) : (
           <>
-            <ul className="mb-3 flex flex-col gap-0.5">
-              <ScopeRow
-                to={to(GLOBAL_SCOPE)}
-                current={selected === GLOBAL_SCOPE}
-                icon={Globe}
-                name={t("memory.projects.global")}
-                count={globalMemories}
-              />
-            </ul>
             {[
               ["here", here],
               ["elsewhere", elsewhere],

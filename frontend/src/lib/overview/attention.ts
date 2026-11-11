@@ -67,8 +67,6 @@ const PAGES: Record<string, { list: string; detail?: (a: Address) => string | nu
   provider: { list: "/model-providers", detail: (a) => `/model-providers/${encode(a.uid)}` },
   knowledge: { list: "/knowledge", detail: (a) => `/knowledge/${encode(a.uid)}` },
   sync: { list: "/sync" },
-  // Task notes waiting to be sorted: Sort into knowledge is on the Memory page.
-  memory: { list: "/memory" },
   // The approval switch lives in Settings, Security tab.
   secret: { list: "/settings/security" },
   // A target the reconciler could not check is written up in the daemon log.

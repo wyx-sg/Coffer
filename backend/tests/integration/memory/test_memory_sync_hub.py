@@ -76,8 +76,10 @@ async def test_an_agent_memory_becomes_one_hub_file(
     assert log.splitlines() == ["Coffer (memory-sync)|Memory sync: 1 published"]
 
 
-@pytest.mark.acceptance(spec="memory", scenario="a memory about the person is filed under global")
-async def test_a_memory_about_the_person_is_filed_under_global(
+@pytest.mark.acceptance(
+    spec="memory", scenario="only a memory learned in a repository is published"
+)
+async def test_only_a_memory_learned_in_a_repository_is_published(
     tmp_path: pathlib.Path, payments: pathlib.Path
 ) -> None:
     scratch = tmp_path / "Documents" / "notes"
@@ -105,10 +107,9 @@ async def test_a_memory_about_the_person_is_filed_under_global(
     )
     await a.sync()
 
-    by_title = {e.title: e for e in _entries()}
-    assert by_title["Replies in Chinese"].is_global
-    assert by_title["User Profile"].is_global
-    assert not by_title["Small PRs here"].is_global
+    assert [(e.title, e.project) for e in _entries()] == [
+        ("Small PRs here", "github.com/acme/payments")
+    ]
 
 
 @pytest.mark.acceptance(
@@ -136,7 +137,7 @@ async def test_a_codex_preference_follows_the_repository_its_task_worked_in(
     assert by_title["when retrying, the user wanted backoff capped at 30s"].project == (
         "github.com/acme/payments"
     )
-    assert by_title["keep appraisal drafts under one page"].is_global
+    assert "keep appraisal drafts under one page" not in by_title
 
 
 @pytest.mark.acceptance(spec="memory", scenario="two clones on two machines share one project")

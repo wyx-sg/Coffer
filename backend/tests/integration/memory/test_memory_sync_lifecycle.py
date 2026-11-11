@@ -15,6 +15,7 @@ from tests.integration.memory._sync_harness import (
     CHINESE,
     Machine,
     cc_file,
+    cc_memory_dir,
     cc_project,
     codex_memory,
     hub_files,
@@ -75,11 +76,11 @@ async def test_an_absorbed_copy_does_not_circulate(
     tmp_path: pathlib.Path, payments: pathlib.Path
 ) -> None:
     a = Machine("machine-a", tmp_path / "a")
-    a.codex(memory_md="", summary_md=CHINESE)
+    a.codex(memory_md=codex_memory([("Payments", str(payments), ["Prefers replies in Chinese."])]))
     cc = a.claude()
     memory = cc_project(cc, payments, {})
     await a.sync()
-    assert "Prefers replies in Chinese." in (cc / "rules" / "coffer-memory.md").read_text()
+    assert "Prefers replies in Chinese." in (memory / "MEMORY.md").read_text()
     before = sorted(p.read_bytes() for p in hub_files(_vault()))
     # Claude Code's curation folds the line it was given into a memory of its own.
     (memory / "own.md").write_text(
@@ -137,8 +138,9 @@ async def test_an_agents_own_files_are_byte_identical_after_a_sync(
     new = {p for root in (cc, codex) for p in root.rglob("*") if p.is_file()} - set(snap)
     for path in new:
         rel = str(path)
-        assert path.name in ("MEMORY.md", "coffer-memory.md") or "/extensions/coffer/" in rel, rel
-    assert cc / "rules" / "coffer-memory.md" in new
+        assert path.name == "MEMORY.md" or "/extensions/coffer/" in rel, rel
+    assert cc_memory_dir(cc, payments) / "MEMORY.md" in new
+    assert not (cc / "rules").exists()
     assert not [p for p in new if p.name.startswith("coffer_")]
 
 
@@ -147,13 +149,15 @@ async def test_the_first_sync_waits_for_the_person(
     tmp_path: pathlib.Path, payments: pathlib.Path
 ) -> None:
     a = Machine("machine-a", tmp_path / "a")
-    codex = a.codex(memory_md=codex_memory([("Payments", str(payments), [])]), summary_md=CHINESE)
+    codex = a.codex(
+        memory_md=codex_memory([("Payments", str(payments), ["Prefers replies in Chinese."])])
+    )
     cc = a.claude()
-    cc_project(cc, payments, {"p.md": cc_file("Ledger", "Retries", "project", "x")})
+    memory = cc_project(cc, payments, {"p.md": cc_file("Ledger", "Retries", "project", "x")})
     await a.service.sync("user")
 
     assert len(hub_files(_vault())) == 2
-    assert not (cc / "rules").exists()
+    assert not (memory / "MEMORY.md").exists()
     assert not (codex / "memories" / "extensions").exists()
     state = await a.view.state()
     assert state.preview is not None
@@ -161,7 +165,7 @@ async def test_the_first_sync_waits_for_the_person(
     assert ("codex", 1) in listed
 
     await a.service.write_preview("user")
-    assert "Prefers replies in Chinese." in (cc / "rules" / "coffer-memory.md").read_text()
+    assert "Prefers replies in Chinese." in (memory / "MEMORY.md").read_text()
     assert len(resources(codex)) == 1
     assert (await a.view.state()).preview is None
 

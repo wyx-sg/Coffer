@@ -32,7 +32,6 @@ vi.mock("@/lib/api/memory", () => ({
   listEntries: vi.fn(),
   getEntry: vi.fn(),
   curate: vi.fn(),
-  sortHandoff: vi.fn(),
 }));
 const api = await import("@/lib/api/memory");
 
@@ -70,7 +69,6 @@ function state(over: Partial<MemorySyncState> = {}): MemorySyncState {
   return {
     agents: [agent("claude_code", { copies: { written: 2, edited: 1 } }), agent("codex")],
     codex_imports_claude: null,
-    global_memories: 2,
     last_report: {},
     last_synced_at: new Date(Date.now() - 2 * HOUR).toISOString(),
     machine: "mac-mini",
@@ -86,7 +84,6 @@ function state(over: Partial<MemorySyncState> = {}): MemorySyncState {
       },
     ],
     running: false,
-    to_sort: 0,
     ...over,
   };
 }
@@ -103,7 +100,6 @@ function entry(over: Partial<HubEntry>): HubEntry {
     created_at: new Date(Date.now() - 3 * HOUR).toISOString(),
     updated_at: new Date(Date.now() - HOUR).toISOString(),
     copies: { claude_code: "origin", codex: "written" },
-    to_sort: false,
     ...over,
   };
 }
@@ -172,11 +168,11 @@ describe("MemoryPage — scopes and memories", () => {
 
     const scopes = screen.getByRole("navigation", { name: "Memory scopes" });
     const links = within(scopes).getAllByRole("link");
-    // Global memories lead, then projects by short name, the one not here apart.
-    expect(links.map((l) => l.textContent)).toEqual(["Global memories2", "app2", "elsewhere1"]);
+    // Projects by short name, the one not here apart; there is no global scope.
+    expect(links.map((l) => l.textContent)).toEqual(["app2", "elsewhere1"]);
     expect(within(scopes).getByText("Not checked out here")).toBeInTheDocument();
-    // With global memories, the page opens on them.
-    await waitFor(() => expect(api.listEntries).toHaveBeenCalledWith(""));
+    // The page opens on the first project checked out here.
+    await waitFor(() => expect(api.listEntries).toHaveBeenCalledWith(PROJECT.key));
     expect(links[0]).toHaveAttribute("aria-current", "page");
 
     // The page lists no agent and edits no memory.
@@ -247,8 +243,8 @@ describe("MemoryPage — scopes and memories", () => {
 
   test("an old project address opens that scope", async () => {
     // The redirect itself is the router's; the page reads the scope it lands on.
-    renderPage("/memory?scope=global");
-    await waitFor(() => expect(api.listEntries).toHaveBeenCalledWith(""));
+    renderPage(`/memory?scope=${PROJECT.folder}`);
+    await waitFor(() => expect(api.listEntries).toHaveBeenCalledWith(PROJECT.key));
   });
 
   test("an agent's Memory tab link filters the list to that agent", async () => {
@@ -437,36 +433,5 @@ describe("MemoryPage — undo", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Undo sync" }));
     expect(await within(dialog).findByText("Couldn't undo the sync")).toBeInTheDocument();
     expect(screen.getByRole("dialog")).toBeInTheDocument();
-  });
-});
-
-describe("MemoryPage — task notes to sort", () => {
-  test("nothing to sort shows no reminder", async () => {
-    renderPage();
-    await screen.findByTestId("memory-list");
-    expect(screen.queryByTestId("memory-to-sort")).toBeNull();
-  });
-
-  acceptance("memory", "sorting is handed off and recorded", async () => {
-    vi.mocked(api.getSyncState).mockResolvedValue(state({ to_sort: 3 }));
-    vi.mocked(api.listEntries).mockResolvedValue({
-      project: "",
-      entries: [entry({ to_sort: true, copies: { claude_code: "origin", codex: "stays_home" } })],
-    });
-    vi.mocked(api.sortHandoff).mockResolvedValue({ handoff: { prompt: "Sort these" } });
-    openTerminal.mockResolvedValue(true);
-    renderPage();
-    const line = await screen.findByTestId("memory-to-sort");
-    expect(line).toHaveTextContent("3 memories look like task notes and wait to be sorted");
-    expect(rowOf(await screen.findByTestId("memory-list"), "Run make verify")).toHaveTextContent(
-      "To sort",
-    );
-    fireEvent.click(within(line).getByRole("button", { name: "Sort into knowledge" }));
-    await waitFor(() =>
-      expect(openTerminal).toHaveBeenCalledWith(
-        { agent: "claude_code", prompt: "Sort these" },
-        expect.objectContaining({ label: "Copy prompt" }),
-      ),
-    );
   });
 });
