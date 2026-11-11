@@ -6789,7 +6789,6 @@
     },
     "tabs": {
       "overview": "Overview",
-      "prompt": "Prompt",
       "runs": "History",
       "files": "Files"
     },

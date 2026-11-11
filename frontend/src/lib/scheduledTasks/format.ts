@@ -190,7 +190,7 @@ export function configFrom(form: TaskForm): ScheduledTaskConfig {
   };
 }
 
-/** Whether the form can be saved. Editing leaves the prompt to the Prompt tab. */
+/** Whether the form can be saved. Editing leaves the prompt to the Files tab. */
 export function formValid(form: TaskForm, editing = false): boolean {
   if ((!editing && !form.prompt.trim()) || !form.agent) return false;
   if (form.kind === "once") return form.at !== "" && !Number.isNaN(new Date(form.at).getTime());

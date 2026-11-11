@@ -1,18 +1,18 @@
-// src/components/scheduled-tasks/TaskFiles.tsx — an open task's Files tab: the task's own folder, read-only.
+// src/components/scheduled-tasks/TaskFiles.tsx — an open task's Files tab: everything the task owns on disk.
 //
 // The same Files card a skill's folder is browsed in (SkillFileSplit, canvas
-// 4.3.01): the tree on the left, the open file on the right. The folder holds
-// the task's PROMPT.md and, for a task that names no directory, whatever its
-// runs wrote there — a daily report, a CSV. Files are changed on disk; Reveal
-// in Finder opens the folder.
+// 4.3.01), reaching the bottom of the window: the tree on the left, the open
+// file on the right. The folder holds the task's PROMPT.md (open first, and the
+// one file editable here) and whatever else belongs to the task — the scripts
+// its prompt runs, intermediate files, the reports its runs write. Other files
+// are changed on disk; Reveal in Finder opens the folder.
 import { useState } from "react";
 
 import { ReadOnlyFile } from "@/components/files/ReadOnlyFile";
 import { SkillFileSplit } from "@/components/skills/SkillFileSplit";
 import type { ScheduledTask } from "@/lib/api/scheduledTasks";
 import { useScheduledTaskFileContent, useScheduledTaskFiles } from "@/lib/hooks/useScheduledTasks";
-
-const PROMPT_FILE = "PROMPT.md";
+import { PROMPT_FILE, TaskPromptFile } from "./TaskPromptFile";
 
 function OpenFile({ uid, name, path }: { uid: string; name: string; path: string }) {
   const content = useScheduledTaskFileContent(uid, path);
@@ -29,7 +29,13 @@ export function TaskFiles({ task }: { task: ScheduledTask }) {
       selected={selected}
       onSelect={setSelected}
       folderPath={task.folder}
-      detail={<OpenFile key={selected} uid={task.uid} name={task.name} path={selected} />}
+      detail={
+        selected === PROMPT_FILE ? (
+          <TaskPromptFile task={task} />
+        ) : (
+          <OpenFile key={selected} uid={task.uid} name={task.name} path={selected} />
+        )
+      }
     />
   );
 }

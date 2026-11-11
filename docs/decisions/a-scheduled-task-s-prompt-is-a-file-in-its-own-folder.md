@@ -124,15 +124,28 @@ Rules a change must keep:
 - **Content, not synced.** The folder is under `content/`, the user's only copy,
   like the workspace. Deleting a task leaves its folder: what it wrote is the
   owner's.
-- **Read-only on the page.** The Files tab shows the folder as a skill's folder
-  is shown; files are changed on disk. Only `PROMPT.md` is editable, in the
-  Prompt tab.
+- **One place on the page.** The Files tab shows the whole folder as a
+  skill's folder is shown: the prompt, scripts it runs, intermediate files and
+  reports. `PROMPT.md` opens first and is the one file editable there; others
+  are changed on disk. There is no separate Prompt tab (see History).
 
 ## Consequences
 
 - Tasks written before 2026-11-11 have their prompt moved into `PROMPT.md`
   when the daemon starts (an existing file wins), then dropped from the config.
-- The Edit dialog no longer shows the prompt; New task still asks for it.
+- The Edit dialog no longer shows the prompt; New task still asks for it, and
+  the Files tab edits it afterwards.
 - `coffer task prompt` replaces the file and `coffer task files` lists the
   folder; `coffer task show` returns `prompt` and `folder`.
 - A deleted task's folder stays until the owner removes it.
+
+## History
+
+- 2026-11-11, later the same day: the separate Prompt tab was removed. The
+  owner found the Prompt and Files cards too small and asked whether the
+  Prompt tab was needed at all, since a task also keeps scripts, intermediate
+  files and results that "都应该在文件里展示". Options: keep a Prompt tab
+  beside Files (two places show the same file), or fold it into Files with
+  `PROMPT.md` open first and editable (chosen, as Claude Code's scheduled tasks
+  keep the prompt as one file in the task's folder). The Files card now
+  reaches the bottom of the window like every file browser.

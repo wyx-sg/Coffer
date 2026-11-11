@@ -1,4 +1,4 @@
-// src/components/scheduled-tasks/TaskDialog.tsx — New task, or edit one: its name, when, what the agent is asked (new only; an open task's prompt is edited in its Prompt tab), and the agent, model and directory every run opens with.
+// src/components/scheduled-tasks/TaskDialog.tsx — New task, or edit one: its name, when, what the agent is asked (new only; an open task's prompt is edited in its Files tab), and the agent, model and directory every run opens with.
 //
 // Spec channels "Manage scheduled tasks from the Scheduled tasks page". Every
 // run is a new conversation of its own; what it does with a chat or a report
@@ -104,7 +104,7 @@ function Form({ onOpenChange, existing, onSaved }: Omit<Props, "open">) {
           />
         </div>
         <TaskScheduleFields form={form} set={set} />
-        {/* An open task's prompt is its PROMPT.md, edited in the Prompt tab. */}
+        {/* An open task's prompt is its PROMPT.md, edited in the Files tab. */}
         {editing ? null : (
           <div className="space-y-1.5">
             <Label htmlFor="task-prompt" required>

@@ -179,8 +179,9 @@ describe("ScheduledTasksPage", () => {
     "the owner reads and edits a task's prompt and files on its page",
     async () => {
       api.setPrompt.mockResolvedValue(MORNING);
-      renderPage("/scheduled-tasks/t-1/prompt");
-      expect(await screen.findByText("PROMPT.md")).toBeInTheDocument();
+      renderPage("/scheduled-tasks/t-1/files");
+      expect(screen.queryByRole("tab", { name: "Prompt" })).toBeNull();
+      expect(await screen.findByText(`${MORNING.name}/PROMPT.md`)).toBeInTheDocument();
       fireEvent.click(screen.getByRole("button", { name: "Edit prompt" }));
       const editor = await screen.findByRole("textbox", { name: "PROMPT.md" });
       expect(editor).toBeInTheDocument();

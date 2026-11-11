@@ -3221,13 +3221,15 @@ button of its own: conversations open from one place.
 The web app MUST have a **Scheduled tasks** page in the Run group of the
 navigation. It lists every task, soonest first, with its schedule, its agent,
 its next run and how its last run ended; a running task says so. Opening a
-task shows four tabs, each at its own path: **Overview** (when it runs, its
-next run, agent, model, directory and catch-up), **Prompt** (its `PROMPT.md`
-shown as a Markdown file, with Preview and Source, and Edit, which saves the
-file), **History** (its runs as a table: when each started, how it ended, what
-started it, how long it took and its conversation, searchable and filtered by
-outcome and by what started it) and **Files** (the task's folder, read-only, as
-a skill's folder is shown). It offers Run now (refused while it runs), Pause or
+task shows three tabs, each at its own path: **Overview** (when it runs, its
+next run, agent, model, directory and catch-up), **History** (its runs as a
+table: when each started, how it ended, what started it, how long it took and
+its conversation, searchable and filtered by outcome and by what started it)
+and **Files** (the task's folder as a skill's folder is shown, reaching the
+bottom of the window: everything in it, such as scripts the prompt runs,
+intermediate files and reports, is listed; `PROMPT.md` opens first, shown as a
+Markdown file with Preview and Source and an Edit that saves the file; every
+other file is read-only). It offers Run now (refused while it runs), Pause or
 Resume, Edit (through a dialog, for everything but the prompt) and Delete.
 **New task** asks for a name, the schedule (with a timezone for a repeating
 one), the prompt, the agent, the model — the agent's default or one of the
@@ -3248,5 +3250,5 @@ list|show|add|prompt|files|update|enable|disable|delete|run|runs`.
 
 #### Scenario: the owner reads and edits a task's prompt and files on its page
 - **GIVEN** a task whose run wrote `report.md` into the task's folder
-- **WHEN** the owner opens its Prompt tab, edits `PROMPT.md` and saves, then opens its Files tab
-- **THEN** the next run is given the saved prompt, and the Files tab lists `PROMPT.md` and `report.md` and opens `report.md`; a path outside the folder is refused
+- **WHEN** the owner opens its Files tab, edits `PROMPT.md` there and saves, then opens `report.md`
+- **THEN** the next run is given the saved prompt, the tab lists `PROMPT.md` and `report.md` and opens `report.md` read-only; a path outside the folder is refused

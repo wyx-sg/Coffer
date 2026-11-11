@@ -77,7 +77,9 @@ export function ScheduledTasksPage() {
             onOpen={(id) => navigate(`/scheduled-tasks/${encodeURIComponent(id)}`)}
           />
         }
-        detail={<div className="h-full px-7 py-5">{detail}</div>}
+        // No h-full: the Files card measures what sits under it (filePane.ts), and a
+        // full-height wrapper would count the empty space as something below it.
+        detail={<div className={cn("px-7 py-5", !task && "h-full")}>{detail}</div>}
       />
       <TaskDialog
         open={adding}

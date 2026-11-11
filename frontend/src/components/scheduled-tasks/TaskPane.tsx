@@ -2,9 +2,9 @@
 //
 // The header is the name with its state pill and one meta line (the agent ·
 // the schedule in words · next run). The tabs, each at its own path segment:
-// Overview (when it runs and what every run opens with), Prompt (its PROMPT.md,
-// editable), History (every run, as a table) and Files (the task's folder:
-// what its runs wrote there).
+// Overview (when it runs and what every run opens with), History (every run,
+// as a table) and Files (the task's folder: PROMPT.md, editable, and whatever
+// else the task keeps there — scripts, intermediate files, reports).
 import { CalendarClock } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -18,7 +18,6 @@ import { formatMoment } from "@/lib/time";
 import { TaskActions } from "./TaskActions";
 import { TaskFiles } from "./TaskFiles";
 import { TaskOverview } from "./TaskOverview";
-import { TaskPromptFile } from "./TaskPromptFile";
 import { TaskRuns } from "./TaskRuns";
 
 interface Props {
@@ -70,9 +69,6 @@ export function TaskPane({ task, onDeleted }: Props) {
         </TabsList>
         <TabsContent value="overview">
           <TaskOverview task={task} />
-        </TabsContent>
-        <TabsContent value="prompt">
-          <TaskPromptFile task={task} />
         </TabsContent>
         <TabsContent value="runs">
           <TaskRuns uid={task.uid} />

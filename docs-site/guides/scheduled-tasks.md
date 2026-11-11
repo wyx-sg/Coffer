@@ -39,10 +39,11 @@ coffer task list
 
 ## The task's folder {#the-task-s-folder}
 
-Every task has a folder of its own, `~/.coffer/content/workspace/scheduled-tasks/<uid>/` (`coffer task show` prints it as `folder`). It holds:
+Every task has a folder of its own, `~/.coffer/content/workspace/scheduled-tasks/<uid>/` (`coffer task show` prints it as `folder`), and everything in it shows on the task's **Files** tab. It holds:
 
-- **`PROMPT.md`**, the prompt. Edit it on the task's **Prompt** tab, in any editor, or ask an agent to; the next run reads the file as it is then. `coffer task prompt <task> --data '{"prompt": "…"}'` replaces it.
+- **`PROMPT.md`**, the prompt. Edit it on the task's **Files** tab, in any editor, or ask an agent to; the next run reads the file as it is then. `coffer task prompt <task> --data '{"prompt": "…"}'` replaces it.
 - **Whatever its runs write**, when the task names no directory: a run works in this folder, so a daily report the prompt asks for (say `reports/2026-11-11.md`) lands here and shows on the task's **Files** tab.
+- **Anything else the task needs**: a script the prompt runs, intermediate files it keeps between runs. Put them here and the prompt can name them by relative path (`python3 digest.py`) when the task names no directory.
 
 Naming the files, or keeping one file up to date instead of one per day, is the prompt's job. The folder is yours: it is not synced, and deleting the task leaves it in place.
 
@@ -75,12 +76,11 @@ Turn **Catch up** off on a task to skip every missed run instead.
 
 The list shows every task, soonest first; each row says when it runs next, or that it is paused or failing.
 
-Open a task for its header (**Run now**, **Pause** or **Resume**, **Edit**, and **⋯ › Delete**) and four tabs:
+Open a task for its header (**Run now**, **Pause** or **Resume**, **Edit**, and **⋯ › Delete**) and three tabs:
 
 - **Overview**: when it runs, its next run, agent, model, directory and catch-up.
-- **Prompt**: `PROMPT.md`, rendered, with **Source** to see the Markdown. **Edit** opens it in an editor; **Save** writes the file. **Edit** in the header changes everything else.
 - **History**: every run as a table — when it started, how it ended (**Done**, **Skipped**, **Failed**, **Stopped**), whether the schedule, a catch-up or you started it, and how long it took — with the reason under a skipped or failed run. Search it, filter by result and by what started it, and sort by start or duration.
-- **Files**: the task's folder, read-only, with the open file beside the tree.
+- **Files**: the task's folder, reaching the bottom of the window, with the open file beside the tree. `PROMPT.md` opens first, rendered, with **Source** to see the Markdown; **Edit** opens it in an editor and **Save** writes the file. Every other file is read-only here; change it on disk. **Edit** in the header changes everything but the prompt.
 
 Each run in the history names its conversation as a link: it takes you to that conversation on the **Conversations** page, selected in the list; open it in your terminal from its row to read what the run did and carry the conversation on. Runs are kept for 90 days by default; change it in Settings › Data.
 
