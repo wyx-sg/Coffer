@@ -55,7 +55,7 @@ Coffer 自己提供的 MCP 工具，以保留前缀 `coffer__` 与上游工具�
 
 ### 知识集（Collection） {#collection}
 
-一棵知识树，位于 `~/.coffer/vault/knowledge/<collection>/`：一个小 wiki，`pages/` 下的[页面](#page)由你和你的智能体根据 `sources/` 下保留的[来源](#source)编译而成，根目录有一个 `README.md`。知识集是类型为 `knowledge` 的[资源](#resource)。见[知识](/zh/guides/knowledge)。
+一个知识文件夹，位于 `~/.coffer/vault/knowledge/<collection>/`：你和你的智能体共同编写的 Markdown 文件，按知识集自己的[规则文件](#rules-file)维护，根目录有一个说明它的 `README.md`。知识集是类型为 `knowledge` 的[资源](#resource)。见[知识](/zh/guides/knowledge)。
 
 ### `coffer-guide` {#coffer-guide}
 
@@ -111,7 +111,7 @@ Coffer 发送密钥明文的地方：MCP 服务器的环境变量或 HTTP 请求
 
 ### 收件箱（Inbox） {#inbox}
 
-知识集中隐藏的 `.inbox/` 目录，一个投放区：智能体或另一台机器放在这里的文件，会被下一次[扫描](#upkeep-pass)收编并作为[来源](#source)保留。见[知识](/zh/architecture/knowledge)。
+知识集中隐藏的 `.inbox/` 目录，一个投放区：智能体或另一台机器放在这里的文件，会被下一次[扫描](#upkeep-pass)移进知识集的[上传文件夹](#uploads-folder)。见[知识](/zh/architecture/knowledge)。
 
 ### 调用日志（Invocation log） {#invocation-log}
 
@@ -145,7 +145,7 @@ Coffer 发送密钥明文的地方：MCP 服务器的环境变量或 HTTP 请求
 
 ### 材料（Material） {#material}
 
-提交给知识集的新知识：上传内容，或留在[收件箱](#inbox)里的文件。它会原样成为一个[来源](#source)。见[知识](/zh/guides/knowledge)。
+提交给知识集的新知识：上传内容，或留在[收件箱](#inbox)里的文件。它会转换成 Markdown，保存在知识集的[上传文件夹](#uploads-folder)里。见[知识](/zh/guides/knowledge)。
 
 ### MCP 网关（MCP gateway） {#mcp-gateway}
 
@@ -173,10 +173,6 @@ Coffer 发送密钥明文的地方：MCP 服务器的环境变量或 HTTP 请求
 
 ## P {#p}
 
-### 页面（Page） {#page}
-
-[知识集](#collection) `pages/` 下的 Markdown 文件：wiki 本身，由你和你的智能体根据知识集的[来源](#source)编写并保持更新。见[知识](/zh/guides/knowledge)。
-
 ### 应用前快照（Pre-apply snapshot） {#pre-apply-snapshot}
 
 Coffer 在一轮[同步](#sync-round)检出任何内容之前打的 git 标签（`refs/tags/coffer/pre-apply/<time>`，保留最新十个），这样这一轮可以从该轮的抽屉里回滚。见[保险库同步](/zh/architecture/vault-sync#rollback)。
@@ -203,6 +199,10 @@ Coffer 在一轮[同步](#sync-round)检出任何内容之前打的 git 标签�
 
 Coffer 保存日志类数据行（比如审计日志和[调用日志](#invocation-log)）多长时间的逐表限制，由后台清理程序执行。在**设置 → 数据**里管理。见[可观测性](/zh/architecture/observability#retention)。
 
+### 规则文件（Rules file） {#rules-file}
+
+[知识集](#collection)据以编写和维护的文件：它的结构、文件带哪些 frontmatter、一次整理检查什么。它的 `README.md` 用 `rules` 指定它；没有指定时，是知识集根目录下 `AGENTS.md`、`CLAUDE.md`、`README.md` 中第一个存在的。智能体遵循它，优先于自己的默认做法。见[知识](/zh/guides/knowledge#what-a-readme-declares)。
+
 ## S {#s}
 
 ### 作用范围（Scope） {#scope}
@@ -225,10 +225,6 @@ Coffer 为防范以你身份运行、遭到提示词注入的智能体而守住�
 
 一个带 `SKILL.md` 的文件夹，教智能体完成一项任务。Coffer 把托管技能保存在它的[主存储](#master-store)中，并把每个技能[绑定](#binding)到其生效范围内的智能体。技能是类型为 `skill` 的[资源](#resource)。见[技能](/zh/guides/skills)。
 
-### 来源（Source） {#source}
-
-[知识集](#collection) `sources/` 下的 Markdown 文件：按到达时的样子保留的[材料](#material)，智能体读它，从不编辑它。[页面](#page)写明它依据哪些来源。见[知识](/zh/guides/knowledge)。
-
 ### 独立密钥（Standalone secret） {#standalone-secret}
 
 不属于任何资源的密钥，存为 `secret/<id>`，在技能和 env 文件中以 `coffer://secret/<id>` 引用。id 由 Coffer 在你运行 `coffer secret set --name "Orders DB"` 时生成；人从不自己选 id，只给它起名称（标签，最多 64 个字符）和写描述（最多 200 个字符），二者可随时修改。命令通过 [`coffer run`](#coffer-run) 使用它。见[密钥](/zh/guides/secrets)。
@@ -249,7 +245,7 @@ Coffer 保存的五类状态之一，每类在 `~/.coffer` 下有自己的位置
 
 ### 整理（Tidy） {#tidy}
 
-[知识集](#collection)上的按钮（列表页上还有**整理全部**），它会在你的首选终端里启动默认的交接智能体，并把一条提示作为第一条消息发给它，让它按 `coffer-guide` 技能整合待整理的来源、修好 Coffer 发现的问题，并合并、拆分和纠正其中的内容。没有可用的托管智能体时，它提供可复制的提示。智能体的编辑记成一次带着汇报的改动，**撤销这次整理…**可以把它放回去。整理由你的智能体来做，Coffer 自己从不主动整理。记忆没有整理按钮：每个智能体整理自己的记忆。见[知识](/zh/guides/knowledge)。
+[知识集](#collection)上的按钮（列表页上还有**整理全部**），它会在你的首选终端里启动默认的交接智能体，并把一条提示作为第一条消息发给它，让它按 `coffer-guide` 技能，依照知识集自己的[规则文件](#rules-file)整理它，并修好失效链接。没有可用的托管智能体时，它提供可复制的提示。智能体的编辑记成一次带着汇报的改动，**撤销这次整理…**可以把它放回去。整理由你的智能体来做，Coffer 自己从不主动整理。记忆没有整理按钮：每个智能体整理自己的记忆。见[知识](/zh/guides/knowledge)。
 
 ### 分层（Tiering） {#tiering}
 
@@ -276,6 +272,10 @@ Coffer 保存的五类状态之一，每类在 `~/.coffer` 下有自己的位置
 ### 维护任务（Upkeep pass） {#upkeep-pass}
 
 Coffer 按定时器、无需要求就做的机械性工作：[记忆同步](#memory-sync)，以及知识的扫描（重新渲染指南、收编留在[收件箱](#inbox)的文件、提交磁盘上的编辑）。它们都不调用模型。记忆同步可以在记忆页面**立即同步**的 **▾** 里关闭或调整时间。见[记忆](/zh/architecture/memory#the-sync-pass)和[知识](/zh/architecture/knowledge#the-sweep)。
+
+### 上传文件夹（Uploads folder） {#uploads-folder}
+
+[知识集](#collection)里 Coffer 写入[材料](#material)的文件夹：默认是 `sources/`，知识集的 `README.md` 可以用 `uploads` 另指一个。其中的链接不检查。见[知识](/zh/guides/knowledge#what-a-readme-declares)。
 
 ## V {#v}
 

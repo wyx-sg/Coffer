@@ -36,8 +36,10 @@ def client(tmp_path, monkeypatch):
         yield c
 
 
-def _create_collection(client: TestClient, name: str) -> None:
-    resp = client.post("/api/v1/knowledge/collections", json={"name": name})
+def _create_collection(client: TestClient, name: str, template: str = "blank") -> None:
+    """A collection made from ``template``: ``blank`` by default, its README
+    alone, so a test sees only the files it writes itself."""
+    resp = client.post("/api/v1/knowledge/collections", json={"name": name, "template": template})
     assert resp.status_code == 201, resp.text
 
 

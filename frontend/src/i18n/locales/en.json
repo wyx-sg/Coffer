@@ -3163,7 +3163,7 @@
     }
   },
   "knowledge": {
-    "subtitle": "Pages your agents write from the sources you keep. Every agent can read them.",
+    "subtitle": "Markdown you and your agents write, each collection by its own rules. Every agent can read it.",
     "title": "Knowledge",
     "nav": {
       "label": "Collections and documents",
@@ -3172,15 +3172,13 @@
       "collapse": "Collapse {{name}}"
     },
     "tree": {
-      "empty": "No pages or sources yet",
-      "emptyFolder": "Nothing here yet",
-      "pages": "Pages",
-      "sources": "Sources"
+      "empty": "No files yet",
+      "emptyFolder": "Nothing here yet"
     },
     "collection": {
       "descriptionLabel": "What belongs in this collection",
       "noDescription": "No description yet. Say what belongs in here so agents recognise it.",
-      "emptyLine": "No pages or sources yet. Upload a document, or drop Markdown files into the folder.",
+      "emptyLine": "No files yet. Upload a document, or drop Markdown files into the folder.",
       "more": "More actions for {{name}}",
       "copyPath": "Copy path",
       "descriptionSaved": "Description updated",
@@ -3190,14 +3188,23 @@
     },
     "create": {
       "title": "New collection",
-      "body": "A folder of Markdown documents you and your agents write together.",
+      "body": "A folder of Markdown files you and your agents write together, kept by its own rules.",
       "name": "Name",
       "folder": "Folder: ~/.coffer/vault/knowledge/{{name}}/",
       "description": "What belongs in here",
       "descriptionHint": "One sentence: what belongs in this collection",
       "everyAgent": "Every agent sees it through the coffer-guide skill.",
       "submit": "Create collection",
-      "created": "Created {{name}}"
+      "created": "Created {{name}}",
+      "template": "Start from",
+      "templates": {
+        "llm-wiki": "LLM wiki",
+        "blank": "Blank"
+      },
+      "templateHints": {
+        "llm-wiki": "Adds `AGENTS.md` with the rules of a wiki agents compile from sources, and an `index.md` to start reading at. Change them as you like.",
+        "blank": "Only the README. Add your own rules file when you want one."
+      }
     },
     "rename": {
       "menu": "Rename…",
@@ -3262,14 +3269,6 @@
       "preview": "Preview",
       "source": "Source",
       "created": "Created {{date}}",
-      "sources": "Sources:",
-      "missingSource": "No source is named {{slug}}",
-      "citedBy_one": "Cited by {{count}} page:",
-      "citedBy_other": "Cited by {{count}} pages:",
-      "verified": "verified {{date}}",
-      "stale": "Needs rechecking",
-      "neverVerified": "never checked",
-      "supersededBy": "Superseded by",
       "original": "Original",
       "originalFailed": "Couldn't open the original file.",
       "originalElsewhere": "Original {{name}} is on the Mac it was uploaded from",
@@ -3311,7 +3310,6 @@
       "title": "Pick a collection",
       "body": "Choose a collection on the left to read its documents, or create a new one."
     },
-    "waiting": "Waiting",
     "operation": {
       "save": "Saved",
       "delete": "Deleted",
@@ -3340,31 +3338,19 @@
       "close": "Close history"
     },
     "check": {
-      "title": "To do",
-      "description": "What Coffer finds in the collection's files on every read. Tidy hands it to your agent.",
-      "none": "Nothing to do.",
+      "title": "Broken links",
+      "description": "Links Coffer finds broken in the collection's files on every read. Tidy hands them to your agent.",
+      "none": "No broken links.",
       "failed": "Couldn’t check this collection",
       "target": "→ {{target}}",
       "others": "also {{paths}}",
       "kinds": {
         "dead_link": "Dead links",
         "ambiguous_link": "Ambiguous links",
-        "outside_link": "Links outside the knowledge folder",
-        "duplicate_slug": "Names used twice",
-        "missing_source": "Missing sources",
-        "superseded_source": "Pages citing an outdated source",
-        "incomplete_page": "Incomplete pages",
-        "unsourced_page": "Pages without sources",
-        "stale_page": "Pages to recheck",
-        "orphan_page": "Pages nothing links to",
-        "waiting_source": "Waiting sources"
+        "outside_link": "Links outside the knowledge folder"
       },
-      "missing": "missing {{target}}",
       "more": "{{count}} more",
-      "fewer": "Show fewer",
-      "replaced": "cites {{target}}, replaced by {{newest}}",
-      "lastChecked": "last checked {{date}}",
-      "neverChecked": "never checked"
+      "fewer": "Show fewer"
     },
     "changeLog": {
       "title": "Change log",
@@ -3381,31 +3367,12 @@
       "tidyExpired": "Closed without a report: the collection sat unchanged for 30 minutes."
     },
     "summary": {
-      "pages_one": "{{count}} page",
-      "pages_other": "{{count}} pages",
-      "sources_one": "{{count}} source",
-      "sources_other": "{{count}} sources",
-      "sourcesWaiting": "{{count}} sources ({{waiting}} waiting)",
       "updated": "updated {{when}}",
-      "managed": "Kept in Coffer: synced to your other Macs, every change kept in its history, tidied by your agent."
-    },
-    "contents": {
-      "title": "Contents",
-      "description": "Its pages by type, and its sources. A title opens the file.",
-      "none": "No pages or sources yet.",
-      "failed": "Couldn’t read the contents",
-      "used_one": "used by {{count}} page",
-      "used_other": "used by {{count}} pages",
-      "skipped": "skipped",
-      "superseded": "superseded"
-    },
-    "types": {
-      "overview": "Overviews",
-      "concept": "Concepts",
-      "entity": "Entities",
-      "how-to": "How-tos",
-      "decision": "Decisions",
-      "none": "No type"
+      "managed": "Kept in Coffer: synced to your other Macs, every change kept in its history, tidied by your agent.",
+      "files_one": "{{count}} Markdown file",
+      "files_other": "{{count}} Markdown files",
+      "rules": "Rules:",
+      "start": "Start:"
     },
     "tidyUndo": {
       "button": "Undo this tidy…",
@@ -3457,7 +3424,8 @@
       "rules": "Rules file",
       "noRules": "None",
       "managed": "Managed by",
-      "managedBy": "Its own tools. Coffer only shares it with agents: it copies, syncs, tidies and records nothing here."
+      "managedBy": "Its own tools. Coffer only shares it with agents: it copies, syncs, tidies and records nothing here.",
+      "start": "Start page"
     },
     "disconnect": {
       "menu": "Disconnect…",

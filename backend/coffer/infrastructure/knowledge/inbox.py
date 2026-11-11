@@ -2,7 +2,7 @@
 
 The hidden ``.inbox/`` half of what ``fs.py`` writes (see "Promote submitted
 material at once"). An item is ordinary frontmatter and Markdown;
-:func:`promote` keeps it as a source under ``sources/`` with its Markdown and
+:func:`promote` keeps it as a source in the uploads folder with its Markdown and
 frontmatter ("Keep every upload as a Markdown source") and removes it. Coffer's
 own entrances promote at once, and the sweep adopts and promotes whatever an
 agent outside Coffer, another machine or an older guide dropped there.
@@ -167,27 +167,33 @@ def inbox_items(collection: str) -> tuple[str, ...]:
     return tuple(name for _, name in sorted(found))
 
 
-def promote(collection: str, name: str) -> KnowledgeFile:
+def promote(collection: str, name: str, folder: str | None = None) -> KnowledgeFile:
     """Keep an inbox item as a source, as it stands.
 
     The material must not wait in a hidden directory: it lands under the
-    collection's ``sources/`` with its frontmatter — every key a writer set
-    kept — and the inbox file is removed. An upload's pictures are already
-    under ``assets/``; its own file is kept on the Mac it came from only.
+    collection's uploads folder (``sources/`` unless its README names
+    another) with its frontmatter — every key a writer set
+    kept — and the inbox file is removed. An upload with pictures or
+    attachments lands in its own ``folder`` there, beside the files it links,
+    named after the folder so its slug stays as unique as the folder's;
+    its own file is kept on the Mac it came from only.
     """
     path = _inbox_item(collection, name)
     if not path.is_file():
         raise KnowledgeFileNotFound(inbox_path(collection, name))
     fm, body = split_frontmatter(decode(path.read_bytes()))
     title = str(fm.get("title") or path.stem)
-    directory = paths.sources_dir(collection)
+    directory = paths.uploads_dir(collection)
+    if folder:
+        directory = directory / folder
     directory.mkdir(parents=True, exist_ok=True)
     written = write_file(
-        directory=f"{collection}/{paths.SOURCES_DIR_NAME}",
+        directory=paths.relative_of(directory),
         title=title,
         description=str(fm.get("description") or ""),
         body=body,
         actor=str(fm.get("actor") or ACTOR_AGENT),
+        relpath=f"{paths.relative_of(directory)}/{folder}.md" if folder else None,
         extra=dict(fm),
     )
     path.unlink(missing_ok=True)

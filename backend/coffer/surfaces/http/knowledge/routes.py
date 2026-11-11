@@ -124,7 +124,9 @@ async def create_collection(
     svc: KnowledgeService = Depends(get_knowledge_service),  # noqa: B008
     actor: str = Depends(_actor_kind),
 ) -> CollectionOut:
-    created = await svc.create_collection(body.name, actor=actor, description=body.description)
+    created = await svc.create_collection(
+        body.name, actor=actor, description=body.description, template=body.template
+    )
     return collection_out(created)
 
 
@@ -144,8 +146,8 @@ async def check_collection(
     uid: str,
     svc: KnowledgeService = Depends(get_knowledge_service),  # noqa: B008
 ) -> CheckOut:
-    """One collection's mechanical findings, computed now from its files and
-    fixed by nothing here ("Check a collection mechanically on every read")."""
+    """One collection's broken links, computed now from its files and fixed by
+    nothing here ("Check every link in a collection")."""
     return check_out(await svc.check(uid))
 
 
@@ -154,8 +156,8 @@ async def collection_files(
     uid: str,
     svc: KnowledgeService = Depends(get_knowledge_service),  # noqa: B008
 ) -> CollectionFilesOut:
-    """Every page and source of a collection with its title, page type and
-    waiting mark ("Show a collection's contents by page type")."""
+    """Every Markdown file of a collection with its title and description
+    ("List a collection's files")."""
     return CollectionFilesOut(files=[file_summary_out(f) for f in await svc.files(uid)])
 
 

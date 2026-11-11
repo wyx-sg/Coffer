@@ -1,9 +1,9 @@
 """What one Confluence conversion keeps and reports as it goes.
 
 A conversion is handed the attachments that were downloaded with the page
-(by their Confluence file names) and the folder under ``assets/`` its files go
-in. Each attachment the page refers to is kept once, under a name safe on every
-file system, and linked from the Markdown by ``../assets/<folder>/<name>``;
+(by their Confluence file names). Each attachment the page refers to is kept
+once, under a name safe on every file system, in the upload's own folder beside
+the source, and linked from the Markdown by its bare name;
 every other part — an embed, a diagram, a macro — is recorded with how it
 ended, so the import's report says exactly what was and was not kept (spec
 knowledge "Import a Confluence page as a readable source with its
@@ -43,7 +43,6 @@ def safe_name(name: str) -> str:
 class Context:
     """The state of one page's conversion."""
 
-    folder: str
     attachments: dict[str, bytes] = field(default_factory=dict)
     files: list[ConvertedFile] = field(default_factory=list)
     attachment_items: list[ImportItem] = field(default_factory=list)
@@ -56,8 +55,8 @@ class Context:
     _taken: set[str] = field(default_factory=set)
 
     def link(self, stored: str) -> str:
-        """The relative link from a source under ``sources/`` to a kept file."""
-        return f"../assets/{quote(self.folder)}/{quote(stored)}"
+        """The relative link from the source to a kept file beside it."""
+        return quote(stored)
 
     def _free(self, wanted: str) -> str:
         stem, dot, ext = wanted.rpartition(".")
@@ -92,9 +91,7 @@ class Context:
         stored = self._free(safe_name(name))
         self._stored[name] = stored
         self.files.append(ConvertedFile(stored, data))
-        self.attachment_items.append(
-            ImportItem(name, ITEM_KEPT, path=f"../assets/{self.folder}/{stored}")
-        )
+        self.attachment_items.append(ImportItem(name, ITEM_KEPT, path=stored))
         return self.link(stored)
 
     def macro(self, name: str, status: str, reason: str = "", path: str = "") -> None:

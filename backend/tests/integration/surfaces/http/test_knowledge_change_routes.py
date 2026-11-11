@@ -34,8 +34,10 @@ def test_the_feed_lists_edits_across_collections_newest_first(client) -> None:  
     _create_collection(client, "shopee")
     _create_collection(client, "personal")
     # An agent's edit on disk, in another collection, found by the sweep …
-    paths.pages_dir("personal").mkdir(parents=True)
-    (paths.pages_dir("personal") / "agent.md").write_text("one\ntwo\n", encoding="utf-8")
+    (paths.collection_dir("personal") / "pages").mkdir(parents=True)
+    ((paths.collection_dir("personal") / "pages") / "agent.md").write_text(
+        "one\ntwo\n", encoding="utf-8"
+    )
     client.portal.call(sweep_once, get_knowledge_service(), _no_refresh)  # type: ignore[union-attr]
     # … then a person's upload.
     _submit(client, collection="shopee", title="Cache", description="d", body="first")

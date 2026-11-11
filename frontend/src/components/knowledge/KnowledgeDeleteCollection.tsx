@@ -52,7 +52,7 @@ export function KnowledgeDeleteCollection({ collection, open, onOpenChange }: Pr
       onOpenChange={onOpenChange}
       title={t("knowledge.deleteCollection.title", { name: collection.name })}
       description={t("knowledge.deleteCollection.body", {
-        count: collection.page_count + collection.source_count,
+        count: collection.note_count,
       })}
       confirmLabel={t("knowledge.deleteCollection.confirm")}
       pendingLabel={t("knowledge.deleteCollection.pending")}

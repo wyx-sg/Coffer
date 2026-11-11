@@ -4,8 +4,8 @@
 // keeps themselves"). Coffer only shares it with the agents, so the page shows
 // what it is and nothing to manage: an "External" tag, its README's opening
 // paragraph (not editable here: Coffer writes nothing into the folder), where
-// it lives, how many notes it holds, its own rules file, and a line saying who
-// manages it. No Tidy, To do, Contents or Change log. The ⋯ menu is Reveal in
+// it lives, how many notes it holds, its own rules file and start page, and a
+// line saying who manages it. No Tidy, Broken links or Change log. The ⋯ menu is Reveal in
 // Finder · Open in Obsidian (only when installed) · Copy path · Rename… (a
 // label only) · Disconnect…, which leaves every file where it is.
 import { useState } from "react";
@@ -67,6 +67,16 @@ export function KnowledgeLinkedView({ collection }: Props) {
         t("knowledge.linked.noRules")
       ),
     ],
+    ...(collection.entry_file
+      ? [
+          [
+            t("knowledge.linked.start"),
+            <span key="start" className="font-mono text-xs">
+              {collection.entry_file}
+            </span>,
+          ] satisfies [string, React.ReactNode],
+        ]
+      : []),
     [t("knowledge.linked.managed"), t("knowledge.linked.managedBy")],
   ];
 

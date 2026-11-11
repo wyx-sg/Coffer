@@ -135,8 +135,8 @@ export interface paths {
         };
         /**
          * Check Collection
-         * @description One collection's mechanical findings, computed now from its files and
-         *     fixed by nothing here ("Check a collection mechanically on every read").
+         * @description One collection's broken links, computed now from its files and fixed by
+         *     nothing here ("Check every link in a collection").
          */
         get: operations["check_collection_api_v1_knowledge_collections__uid__check_get"];
         put?: never;
@@ -176,8 +176,8 @@ export interface paths {
         };
         /**
          * Collection Files
-         * @description Every page and source of a collection with its title, page type and
-         *     waiting mark ("Show a collection's contents by page type").
+         * @description Every Markdown file of a collection with its title and description
+         *     ("List a collection's files").
          */
         get: operations["collection_files_api_v1_knowledge_collections__uid__files_get"];
         put?: never;
@@ -398,9 +398,7 @@ export interface components {
         };
         /**
          * CheckOut
-         * @description One collection's mechanical check ("Check a collection mechanically on
-         *     every read"): what Coffer found, and the prompt that hands the rest to the
-         *     agent.
+         * @description One collection's broken links ("Check every link in a collection").
          */
         CheckOut: {
             collection: components["schemas"]["CollectionOut"];
@@ -413,6 +411,12 @@ export interface components {
             description?: string | null;
             /** Name */
             name: string;
+            /**
+             * Template
+             * @default llm-wiki
+             * @enum {string}
+             */
+            template?: "llm-wiki" | "blank";
         };
         /**
          * CollectionDescribeIn
@@ -424,8 +428,8 @@ export interface components {
         };
         /**
          * CollectionFilesOut
-         * @description Every page and source of one collection, for its page's Contents
-         *     ("Show a collection's contents by page type").
+         * @description Every Markdown file of one collection but its README, each with its
+         *     title and description ("List a collection's files").
          */
         CollectionFilesOut: {
             /** Files */
@@ -447,6 +451,11 @@ export interface components {
         CollectionOut: {
             /** Description */
             description: string;
+            /**
+             * Entry File
+             * @default
+             */
+            entry_file: string;
             /**
              * Finding Count
              * @default 0
@@ -470,20 +479,10 @@ export interface components {
              */
             note_count: number;
             /**
-             * Page Count
-             * @default 0
-             */
-            page_count: number;
-            /**
              * Rules File
              * @default
              */
             rules_file: string;
-            /**
-             * Source Count
-             * @default 0
-             */
-            source_count: number;
             tidy_handoff: components["schemas"]["HandoffOut"];
             /**
              * Tidy Running
@@ -495,10 +494,10 @@ export interface components {
             /** Updated At */
             updated_at: string | null;
             /**
-             * Waiting Source Count
-             * @default 0
+             * Uploads Dir
+             * @default
              */
-            waiting_source_count: number;
+            uploads_dir: string;
         };
         /** DirectoryOut */
         DirectoryOut: {
@@ -560,12 +559,8 @@ export interface components {
         FileOut: {
             /** Actor */
             actor: string;
-            /** Aliases */
-            aliases: string[];
             /** Body */
             body: string;
-            /** Cited By */
-            cited_by: components["schemas"]["PageRefOut"][];
             /** Created At */
             created_at: string;
             /** Description */
@@ -578,12 +573,6 @@ export interface components {
             import_report: {
                 [key: string]: unknown;
             };
-            /**
-             * Kind
-             * @default file
-             * @enum {string}
-             */
-            kind: "page" | "source" | "file";
             /** Links */
             links: components["schemas"]["LinkRefOut"][];
             /** Origin */
@@ -597,96 +586,27 @@ export interface components {
             original: string;
             /** Original Path */
             original_path: string | null;
-            /**
-             * Page Type
-             * @default
-             */
-            page_type: string;
             /** Path */
             path: string;
             /** Readable Body */
             readable_body: string | null;
-            /** Sources */
-            sources: components["schemas"]["SourceRefOut"][];
-            /**
-             * Stale
-             * @default false
-             */
-            stale: boolean;
-            /**
-             * Summary
-             * @default
-             */
-            summary: string;
-            superseded_by: components["schemas"]["SourceRefOut"] | null;
             /** Title */
             title: string;
             /** Updated At */
             updated_at: string;
-            /**
-             * Verified
-             * @default
-             */
-            verified: string;
-            /**
-             * Waiting
-             * @default false
-             */
-            waiting: boolean;
         };
         /** FileSummaryOut */
         FileSummaryOut: {
             /** Actor */
             actor: string;
-            /**
-             * Cited Count
-             * @default 0
-             */
-            cited_count: number;
             /** Description */
             description: string;
-            /**
-             * Kind
-             * @default file
-             * @enum {string}
-             */
-            kind: "page" | "source" | "file";
-            /**
-             * Page Type
-             * @default
-             */
-            page_type: string;
             /** Path */
             path: string;
-            /**
-             * Skipped
-             * @default false
-             */
-            skipped: boolean;
-            /**
-             * Stale
-             * @default false
-             */
-            stale: boolean;
-            /**
-             * Summary
-             * @default
-             */
-            summary: string;
-            /**
-             * Superseded By
-             * @default
-             */
-            superseded_by: string;
             /** Title */
             title: string;
             /** Updated At */
             updated_at: string;
-            /**
-             * Waiting
-             * @default false
-             */
-            waiting: boolean;
         };
         /** FindingOut */
         FindingOut: {
@@ -694,7 +614,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "dead_link" | "ambiguous_link" | "outside_link" | "duplicate_slug" | "missing_source" | "superseded_source" | "incomplete_page" | "unsourced_page" | "stale_page" | "orphan_page" | "waiting_source";
+            kind: "dead_link" | "ambiguous_link" | "outside_link";
             /** Others */
             others: string[];
             /** Path */
@@ -796,25 +716,6 @@ export interface components {
             path: string | null;
             /** Target */
             target: string;
-        };
-        /** PageRefOut */
-        PageRefOut: {
-            /** Path */
-            path: string;
-            /** Title */
-            title: string;
-        };
-        /** SourceRefOut */
-        SourceRefOut: {
-            /** Path */
-            path: string | null;
-            /** Slug */
-            slug: string;
-            /**
-             * Title
-             * @default
-             */
-            title: string;
         };
         /**
          * TidyFinishIn

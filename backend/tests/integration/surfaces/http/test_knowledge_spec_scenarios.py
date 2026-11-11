@@ -53,7 +53,7 @@ def test_hidden_entries_are_in_no_listing_count_or_catalogue(  # type: ignore[no
     (inbox_dir / "waiting.md").write_text("waiting\n", encoding="utf-8")
 
     [entry] = client.get("/api/v1/knowledge/collections").json()["collections"]
-    assert (entry["page_count"], entry["source_count"]) == (0, 1)
+    assert entry["note_count"] == 1
 
     from coffer.infrastructure.knowledge import catalogue
 

@@ -68,7 +68,7 @@ def _catalogue() -> guide_render.Catalogue:
                 uid="rsc-coffer",
                 name="coffer",
                 description="The Coffer project's own knowledge. Notes an agent wrote.",
-                page_count=2,
+                note_count=2,
             ),
             [
                 FileEntry(
@@ -77,8 +77,6 @@ def _catalogue() -> guide_render.Catalogue:
                     description="How aggregation and tiering fit together.",
                     actor="agent",
                     updated_at="2026-09-18T00:00:00Z",
-                    kind="page",
-                    page_type="concept",
                 ),
                 FileEntry(
                     path="coffer/sources/sync.md",
@@ -86,8 +84,6 @@ def _catalogue() -> guide_render.Catalogue:
                     description="",
                     actor="user",
                     updated_at="2026-09-18T00:00:00Z",
-                    kind="source",
-                    waiting=True,
                 ),
             ],
         ),
@@ -96,7 +92,7 @@ def _catalogue() -> guide_render.Catalogue:
                 uid="rsc-scratch",
                 name="scratch",
                 description="",
-                page_count=0,
+                note_count=0,
             ),
             [],
         ),

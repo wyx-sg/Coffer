@@ -52,7 +52,7 @@ def imported(collection: str, page_id: str) -> list[str]:
     a page imported again replaces its newest import."""
     if not page_id:
         return []
-    directory = paths.sources_dir(collection)
+    directory = paths.uploads_dir(collection)
     if not directory.is_dir():
         return []
     found: list[str] = []

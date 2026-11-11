@@ -8,7 +8,6 @@ reads it, the second by two vaults quietly overwriting each other every round.
 
 from __future__ import annotations
 
-import dataclasses
 import pathlib
 import tempfile
 
@@ -33,7 +32,8 @@ def _collection(name: str, description: str, documents: int = 1):  # type: ignor
         uid=f"uid-{name}",
         name=name,
         description=description,
-        page_count=documents,
+        note_count=documents,
+        rules_file="AGENTS.md",
     )
     files = [
         FileEntry(
@@ -42,8 +42,6 @@ def _collection(name: str, description: str, documents: int = 1):  # type: ignor
             description="What it answers.",
             actor="curation",
             updated_at=None,
-            kind="page",
-            page_type="concept",
         )
         for i in range(documents)
     ]
@@ -138,11 +136,11 @@ def test_the_body_carries_both_halves() -> None:
     manual, catalogue = body[:manual_end], body[manual_end:]
     assert "`coffer__search_tools`" in manual
     assert "`coffer__write`" not in manual
-    assert "### Writing a page" in manual  # how an agent adds knowledge
+    assert "read its rules file" in manual  # how an agent adds knowledge
     assert "### Tidying a collection" in manual
     assert "Everything left out is\nstill callable" in manual  # the tiering contract
     assert "Nothing here waits on a human" in manual
-    assert "`pages/doc0.md` — **Doc 0**" in catalogue
+    assert "**pages/**\n\n- `doc0.md` — **Doc 0**" in catalogue
     assert "~/.coffer/knowledge/shopee/" in catalogue
 
 
@@ -161,8 +159,8 @@ def test_the_manual_names_one_tool_and_the_log_reader() -> None:
     assert "adds one tool of its own" in text
     # Knowledge is written straight into a collection, tidied there, and never
     # committed through git in the vault.
-    assert "### Writing a page" in text
-    assert "never run git inside the vault" in text
+    assert "Before you write in a collection, read its rules file" in text
+    assert "Never run git inside the vault" in text
     # The only knowledge commands it names are the ones a tidy runs and the
     # one that imports a Confluence page: writing a page is a file edit, never
     # a command.
@@ -262,13 +260,9 @@ def test_with_knowledge_switched_off_the_manual_documents_no_knowledge_tool_or_r
     """The whole guide, not only its description: the writing and tidying
     instructions and the knowledge root leave with the feature."""
     text = render("~/.coffer/knowledge", None)
-    for heading in (
-        "Writing a page",
-        "Integrating sources",
-        "Tidying a collection",
-        "Checking a collection",
-    ):
+    for heading in ("Tidying a collection", "Checking a collection"):
         assert f"### {heading}" not in text, heading
+    assert "rules file" not in text
     assert "~/.coffer/knowledge" not in text
     assert "adds one tool of its own" in text
     assert "<!--" not in text
@@ -310,121 +304,110 @@ def _section(text: str, heading: str) -> str:
 )
 def test_the_guide_carries_the_writing_and_tidying_sections() -> None:
     text = render("~/.coffer/knowledge", [_collection("ops", "Runbooks.")])
-    for heading in (
-        "Writing a page",
-        "Integrating sources",
-        "Tidying a collection",
-    ):
-        assert f"### {heading}" in text, heading
+    flat = " ".join(text.split())
+    assert "Before you write in a collection, read its rules file" in flat
+    assert "### Tidying a collection" in text
     # Checking is part of tidying, not a section of its own.
     assert "### Checking a collection" not in text
     description = yaml.safe_load(text.split("---", 2)[1])["description"].lower()
     assert "writ" in description and "tidy" in description and "check" in description
 
 
-@pytest.mark.acceptance(spec="knowledge", scenario="the writing section states the six rules")
-def test_the_writing_section_states_the_six_rules() -> None:
+@pytest.mark.acceptance(spec="knowledge", scenario="the guide sets no format of its own")
+def test_the_guide_sets_no_format_of_its_own() -> None:
     text = render("~/.coffer/knowledge", [_collection("ops", "Runbooks.")])
-    flat = " ".join(_section(text, "Writing a page").split())
-    assert "fold the fact into the" in flat  # 1. the page that owns the subject
-    assert "Lose nothing" in flat
-    assert "Organise by subject, never by provenance" in flat
-    assert "the newer wins unless the older one is shown to be right" in flat
-    assert "Link pages by `[[slug]]`, or by a relative path" in flat
-    assert "update the links to it, or keep its old slug in its `aliases`" in flat
-    assert "Never edit a source" in flat
-    for key in ("a `title`", "a `type`", "`description`", "`sources`", "`aliases`"):
-        assert key in flat
-    assert "`actor: agent`" in flat
+    flat = " ".join(text.split())
+    assert "Coffer sets no format for it" in flat
+    assert "It wins over anything you would do by default" in flat
+    assert "broken link" in flat
+    assert "uploads folder" in flat
+    # No page type, no required key, no folder a collection must have.
+    for word in ("`pages/`", "`type`", "`verified`", "`sources` key", "overview", "how-to"):
+        assert word not in flat, word
+    assert "### Writing a page" not in text
+    assert "### Integrating sources" not in text
 
 
-def _file(path: str, title: str, *, kind: str, page_type: str = "", waiting: bool = False):  # type: ignore[no-untyped-def]
+def _file(path: str, title: str, description: str = ""):  # type: ignore[no-untyped-def]
     return FileEntry(
         path=path,
         title=title,
-        description=f"What {title} answers.",
+        description=description or f"What {title} answers.",
         actor="agent",
         updated_at="",
-        kind=kind,
-        page_type=page_type,
-        waiting=waiting,
     )
 
 
 @pytest.mark.acceptance(
     spec="knowledge", scenario="the skill body carries the catalogue and the absolute root"
 )
-def test_the_catalogue_groups_pages_by_type_and_names_waiting_sources() -> None:
-    entry = CollectionEntry(uid="u", name="shopee", description="Accounts.", page_count=3)
+def test_the_catalogue_lists_files_by_folder_with_the_rules_file() -> None:
+    entry = CollectionEntry(
+        uid="u", name="shopee", description="Accounts.", note_count=3, rules_file="AGENTS.md"
+    )
     files = [
-        _file("shopee/pages/sessions.md", "Sessions", kind="page", page_type="concept"),
-        _file("shopee/pages/gateway.md", "Gateway", kind="page", page_type="entity"),
-        _file("shopee/pages/tokens.md", "Tokens", kind="page", page_type="concept"),
-        _file("shopee/sources/design.md", "Design doc", kind="source", waiting=True),
-        _file("shopee/sources/old.md", "Old notes", kind="source"),
-        _file("shopee/diagram.png", "diagram.png", kind="file"),
+        _file("shopee/AGENTS.md", "Rules for this collection"),
+        _file("shopee/pages/sessions.md", "Sessions"),
+        _file("shopee/sources/design.md", "Design doc"),
     ]
     text = render_catalogue("~/.coffer/vault/knowledge", [(entry, files)])
-    concept = text.index("**Pages: concept**")
-    entity = text.index("**Pages: entity**")
-    assert concept < text.index("`pages/sessions.md` — **Sessions**: What Sessions answers.")
-    assert concept < text.index("`pages/tokens.md` — **Tokens**") < entity
-    assert entity < text.index("`pages/gateway.md` — **Gateway**")
-    sources = text.split("**Sources**")[1]
-    assert "`sources/design.md` — **Design doc** (waiting)" in sources
-    assert "`sources/old.md` — **Old notes**\n" in sources
-    assert "diagram.png" not in text
+
+    assert "Its rules are in `AGENTS.md`" in text
+    root = text.index("**(root)**")
+    pages = text.index("**pages/**")
+    sources = text.index("**sources/**")
+    assert root < text.index("`AGENTS.md` — **Rules for this collection**") < pages
+    assert pages < text.index("`sessions.md` — **Sessions**: What Sessions answers.") < sources
+    assert sources < text.index("`design.md` — **Design doc**")
     assert "`~/.coffer/vault/knowledge/shopee/`" in text
     assert "_Shortened" not in text
 
 
 @pytest.mark.acceptance(
-    spec="knowledge", scenario="the catalogue marks a superseded source and shows summaries"
+    spec="knowledge", scenario="a collection with a start page is listed by its start page"
 )
-def test_the_catalogue_marks_a_superseded_source_and_shows_summaries() -> None:
-    entry = CollectionEntry(uid="u", name="shopee", description="", page_count=0)
-    files = [
-        dataclasses.replace(
-            _file("shopee/sources/v1.md", "Design v1", kind="source"),
-            superseded_by="shopee/sources/v2.md",
-            summary="The 2024 design.",
-        ),
-        dataclasses.replace(
-            _file("shopee/sources/v2.md", "Design v2", kind="source"),
-            summary="The 2026 design, with the new gateway.",
-        ),
-    ]
-    text = render_catalogue("~/k", [(entry, files)])
-    assert (
-        "`sources/v1.md` — **Design v1** (superseded by `sources/v2.md`): The 2024 design." in text
+def test_a_collection_with_a_start_page_is_listed_by_its_count() -> None:
+    entry = CollectionEntry(
+        uid="u",
+        name="shopee",
+        description="",
+        note_count=12,
+        rules_file="schema.md",
+        entry_file="index.md",
     )
-    assert "`sources/v2.md` — **Design v2**: The 2026 design, with the new gateway." in text
+    files = [_file(f"shopee/pages/p{i}.md", f"Page {i}") for i in range(12)]
+    text = render_catalogue("~/k", [(entry, files)])
+
+    assert "Its rules are in `schema.md`" in text
+    assert "Start reading at `index.md`." in text
+    assert "12 Markdown files." in text
+    assert "p3.md" not in text and "Page 3" not in text
+
+
+def test_a_collection_with_no_rules_file_is_written_like_its_files() -> None:
+    entry = CollectionEntry(uid="u", name="bare", description="", note_count=1)
+    text = render_catalogue("~/k", [(entry, [_file("bare/a.md", "A")])])
+    assert "write in it the way its existing files are written" in text
 
 
 @pytest.mark.acceptance(spec="knowledge", scenario="a catalogue past its budget shortens itself")
 def test_a_catalogue_past_its_budget_drops_descriptions_then_lists_counts() -> None:
     long = "x" * 200
-    entry = CollectionEntry(uid="u", name="big", description="", page_count=400)
-    pages = [
-        dataclasses.replace(
-            _file(f"big/pages/p{i}.md", f"Page {i}", kind="page", page_type="concept"),
-            description=long,
-        )
-        for i in range(400)
-    ]
+    entry = CollectionEntry(uid="u", name="big", description="", note_count=400)
+    pages = [_file(f"big/pages/p{i}.md", f"Page {i}", long) for i in range(400)]
     titles = render_catalogue("~/k", [(entry, pages)])
     assert len(titles) <= MAX_CATALOGUE_CHARS
     assert "_Shortened: descriptions are left out" in titles
-    assert "`pages/p7.md` — **Page 7**\n" in titles and long not in titles
+    assert "`p7.md` — **Page 7**\n" in titles and long not in titles
 
     many = [
-        _file(f"big/pages/a-much-longer-page-name-{i}.md", f"A long title {i} " * 4, kind="page")
+        _file(f"big/pages/a-much-longer-page-name-{i}.md", f"A long title {i} " * 4)
         for i in range(2000)
     ]
     counts = render_catalogue("~/k", [(entry, many)])
     assert len(counts) <= MAX_CATALOGUE_CHARS
     assert "_Shortened: only counts are listed" in counts
-    assert "2000 pages under `pages/`, 0 sources under `sources/` (0 waiting)" in counts
+    assert "2000 Markdown files." in counts
     assert "a-much-longer-page-name-1.md" not in counts
 
 
@@ -453,7 +436,8 @@ def test_the_guide_lists_a_linked_folder_with_its_own_path_and_rules() -> None:
 
     assert "### Work (linked folder)" in text
     assert "`~/Obsidian/Work/`" in text
-    assert "Follow its own `AGENTS.md`" in text
-    assert "- `Projects/Gateway.md` — **Payment gateway**" in text
+    assert "Its rules are in `AGENTS.md`" in text
+    assert "**Projects/**" in text
+    assert "- `Gateway.md` — **Payment gateway**" in text
     assert str(home) not in text
     assert "Work (My work notes)" in render_description([(entry, [note])])

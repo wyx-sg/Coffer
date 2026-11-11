@@ -2,9 +2,10 @@
 
 A linked folder (ADR linked-knowledge-folders-are-read-only-and-machine-local)
 is any folder on this disk, an Obsidian vault say, that Coffer only **shares**
-with the agents. Coffer never writes into it, keeps no history of it and runs
-none of its wiki rules over it: the folder has its own layout and its own
-rules, and the agents follow those. So this module only reads, and it has its
+with the agents. Coffer never writes into it, keeps no history of it and
+checks nothing in it: the folder has its own layout and its own rules, read the
+same way as a collection Coffer keeps (``collection_settings``), and the agents
+follow those. So this module only reads, and it has its
 own path guard because the folder lies outside the knowledge root that
 ``paths`` guards.
 
@@ -35,12 +36,9 @@ from coffer.domain.knowledge.errors import (
     LinkedFolderRefused,
     UnsafeKnowledgePath,
 )
+from coffer.infrastructure.knowledge import collection_settings
 from coffer.infrastructure.knowledge.frontmatter import split_frontmatter
 from coffer.infrastructure.vault.home import coffer_home
-
-#: The files a folder's own rules may live in, checked at its root in this
-#: order; the first present is the one the guide tells an agent to follow.
-RULES_FILES = ("AGENTS.md", "CLAUDE.md", "README.md")
 
 #: Folders no knowledge lives in, skipped on every walk besides hidden ones.
 _SKIPPED_DIRS = frozenset({"node_modules", "__pycache__"})
@@ -48,9 +46,6 @@ _SKIPPED_DIRS = frozenset({"node_modules", "__pycache__"})
 #: A walk stops after this many Markdown files: a folder this large is a
 #: different design (the knowledge spec's own assumption is hundreds of files).
 MAX_WALKED_FILES = 5000
-
-#: How much of a file is read to find its title.
-_HEAD_BYTES = 4096
 
 #: A file larger than this is described but not read into the page: a linked
 #: folder can hold attachments of any size.
@@ -99,47 +94,15 @@ def resolve(folder: str, relpath: str) -> pathlib.Path:
 
 
 def rules_file(folder: str) -> str:
-    """The folder's own rules file at its root, the first of
-    :data:`RULES_FILES` present; empty when it has none."""
-    base = pathlib.Path(folder)
-    return next((name for name in RULES_FILES if (base / name).is_file()), "")
-
-
-def _description(folder: str) -> str:
-    """The first paragraph of the folder's ``README.md``, as for a collection
-    Coffer keeps; empty when it has none."""
-    readme = pathlib.Path(folder) / "README.md"
-    if not readme.is_file():
-        return ""
-    _, body = split_frontmatter(readme.read_text(encoding="utf-8", errors="replace"))
-    paragraph: list[str] = []
-    for line in body.splitlines():
-        stripped = line.strip()
-        if stripped.startswith("#"):
-            continue
-        if not stripped:
-            if paragraph:
-                break
-            continue
-        paragraph.append(stripped)
-    return " ".join(paragraph)
+    """The folder's own rules file: what its README declares as ``rules``,
+    else the first of ``collection_settings.RULES_FILES`` at its root; empty when none."""
+    return collection_settings.read(pathlib.Path(folder)).rules
 
 
 def _title(path: pathlib.Path) -> str:
     """A note's title: its frontmatter ``title``, else its first ``#``
     heading, else its file name without ``.md``."""
-    try:
-        with path.open("rb") as handle:
-            head = handle.read(_HEAD_BYTES).decode("utf-8", errors="replace")
-    except OSError:
-        return path.stem
-    fm, body = split_frontmatter(head)
-    if fm.get("title"):
-        return str(fm["title"])
-    for line in body.splitlines():
-        if line.startswith("# "):
-            return line[2:].strip() or path.stem
-    return path.stem
+    return collection_settings.head_title(path)[0]
 
 
 def _walk(folder: str) -> tuple[list[pathlib.Path], float]:
@@ -191,15 +154,17 @@ def collection_entry(uid: str, name: str, folder: str) -> CollectionEntry:
     gone missing lists with no files rather than failing the whole list."""
     present = pathlib.Path(folder).is_dir()
     found, newest = _walk(folder) if present else ([], 0.0)
+    settings = collection_settings.read(pathlib.Path(folder)) if present else None
     return CollectionEntry(
         uid=uid,
         name=name,
-        description=_description(folder) if present else "",
+        description=collection_settings.description(pathlib.Path(folder)) if present else "",
         folder_path=folder,
         updated_at=datetime.fromtimestamp(newest, tz=UTC).isoformat() if newest else None,
         linked=True,
         note_count=len(found),
-        rules_file=rules_file(folder) if present else "",
+        rules_file=settings.rules if settings else "",
+        entry_file=settings.entry if settings else "",
     )
 
 
@@ -242,7 +207,7 @@ def list_level(name: str, folder: str, relpath: str) -> CatalogueLevel:
 
 def read_file(name: str, folder: str, relpath: str) -> KnowledgeFile:
     """One file of the linked folder with its absolute paths, read as it is:
-    no wiki rules apply, so it carries no type, sources or links."""
+    nothing is checked in it, so it carries no resolved links."""
     inner = relpath.strip("/").split("/", 1)[1] if "/" in relpath.strip("/") else ""
     if not inner:
         raise KnowledgeFileNotFound(relpath)

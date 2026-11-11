@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-10-12
 **Deciders**: Yuxing Wu
-**Related**: [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md), [Knowledge Is a Wiki of Pages Compiled From Kept Sources](knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault](sync-memory-into-each-agents-own-memory.md), [Coffer Ships Its Own Manual as a Skill Resource](coffer-ships-its-own-skill.md), [Knowledge Stays Current Through Flags Coffer Computes and an Agent Clears](knowledge-stays-current-through-flags-coffer-computes.md), [Managed Agents Run With Full Permissions; Owner Pairing Is the Gate](managed-agents-run-with-full-permissions.md), [Internal Engine Settings](internal-engine-settings.md), research notes [knowledge curation](../research/knowledge-curation.md) and [knowledge structures](../research/knowledge-structures.md), spec knowledge "Teach writing and tidying in the guide", "Hand a tidy to the agent", "Record a tidy as one change", "Undo a tidy", spec vault-storage "Keep the last valid version when a hand edit is invalid", OpenSpec change `make-a-tidy-one-change`
+**Related**: [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md), [Knowledge Collections Own Their Format; Coffer Checks Only Links](knowledge-collections-own-their-format.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault](sync-memory-into-each-agents-own-memory.md), [Coffer Ships Its Own Manual as a Skill Resource](coffer-ships-its-own-skill.md), [Managed Agents Run With Full Permissions; Owner Pairing Is the Gate](managed-agents-run-with-full-permissions.md), [Internal Engine Settings](internal-engine-settings.md), research notes [knowledge curation](../research/knowledge-curation.md) and [knowledge structures](../research/knowledge-structures.md), spec knowledge "Teach writing and tidying in the guide", "Hand a tidy to the agent", "Record a tidy as one change", "Undo a tidy", spec vault-storage "Keep the last valid version when a hand edit is invalid", OpenSpec change `make-a-tidy-one-change`
 
 ## Context
 
@@ -189,15 +189,18 @@ Two buttons and two prompts: Tidy edits; Check reports and changes nothing.
 #### Option G — One Tidy that fixes what is certain and reports what is not (chosen)
 
 Remove **Check with agent**, `check_handoff` and the guide's "Checking a
-collection" section. The Tidy prompt carries the collection's mechanical
-findings (up to 40 lines, then a count) and orders one complete maintenance:
-integrate the waiting sources, fix the mechanical findings, merge, split and
-correct, and **leave alone anything uncertain** — two pages that disagree with
-nothing to tell which is right, a deletion of much text, a change to the
-README's page types — listing it in the report as a decision for the person.
-Tidy all's prompt carries each collection's finding count and tells the agent
-to read the findings with `coffer knowledge check <collection>`. Coffer's own
-mechanical check stays on the collection page, computed on every read.
+collection" section. The Tidy prompt carries the collection's rules file and
+its broken links (up to 40 lines, then a count) and orders one complete
+maintenance by the collection's own rules: what those rules say a tidy checks
+and fixes, every broken link fixed, and **leave alone anything uncertain** — two
+files that disagree with nothing to tell which is right, a deletion of much
+text, a change to the rules file — listing it in the report as a decision for
+the person. (What a tidy checks used to be Coffer's own list — waiting sources,
+pages due a recheck; it is now the collection's, see
+[Knowledge Collections Own Their Format](knowledge-collections-own-their-format.md).)
+Tidy all's prompt carries each collection's broken-link count and tells the
+agent to read them with `coffer knowledge check <collection>`. Coffer's link
+check stays on the collection page, computed on every read.
 
 - **Pros.** One button, one prompt, one guide section, and the agent that edits
   has the full list of problems. It is the rule Astro-Han's production skill
@@ -324,11 +327,11 @@ before and is what made a bad tidy expensive).
 
 Tidying knowledge is the agent's job, started by the person with **Tidy** or
 **Tidy all**, and nothing tidies unattended; Coffer runs no model of its own
-over knowledge. **Tidy is the only hand-off**: its prompt carries Coffer's
-mechanical findings and tells the agent to integrate waiting sources, fix the
-findings, recheck the pages due a recheck, merge, split and correct, and to
-leave anything uncertain alone and report it, ending the report with the gaps
-it found. Coffer's mechanical check stays on the collection page. **A tidy is
+over knowledge. **Tidy is the only hand-off**: its prompt names the collection's rules file and
+carries the broken links Coffer found, and tells the agent to tidy by those
+rules, fix every broken link, and leave anything uncertain alone and report it,
+ending the report with the gaps it found. Coffer's link check stays on the
+collection page. **A tidy is
 one change**: the agent opens it with `tidy-start`, the collection is paused in
 the vault writer while it works, and `tidy-finish` commits everything as one
 `agent` `tidy` commit carrying the report; the sweep closes an abandoned tidy

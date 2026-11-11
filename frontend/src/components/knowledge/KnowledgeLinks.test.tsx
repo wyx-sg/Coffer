@@ -1,7 +1,7 @@
 // frontend/src/components/knowledge/KnowledgeLinks.test.tsx
 //
 // Every link in an open knowledge file opens where it points (spec knowledge
-// "Link pages by slug or relative path and check every link"), and an
+// "Resolve links by slug or relative path"), and an
 // imported Confluence page reads as the page, not its markup (spec knowledge
 // "Import a Confluence page as a readable source with its attachments"):
 // a web link in a table the import kept as HTML is a link, opened by the
@@ -50,9 +50,7 @@ const { fsApi } = await import("@/lib/api/fs");
 const tauri = vi.mocked(await import("@/lib/tauri"));
 
 const CONFLUENCE = file(`${NAME}/sources/account-core.md`, {
-  kind: "source",
   title: "Account Core",
-  page_type: "",
   body: [
     "# Account Core",
     "",

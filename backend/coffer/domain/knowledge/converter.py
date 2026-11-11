@@ -21,8 +21,8 @@ class ConvertedImage:
     """One picture taken out of an uploaded document, kept beside its source
     (ADR knowledge-sources-keep-their-images-and-originals-stay-on-this-mac).
 
-    ``name`` is how the Markdown refers to it (``![…](name)``) until the
-    source is written and the link is pointed at where it is kept.
+    ``name`` is how the Markdown refers to it (``![…](name)``); the picture
+    is kept under that name in the upload's own folder, beside the source.
     """
 
     name: str
@@ -31,11 +31,10 @@ class ConvertedImage:
 
 @dataclass(frozen=True)
 class ConvertedFile:
-    """Any other file a conversion keeps beside its source, under the
-    folder the conversion names (:attr:`Conversion.asset_folder`): an
-    attachment the document refers to, a diagram's source, the raw form the
-    readable Markdown was made from. The Markdown already links it by
-    ``../assets/<folder>/<name>``."""
+    """Any other file a conversion keeps beside its source, in the upload's
+    own folder: an attachment the document refers to, a diagram's source, the
+    raw form the readable Markdown was made from. The Markdown already links
+    it by its bare name."""
 
     name: str
     data: bytes
@@ -111,12 +110,8 @@ class Conversion:
     #: own title, where it came from, its version — kept on the source. Never
     #: the keys Coffer writes itself (``actor``, the timestamps).
     metadata: Mapping[str, Any] = field(default_factory=dict)
-    #: Other files kept beside the source, in :attr:`asset_folder`.
+    #: Other files kept beside the source, in the upload's own folder.
     files: tuple[ConvertedFile, ...] = ()
-    #: The folder under ``assets/`` the conversion's files go in, when the
-    #: converter names it (a Confluence page by its id and version); ``None``
-    #: lets the upload name it.
-    asset_folder: str | None = None
     #: Part by part, what a structured import did; ``None`` for a plain file.
     report: ImportReport | None = None
 

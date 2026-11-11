@@ -22,15 +22,15 @@ This page matches what `coffer knowledge --help` prints. Add `--help` to any com
 | [`knowledge show`](#knowledge-show) | One collection: its config, reach and state. |
 | [`knowledge update`](#knowledge-update) | Change a collection. |
 | [`knowledge delete`](#knowledge-delete) | Delete a collection. |
-| [`knowledge collections`](#knowledge-collections) | Every collection with its description, page, source, waiting-source and finding counts. |
+| [`knowledge collections`](#knowledge-collections) | Every collection with its description, rules file, start page and counts. |
 | [`knowledge create`](#knowledge-create) | Create a collection. |
 | [`knowledge link`](#knowledge-link) | Share a folder you keep yourself with every agent; nothing is copied into Coffer. |
 | [`knowledge describe`](#knowledge-describe) | Rewrite a collection's description. |
-| [`knowledge check`](#knowledge-check) | A collection's mechanical findings: dead links, orphan pages, waiting sources. |
+| [`knowledge check`](#knowledge-check) | A collection's broken links: dead, ambiguous or leaving the knowledge root. |
 | [`knowledge tree`](#knowledge-tree) | One level of the knowledge tree. |
 | [`knowledge changes`](#knowledge-changes) | Recent changes across collections, newest first. |
 | [`knowledge restore`](#knowledge-restore) | Restore what a delete removed (from the changes feed). |
-| [`knowledge files`](#knowledge-files) | Every page and source of a collection with its title, page type and waiting mark. |
+| [`knowledge files`](#knowledge-files) | Every Markdown file of a collection with its title and description. |
 | [`knowledge tidy-start`](#knowledge-tidy-start) | Open a tidy of a collection: until it finishes, its edits are kept for one change. |
 | [`knowledge tidy-finish`](#knowledge-tidy-finish) | Close a collection's tidy and commit its edits as one change. |
 | [`knowledge undo`](#knowledge-undo) | Put every file a change touched back as it was before it. |
@@ -108,7 +108,7 @@ coffer knowledge delete [OPTIONS] UID
 
 ## knowledge collections
 
-Every collection with its description, page, source, waiting-source and finding counts.
+Every collection with its description, rules file, start page and counts.
 
 <p class="cli-label">Synopsis</p>
 
@@ -124,7 +124,7 @@ coffer knowledge collections [OPTIONS]
 
 ## knowledge create
 
-Create a collection. Body: name, description.
+Create a collection. Body: name, description, template (llm-wiki or blank).
 
 <p class="cli-label">Synopsis</p>
 
@@ -179,7 +179,7 @@ coffer knowledge describe [OPTIONS] UID
 
 ## knowledge check
 
-A collection's mechanical findings: dead links, orphan pages, waiting sources.
+A collection's broken links: dead, ambiguous or leaving the knowledge root.
 
 <p class="cli-label">Synopsis</p>
 
@@ -249,7 +249,7 @@ coffer knowledge restore [OPTIONS] VERSION
 
 ## knowledge files
 
-Every page and source of a collection with its title, page type and waiting mark.
+Every Markdown file of a collection with its title and description.
 
 <p class="cli-label">Synopsis</p>
 

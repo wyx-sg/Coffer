@@ -60,25 +60,22 @@ describe("the collection tree and the document pane", () => {
     expect(screen.queryByRole("button", { name: "Add a document" })).toBeNull();
     expect(screen.queryByRole("textbox")).toBeNull();
     expect(screen.queryByRole("searchbox")).toBeNull();
-    // The collection's root shows Pages and Sources first, labelled.
-    await within(nav).findByRole("button", { name: "Pages" });
+    // The collection's root shows its folders first, each by its own name.
+    await within(nav).findByRole("button", { name: "pages" });
     const folders = within(nav)
       .getAllByRole("button", { expanded: false })
       .map((b) => b.textContent)
-      .filter((name) => name === "Pages" || name === "Sources");
-    expect(folders).toEqual(["Pages", "Sources"]);
+      .filter((name) => name === "pages" || name === "sources");
+    expect(folders).toEqual(["pages", "sources"]);
     // Both pages — one at the folder's root, one in a folder — each named by
-    // its file, as it is on disk; and the source with its Waiting mark.
-    fireEvent.click(within(nav).getByRole("button", { name: "Pages" }));
+    // its file, as it is on disk; and the source with no mark of Coffer's own.
+    fireEvent.click(within(nav).getByRole("button", { name: "pages" }));
     expect(await within(nav).findByRole("button", { name: "gateway.md" })).toBeInTheDocument();
     fireEvent.click(within(nav).getByRole("button", { name: "account" }));
     expect(await within(nav).findByRole("button", { name: "session.md" })).toBeInTheDocument();
-    fireEvent.click(within(nav).getByRole("button", { name: "Sources" }));
+    fireEvent.click(within(nav).getByRole("button", { name: "sources" }));
     const source = await within(nav).findByRole("button", { name: /^release-notes\.md/ });
-    expect(source).toHaveTextContent("Waiting");
-    expect(within(nav).getByRole("button", { name: "gateway.md" })).not.toHaveTextContent(
-      "Waiting",
-    );
+    expect(source).toHaveTextContent(/^release-notes\.md$/);
     // No Inbox node and no hidden entry.
     expect(within(nav).queryByRole("button", { name: /^Inbox/ })).toBeNull();
     expect(within(nav).queryByText(/^\./)).toBeNull();
@@ -100,7 +97,7 @@ describe("the collection tree and the document pane", () => {
 
   test("the collection tree and its header carry no reach mark, button or switch", async () => {
     renderKnowledge(`/knowledge/${UID}`);
-    await within(tree()).findByRole("button", { name: "Pages" });
+    await within(tree()).findByRole("button", { name: "pages" });
     expect(screen.queryByTestId("scope-control")).toBeNull();
     expect(screen.queryByRole("switch")).toBeNull();
     expect(screen.queryByRole("button", { name: /^(enabled|disabled|every agent)$/i })).toBeNull();
@@ -109,7 +106,7 @@ describe("the collection tree and the document pane", () => {
   test("a collection opened from the list stays open when a document in it is opened", async () => {
     renderKnowledge("/knowledge");
     fireEvent.click(await within(tree()).findByRole("button", { name: `Expand ${NAME}` }));
-    fireEvent.click(await within(tree()).findByRole("button", { name: "Pages" }));
+    fireEvent.click(await within(tree()).findByRole("button", { name: "pages" }));
     fireEvent.click(await within(tree()).findByRole("button", { name: "gateway.md" }));
     expect(await screen.findByRole("button", { name: "Open in editor" })).toBeInTheDocument();
     expect(within(tree()).getByRole("button", { name: "gateway.md" })).toHaveAttribute(
@@ -124,10 +121,10 @@ describe("the collection tree and the document pane", () => {
   test("a collection closed on its chevron opens again when a link leads into it", async () => {
     renderKnowledge(`/knowledge/${UID}`);
     fireEvent.click(await within(tree()).findByRole("button", { name: `Collapse ${NAME}` }));
-    expect(within(tree()).queryByRole("button", { name: "Pages" })).toBeNull();
+    expect(within(tree()).queryByRole("button", { name: "pages" })).toBeNull();
     // Leave for the bare address, then come back in through a document address.
     fireEvent.click(within(tree()).getByRole("button", { name: `Expand ${NAME}` }));
-    fireEvent.click(await within(tree()).findByRole("button", { name: "Pages" }));
+    fireEvent.click(await within(tree()).findByRole("button", { name: "pages" }));
     fireEvent.click(await within(tree()).findByRole("button", { name: "gateway.md" }));
     expect(await within(tree()).findByRole("button", { name: "gateway.md" })).toBeInTheDocument();
   });
@@ -156,7 +153,6 @@ describe("a document opens in the person's editor", () => {
     expect(screen.getByRole("button", { name: "Preview" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Source" })).toBeInTheDocument();
     expect(screen.getByText(/^Created Sep 12 by/)).toBeInTheDocument();
-    expect(screen.getByTestId("page-type")).toHaveTextContent(GATEWAY.page_type);
     expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
     expect(screen.queryByRole("textbox")).toBeNull();
   });

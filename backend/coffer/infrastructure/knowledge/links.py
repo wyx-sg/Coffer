@@ -1,12 +1,12 @@
-"""The links a knowledge file writes, found and resolved (spec knowledge "Link
-pages by slug or relative path and check every link").
+"""The links a knowledge file writes, found and resolved (spec knowledge
+"Resolve links by slug or relative path").
 
 Two forms are links, and both are checked:
 
-* ``[[target]]`` and ``[[target|text]]`` name a page's slug or alias, or a
-  source's slug, and survive a move;
+* ``[[target]]`` and ``[[target|text]]`` name a file's slug or alias, and
+  survive a move;
 * a standard Markdown link or picture — ``[text](../pages/x.md)``,
-  ``![chart](../assets/x/chart.png)``, or a reference definition
+  ``![chart](deck/chart.png)``, or a reference definition
   ``[x]: ../pages/x.md`` — names a file by its path relative to the file that
   writes it, the way every Markdown reader, Obsidian and an agent's own file
   tools follow it.
