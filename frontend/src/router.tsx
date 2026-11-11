@@ -112,6 +112,10 @@ const pageRoutes: RouteObject[] = gateRoutes([
     path: "scheduled-tasks/:uid",
     element: lazyPage(() => import("./pages/ScheduledTasksPage"), "ScheduledTasksPage"),
   },
+  {
+    path: "scheduled-tasks/:uid/:tab",
+    element: lazyPage(() => import("./pages/ScheduledTasksPage"), "ScheduledTasksPage"),
+  },
   { path: "clis", element: lazyPage(() => import("./pages/ClisPage"), "ClisPage") },
   // One command-line tool, by the command itself, open beside the list; its
   // tab (Overview bare, Commands) is the path.

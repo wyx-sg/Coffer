@@ -3,8 +3,8 @@
 //
 // A task is a `scheduled_task` resource: editing, pausing, resuming, renaming
 // and deleting ride the generic /resources routes (`resourcesApi`); these are
-// a task's own reads and actions — the list with next and last runs, a task's
-// run history and Run now.
+// a task's own reads and actions — the list with next and last runs, its
+// PROMPT.md, the files in its folder, its run history and Run now.
 //
 // Wire types are the channels contract's generated schemas.
 
@@ -34,6 +34,21 @@ export const scheduledTasksApi = {
         params: { path: { uid }, query: { limit } },
       }),
     ).then((r) => r.items),
+  setPrompt: (uid: string, prompt: string): Promise<ScheduledTask> =>
+    unwrap(
+      getApiClient().PUT("/scheduled-tasks/{uid}/prompt", {
+        params: { path: { uid } },
+        body: { prompt },
+      }),
+    ),
+  filesTree: (uid: string) =>
+    unwrap(getApiClient().GET("/scheduled-tasks/{uid}/files", { params: { path: { uid } } })),
+  fileContent: (uid: string, path: string) =>
+    unwrap(
+      getApiClient().GET("/scheduled-tasks/{uid}/files/content", {
+        params: { path: { uid }, query: { path } },
+      }),
+    ),
   runNow: (uid: string): Promise<ScheduledRun> =>
     unwrap(getApiClient().POST("/scheduled-tasks/{uid}/run", { params: { path: { uid } } })),
 };

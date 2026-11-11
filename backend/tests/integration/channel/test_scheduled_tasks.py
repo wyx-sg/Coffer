@@ -13,15 +13,21 @@ import os
 import time
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
 from pydantic import BaseModel, ConfigDict
 
-from coffer.application.channel.schedule.kind import KIND
+from coffer.application.channel.schedule.kind import KIND, make_scheduled_task_kind
 from coffer.domain.chat.events import TurnError, TurnStarted
 from coffer.domain.errors import ConfigValidationError
 from coffer.domain.resource import Kind, StorageClass
-from coffer.infrastructure.chat.default_workspace import default_workspace_dir
+from coffer.surfaces.http import errors
+from coffer.surfaces.http.auth import set_active_token
+from coffer.surfaces.http.schedule_routes import router as schedule_router
+from coffer.surfaces.http.schedule_routes import set_schedule_services
 from coffer.surfaces.http.schedule_wiring import _Reads
 from tests.unit.chat.conftest import FakeAgentAdapter
 
@@ -175,7 +181,9 @@ async def test_a_task_an_older_coffer_wrote_is_read_without_its_chat(
     s = build_scheduling(env, monkeypatch, s.clock)
 
     assert await s.tasks.drop_retired_follow_ups() == 1
+    assert await s.tasks.move_prompts_to_files() == 1
     (view,) = await s.tasks.views()
+    assert view.prompt == "Post the standup\n"
     assert view.task.uid == old.uid != follow_up.uid
     assert view.config.agent == "claude_code"
     assert view.config.schedule.kind == "cron"
@@ -349,9 +357,9 @@ async def test_a_task_runs_in_a_new_conversation_each_time(
 
 
 @pytest.mark.acceptance(
-    spec="channels", scenario="a task that names no directory runs in Coffer's workspace"
+    spec="channels", scenario="a task that names no directory runs in its own folder"
 )
-async def test_a_task_without_a_directory_runs_in_the_coffer_workspace(
+async def test_a_task_without_a_directory_runs_in_its_own_folder(
     env: ChannelEnv, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     s = build_scheduling(env, monkeypatch)
@@ -363,8 +371,93 @@ async def test_a_task_without_a_directory_runs_in_the_coffer_workspace(
     (run,) = await s.settled(task.uid)
 
     conversation = await env.chat.get_conversation(run.conversation_id)
-    assert conversation.agent_config.cwd == default_workspace_dir()
-    assert conversation.agent_config.cwd.endswith("/.coffer/content/workspace")
+    folder = (await s.tasks.view(task.uid)).folder
+    assert conversation.agent_config.cwd == folder
+    assert folder.endswith(f"/.coffer/content/workspace/scheduled-tasks/{task.uid}")
+
+
+# --- the prompt file -----------------------------------------------------------
+
+
+@pytest.mark.acceptance(spec="channels", scenario="a task's prompt is the PROMPT.md in its folder")
+async def test_the_prompt_is_a_file_in_the_task_folder(
+    env: ChannelEnv, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    s = build_scheduling(env, monkeypatch)
+    task = await s.tasks.create(None, task_config(), actor="t")
+    assert "prompt" not in task.config
+    view = await s.tasks.view(task.uid)
+    assert view.prompt == "Summarise the open pull requests\n"
+    assert (Path(view.folder) / "PROMPT.md").read_text() == view.prompt
+
+
+@pytest.mark.acceptance(spec="channels", scenario="the next run is given the prompt as edited")
+async def test_the_next_run_is_given_the_prompt_as_edited(
+    env: ChannelEnv, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    s = build_scheduling(env, monkeypatch)
+    env.provider.adapter = adapter = default_reply_adapter("Done.")
+    task = await s.tasks.create(None, task_config(), actor="t")
+    await s.tasks.set_prompt(task.uid, "# Daily\n\nCount the open issues.")
+    folder = Path((await s.tasks.view(task.uid)).folder)
+    (folder / "PROMPT.md").write_text("# Daily\n\nCount the closed issues.\n")
+
+    s.clock.advance(timedelta(minutes=30))
+    await s.tick()
+    await s.settled(task.uid)
+    assert "Count the closed issues." in adapter.recorded_prompts[-1]
+
+
+@pytest.mark.acceptance(spec="channels", scenario="a run whose PROMPT.md is missing fails")
+async def test_a_run_whose_prompt_file_is_missing_fails(
+    env: ChannelEnv, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    s = build_scheduling(env, monkeypatch)
+    task = await s.tasks.create(None, task_config(), actor="t")
+    (Path((await s.tasks.view(task.uid)).folder) / "PROMPT.md").unlink()
+
+    s.clock.advance(timedelta(minutes=30))
+    await s.tick()
+    (run,) = await s.settled(task.uid)
+    assert run.outcome == "failed"
+    assert run.reason == "PROMPT.md is missing or empty"
+
+
+@pytest.mark.acceptance(spec="channels", scenario="a prompt in a task's file is refused on edit")
+async def test_a_prompt_in_the_task_file_is_refused_on_edit(
+    env: ChannelEnv, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    s = build_scheduling(env, monkeypatch)
+    task = await s.tasks.create(None, task_config(), actor="t")
+    with pytest.raises(ConfigValidationError, match=r"PROMPT\.md"):
+        await env.resources.update_config(task.uid, {**task.config, "prompt": "Other"}, "t")
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="a task that carries its prompt in its file is moved to PROMPT.md"
+)
+async def test_an_older_task_s_prompt_moves_to_its_file(
+    env: ChannelEnv, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    s = build_scheduling(env, monkeypatch)
+    # A task file written before 2026-11-11, as the resource store holds it.
+    env.kinds[KIND] = Kind(
+        name=KIND,
+        display_name="Scheduled task",
+        config_schema=_AnyConfig,
+        free_name=True,
+        storage=StorageClass.LOCAL,
+    )
+    old = await env.resources.register(
+        KIND, "Old", {"schedule": daily(), "prompt": "Say hi", "agent": "builtin"}, "t"
+    )
+    env.kinds[KIND] = make_scheduled_task_kind(clock=s.clock)
+
+    assert await s.tasks.move_prompts_to_files() == 1
+    view = await s.tasks.view(old.uid)
+    assert view.prompt == "Say hi\n"
+    assert "prompt" not in view.task.config
+    assert await s.tasks.move_prompts_to_files() == 0
 
 
 @pytest.mark.acceptance(spec="channels", scenario="a task whose turn fails is recorded failed")
@@ -504,3 +597,46 @@ async def test_scheduled_tasks_off_runs_nothing(
     await s.tick()
     (row,) = await s.settled(task.uid)
     assert row.outcome == "done"
+
+
+# --- the routes the detail page uses ------------------------------------------
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="the owner reads and edits a task's prompt and files on its page"
+)
+async def test_the_page_edits_the_prompt_and_reads_the_task_folder(
+    env: ChannelEnv, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    s = build_scheduling(env, monkeypatch)
+    set_schedule_services(tasks=s.tasks, scheduler=s.scheduler, reads=None)
+    set_active_token("t")
+    app = FastAPI()
+    errors.register(app)
+    app.include_router(schedule_router)
+    headers = {"X-Coffer-Token": "t"}
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://x", headers=headers
+    ) as c:
+        made = await c.post(
+            "/api/v1/scheduled-tasks",
+            json={
+                "prompt": "# Report\n\nWrite today's report to report.md.",
+                "config": {"schedule": daily(), "agent": "builtin"},
+            },
+        )
+        assert made.status_code == 201, made.text
+        task = made.json()
+        assert task["prompt"] == "# Report\n\nWrite today's report to report.md.\n"
+        uid = task["uid"]
+
+        edited = await c.put(f"/api/v1/scheduled-tasks/{uid}/prompt", json={"prompt": "Say hi"})
+        assert edited.json()["prompt"] == "Say hi\n"
+
+        (Path(task["folder"]) / "report.md").write_text("# Today\n")
+        tree = (await c.get(f"/api/v1/scheduled-tasks/{uid}/files")).json()
+        assert {n["name"] for n in tree["root"]["children"]} == {"PROMPT.md", "report.md"}
+        one = await c.get(f"/api/v1/scheduled-tasks/{uid}/files/content?path=report.md")
+        assert one.json()["content"] == "# Today\n"
+        out = await c.get(f"/api/v1/scheduled-tasks/{uid}/files/content?path=../x")
+        assert out.status_code == 400

@@ -16,6 +16,7 @@ from coffer.application.channel.schedule.scheduler import TaskScheduler
 from coffer.application.channel.schedule.tasks import TaskService
 from coffer.domain.channel.scheduled_run import ScheduledRun
 from coffer.infrastructure.channel.persistence import ScheduledRunRepo
+from coffer.infrastructure.channel.task_folders import TaskFolders
 from coffer.infrastructure.persistence.engine import session_maker
 from coffer.surfaces.http.schedule_wiring import FreshTurns
 
@@ -83,13 +84,17 @@ def build_scheduling(
     monkeypatch.setattr(_ClockedDatetime, "clock", clock)
     monkeypatch.setattr(resource_service, "datetime", _ClockedDatetime)
     runs = ScheduledRunRepo(session_maker(env.engine))
-    runner = TaskRunner(runs=runs, fresh=FreshTurns(env.chat, env.orchestrator), clock=clock)
+    folders = TaskFolders()
+    runner = TaskRunner(
+        runs=runs, fresh=FreshTurns(env.chat, env.orchestrator), folders=folders, clock=clock
+    )
     scheduler = TaskScheduler(resources=env.resources, runs=runs, runner=runner, clock=clock)
     tasks = TaskService(
         resources=env.resources,
         runs=runs,
         next_run=scheduler.next_run,
         is_running=scheduler.is_running,
+        folders=folders,
     )
     env.kinds[KIND] = make_scheduled_task_kind(clock=clock)
     return Scheduling(

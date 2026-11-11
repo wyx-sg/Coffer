@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-11-06
 **Deciders**: Yuxing (owner)
-**Related**: [An Agent Notifies the Owner Through a Built-in Tool](an-agent-notifies-the-owner-through-a-built-in-tool.md), [Background Workers Wake on Events](background-workers-wake-on-events.md), [Chat Is a Single-Owner Live Mirror](chat-single-owner-live-mirror.md), spec channels, spec daemon, research note [Scheduled agent tasks](../research/scheduled-agent-tasks.md)
+**Related**: [A Scheduled Task's Prompt Is a File in Its Own Folder](a-scheduled-task-s-prompt-is-a-file-in-its-own-folder.md) (where the prompt and a run's files live), [An Agent Notifies the Owner Through a Built-in Tool](an-agent-notifies-the-owner-through-a-built-in-tool.md), [Background Workers Wake on Events](background-workers-wake-on-events.md), [Chat Is a Single-Owner Live Mirror](chat-single-owner-live-mirror.md), spec channels, spec daemon, research note [Scheduled agent tasks](../research/scheduled-agent-tasks.md)
 
 ## Context
 

@@ -6737,16 +6737,24 @@
     },
     "detail": {
       "next": "next {{next}}",
-      "what": "What it does"
+      "what": "What it does",
+      "nextRun": "Next run"
     },
     "runs": {
-      "title": "History",
-      "help": "Every run: when it ran, how it ended and why, and the conversation it used. Its title takes you to that conversation on the Conversations page, where it opens in a terminal so you can read the run or carry it on. Runs are kept for 90 days.",
       "none": "It hasn't run yet.",
-      "byHand": "run by hand",
-      "late": "late, was due {{due}}",
       "conversation": "Conversation:",
-      "conversationGone": "Its conversation has been removed."
+      "conversationGone": "Its conversation has been removed.",
+      "started": "Started",
+      "outcome": "Outcome",
+      "trigger": "Started by",
+      "duration": "Took",
+      "conversationColumn": "Conversation",
+      "search": "Search reasons and conversations",
+      "by": {
+        "schedule": "On schedule",
+        "late": "Late (catch up)",
+        "manual": "By hand"
+      }
     },
     "dialog": {
       "title": "New scheduled task",
@@ -6773,7 +6781,7 @@
       "manualHint": "Runs only when you press Run now.",
       "prompt": "Prompt",
       "promptPlaceholder": "Summarise yesterday's open pull requests",
-      "promptHint": "The answer stays in the run's conversation; open it from the task's history. To hear about it, ask the agent in the prompt to notify you.",
+      "promptHint": "The answer stays in the run's conversation; open it from the task's history. Files a run writes in the task's folder show in its Files tab. To hear about it, ask the agent in the prompt to notify you.",
       "agent": "Agent",
       "model": "Model",
       "cwd": "Directory",
@@ -6783,11 +6791,22 @@
       "addFailed": "Couldn’t create the task",
       "editFailed": "Couldn’t save the task",
       "agentDefault": "Agent default",
-      "workspaceFolder": "Coffer workspace",
+      "workspaceFolder": "Task folder",
       "timezone": "Timezone",
       "timezonePlaceholder": "This Mac's time",
       "timezoneHint": "In the timezone you name (an IANA name such as Asia/Singapore), or this Mac's local time.",
       "agentDefaultNamed": "Agent default ({{model}})"
+    },
+    "tabs": {
+      "overview": "Overview",
+      "prompt": "Prompt",
+      "runs": "History",
+      "files": "Files"
+    },
+    "prompt": {
+      "unsaved": "Unsaved changes",
+      "revert": "Revert",
+      "edit": "Edit prompt"
     }
   }
 }

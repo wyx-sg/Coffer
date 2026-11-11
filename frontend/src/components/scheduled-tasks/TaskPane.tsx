@@ -1,17 +1,24 @@
-// src/components/scheduled-tasks/TaskPane.tsx — the open task (board TaskDetail): its header and actions, then What it does and History.
+// src/components/scheduled-tasks/TaskPane.tsx — the open task: its header and actions over three tabs.
 //
 // The header is the name with its state pill and one meta line (the agent ·
-// the schedule in words · next run). What it does lists the prompt, the agent,
-// model and directory every run opens with, and catch-up. History is every run.
+// the schedule in words · next run). The tabs, each at its own path segment:
+// Overview (when it runs and what every run opens with), Prompt (its PROMPT.md,
+// editable), History (every run, as a table) and Files (the task's folder:
+// what its runs wrote there).
 import { CalendarClock } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { Section, SectionStack } from "@/components/Section";
 import { StatusPill } from "@/components/status/StatusPill";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ScheduledTask } from "@/lib/api/scheduledTasks";
+import { useDetailTab } from "@/lib/detailTabs";
 import { STATE_TONE, agentText, scheduleText, taskState } from "@/lib/scheduledTasks/format";
+import { DEFAULT_TASK_TAB, TASK_TABS, taskBasePath } from "@/lib/scheduledTasks/tabs";
 import { formatMoment } from "@/lib/time";
 import { TaskActions } from "./TaskActions";
+import { TaskFiles } from "./TaskFiles";
+import { TaskOverview } from "./TaskOverview";
+import { TaskPromptFile } from "./TaskPromptFile";
 import { TaskRuns } from "./TaskRuns";
 
 interface Props {
@@ -19,17 +26,9 @@ interface Props {
   onDeleted: () => void;
 }
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="grid grid-cols-[140px_minmax(0,1fr)] gap-3 py-1.5 text-xs">
-      <dt className="text-text-muted">{label}</dt>
-      <dd className="min-w-0 break-words text-text">{children}</dd>
-    </div>
-  );
-}
-
 export function TaskPane({ task, onDeleted }: Props) {
   const { t, i18n } = useTranslation();
+  const [tab, setTab] = useDetailTab(TASK_TABS, DEFAULT_TASK_TAB, taskBasePath(task.uid));
   const state = taskState(task);
   const c = task.config;
   const meta = [
@@ -61,23 +60,27 @@ export function TaskPane({ task, onDeleted }: Props) {
           <TaskActions task={task} onDeleted={onDeleted} />
         </span>
       </header>
-      <SectionStack>
-        <Section title={t("scheduledTasks.detail.what")}>
-          <dl className="divide-y divide-border-subtle">
-            <Row label={t("scheduledTasks.dialog.prompt")}>
-              <span className="whitespace-pre-wrap">{c.prompt}</span>
-            </Row>
-            <Row label={t("scheduledTasks.dialog.agent")}>{agentText(task)}</Row>
-            <Row label={t("scheduledTasks.dialog.cwd")}>
-              <span className="font-mono">{c.cwd || t("scheduledTasks.dialog.workspaceFolder")}</span>
-            </Row>
-            <Row label={t("scheduledTasks.dialog.catchUp")}>
-              {c.catch_up ? t("scheduledTasks.on") : t("scheduledTasks.off")}
-            </Row>
-          </dl>
-        </Section>
-        <TaskRuns uid={task.uid} />
-      </SectionStack>
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList>
+          {TASK_TABS.map((key) => (
+            <TabsTrigger key={key} value={key}>
+              {t(`scheduledTasks.tabs.${key}`)}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        <TabsContent value="overview">
+          <TaskOverview task={task} />
+        </TabsContent>
+        <TabsContent value="prompt">
+          <TaskPromptFile task={task} />
+        </TabsContent>
+        <TabsContent value="runs">
+          <TaskRuns uid={task.uid} />
+        </TabsContent>
+        <TabsContent value="files">
+          <TaskFiles task={task} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

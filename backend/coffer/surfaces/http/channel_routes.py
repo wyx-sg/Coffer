@@ -188,10 +188,14 @@ class NotifyIn(BaseModel):
     #: earliest pairing — the owner's DM). A chat this channel is not paired to
     #: is refused, so a caller cannot address an arbitrary group.
     chat_id: str | None = None
+    #: Absolute paths of local files on this Mac, sent after the text.
+    files: list[str] = Field(default_factory=list, max_length=10)
 
 
 class NotifyOut(BaseModel):
     sent: bool
+    #: Files that could not be uploaded; the text was still sent.
+    files_failed: list[str] = Field(default_factory=list)
 
 
 class RestartOut(BaseModel):
@@ -334,8 +338,10 @@ async def channel_status(uid: str) -> ChannelStatusOut:
 
 @router.post("/{uid}/notify", response_model=NotifyOut)
 async def notify_channel(uid: str, body: NotifyIn, actor: str = Depends(get_actor)) -> NotifyOut:
-    await get_channel_service().notify(uid, body.text, actor=actor, chat_id=body.chat_id)
-    return NotifyOut(sent=True)
+    failed = await get_channel_service().notify(
+        uid, body.text, actor=actor, chat_id=body.chat_id, files=body.files
+    )
+    return NotifyOut(sent=True, files_failed=failed)
 
 
 @router.post("/{uid}/restart", response_model=RestartOut)

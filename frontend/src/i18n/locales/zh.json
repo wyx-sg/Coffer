@@ -6737,16 +6737,24 @@
     },
     "detail": {
       "next": "下次 {{next}}",
-      "what": "任务内容"
+      "what": "任务内容",
+      "nextRun": "下次运行"
     },
     "runs": {
-      "title": "运行记录",
-      "help": "每次运行：何时运行、结果如何、原因，以及用的是哪个对话。点对话标题会跳到对话页并选中它，在终端里打开，可以查看这次运行，也可以接着聊。记录保留 90 天。",
       "none": "还没有运行过。",
-      "byHand": "手动运行",
-      "late": "迟到，原定 {{due}}",
       "conversation": "对话：",
-      "conversationGone": "这次运行的对话已被删除。"
+      "conversationGone": "这次运行的对话已被删除。",
+      "started": "开始时间",
+      "outcome": "结果",
+      "trigger": "触发方式",
+      "duration": "用时",
+      "conversationColumn": "对话",
+      "search": "搜索原因和对话",
+      "by": {
+        "schedule": "按时",
+        "late": "补跑",
+        "manual": "手动"
+      }
     },
     "dialog": {
       "title": "新建定时任务",
@@ -6773,7 +6781,7 @@
       "manualHint": "只在你点击立即运行时运行。",
       "prompt": "提示词",
       "promptPlaceholder": "汇总昨天还开着的 PR",
-      "promptHint": "回复留在这次运行的会话里，可以从任务的运行记录打开。想收到通知，就在提示词里让智能体通知你。",
+      "promptHint": "回复留在这次运行的会话里，可以从任务的运行记录打开。运行写在任务文件夹里的文件会出现在「文件」里。想收到通知，就在提示词里让智能体通知你。",
       "agent": "智能体",
       "model": "模型",
       "cwd": "目录",
@@ -6783,11 +6791,22 @@
       "addFailed": "无法创建任务",
       "editFailed": "无法保存任务",
       "agentDefault": "智能体默认",
-      "workspaceFolder": "Coffer 工作区",
+      "workspaceFolder": "任务文件夹",
       "timezone": "时区",
       "timezonePlaceholder": "这台 Mac 的时间",
       "timezoneHint": "按你填的时区（IANA 名称，例如 Asia/Singapore），不填就按这台 Mac 的本地时间。",
       "agentDefaultNamed": "智能体默认（{{model}}）"
+    },
+    "tabs": {
+      "overview": "概览",
+      "prompt": "提示词",
+      "runs": "运行记录",
+      "files": "文件"
+    },
+    "prompt": {
+      "unsaved": "有未保存的修改",
+      "revert": "撤销修改",
+      "edit": "编辑提示词"
     }
   }
 }

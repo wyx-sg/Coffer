@@ -3,8 +3,10 @@ times it names (spec channels "Keep scheduled tasks as machine-local resources")
 
 A task says three things — when it runs (:mod:`schedule`), what the agent is
 told, and the agent, model and directory every run opens a new conversation
-with. That is the whole mechanism; what a task does with a chat, a report or a
-flow is its prompt's (ADR automation-is-a-scheduled-prompt).
+with. What the agent is told is a file, ``PROMPT.md`` in the task's own folder
+(ADR automation-is-a-scheduled-prompt), so it is read and edited like any
+other file; this config holds the rest. That is the whole mechanism; what a
+task does with a chat, a report or a flow is its prompt's.
 
 The task's file is ``Resource.config`` of a ``scheduled_task`` resource, filed
 under ``local/``: its agent and directory are this machine's, and two machines
@@ -27,8 +29,10 @@ from coffer.domain.channel.schedule import (
 )
 
 __all__ = [
+    "PROMPT_FILE",
     "PROMPT_MAX_LENGTH",
     "ScheduledTaskConfig",
+    "clean_prompt",
     "grace_for",
     "is_retired_follow_up",
     "min_repeat_ok",
@@ -36,6 +40,19 @@ __all__ = [
 
 #: The longest prompt a task keeps. It rides on every run.
 PROMPT_MAX_LENGTH = 8000
+
+#: The file in a task's folder that holds its prompt.
+PROMPT_FILE = "PROMPT.md"
+
+
+def clean_prompt(value: str) -> str:
+    """A prompt as it is kept: trimmed, not empty, within :data:`PROMPT_MAX_LENGTH`."""
+    stripped = value.strip()
+    if not stripped:
+        raise ValueError("prompt must not be empty")
+    if len(stripped) > PROMPT_MAX_LENGTH:
+        raise ValueError(f"prompt is longer than {PROMPT_MAX_LENGTH} characters")
+    return stripped
 
 
 #: Fields a task file written before 2026-11-06 may still carry: the chat it
@@ -82,10 +99,14 @@ class ScheduledTaskConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     schedule: Schedule
-    prompt: str = Field(min_length=1, max_length=PROMPT_MAX_LENGTH)
+    #: Never set: the prompt is the task's ``PROMPT.md``. Named only so a
+    #: config that carries one is refused with a reason rather than as an
+    #: unknown field. A file written before 2026-11-11 carries one; it is
+    #: moved into ``PROMPT.md`` at startup, before the file is read as a task.
+    prompt: None = Field(default=None, exclude=True)
     #: The agent (its key, ``claude_code`` or ``codex`` — one agent per type),
     #: model and directory every run opens a new conversation with. No model
-    #: is the agent's default; no directory is the Coffer workspace.
+    #: is the agent's default; no directory is the task's own folder.
     agent: str = Field(min_length=1)
     model: str | None = None
     cwd: str | None = None
@@ -98,13 +119,12 @@ class ScheduledTaskConfig(BaseModel):
     def _old_file(cls, raw: Any) -> Any:
         return _upgrade(raw)
 
-    @field_validator("prompt")
+    @field_validator("prompt", mode="before")
     @classmethod
-    def _prompt(cls, value: str) -> str:
-        stripped = value.strip()
-        if not stripped:
-            raise ValueError("prompt must not be empty")
-        return stripped
+    def _prompt(cls, value: Any) -> None:
+        if value is not None:
+            raise ValueError(f"a task's prompt is its {PROMPT_FILE}, not part of its config")
+        return None
 
 
 def min_repeat_ok(schedule: Schedule, gap: timedelta | None) -> bool:

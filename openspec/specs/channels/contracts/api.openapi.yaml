@@ -429,6 +429,136 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
       summary: Get Task
+  /api/v1/scheduled-tasks/{uid}/files:
+    get:
+      description: The task's folder as a read-only file tree.
+      operationId: list_task_files_api_v1_scheduled_tasks__uid__files_get
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillFileTreeOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: List Task Files
+  /api/v1/scheduled-tasks/{uid}/files/content:
+    get:
+      description: One file of the task's folder; a path resolving outside it is refused.
+      operationId: read_task_file_api_v1_scheduled_tasks__uid__files_content_get
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: query
+        name: path
+        required: true
+        schema:
+          minLength: 1
+          title: Path
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillFileContentOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Read Task File
+  /api/v1/scheduled-tasks/{uid}/prompt:
+    put:
+      description: Replace the task's ``PROMPT.md``; the next run is given it.
+      operationId: set_task_prompt_api_v1_scheduled_tasks__uid__prompt_put
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScheduledTaskPromptIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduledTaskOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Set Task Prompt
   /api/v1/scheduled-tasks/{uid}/run:
     post:
       description: Run the task once, now, whatever its schedule.
@@ -913,6 +1043,12 @@ components:
           - type: string
           - type: 'null'
           title: Chat Id
+        files:
+          items:
+            type: string
+          maxItems: 10
+          title: Files
+          type: array
         text:
           maxLength: 4096
           minLength: 1
@@ -924,11 +1060,17 @@ components:
       type: object
     NotifyOut:
       properties:
+        files_failed:
+          items:
+            type: string
+          title: Files Failed
+          type: array
         sent:
           title: Sent
           type: boolean
       required:
       - sent
+      - files_failed
       title: NotifyOut
       type: object
     OnceSchedule:
@@ -1105,7 +1247,7 @@ components:
       - conversation
       title: ScheduledRunOut
       type: object
-    ScheduledTaskConfig:
+    ScheduledTaskConfig-Input:
       additionalProperties: false
       description: '``Resource.config`` of a ``scheduled_task``.'
       properties:
@@ -1128,10 +1270,8 @@ components:
           - type: 'null'
           title: Model
         prompt:
-          maxLength: 8000
-          minLength: 1
           title: Prompt
-          type: string
+          type: 'null'
         schedule:
           discriminator:
             mapping:
@@ -1152,14 +1292,61 @@ components:
           title: Schedule
       required:
       - schedule
-      - prompt
       - agent
+      title: ScheduledTaskConfig
+      type: object
+    ScheduledTaskConfig-Output:
+      additionalProperties: false
+      description: '``Resource.config`` of a ``scheduled_task``.'
+      properties:
+        agent:
+          minLength: 1
+          title: Agent
+          type: string
+        catch_up:
+          default: true
+          title: Catch Up
+          type: boolean
+        cwd:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cwd
+        model:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Model
+        schedule:
+          discriminator:
+            mapping:
+              cron: '#/components/schemas/CronSchedule'
+              daily: '#/components/schemas/DailySchedule'
+              hourly: '#/components/schemas/HourlySchedule'
+              manual: '#/components/schemas/ManualSchedule'
+              once: '#/components/schemas/OnceSchedule'
+              weekly: '#/components/schemas/WeeklySchedule'
+            propertyName: kind
+          oneOf:
+          - $ref: '#/components/schemas/OnceSchedule'
+          - $ref: '#/components/schemas/HourlySchedule'
+          - $ref: '#/components/schemas/DailySchedule'
+          - $ref: '#/components/schemas/WeeklySchedule'
+          - $ref: '#/components/schemas/CronSchedule'
+          - $ref: '#/components/schemas/ManualSchedule'
+          title: Schedule
+      required:
+      - schedule
+      - agent
+      - model
+      - cwd
+      - catch_up
       title: ScheduledTaskConfig
       type: object
     ScheduledTaskIn:
       properties:
         config:
-          $ref: '#/components/schemas/ScheduledTaskConfig'
+          $ref: '#/components/schemas/ScheduledTaskConfig-Input'
         description:
           default: ''
           title: Description
@@ -1169,6 +1356,11 @@ components:
           - type: string
           - type: 'null'
           title: Name
+        prompt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Prompt
       required:
       - config
       title: ScheduledTaskIn
@@ -1187,7 +1379,7 @@ components:
     ScheduledTaskOut:
       properties:
         config:
-          $ref: '#/components/schemas/ScheduledTaskConfig'
+          $ref: '#/components/schemas/ScheduledTaskConfig-Output'
         created_at:
           format: date-time
           title: Created At
@@ -1200,6 +1392,9 @@ components:
         enabled:
           title: Enabled
           type: boolean
+        folder:
+          title: Folder
+          type: string
         last_run:
           anyOf:
           - $ref: '#/components/schemas/ScheduledRunOut'
@@ -1213,6 +1408,9 @@ components:
             type: string
           - type: 'null'
           title: Next Run
+        prompt:
+          title: Prompt
+          type: string
         running:
           title: Running
           type: boolean
@@ -1234,7 +1432,19 @@ components:
       - last_run
       - next_run
       - running
+      - prompt
+      - folder
       title: ScheduledTaskOut
+      type: object
+    ScheduledTaskPromptIn:
+      properties:
+        prompt:
+          minLength: 1
+          title: Prompt
+          type: string
+      required:
+      - prompt
+      title: ScheduledTaskPromptIn
       type: object
     SeaTalkChannelConfig:
       additionalProperties: false
@@ -1357,6 +1567,92 @@ components:
       - state
       - secret_ref
       title: SecretApprovalOut
+      type: object
+    SkillFileContentOut:
+      properties:
+        abs_path:
+          title: Abs Path
+          type: string
+        binary:
+          title: Binary
+          type: boolean
+        content:
+          title: Content
+          type: string
+        folder_abs_path:
+          title: Folder Abs Path
+          type: string
+        path:
+          title: Path
+          type: string
+        size:
+          title: Size
+          type: integer
+        truncated:
+          title: Truncated
+          type: boolean
+      required:
+      - path
+      - abs_path
+      - folder_abs_path
+      - content
+      - truncated
+      - binary
+      - size
+      title: SkillFileContentOut
+      type: object
+    SkillFileNodeOut:
+      properties:
+        abs_path:
+          title: Abs Path
+          type: string
+        children:
+          items:
+            $ref: '#/components/schemas/SkillFileNodeOut'
+          title: Children
+          type: array
+        folder_abs_path:
+          title: Folder Abs Path
+          type: string
+        name:
+          title: Name
+          type: string
+        path:
+          title: Path
+          type: string
+        size:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Size
+        truncated:
+          default: false
+          title: Truncated
+          type: boolean
+        type:
+          enum:
+          - file
+          - dir
+          title: Type
+          type: string
+      required:
+      - name
+      - path
+      - abs_path
+      - folder_abs_path
+      - type
+      - size
+      - truncated
+      - children
+      title: SkillFileNodeOut
+      type: object
+    SkillFileTreeOut:
+      properties:
+        root:
+          $ref: '#/components/schemas/SkillFileNodeOut'
+      required:
+      - root
+      title: SkillFileTreeOut
       type: object
     TelegramChannelConfig:
       additionalProperties: false

@@ -11,13 +11,13 @@ from typing import Protocol
 
 from coffer.domain.channel.scheduled_run import RunOutcome, ScheduledRun
 
-__all__ = ["FreshTurnPort", "ScheduledRunRepoPort"]
+__all__ = ["FreshTurnPort", "ScheduledRunRepoPort", "TaskFolderPort"]
 
 
 class FreshTurnPort(Protocol):
     """Starts a run's turn (spec channels "Run a scheduled task in a fresh
     conversation of its own"): a new conversation
-    on ``agent``, in ``cwd`` (the Coffer workspace when ``None``), on ``model`` (the
+    on ``agent``, in ``cwd`` (the task's directory, or its own folder), on ``model`` (the
     agent's default when ``None``), titled ``title``, whose one turn is given
     ``text``. Returns the conversation's id once the turn is under way;
     ``on_end`` is told how it ended. Raises ``CofferError`` when the
@@ -28,7 +28,7 @@ class FreshTurnPort(Protocol):
         *,
         agent: str,
         model: str | None,
-        cwd: str | None,
+        cwd: str,
         title: str,
         text: str,
         on_end: Callable[[RunOutcome, str], Awaitable[None]],
@@ -63,3 +63,19 @@ class ScheduledRunRepoPort(Protocol):
     async def since(self, when: datetime) -> list[ScheduledRun]: ...
 
     async def close_interrupted(self, *, reason: str, finished_at: datetime) -> int: ...
+
+
+class TaskFolderPort(Protocol):
+    """Each task's own folder under Coffer's workspace
+    (``scheduled-tasks/<uid>/``): its ``PROMPT.md``, and whatever its runs
+    leave there when the task names no directory of its own."""
+
+    def path(self, task_uid: str) -> str:
+        """The folder's absolute path, created when absent."""
+        ...
+
+    def read_prompt(self, task_uid: str) -> str | None:
+        """The prompt, or ``None`` when the file is missing."""
+        ...
+
+    def write_prompt(self, task_uid: str, text: str) -> None: ...

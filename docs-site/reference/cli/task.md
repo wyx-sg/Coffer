@@ -23,8 +23,10 @@ This page matches what `coffer task --help` prints. Add `--help` to any command 
 | [`task enable`](#task-enable) | Switch a task on. |
 | [`task disable`](#task-disable) | Switch a task off. |
 | [`task list`](#task-list) | Every scheduled task, with its next and last run. |
-| [`task show`](#task-show) | One task: its config, next run and last run. |
+| [`task show`](#task-show) | One task: its config, prompt, folder, next run and last run. |
 | [`task add`](#task-add) | Add a scheduled task. |
+| [`task prompt`](#task-prompt) | Replace a task's PROMPT.md (or edit that file in its folder). |
+| [`task files`](#task-files) | The files in the task's folder (PROMPT.md and what its runs wrote there). |
 | [`task run`](#task-run) | Run a task once, now, whatever its schedule. |
 | [`task runs`](#task-runs) | A task's runs, newest first: when, and how each ended. |
 
@@ -116,7 +118,7 @@ coffer task list [OPTIONS]
 
 ## task show
 
-One task: its config, next run and last run.
+One task: its config, prompt, folder, next run and last run.
 
 <p class="cli-label">Synopsis</p>
 
@@ -133,7 +135,7 @@ coffer task show [OPTIONS] UID
 
 ## task add
 
-Add a scheduled task. Body: name, description, config (schedule with an optional IANA timezone, prompt, agent, model, cwd). Every run opens a new conversation on the agent.
+Add a scheduled task. Body: name, description, prompt (written to the task's PROMPT.md), config (schedule with an optional IANA timezone, agent, model, cwd; no cwd runs in the task's own folder). Every run opens a new conversation on the agent.
 
 <p class="cli-label">Synopsis</p>
 
@@ -147,6 +149,42 @@ coffer task add [OPTIONS]
 | --- | --- | --- | --- |
 | `--data, -d` <span class="cli-chip">option</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
 | `--set` <span class="cli-chip">option</span> | text (repeatable) |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
+| `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## task prompt
+
+Replace a task's PROMPT.md (or edit that file in its folder). Body: prompt.
+
+<p class="cli-label">Synopsis</p>
+
+```sh
+coffer task prompt [OPTIONS] UID
+```
+
+<p class="cli-label">Arguments and options</p>
+
+| Name | Type | Default | Description |
+| --- | --- | --- | --- |
+| `UID` <span class="cli-chip">argument</span> | text | required | The scheduled_task's name or uid |
+| `--data, -d` <span class="cli-chip">option</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
+| `--set` <span class="cli-chip">option</span> | text (repeatable) |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
+| `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## task files
+
+The files in the task's folder (PROMPT.md and what its runs wrote there).
+
+<p class="cli-label">Synopsis</p>
+
+```sh
+coffer task files [OPTIONS] UID
+```
+
+<p class="cli-label">Arguments and options</p>
+
+| Name | Type | Default | Description |
+| --- | --- | --- | --- |
+| `UID` <span class="cli-chip">argument</span> | text | required | The scheduled_task's name or uid |
 | `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
 
 ## task run

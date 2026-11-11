@@ -295,7 +295,7 @@ The line must start with `MEDIA:` followed by an absolute path, optionally with 
 
 ## Notifications
 
-Coffer can push a message to the paired owner with no inbound message, through `POST /api/v1/channels/{uid}/notify`. The request goes to the owner's direct chat unless it names another paired chat, such as a group; a chat the channel is not paired to is refused. On the channel's page, **Send test** sends a test message — editable, **Test message from Coffer** by default — to the owner's direct chat; it starts no turn. Notifying a channel with no paired owner fails and sends nothing.
+Coffer can push a message to the paired owner with no inbound message, through `POST /api/v1/channels/{uid}/notify`. The request goes to the owner's direct chat unless it names another paired chat, such as a group; a chat the channel is not paired to is refused. It can also carry `files`, up to ten absolute paths on this Mac, sent after the text the way a reply's files are (`coffer channel notify <channel> --data '{"text": "…", "files": ["/abs/path"]}'`). On the channel's page, **Send test** sends a test message — editable, **Test message from Coffer** by default — to the owner's direct chat; it starts no turn. Notifying a channel with no paired owner fails and sends nothing.
 
 An agent can do the same itself with the built-in tool [`coffer__channel_notify`](/reference/mcp-tools#coffer-channel-notify): it sends a message, and files, to the owner's direct chat, never a group. It is meant for an agent working in your terminal or in its own scheduled task, so you can ask it to "tell me on my phone when it's done". If you have more than one channel running and paired, the agent names the one to use.
 

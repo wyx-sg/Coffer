@@ -2,23 +2,32 @@
 Scheduled tasks page").
 
 What is particular to a task lives here: creating one (named after its prompt
-when no name is given), its run history and Run now. Editing, pausing,
+when no name is given), its ``PROMPT.md``, the files in its folder (read-only,
+as a skill's are), its run history and Run now. Editing, pausing,
 renaming and removing a task are the kind-agnostic ``/api/v1/resources``
 routes; the kind checks the schedule on every one of them.
 """
 
 from __future__ import annotations
 
+import pathlib
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from coffer.application.skill import file_ops
 from coffer.domain.channel.scheduled_run import ScheduledRun
 from coffer.domain.channel.scheduled_task import ScheduledTaskConfig
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor
+from coffer.surfaces.http.skill_file_routes import (
+    SkillFileContentOut,
+    SkillFileTreeOut,
+    _content_out,
+    _node_to_out,
+)
 
 if TYPE_CHECKING:
     from coffer.application.channel.schedule.scheduler import TaskScheduler
@@ -91,6 +100,11 @@ class ScheduledTaskOut(BaseModel):
     last_run: ScheduledRunOut | None
     next_run: datetime | None
     running: bool
+    #: The task's ``PROMPT.md``.
+    prompt: str
+    #: The task's own folder: its ``PROMPT.md``, and where its runs work when
+    #: it names no directory.
+    folder: str
 
 
 class ScheduledTaskListOut(BaseModel):
@@ -105,7 +119,13 @@ class ScheduledTaskIn(BaseModel):
     #: Omitted: named after the prompt's first words.
     name: str | None = None
     description: str = ""
+    #: Written to the task's ``PROMPT.md``. Older callers send it in ``config``.
+    prompt: str | None = None
     config: ScheduledTaskConfig
+
+
+class ScheduledTaskPromptIn(BaseModel):
+    prompt: str = Field(min_length=1)
 
 
 def run_out(run: ScheduledRun, conversation: RunConversationOut | None = None) -> ScheduledRunOut:
@@ -138,6 +158,8 @@ async def _out(view: TaskView) -> ScheduledTaskOut:
         last_run=run_out(view.last_run) if view.last_run is not None else None,
         next_run=view.next_run,
         running=view.running,
+        prompt=view.prompt,
+        folder=view.folder,
     )
 
 
@@ -153,6 +175,7 @@ async def create_task(body: ScheduledTaskIn, actor: str = Depends(get_actor)) ->
         body.config.model_dump(mode="json", exclude_none=True),
         actor=actor,
         description=body.description,
+        prompt=body.prompt,
     )
     return await _out(await _tasks().view(task.uid))
 
@@ -160,6 +183,37 @@ async def create_task(body: ScheduledTaskIn, actor: str = Depends(get_actor)) ->
 @router.get("/{uid}", response_model=ScheduledTaskOut)
 async def get_task(uid: str) -> ScheduledTaskOut:
     return await _out(await _tasks().view(uid))
+
+
+@router.put("/{uid}/prompt", response_model=ScheduledTaskOut)
+async def set_task_prompt(uid: str, body: ScheduledTaskPromptIn) -> ScheduledTaskOut:
+    """Replace the task's ``PROMPT.md``; the next run is given it."""
+    return await _out(await _tasks().set_prompt(uid, body.prompt))
+
+
+@router.get("/{uid}/files", response_model=SkillFileTreeOut)
+async def list_task_files(uid: str) -> SkillFileTreeOut:
+    """The task's folder as a read-only file tree."""
+    folder = pathlib.Path((await _tasks().view(uid)).folder).resolve()
+    return SkillFileTreeOut(root=_node_to_out(file_ops.build_file_tree(folder), folder))
+
+
+@router.get("/{uid}/files/content", response_model=SkillFileContentOut)
+async def read_task_file(uid: str, path: str = Query(min_length=1)) -> SkillFileContentOut:
+    """One file of the task's folder; a path resolving outside it is refused."""
+    folder = pathlib.Path((await _tasks().view(uid)).folder).resolve()
+    try:
+        result = file_ops.read_skill_file(folder, path)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="requested path is outside the task's folder",
+        ) from exc
+    except (FileNotFoundError, IsADirectoryError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"no such file in the task: {path}"
+        ) from exc
+    return _content_out(result, folder)
 
 
 @router.get("/{uid}/runs", response_model=ScheduledRunListOut)

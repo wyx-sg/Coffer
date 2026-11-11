@@ -1,4 +1,4 @@
-// src/components/scheduled-tasks/TaskDialog.tsx — New task, or edit one: its name, when, what the agent is asked, and the agent, model and directory every run opens with.
+// src/components/scheduled-tasks/TaskDialog.tsx — New task, or edit one: its name, when, what the agent is asked (new only; an open task's prompt is edited in its Prompt tab), and the agent, model and directory every run opens with.
 //
 // Spec channels "Manage scheduled tasks from the Scheduled tasks page". Every
 // run is a new conversation of its own; what it does with a chat or a report
@@ -51,7 +51,7 @@ function Form({ onOpenChange, existing, onSaved }: Omit<Props, "open">) {
     setForm((f) => ({ ...f, ...patch }));
     if (save.error) save.reset();
   };
-  const valid = formValid(form) && (!editing || form.name.trim() !== "");
+  const valid = formValid(form, editing) && (!editing || form.name.trim() !== "");
 
   const submit = () => {
     if (!valid || save.isPending) return;
@@ -67,7 +67,7 @@ function Form({ onOpenChange, existing, onSaved }: Omit<Props, "open">) {
       );
     } else {
       create.mutate(
-        { name: form.name.trim() || null, config },
+        { name: form.name.trim() || null, prompt: form.prompt.trim(), config },
         { onSuccess: (task) => done(task.uid) },
       );
     }
@@ -104,19 +104,22 @@ function Form({ onOpenChange, existing, onSaved }: Omit<Props, "open">) {
           />
         </div>
         <TaskScheduleFields form={form} set={set} />
-        <div className="space-y-1.5">
-          <Label htmlFor="task-prompt" required>
-            {t("scheduledTasks.dialog.prompt")}
-          </Label>
-          <Textarea
-            id="task-prompt"
-            rows={4}
-            value={form.prompt}
-            placeholder={t("scheduledTasks.dialog.promptPlaceholder")}
-            onChange={(e) => set({ prompt: e.target.value })}
-          />
-          <p className="text-xs text-text-muted">{t("scheduledTasks.dialog.promptHint")}</p>
-        </div>
+        {/* An open task's prompt is its PROMPT.md, edited in the Prompt tab. */}
+        {editing ? null : (
+          <div className="space-y-1.5">
+            <Label htmlFor="task-prompt" required>
+              {t("scheduledTasks.dialog.prompt")}
+            </Label>
+            <Textarea
+              id="task-prompt"
+              rows={4}
+              value={form.prompt}
+              placeholder={t("scheduledTasks.dialog.promptPlaceholder")}
+              onChange={(e) => set({ prompt: e.target.value })}
+            />
+            <p className="text-xs text-text-muted">{t("scheduledTasks.dialog.promptHint")}</p>
+          </div>
+        )}
         <TaskSessionFields form={form} set={set} />
         <label className="flex items-start justify-between gap-3">
           <span className="space-y-0.5">

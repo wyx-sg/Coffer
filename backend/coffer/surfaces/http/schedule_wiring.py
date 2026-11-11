@@ -28,7 +28,7 @@ from coffer.domain.chat.errors import ConversationNotFound
 from coffer.domain.chat.events import AgentEvent, TurnDone, TurnError
 from coffer.domain.features import SCHEDULED_TASKS
 from coffer.infrastructure.channel.persistence import ScheduledRunRepo
-from coffer.infrastructure.chat.default_workspace import default_workspace_dir
+from coffer.infrastructure.channel.task_folders import TaskFolders
 from coffer.surfaces.http.chat_wiring import ChatWiring
 from coffer.surfaces.http.event_wiring import EventStream
 from coffer.surfaces.http.feature_dependencies import get_feature_service_optional
@@ -54,12 +54,12 @@ class FreshTurns:
         *,
         agent: str,
         model: str | None,
-        cwd: str | None,
+        cwd: str,
         title: str,
         text: str,
         on_end: Callable[[RunOutcome, str], Awaitable[None]],
     ) -> str:
-        config: dict[str, Any] = {"cwd": cwd or default_workspace_dir()}
+        config: dict[str, Any] = {"cwd": cwd}
         if model:
             config["model"] = model
         conv = await self._chat_service.create_conversation(agent_key=agent, agent_config=config)
@@ -126,7 +126,10 @@ async def wire_scheduled_tasks(
     events: EventStream,
 ) -> None:
     runs = ScheduledRunRepo(sm)
-    runner = TaskRunner(runs=runs, fresh=FreshTurns(chat.chat_service, chat.orchestrator))
+    folders = TaskFolders()
+    runner = TaskRunner(
+        runs=runs, fresh=FreshTurns(chat.chat_service, chat.orchestrator), folders=folders
+    )
     features = get_feature_service_optional()
 
     def enabled() -> bool:
@@ -140,10 +143,13 @@ async def wire_scheduled_tasks(
         runs=runs,
         next_run=scheduler.next_run,
         is_running=scheduler.is_running,
+        folders=folders,
     )
     app.state.kinds[KIND] = make_scheduled_task_kind()
     # Follow-ups an older Coffer let agents book have no chat to run in now.
     await tasks.drop_retired_follow_ups()
+    # A task written before 2026-11-11 carries its prompt in its file.
+    await tasks.move_prompts_to_files()
     set_schedule_services(tasks=tasks, scheduler=scheduler, reads=_Reads(runs, chat.chat_service))
     # A task created, edited, paused or removed (here, on the page, by sync or
     # by hand) brings the next pass forward.

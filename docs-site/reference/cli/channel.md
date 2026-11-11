@@ -28,7 +28,7 @@ This page matches what `coffer channel --help` prints. Add `--help` to any comma
 | [`channel add`](#channel-add) | Add a channel. |
 | [`channel status`](#channel-status) | Whether the channel is connected, and what waits. |
 | [`channel restart`](#channel-restart) | Reconnect the channel. |
-| [`channel notify`](#channel-notify) | Send a message through the channel. |
+| [`channel notify`](#channel-notify) | Send a message, and files, through the channel. |
 | [`channel check-credentials`](#channel-check-credentials) | Check a platform's credentials before saving. |
 | [`channel pairing`](#channel-pairing) | Pair a person with a channel by a code they send the bot. |
 | [`channel pairing start`](#channel-pairing-start) | Issue a pairing code a person sends to the bot. |
@@ -212,7 +212,7 @@ coffer channel restart [OPTIONS] UID
 
 ## channel notify
 
-Send a message through the channel. Body: text, chat_id.
+Send a message, and files, through the channel. Body: text, chat_id, files.
 
 <p class="cli-label">Synopsis</p>
 

@@ -21,6 +21,9 @@ export function scheduleText(t: TFunction, schedule: Schedule, lang: string): st
 }
 
 /** The agents a task may run on, by key, as the page names them. */
+/** The longest prompt a task may carry (the daemon refuses more). */
+export const PROMPT_MAX_LENGTH = 8000;
+
 export const AGENTS = [
   { key: "claude_code", label: "Claude Code" },
   { key: "codex", label: "Codex" },
@@ -98,9 +101,7 @@ export const STATE_TONE: Record<TaskState, StatusTone> = {
 export function filterTasks(items: ScheduledTask[], filter: string): ScheduledTask[] {
   const q = filter.trim().toLowerCase();
   return q
-    ? items.filter((task) =>
-        [task.name, task.config.prompt].some((s) => s.toLowerCase().includes(q)),
-      )
+    ? items.filter((task) => [task.name, task.prompt].some((s) => s.toLowerCase().includes(q)))
     : items;
 }
 
@@ -151,7 +152,7 @@ export function formFrom(task?: ScheduledTask): TaskForm {
     expr: s?.kind === "cron" ? s.expr : "0 9 * * 1-5",
     timezone: s && "timezone" in s ? (s.timezone ?? "") : "",
     at: s?.kind === "once" ? localInput(s.at) : "",
-    prompt: c?.prompt ?? "",
+    prompt: task?.prompt ?? "",
     agent: c?.agent ?? "claude_code",
     model: c?.model ?? "",
     cwd: c?.cwd ?? "",
@@ -182,7 +183,6 @@ function scheduleFrom(form: TaskForm): Schedule {
 export function configFrom(form: TaskForm): ScheduledTaskConfig {
   return {
     schedule: scheduleFrom(form),
-    prompt: form.prompt.trim(),
     agent: form.agent,
     model: form.model.trim() || null,
     cwd: form.cwd.trim() || null,
@@ -190,8 +190,9 @@ export function configFrom(form: TaskForm): ScheduledTaskConfig {
   };
 }
 
-export function formValid(form: TaskForm): boolean {
-  if (!form.prompt.trim() || !form.agent) return false;
+/** Whether the form can be saved. Editing leaves the prompt to the Prompt tab. */
+export function formValid(form: TaskForm, editing = false): boolean {
+  if ((!editing && !form.prompt.trim()) || !form.agent) return false;
   if (form.kind === "once") return form.at !== "" && !Number.isNaN(new Date(form.at).getTime());
   if (form.kind === "cron") return form.expr.trim().split(/\s+/).length === 5;
   return true;

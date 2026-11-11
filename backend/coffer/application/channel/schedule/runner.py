@@ -2,10 +2,11 @@
 conversation of its own (spec channels "Run a scheduled task in a fresh
 conversation of its own").
 
-A run opens a new conversation on the task's agent, model and directory and
-hands it the prompt, the way the owner would on the Conversations page; the
-answer stays in that conversation, and the history row is how the owner finds
-it (ADR automation-is-a-scheduled-prompt). What a run adds is its row, opened
+A run opens a new conversation on the task's agent, model and directory (the
+task's own folder when it names none) and hands it the task's ``PROMPT.md``,
+the way the owner would on the Conversations page; the answer stays in that
+conversation, and the history row is how the owner finds it (ADR
+automation-is-a-scheduled-prompt). What a run adds is its row, opened
 ``running`` before anything else and closed with how the turn ended.
 
 Application layer only: no infrastructure import here.
@@ -20,9 +21,13 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 
 from coffer.application.channel.schedule.message import run_message
-from coffer.application.channel.schedule.ports import FreshTurnPort, ScheduledRunRepoPort
+from coffer.application.channel.schedule.ports import (
+    FreshTurnPort,
+    ScheduledRunRepoPort,
+    TaskFolderPort,
+)
 from coffer.domain.channel.scheduled_run import RunOutcome, ScheduledRun
-from coffer.domain.channel.scheduled_task import ScheduledTaskConfig
+from coffer.domain.channel.scheduled_task import PROMPT_FILE, ScheduledTaskConfig
 from coffer.domain.errors import CofferError
 from coffer.domain.resource import Resource
 
@@ -48,10 +53,12 @@ class TaskRunner:
         *,
         runs: ScheduledRunRepoPort,
         fresh: FreshTurnPort,
+        folders: TaskFolderPort,
         clock: Callable[[], datetime] = lambda: datetime.now(tz=UTC),
     ) -> None:
         self._runs = runs
         self._fresh = fresh
+        self._folders = folders
         self._clock = clock
         self.on_settled: OnSettled | None = None
 
@@ -81,8 +88,11 @@ class TaskRunner:
         async def on_end(outcome: RunOutcome, reason: str) -> None:
             await self._end(task, run, outcome, reason)
 
+        prompt = (self._folders.read_prompt(task.uid) or "").strip()
+        if not prompt:
+            return await self._fail(task, run, f"{PROMPT_FILE} is missing or empty")
         text = run_message(
-            prompt=config.prompt,
+            prompt=prompt,
             due_at=request.due_at,
             now=self._clock(),
             late=request.late,
@@ -92,7 +102,7 @@ class TaskRunner:
             conversation_id = await self._fresh.start(
                 agent=config.agent,
                 model=config.model,
-                cwd=config.cwd,
+                cwd=config.cwd or self._folders.path(task.uid),
                 title=task.name,
                 text=text,
                 on_end=on_end,

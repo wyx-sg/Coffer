@@ -1,74 +1,142 @@
-// src/components/scheduled-tasks/TaskRuns.tsx — an open task's History: every run, newest first, with how it ended and why.
+// src/components/scheduled-tasks/TaskRuns.tsx — an open task's History tab: every run as a table, newest first.
 //
-// A row is when the run started (and when it was due, for a late or skipped
-// one), the outcome pill, the reason the daemon gave, and the conversation the
-// run used. Its title links to the Conversations page, which selects that
-// conversation in its list and opens it there, to read the run or carry it on
-// (spec channels "Keep every scheduled run in the task's history").
+// A row is when the run started, how it ended, how it was started (on
+// schedule, late, or by hand), how long it took, the reason the daemon gave,
+// and the conversation it used. The table searches the reasons and the
+// conversations' titles and filters by outcome and by how a run started. A
+// conversation's title links to the Conversations page, which selects it in
+// its list and opens it there, to read the run or carry it on (spec channels
+// "Keep every scheduled run in the task's history").
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
+import { DataTable, type Column, type FilterDef } from "@/components/DataTable";
 import { RelativeTime } from "@/components/RelativeTime";
-import { Section } from "@/components/Section";
 import { StatusPill } from "@/components/status/StatusPill";
+import type { RunOutcome, ScheduledRun } from "@/lib/api/scheduledTasks";
+import { formatDuration } from "@/lib/format/duration";
 import { useScheduledTaskRuns } from "@/lib/hooks/useScheduledTasks";
 import { OUTCOME_TONE } from "@/lib/scheduledTasks/format";
 import { formatMoment } from "@/lib/time";
+
+const OUTCOMES: readonly RunOutcome[] = ["running", "done", "skipped", "failed", "stopped"];
+
+/** How a run started: by hand, late for its slot, or on time. */
+function startedBy(run: ScheduledRun): "manual" | "late" | "schedule" {
+  if (run.trigger === "manual") return "manual";
+  return run.catch_up ? "late" : "schedule";
+}
 
 export function TaskRuns({ uid }: { uid: string }) {
   const { t, i18n } = useTranslation();
   const { data, isPending } = useScheduledTaskRuns(uid);
   const runs = data ?? [];
+
+  const columns: Column<ScheduledRun>[] = [
+    {
+      key: "started",
+      header: t("scheduledTasks.runs.started"),
+      className: "w-[18%]",
+      sortable: true,
+      sortValue: (r) => r.started_at,
+      cell: (r) => <RelativeTime iso={r.started_at} className="text-text-muted" />,
+    },
+    {
+      key: "outcome",
+      header: t("scheduledTasks.runs.outcome"),
+      className: "w-[14%]",
+      cell: (r) => (
+        <StatusPill tone={OUTCOME_TONE[r.outcome]}>
+          {t(`scheduledTasks.outcome.${r.outcome}`)}
+        </StatusPill>
+      ),
+    },
+    {
+      key: "trigger",
+      header: t("scheduledTasks.runs.trigger"),
+      className: "w-[16%]",
+      cell: (r) => {
+        const by = startedBy(r);
+        return (
+          <span
+            className="text-text-muted"
+            title={by === "late" ? formatMoment(r.due_at, i18n.language, t) : undefined}
+          >
+            {t(`scheduledTasks.runs.by.${by}`)}
+          </span>
+        );
+      },
+    },
+    {
+      key: "duration",
+      header: t("scheduledTasks.runs.duration"),
+      className: "w-[10%]",
+      sortable: true,
+      sortValue: (r) =>
+        r.finished_at ? Date.parse(r.finished_at) - Date.parse(r.started_at) : null,
+      cell: (r) => (
+        <span className="text-text-muted tabular-nums">
+          {r.finished_at
+            ? formatDuration(Date.parse(r.finished_at) - Date.parse(r.started_at))
+            : "—"}
+        </span>
+      ),
+    },
+    {
+      key: "conversation",
+      header: t("scheduledTasks.runs.conversationColumn"),
+      cell: (r) =>
+        r.conversation ? (
+          <Link
+            to={`/conversations?open=${encodeURIComponent(r.conversation.conversation_id)}`}
+            className="block truncate text-accent-text hover:underline"
+          >
+            {r.conversation.title}
+          </Link>
+        ) : r.conversation_id ? (
+          <span className="text-text-subtle">{t("scheduledTasks.runs.conversationGone")}</span>
+        ) : (
+          <span className="block break-words text-text-muted">{r.reason}</span>
+        ),
+    },
+  ];
+
+  const filters: FilterDef<ScheduledRun>[] = [
+    {
+      key: "outcome",
+      label: t("scheduledTasks.runs.outcome"),
+      options: OUTCOMES.map((o) => ({ value: o, label: t(`scheduledTasks.outcome.${o}`) })),
+      accessor: (r) => r.outcome,
+    },
+    {
+      key: "trigger",
+      label: t("scheduledTasks.runs.trigger"),
+      options: (["schedule", "late", "manual"] as const).map((v) => ({
+        value: v,
+        label: t(`scheduledTasks.runs.by.${v}`),
+      })),
+      accessor: startedBy,
+    },
+  ];
+
   return (
-    <Section title={t("scheduledTasks.runs.title")} help={t("scheduledTasks.runs.help")}>
-      {isPending ? null : runs.length === 0 ? (
-        <p className="text-xs text-text-muted">{t("scheduledTasks.runs.none")}</p>
-      ) : (
-        <ul className="divide-y divide-border-subtle rounded-lg border border-border-subtle">
-          {runs.map((run) => (
-            <li key={run.run_id} className="flex items-start gap-3 px-3 py-2 text-xs">
-              <span className="w-24 shrink-0 pt-0.5 text-text-muted">
-                <RelativeTime iso={run.started_at} />
-              </span>
-              <span className="min-w-0 flex-1 space-y-0.5">
-                <span className="flex flex-wrap items-center gap-2">
-                  <StatusPill tone={OUTCOME_TONE[run.outcome]}>
-                    {t(`scheduledTasks.outcome.${run.outcome}`)}
-                  </StatusPill>
-                  {run.trigger === "manual" ? (
-                    <span className="text-text-muted">{t("scheduledTasks.runs.byHand")}</span>
-                  ) : null}
-                  {run.catch_up ? (
-                    <span className="text-text-muted">
-                      {t("scheduledTasks.runs.late", {
-                        due: formatMoment(run.due_at, i18n.language, t),
-                      })}
-                    </span>
-                  ) : null}
-                </span>
-                {run.reason ? (
-                  <span className="block break-words text-text-muted">{run.reason}</span>
-                ) : null}
-                {run.conversation ? (
-                  <span className="block truncate text-text-muted">
-                    {t("scheduledTasks.runs.conversation")}
-                    <Link
-                      to={`/conversations?open=${encodeURIComponent(run.conversation.conversation_id)}`}
-                      className="ml-1 text-accent-text hover:underline"
-                    >
-                      {run.conversation.title}
-                    </Link>
-                  </span>
-                ) : run.conversation_id ? (
-                  <span className="block text-text-subtle">
-                    {t("scheduledTasks.runs.conversationGone")}
-                  </span>
-                ) : null}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </Section>
+    <DataTable
+      rows={runs}
+      columns={columns}
+      rowKey={(r) => r.run_id}
+      fixed
+      isLoading={isPending}
+      search={{
+        placeholder: t("scheduledTasks.runs.search"),
+        accessor: (r) => `${r.reason} ${r.conversation?.title ?? ""}`,
+      }}
+      filters={filters}
+      rowFooter={(r) =>
+        r.reason && r.conversation_id ? (
+          <span className="text-xs text-text-muted">{r.reason}</span>
+        ) : null
+      }
+      emptyMessage={t("scheduledTasks.runs.none")}
+    />
   );
 }

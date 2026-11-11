@@ -123,6 +123,9 @@ export const channelStatusKey = (uid: string) => ["channels", uid, "status"] as 
 
 export const scheduledTasksKey = ["scheduledTasks"] as const;
 export const scheduledTaskRunsKey = (uid: string) => ["scheduledTasks", uid, "runs"] as const;
+export const scheduledTaskFilesKey = (uid: string) => ["scheduledTasks", uid, "files"] as const;
+export const scheduledTaskFileKey = (uid: string, path: string) =>
+  ["scheduledTasks", uid, "files", path] as const;
 /** The paired chats a new task may run in (spec channels "Manage scheduled tasks from the Scheduled tasks page"). */
 
 // --- daemon ----------------------------------------------------------------

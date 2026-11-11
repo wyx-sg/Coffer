@@ -442,7 +442,11 @@ channel and how many messages went, and no content.
 ### Requirement: Notify the paired owner on demand
 A notify entry point (`POST /api/v1/channels/{uid}/notify`) MUST deliver arbitrary text to a
 channel's paired peer, independent of any conversation and with no inbound message — the call
-the Channels page's **Send test** makes. Notify on a channel with no paired peer fails with a clear error and
+the Channels page's **Send test** makes, and `coffer channel notify`. It MAY
+carry `files`, up to ten absolute paths of files on this Mac, sent after the
+text the way a reply's files are; a path that is not an absolute path to an
+existing file is refused before anything is sent, and a file that fails to
+upload is named in the answer while the text still arrives. Notify on a channel with no paired peer fails with a clear error and
 sends nothing. This is the outbound foundation any feature that alerts the user
 reuses.
 
@@ -450,6 +454,12 @@ reuses.
 - **GIVEN** a paired channel
 - **WHEN** notify is called via REST, and again with the Channels page's Send test
 - **THEN** the text arrives in the IM chat both times
+
+#### Scenario: a notification carries files after its text
+- **GIVEN** a paired channel whose transport sends files
+- **WHEN** notify is called with a text and the absolute path of a report
+- **THEN** the text arrives and the report follows it as a file
+- **AND** a call naming a relative path is refused
 
 #### Scenario: notify on an unpaired channel fails cleanly
 - **GIVEN** a channel with no paired peer
@@ -2991,12 +3001,16 @@ they are closed as [experimental-features](../experimental-features/spec.md)
 A scheduled task MUST be a resource of kind `scheduled_task`, kept on this
 machine (`local/resources/scheduled_task/<uid>.json`) and never synced, since
 the agent and directory it names are this machine's. Its config MUST carry a
-schedule, the prompt the run is given (at most 8000 characters) and the agent
-every run opens on (`claude_code` or `codex`), and MAY carry the model (the
-agent's default otherwise) and the working directory (Coffer's own
-workspace, `~/.coffer/content/workspace`, otherwise). That is the whole task: it names no chat and no template, and what
-it does with a chat, a report or a flow is its prompt's (ADR
-automation-is-a-scheduled-prompt). A schedule is one of: once at a time, every
+schedule and the agent every run opens on (`claude_code` or `codex`), and MAY
+carry the model (the agent's default otherwise) and the working directory.
+Every task MUST have a folder of its own,
+`~/.coffer/content/workspace/scheduled-tasks/<uid>/`, and the prompt the run is
+given (at most 8000 characters) MUST be the file `PROMPT.md` in it, never part
+of the config, so it is read and edited like any file, on the page or in any
+editor. A task that names no directory runs in that folder, so what its runs
+write is kept with it. That is the whole task: it names no chat and no
+template, and what it does with a chat, a report or a flow is its prompt's
+(ADR automation-is-a-scheduled-prompt). A schedule is one of: once at a time, every
 hour at a minute, every day at a time, one weekday at a time, a five-field
 cron expression, or manual (only Run now starts it); a repeating schedule MAY
 name an IANA timezone, and its times are that zone's wall clock, or this
@@ -3005,19 +3019,37 @@ machine's when it names none.
 A task MUST be refused, on every path that creates or edits one, when it names
 no agent, when a one-off's time is being set to one that has passed, when a
 repeating schedule's slots come closer than 15 minutes apart, or when its
-timezone is not a known IANA zone. `POST /api/v1/scheduled-tasks` creates one
-and names it after its prompt when no name is given; editing, renaming,
-pausing (switching it off), resuming and deleting are the kind-agnostic
-resource routes. A task file an older Coffer wrote MUST still be read: the
-chat, conversation mode, mention, material and template it carries are
-dropped, it runs on Claude Code when it named no agent, and a Monday-to-Friday
-schedule reads as the cron expression it meant; a follow-up an agent booked
-in a chat is removed when the daemon starts, its history kept.
+timezone is not a known IANA zone, and a config that carries a prompt MUST be
+refused on every path that edits one. `POST /api/v1/scheduled-tasks` creates
+one, writes its `PROMPT.md`, and names it after its prompt when no name is
+given; `PUT /api/v1/scheduled-tasks/{uid}/prompt` (`coffer task prompt`)
+replaces the file; editing the rest, renaming, pausing (switching it off),
+resuming and deleting are the kind-agnostic resource routes. A task file an
+older Coffer wrote MUST still be read: the chat, conversation mode, mention,
+material and template it carries are dropped, it runs on Claude Code when it
+named no agent, a Monday-to-Friday schedule reads as the cron expression it
+meant, and the prompt it carries is moved into its `PROMPT.md` when the daemon
+starts (kept when that file already exists); a follow-up an agent booked in a
+chat is removed when the daemon starts, its history kept.
 
 #### Scenario: a task is created
 - **GIVEN** no channel at all
 - **WHEN** the owner creates a task on Codex in `~/work/site`, every day at 11:00 in `Asia/Singapore`
-- **THEN** it is stored under `local/` with that schedule, prompt, agent and directory, and listed with its next run at 11:00 Singapore time
+- **THEN** it is stored under `local/` with that schedule, agent and directory, its prompt is its `PROMPT.md`, and it is listed with its next run at 11:00 Singapore time
+
+#### Scenario: a task's prompt is the PROMPT.md in its folder
+- **WHEN** a task is created with a prompt
+- **THEN** its config carries no prompt, and `~/.coffer/content/workspace/scheduled-tasks/<uid>/PROMPT.md` holds it
+
+#### Scenario: a prompt in a task's file is refused on edit
+- **GIVEN** a task
+- **WHEN** its config is edited through the resource routes with a `prompt` in it
+- **THEN** the edit is refused, naming `PROMPT.md`
+
+#### Scenario: a task that carries its prompt in its file is moved to PROMPT.md
+- **GIVEN** a task file written before prompts were files, carrying its prompt
+- **WHEN** the daemon starts
+- **THEN** the prompt is its `PROMPT.md` and its file no longer carries it
 
 #### Scenario: a task without an agent is refused
 - **WHEN** a task is created naming no agent
@@ -3034,7 +3066,7 @@ in a chat is removed when the daemon starts, its history kept.
 #### Scenario: a task an older Coffer wrote is read without its chat
 - **GIVEN** a task file that runs in a chat, `fresh`, every weekday at 09:00, naming no agent, and a follow-up an agent booked
 - **WHEN** the daemon starts
-- **THEN** the task is listed on Claude Code with the cron expression `0 9 * * 1-5` and no chat
+- **THEN** the task is listed on Claude Code with the cron expression `0 9 * * 1-5`, no chat and its prompt in `PROMPT.md`
 - **AND** the follow-up is gone
 
 ### Requirement: Run a scheduled task at the times it names
@@ -3106,11 +3138,13 @@ run.
 
 ### Requirement: Run a scheduled task in a fresh conversation of its own
 Every run MUST open a new conversation on the task's agent, with its model
-when it names one and in its directory, or Coffer's workspace when it names none,
-titled after the task; that conversation MUST be listed on the Conversations
-page like any other and MUST be the run's conversation in its history. Its one
-turn MUST be given the task's prompt as written, followed only by the late
-note of "Catch up a missed run once, within its grace" when the run is late.
+when it names one and in its directory, or the task's own folder when it names
+none, titled after the task; that conversation MUST be listed on the
+Conversations page like any other and MUST be the run's conversation in its
+history. Its one turn MUST be given the task's `PROMPT.md` as it is when the run
+starts, followed only by the late note of "Catch up a missed run once, within
+its grace" when the run is late; a run whose `PROMPT.md` is missing or empty
+MUST be closed `failed` saying so.
 Nothing MUST be posted to any chat by Coffer for a run, however it ends; the
 agent reaches the owner, when the prompt asks it to, the way any turn can
 (`coffer__channel_notify`). The run MUST be closed `done` when its turn
@@ -3124,10 +3158,20 @@ the reason. A repeating task whose last three runs all failed MUST be paused.
 - **THEN** each run opens a new Claude Code conversation in `~/work/site`, titled after the task, whose turn is the task's prompt
 - **AND** each run is closed `done` with its own conversation, and no chat receives anything
 
-#### Scenario: a task that names no directory runs in Coffer's workspace
+#### Scenario: a task that names no directory runs in its own folder
 - **GIVEN** a task that names no working directory
 - **WHEN** it runs
-- **THEN** its conversation opens in `~/.coffer/content/workspace`, the directory a channel or chat turn without one uses
+- **THEN** its conversation opens in `~/.coffer/content/workspace/scheduled-tasks/<uid>/`, beside its `PROMPT.md`
+
+#### Scenario: the next run is given the prompt as edited
+- **GIVEN** a task whose `PROMPT.md` was edited in another editor after it was saved on the page
+- **WHEN** it next runs
+- **THEN** its turn is given the file as it is on disk
+
+#### Scenario: a run whose PROMPT.md is missing fails
+- **GIVEN** a task whose `PROMPT.md` has been deleted
+- **WHEN** its slot comes
+- **THEN** the run is `failed` with the reason that `PROMPT.md` is missing or empty, and no conversation is opened
 
 #### Scenario: a task whose turn fails is recorded failed
 - **GIVEN** a task whose agent's turn ends with an error
@@ -3178,13 +3222,20 @@ button of its own: conversations open from one place.
 The web app MUST have a **Scheduled tasks** page in the Run group of the
 navigation. It lists every task, soonest first, with its schedule, its agent,
 its next run and how its last run ended; a running task says so. Opening a
-task shows its prompt, its settings and its run history; it offers Run now
-(refused while it runs), Pause or Resume, Edit (through a dialog) and Delete.
+task shows four tabs, each at its own path: **Overview** (when it runs, its
+next run, agent, model, directory and catch-up), **Prompt** (its `PROMPT.md`
+shown as a Markdown file, with Preview and Source, and Edit, which saves the
+file), **History** (its runs as a table: when each started, how it ended, what
+started it, how long it took and its conversation, searchable and filtered by
+outcome and by what started it) and **Files** (the task's folder, read-only, as
+a skill's folder is shown). It offers Run now (refused while it runs), Pause or
+Resume, Edit (through a dialog, for everything but the prompt) and Delete.
 **New task** asks for a name, the schedule (with a timezone for a repeating
 one), the prompt, the agent, the model — the agent's default or one of the
 models the agent offers — and the directory, picked with the folder picker
-the other pages use or typed, and empty for the home folder. The CLI mirrors
-the page: `coffer task list|show|add|update|enable|disable|delete|run|runs`.
+the other pages use or typed, and empty for the task's own folder. The CLI
+mirrors the page: `coffer task
+list|show|add|prompt|files|update|enable|disable|delete|run|runs`.
 
 #### Scenario: the owner runs a task now from the page
 - **GIVEN** a paused weekly task
@@ -3195,3 +3246,8 @@ the page: `coffer task list|show|add|update|enable|disable|delete|run|runs`.
 - **GIVEN** no channel at all
 - **WHEN** the owner presses New task, picks Claude Code, a directory, "Every day" at 08:30 and writes a prompt
 - **THEN** the task is listed on Claude Code with its next run at 08:30
+
+#### Scenario: the owner reads and edits a task's prompt and files on its page
+- **GIVEN** a task whose run wrote `report.md` into the task's folder
+- **WHEN** the owner opens its Prompt tab, edits `PROMPT.md` and saves, then opens its Files tab
+- **THEN** the next run is given the saved prompt, and the Files tab lists `PROMPT.md` and `report.md` and opens `report.md`; a path outside the folder is refused

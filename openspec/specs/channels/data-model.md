@@ -116,10 +116,19 @@ directory are this machine's. `name` is the task's label (free text);
 | config key | type | notes |
 | --- | --- | --- |
 | `schedule` | object | one of `{kind: once, at}`, `{kind: hourly, minute}`, `{kind: daily, time: "HH:MM"}`, `{kind: weekly, weekday: 0-6 (Monday 0), time}`, `{kind: cron, expr}`, `{kind: manual}`; a repeating one may add `timezone` (IANA), this machine's local time otherwise; at most every 15 min |
-| `prompt` | string | what the agent is asked; non-empty, at most 8000 characters |
 | `agent` | `claude_code` \| `codex` | required |
-| `model`, `cwd` | string \| null | null is the agent's default model and Coffer's workspace (`~/.coffer/content/workspace`) |
+| `model`, `cwd` | string \| null | null is the agent's default model and the task's own folder |
 | `catch_up` | bool | default `true` |
+
+What the agent is asked is not in the config: it is `PROMPT.md` (non-empty, at
+most 8000 characters) in the task's own folder,
+`~/.coffer/content/workspace/scheduled-tasks/<uid>/` (`content`: the user's only
+copy, not synced). A task that names no `cwd` runs in that folder, so what its
+runs write stays beside its prompt; the folder is not removed with the task.
+
+A file written before 2026-11-11 may carry `prompt`: it is moved into
+`PROMPT.md` when the daemon starts (kept when the file already exists) and
+dropped from the config; a config that carries one is otherwise refused.
 
 A file an older Coffer wrote may carry `chat`, `session`, `mention`,
 `material`, `template`, `origin` and `chain_*`: they are dropped on read, and a

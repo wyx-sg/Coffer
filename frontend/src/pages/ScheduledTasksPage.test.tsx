@@ -18,6 +18,9 @@ vi.mock("@/lib/api/scheduledTasks", () => ({
     create: vi.fn(),
     runs: vi.fn(),
     runNow: vi.fn(),
+    setPrompt: vi.fn(),
+    filesTree: vi.fn(),
+    fileContent: vi.fn(),
   },
 }));
 vi.mock("@/lib/api/agentModels", () => ({
@@ -46,9 +49,10 @@ function task(over: Partial<ScheduledTask> & { uid: string; name: string }): Sch
     last_run: null,
     next_run: "2026-10-30T09:00:00Z",
     running: false,
+    prompt: "Summarise the open pull requests\n",
+    folder: `/Users/me/.coffer/content/workspace/scheduled-tasks/${over.uid}`,
     config: {
       schedule: { kind: "daily", time: "09:00" },
-      prompt: "Summarise the open pull requests",
       agent: "claude_code",
     },
     ...over,
@@ -60,9 +64,9 @@ const NIGHTLY = task({
   uid: "t-2",
   name: "Nightly build",
   next_run: "2026-10-29T16:00:00Z",
+  prompt: "Check the nightly build\n",
   config: {
     schedule: { kind: "cron", expr: "0 2 * * *" },
-    prompt: "Check the nightly build",
     agent: "codex",
     model: "gpt-5",
     cwd: "~/work/site",
@@ -83,6 +87,7 @@ function renderPage(path = "/scheduled-tasks") {
           <Routes>
             <Route path="/scheduled-tasks" element={<ScheduledTasksPage />} />
             <Route path="/scheduled-tasks/:uid" element={<ScheduledTasksPage />} />
+            <Route path="/scheduled-tasks/:uid/:tab" element={<ScheduledTasksPage />} />
           </Routes>
           <Where />
         </MemoryRouter>
@@ -114,7 +119,7 @@ describe("ScheduledTasksPage", () => {
   test("an open task names its agent, model and directory", async () => {
     renderPage("/scheduled-tasks/t-2");
     expect(await screen.findByRole("heading", { name: "Nightly build" })).toBeInTheDocument();
-    expect(screen.getAllByText("Codex · gpt-5").length).toBeGreaterThan(0);
+    expect(screen.getByText("gpt-5")).toBeInTheDocument();
     expect(screen.getByText("~/work/site")).toBeInTheDocument();
   });
 
@@ -162,11 +167,53 @@ describe("ScheduledTasksPage", () => {
       }),
       run("r-1", { conversation_id: "c-1" }),
     ]);
-    renderPage();
+    renderPage("/scheduled-tasks/t-1/runs");
     const link = await screen.findByRole("link", { name: "Open pull requests" });
     expect(link).toHaveAttribute("href", "/conversations?open=c-2");
     expect(screen.getByText("Its conversation has been removed.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Open in/ })).toBeNull();
+  });
+
+  acceptance(
+    "channels",
+    "the owner reads and edits a task's prompt and files on its page",
+    async () => {
+      api.setPrompt.mockResolvedValue(MORNING);
+      renderPage("/scheduled-tasks/t-1/prompt");
+      expect(await screen.findByText("PROMPT.md")).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Edit prompt" }));
+      const editor = await screen.findByRole("textbox", { name: "PROMPT.md" });
+      expect(editor).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    },
+  );
+
+  test("the files tab shows the task's folder and opens a file in it", async () => {
+    const node = (name: string) => ({
+      name,
+      path: name,
+      abs_path: `${MORNING.folder}/${name}`,
+      folder_abs_path: MORNING.folder,
+      type: "file" as const,
+      size: 8,
+      truncated: false,
+      children: [],
+    });
+    api.filesTree.mockResolvedValue({
+      root: { ...node(""), type: "dir", children: [node("PROMPT.md"), node("report.md")] },
+    });
+    api.fileContent.mockImplementation(async (_uid, path) => ({
+      path,
+      abs_path: `${MORNING.folder}/${path}`,
+      folder_abs_path: MORNING.folder,
+      content: path === "report.md" ? "# Today" : "Summarise",
+      truncated: false,
+      binary: false,
+      size: 8,
+    }));
+    renderPage("/scheduled-tasks/t-1/files");
+    fireEvent.click(await screen.findByText("report.md"));
+    await waitFor(() => expect(api.fileContent).toHaveBeenCalledWith("t-1", "report.md"));
   });
 
   acceptance("channels", "the page creates a task", async () => {
@@ -194,9 +241,9 @@ describe("ScheduledTasksPage", () => {
     await waitFor(() => expect(api.create).toHaveBeenCalledTimes(1));
     expect(api.create.mock.calls[0][0]).toEqual({
       name: "Nightly build",
+      prompt: "Check the nightly build",
       config: {
         schedule: { kind: "daily", time: "09:00" },
-        prompt: "Check the nightly build",
         agent: "claude_code",
         model: "claude-sonnet",
         cwd: "~/work/site",

@@ -28,7 +28,7 @@ SPECS = [
         "GET",
         "/scheduled-tasks/{uid}",
         _UI + "open a task",
-        "One task: its config, next run and last run.",
+        "One task: its config, prompt, folder, next run and last run.",
         names=T,
     ),
     RouteCommand(
@@ -36,10 +36,28 @@ SPECS = [
         "POST",
         "/scheduled-tasks",
         _UI + "New task",
-        "Add a scheduled task. Body: name, description, config (schedule with an "
-        "optional IANA timezone, prompt, agent, model, cwd). Every run opens a new "
+        "Add a scheduled task. Body: name, description, prompt (written to the "
+        "task's PROMPT.md), config (schedule with an optional IANA timezone, agent, "
+        "model, cwd; no cwd runs in the task's own folder). Every run opens a new "
         "conversation on the agent.",
         body=True,
+    ),
+    RouteCommand(
+        "task prompt",
+        "PUT",
+        "/scheduled-tasks/{uid}/prompt",
+        _UI + "Prompt · Edit",
+        "Replace a task's PROMPT.md (or edit that file in its folder). Body: prompt.",
+        names=T,
+        body=True,
+    ),
+    RouteCommand(
+        "task files",
+        "GET",
+        "/scheduled-tasks/{uid}/files",
+        _UI + "Files tab",
+        "The files in the task's folder (PROMPT.md and what its runs wrote there).",
+        names=T,
     ),
     RouteCommand(
         "task run",

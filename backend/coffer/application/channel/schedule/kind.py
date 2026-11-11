@@ -50,7 +50,10 @@ def make_scheduled_task_kind(
         check_schedule(ScheduledTaskConfig.model_validate(config), now=clock(), new=True)
 
     async def _validate_update(resource: Resource, after: dict[str, Any]) -> None:
-        before = ScheduledTaskConfig.model_validate(resource.config).schedule
+        # A file from before 2026-11-11 still carries its prompt while it is
+        # being moved into PROMPT.md.
+        old = {k: v for k, v in resource.config.items() if k != "prompt"}
+        before = ScheduledTaskConfig.model_validate(old).schedule
         parsed = ScheduledTaskConfig.model_validate(after)
         try:
             # A one-off whose time is not being changed may already be behind.

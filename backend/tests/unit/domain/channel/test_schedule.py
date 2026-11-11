@@ -28,6 +28,7 @@ from coffer.domain.channel.schedule import (
 )
 from coffer.domain.channel.scheduled_task import (
     ScheduledTaskConfig,
+    clean_prompt,
     grace_for,
     min_repeat_ok,
 )
@@ -164,7 +165,6 @@ def test_shortest_gap_measures_the_tightest_repeat(local_tz: None) -> None:
 def _config(**changes: object) -> dict[str, object]:
     base: dict[str, object] = {
         "schedule": {"kind": "daily", "time": "09:00"},
-        "prompt": "Check the deploy",
         "agent": "claude_code",
     }
     return {**base, **changes}
@@ -183,8 +183,7 @@ def test_a_task_names_its_agent_model_and_directory() -> None:
         {"agent": ""},  # a task names its agent
         {"chat": {"channel": "ch-1", "chat_id": "owner"}},  # a task has no chat
         {"schedule": {"kind": "weekdays", "time": "09:00"}},  # Monday to Friday is cron
-        {"prompt": ""},
-        {"prompt": "x" * 8001},
+        {"prompt": "Check the deploy"},  # the prompt is the task's PROMPT.md
     ],
 )
 def test_a_config_breaking_a_rule_is_refused(changes: dict[str, object]) -> None:
@@ -193,10 +192,10 @@ def test_a_config_breaking_a_rule_is_refused(changes: dict[str, object]) -> None
 
 
 def test_an_older_file_is_read_without_its_chat() -> None:
+    # Its prompt has already been moved into PROMPT.md (TaskService).
     config = ScheduledTaskConfig.model_validate(
         {
             "schedule": {"kind": "weekdays", "time": "08:05", "timezone": "Asia/Singapore"},
-            "prompt": "Standup",
             "chat": {"channel": "ch-1", "chat_id": "owner"},
             "session": "continue",
             "mention": {"name": "Sam"},
@@ -254,7 +253,7 @@ def test_a_schedule_reads_its_times_in_its_own_timezone() -> None:
         assert next_slot(schedule, monday) == datetime(2026, 11, 2, 3, 0, tzinfo=UTC)
         # A repeating slot's grace lasts to the end of that day in its zone:
         # 11:00 Singapore is 13 hours from Singapore's midnight.
-        config = ScheduledTaskConfig(schedule=schedule, prompt="x", agent="claude_code")
+        config = ScheduledTaskConfig(schedule=schedule, agent="claude_code")
         slot = datetime(2026, 11, 2, 3, 0, tzinfo=UTC)
         assert grace_for(config, slot=slot, created_at=monday) == timedelta(hours=13)
     finally:
@@ -284,6 +283,13 @@ def test_an_unknown_timezone_is_not_a_schedule() -> None:
 
 
 def test_a_task_dumps_without_empty_fields() -> None:
-    base = {"schedule": {"kind": "daily", "time": "09:00"}, "prompt": "x", "agent": "codex"}
+    base = {"schedule": {"kind": "daily", "time": "09:00"}, "agent": "codex"}
     dumped = ScheduledTaskConfig.model_validate(base).model_dump(exclude_none=True)
     assert "chat" not in dumped and "timezone" not in dumped["schedule"]
+
+
+def test_a_prompt_is_kept_trimmed_and_bounded() -> None:
+    assert clean_prompt("  # Daily\n\nSay hi.\n\n") == "# Daily\n\nSay hi."
+    for bad in ("", "   ", "x" * 8001):
+        with pytest.raises(ValueError):
+            clean_prompt(bad)
