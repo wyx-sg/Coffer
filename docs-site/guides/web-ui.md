@@ -182,6 +182,8 @@ Switch between **English** and **简体中文** in **Settings → General → La
 
 File trees and previews — on the skill, knowledge and agent pages — fill the window to the bottom and scroll inside. Inside a file viewer, **Cmd+F** (**Ctrl+F**) searches the file.
 
+Every Markdown preview, and the text of conversations, draws a ```` ```mermaid ```` code block as its diagram: a flowchart, a sequence diagram, a state diagram, or any other type [Mermaid](https://mermaid.js.org/intro/) draws, in the app's light or dark colours. The diagram is drawn on your Mac; nothing is sent anywhere. A block Mermaid cannot read shows its source, under a line saying the diagram could not be drawn.
+
 ## When the daemon is not reachable
 
 The UI checks the daemon every 30 seconds. When it stops answering, the UI retries after 1, 2, 4 and 8 seconds and shows what is happening at the top of the workspace, while the sidebar stays usable:

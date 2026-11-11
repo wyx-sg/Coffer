@@ -9,6 +9,10 @@
       "prev": "Previous",
       "caseSensitive": "Case sensitive",
       "close": "Close"
+    },
+    "diagram": {
+      "label": "Diagram",
+      "failed": "This diagram couldn’t be drawn, so its source is shown."
     }
   },
   "fileActions": {

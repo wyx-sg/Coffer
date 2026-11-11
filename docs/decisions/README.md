@@ -248,6 +248,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`knowledge-stays-current-through-flags-coffer-computes`](knowledge-stays-current-through-flags-coffer-computes.md) | Knowledge Stays Current Through Flags Coffer Computes and an Agent Clears |
 | [`knowledge-sources-keep-their-images-and-originals-stay-on-this-mac`](knowledge-sources-keep-their-images-and-originals-stay-on-this-mac.md) | Knowledge Sources Keep Their Images; Originals Stay on This Mac |
 | [`knowledge-files-stay-where-their-writer-put-them`](knowledge-files-stay-where-their-writer-put-them.md) | Knowledge Files Stay Where Their Writer Put Them, and Every Link Is Checked |
+| [`markdown-diagrams-render-with-mermaid`](markdown-diagrams-render-with-mermaid.md) | Markdown Diagrams Render With Mermaid, in the Browser, Loaded on Demand |
 | [`confluence-pages-import-as-readable-sources`](confluence-pages-import-as-readable-sources.md) | Confluence Pages Import as Readable Sources With Their Attachments |
 | [`linked-knowledge-folders-are-read-only-and-machine-local`](linked-knowledge-folders-are-read-only-and-machine-local.md) | A Linked Knowledge Folder Is Shared in Place, Read-Only to Coffer, and Recorded Machine-Local |
 | [`sync-memory-into-each-agents-own-memory`](sync-memory-into-each-agents-own-memory.md) | Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault |

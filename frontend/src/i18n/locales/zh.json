@@ -9,6 +9,10 @@
       "prev": "上一个",
       "caseSensitive": "区分大小写",
       "close": "关闭"
+    },
+    "diagram": {
+      "label": "图",
+      "failed": "这张图无法绘制，下面显示的是它的源码。"
     }
   },
   "fileActions": {
