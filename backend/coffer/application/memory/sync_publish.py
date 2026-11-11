@@ -12,10 +12,10 @@ loudly and in isolation").
 
 Before an entry is published:
 
-- its project is resolved: a memory about the person, or one learned in no
-  directory at all, is ``global``; one learned in a repository is filed under
-  the repository's project key; any other is not published ("Identify a
-  project by a key that does not depend on the machine");
+- its project is resolved: one learned in a repository is filed under the
+  repository's project key; any other is not published ("Identify a project
+  by a key that does not depend on the machine", "Sync only project
+  memories");
 - its paths are made portable ("Store paths in a memory portably");
 - it is withheld when it holds something shaped like a secret ("Withhold a
   memory that looks like a secret");
@@ -35,7 +35,6 @@ from coffer.domain.memory import absorption
 from coffer.domain.memory.errors import UnreadableMemory
 from coffer.domain.memory.hub import (
     CLAUDE_CODE,
-    TYPE_USER,
     HubEntry,
     Origin,
     entry_id,
@@ -301,25 +300,23 @@ def _publish_source(
 
 
 def _place(raw: RawEntry, ctx: PublishContext) -> tuple[str, list[str]] | None:
-    """``(project key, repository roots)`` for an entry; ``""`` is global.
-    ``None`` when the entry is not published.
+    """``(project key, repository roots)`` for an entry, or ``None`` when the
+    entry is not published.
 
     An entry stays where its agent filed it, whatever its type: under the
     first of its directories inside a repository, as that repository's
-    project. An entry with no directory is global, and so is a memory about
-    the person learned outside any repository; anything else learned outside
-    one (a scratch directory) is not published."""
-    if not raw.project_root:
-        return "", []
+    project. A memory learned in no repository (Codex's profile, a scratch
+    directory, a session with no working directory) is not published: there
+    is no global memory ("Sync only project memories")."""
     for directory in (raw.project_root, *raw.other_roots):
+        if not directory:
+            continue
         checkout = ctx.project_of(directory)
         if checkout is not None:
             roots = [checkout.root]
             if directory.rstrip("/") != checkout.root.rstrip("/"):
                 roots.append(directory)
             return checkout.key, roots
-    if raw.type == TYPE_USER:
-        return "", []
     return None
 
 

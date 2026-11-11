@@ -18,14 +18,15 @@ settings document (spec internal-engine).
 
 ```text
 ~/.coffer/vault/memory/
-├── global/                          # memories about the person
-│   └── <id>.md
-├── projects/
-│   └── github.com-acme-payments/    # one folder per project key
-│       └── <id>.md
-└── sorted/                          # one record per task-material memory sorted
-    └── <id>.md
+└── projects/
+    └── github.com-acme-payments/    # one folder per project key
+        └── <id>.md
 ```
+
+Only memories learned in a repository are published ("Sync only project
+memories"). An entry an earlier build published under `global/` is written
+into no agent and is deleted by the machine that published it on its next
+sync; `sorted/` records an earlier build wrote are not read.
 
 The hub is in the vault, so vault sync carries it to every machine. Each
 entry is one Markdown file with this frontmatter, then the memory's body:
@@ -34,7 +35,7 @@ entry is one Markdown file with this frontmatter, then the memory's body:
 ---
 id: 3f2a91c4de55b071
 origin: {machine: <machine id>, agent: claude_code, source: projects/<slug>/memory/feedback_testing}
-project: github.com/acme/payments      # absent for global
+project: github.com/acme/payments
 type: feedback                         # user | feedback | project | reference
 title: Integration tests hit a real database
 description: Never mock the DB in integration tests; a mocked run hid a broken migration.
@@ -48,7 +49,7 @@ updated_at: 2026-10-09T06:00:00Z
 |---|---|
 | `id` | `sha256(machine, agent, source)[:16]`: an unchanged source re-read maps to the same entry, so an edit is an update |
 | `origin` | the one machine and agent that may change or delete the entry ("Publish only what the origin agent wrote, and only from its machine") |
-| `project` | the project key: the normalised remote of the repository, or its directory name when it has none; absent for global |
+| `project` | the project key: the normalised remote of the repository, or its directory name when it has none |
 | `type` | the agent's own memory type; Codex sections map onto `user` and `project` |
 | `body` | stored portably: the repository root is `<repo>` and the home directory `~` ("Store paths in a memory portably") |
 
@@ -59,30 +60,6 @@ updated_at: 2026-10-09T06:00:00Z
 - An entry whose text the bundled plaintext detector flags is withheld and
   never written to the hub.
 
-## Task material and sorted records
-
-An entry is **task material** when its agent filed it as task notes: a Codex
-memory whose identity names a task group, or a Claude Code memory typed
-`reference` ("Flag the memories an agent filed as task material"). Nothing is
-stored for the flag; it is read from `origin` and `type`. Task material is not
-written into an agent of another type until it is sorted back into memory.
-
-A sorting is one file, `vault/memory/sorted/<id>.md`, written by
-`coffer memory sorted` as one vault commit by the writer `memory-sync`:
-
-```yaml
----
-id: 3f2a91c4de55b071
-outcome: knowledge          # knowledge | skill | memory | drop
-where: shopee-account/pages/ia-sheet.md
-sorted_at: 2026-11-03T09:00:00Z
----
-```
-
-A record stays when its memory is reworded and is deleted by the next sync once
-its memory has left the hub. A memory is **to sort** while it is task material
-and has no record.
-
 ## Copies in the agents
 
 What a sync writes into each agent on this machine. A project's memories are
@@ -90,14 +67,17 @@ written only where the project is checked out here, with `<repo>` and `~`
 expanded to this machine's paths. An agent never receives its own memories
 back from its own machine.
 
-| Agent | Project memories | Global memories |
-|---|---|---|
-| Claude Code | a block at the end of `<config_dir>/projects/<slug>/memory/MEMORY.md` between `<!-- coffer:memory-sync:begin -->` and `<!-- coffer:memory-sync:end -->`: one line per memory with its text (at most 800 characters) and the agent it came from, newest first, at most 4 KB, the rest counted | `<config_dir>/rules/coffer-memory.md`: the same lines, Codex's User Profile first, at most 8 KB, the rest counted |
-| Codex | `<config_dir>/memories/extensions/coffer/resources/<id>-<title-slug>.md`, with `instructions.md` beside them | the same folder |
+| Agent | Project memories |
+|---|---|
+| Claude Code | a block at the end of `<config_dir>/projects/<slug>/memory/MEMORY.md` between `<!-- coffer:memory-sync:begin -->` and `<!-- coffer:memory-sync:end -->`: one line per memory with its text (at most 800 characters) and the agent it came from, newest first, at most 4 KB, the rest counted |
+| Codex | `extensions/coffer/resources/<id>-<title-slug>.md` in every Codex memory folder (`memories/`, `memories_v2/`), with `instructions.md` beside them |
+
+The global rules file an earlier build wrote, `<config_dir>/rules/coffer-memory.md`,
+is deleted by the next sync.
 
 Claude Code gets no file per memory. A `coffer_*` copy an earlier build wrote
 carries `coffer: {entry, from, synced_at}` in its frontmatter; readers skip
-every such file, the marked block, the rules file, everything under Codex's `extensions/`, and any
+every such file, the marked block, everything under Codex's `extensions/`, and any
 Codex bullet tagged `[via Coffer]` ("Never republish Coffer's own copies").
 Codex writes nothing while its `memories` feature is off.
 
@@ -133,13 +113,13 @@ Codex writes nothing while its `memories` feature is off.
 changes a first or large sync (more than 50 copies) would make. **Write**
 applies exactly that plan; **Cancel** drops it; a newer sync replaces it.
 Losing the ledger costs one preview, never an agent's own memory: Coffer's
-block and rules file are rewritten whole, and a Codex resource is named by its
+block is rewritten whole, and a Codex resource is named by its
 entry id.
 
 ## Undo
 
 **Undo sync** removes every copy in `copies` whose state is `written` and whose
-file still matches its digest, Claude Code's marked block and rules file, and
+file still matches its digest, Claude Code's marked block, and
 Codex's `extensions/coffer/` folder, then turns the `memory_sync` pass off. Edited and removed copies, every agent's own
 memory and the hub stay.
 
@@ -150,6 +130,4 @@ memory and the hub stay.
 | `memory_synced` | a sync changed the hub or a copy | the person, or `system:memory-sync-worker` |
 | `memory_sync_undone` | Undo sync | the person |
 | `memory_curation_requested` | Curate now | the person |
-| `memory_sort_requested` | Sort into knowledge | the person |
-| `memory_sorted` | `coffer memory sorted` recorded a sorting | the person, through their agent |
 | `memory_hook_removed` | the upgrade took the retired hook out of one agent | `system:upgrade` |

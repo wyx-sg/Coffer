@@ -8,12 +8,10 @@
 // interval), when memory last synced and syncs next, and a ⋯ menu with Undo
 // sync…; under it one banner counts what waits on the person (a first or large
 // sync to confirm, a source the last sync could not read, a memory it
-// withheld, an agent whose own memory is off so nothing is written into it),
-// and under it a quiet line counting the memories the agents filed as task
-// notes, with **Sort into knowledge**.
+// withheld, an agent whose own memory is off so nothing is written into it).
 // Each agent's own memory and curation live on its Memory tab. Below, the
-// scopes — global memories, then the hub's projects — beside the open scope's
-// memories (`?scope=`); a memory opens in a drawer
+// hub's projects beside the open project's memories (`?scope=`); only memories
+// learned in a repository are synced. A memory opens in a drawer
 // (`?memory=<id>`) with its text and where each agent holds it. Nothing on the
 // page edits a memory's text: the person edits memory in the agent's own
 // memory directory.
@@ -28,7 +26,6 @@ import { MemoryList } from "@/components/memory/MemoryList";
 import { MemoryPageEmpty } from "@/components/memory/MemoryPageEmpty";
 import { MemoryNeedsYou } from "@/components/memory/MemoryNeedsYou";
 import { MemoryScopeList } from "@/components/memory/MemoryScopeList";
-import { MemoryToSort } from "@/components/memory/MemoryToSort";
 import { MemorySyncButton } from "@/components/memory/MemorySyncButton";
 import { MemorySyncClock } from "@/components/memory/MemorySyncClock";
 import { UndoSyncDialog } from "@/components/memory/UndoSyncDialog";
@@ -38,7 +35,6 @@ import { PAGE_BLEED, PAGE_BLEED_HEAD } from "@/components/shell/pageFrame";
 import { ActionMenu } from "@/components/ui/menu";
 import { useMemoryEntries, useMemorySyncState } from "@/lib/hooks/useMemory";
 import {
-  GLOBAL_SCOPE,
   defaultScope,
   parsePreview,
   reportFailures,
@@ -55,11 +51,8 @@ export function MemoryPage() {
   const noAgents = Boolean(state) && agents.length === 0;
 
   const scope = params.get("scope") ?? (state ? defaultScope(state) : null);
-  const isGlobal = scope === GLOBAL_SCOPE;
-  const project = isGlobal ? null : (state?.projects.find((p) => p.folder === scope) ?? null);
-  const known = isGlobal || project !== null;
-  // Global memories are asked for as project "" — the hub files them under `global/`.
-  const entries = useMemoryEntries(isGlobal ? "" : (project?.key ?? null));
+  const project = state?.projects.find((p) => p.folder === scope) ?? null;
+  const entries = useMemoryEntries(project?.key ?? null);
   const rows = useMemo(() => entries.data ?? [], [entries.data]);
 
   const openId = params.get("memory");
@@ -91,12 +84,12 @@ export function MemoryPage() {
   };
 
   let pane: JSX.Element | null = null;
-  if (state && known) {
+  if (state && project) {
     pane = (
       <MemoryList
         key={scope}
         project={project}
-        count={isGlobal ? state.global_memories : (project?.memories ?? 0)}
+        count={project.memories}
         entries={rows}
         machine={state.machine}
         isLoading={entries.isPending}
@@ -149,14 +142,11 @@ export function MemoryPage() {
             withheld={reportWithheld(state.last_report)}
             agents={agents}
             onOpenMemory={(entry, key) => {
-              const folder = key
-                ? state.projects.find((p) => p.key === key)?.folder
-                : GLOBAL_SCOPE;
+              const folder = state.projects.find((p) => p.key === key)?.folder;
               if (folder) setParams({ scope: folder, memory: entry });
             }}
           />
         ) : null}
-        {state && !noAgents ? <MemoryToSort count={state.to_sort} /> : null}
       </div>
 
       {error || noAgents ? (
@@ -172,7 +162,6 @@ export function MemoryPage() {
           list={
             <MemoryScopeList
               projects={state?.projects ?? []}
-              globalMemories={state?.global_memories ?? 0}
               selected={scope}
               isLoading={isPending}
             />

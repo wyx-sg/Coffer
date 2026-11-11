@@ -3636,7 +3636,6 @@
       "done_other": "已移除 {{count}} 份副本。自动同步已关闭。"
     },
     "detail": {
-      "global": "写入每台机器上的每个智能体",
       "notHere": "这台机器上没有检出：检出后才会写入",
       "memories_one": "{{count}} 条记忆",
       "memories_other": "{{count}} 条记忆"
@@ -3658,14 +3657,12 @@
     "copy": {
       "origin": "它自己的",
       "written": "已写入",
-      "rules": "在规则文件中",
       "pending": "下次同步",
       "held_back": "暂缓",
       "deferred": "由 Codex 导入",
       "edited": "被智能体修改",
       "removed": "被智能体移除",
-      "block": "在项目记忆中",
-      "stays_home": "留在原智能体"
+      "block": "在项目记忆中"
     },
     "scopes": {
       "label": "记忆范围",
@@ -3700,13 +3697,6 @@
       "openAgent": "打开 {{agent}} 的记忆设置",
       "blocked_one": "{{count}} 个智能体没法写入",
       "blocked_other": "{{count}} 个智能体没法写入"
-    },
-    "toSort": {
-      "line_one": "{{count}} 条记忆像任务笔记，等你整理",
-      "line_other": "{{count}} 条记忆像任务笔记，等你整理",
-      "hint": "这些是智能体按任务笔记记下的，Coffer 先让它们留在写下它的智能体里。整理会在终端里打开 Claude Code，把外部系统的事放进知识库，固定步骤做成技能，关于你的留作记忆。",
-      "button": "整理到知识库",
-      "badge": "待整理"
     },
     "sortOutcome": {
       "knowledge": "知识库",

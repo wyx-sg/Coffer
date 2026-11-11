@@ -25,7 +25,7 @@ import contextlib
 import dataclasses
 import logging
 import pathlib
-from collections.abc import Mapping, Sequence, Set
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 
 from coffer.domain.memory import absorption
@@ -110,24 +110,22 @@ def targets_for(
     checkouts: Mapping[str, str],
     home: str,
     codex_imports_claude: bool,
-    stay_home: Set[str] = frozenset(),
 ) -> AgentTargets:
-    """Every hub entry ``agent_type`` here should hold. ``stay_home`` names the
-    entries that reach only the agent type they came from."""
+    """Every hub entry ``agent_type`` here should hold."""
     out = AgentTargets()
     for entry in sorted(hub.values(), key=lambda e: e.id):
         if entry.origin.machine == machine and entry.origin.agent == agent_type:
             continue
-        if entry.id in stay_home and entry.origin.agent != agent_type:
-            continue
         if agent_type == CODEX and entry.origin.agent == CLAUDE_CODE and codex_imports_claude:
             continue
-        root: str | None = None
-        if entry.project:
-            root = checkouts.get(entry.project)
-            if root is None:
-                out.held_back += 1
-                continue
+        if not entry.project:
+            # A global entry another machine published before it upgraded:
+            # there is no global memory, and its machine deletes it.
+            continue
+        root = checkouts.get(entry.project)
+        if root is None:
+            out.held_back += 1
+            continue
         target = Target(
             entry=entry, root=root, body=from_portable(entry.body, repo_root=root, home=home)
         )

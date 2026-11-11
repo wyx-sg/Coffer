@@ -1,5 +1,7 @@
 # Claude Code Reads Other Agents' Memories as Text It Loads: a Project's in Its MEMORY.md Block, the Global Ones in a Rules File
 
+> **Superseded in part (2026-11-11).** [Sync Only Project Memories](sync-only-project-memories.md): there are no global memories, so the rules file `rules/coffer-memory.md` is no longer written and the next sync deletes it. A project's memories still go into its `MEMORY.md` block.
+
 **Status**: Accepted
 **Date**: 2026-11-03
 **Deciders**: Yuxing Wu

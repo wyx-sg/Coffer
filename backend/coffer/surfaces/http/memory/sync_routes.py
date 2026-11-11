@@ -5,8 +5,7 @@ The sync's state, **Sync now**, the pending preview's **Write** and
 **Cancel**, **Undo sync…**, the person's answer to "Codex imports Claude
 Code's memories itself", the hub's memories for one project with where each
 was written here, one memory's text with the file each agent holds it in,
-**Curate now**, **Turn on** for an agent's own curation, and **Sort into
-knowledge** with the record of what was sorted.
+**Curate now**, and **Turn on** for an agent's own curation.
 """
 
 from __future__ import annotations
@@ -33,14 +32,9 @@ from coffer.surfaces.http.memory.sync_schemas import (
     HubEntryOut,
     MemorySyncReportOut,
     MemorySyncStateOut,
-    SortedIn,
-    SortedOut,
-    SortHandoffOut,
     SyncAgentOut,
     SyncLocationOut,
     SyncProjectOut,
-    ToSortEntryOut,
-    ToSortOut,
     WriterStatusOut,
 )
 
@@ -96,9 +90,7 @@ def _state(state: SyncState) -> MemorySyncStateOut:
             )
             for p in state.projects
         ],
-        global_memories=state.global_memories,
         machine=state.machine,
-        to_sort=state.to_sort,
     )
 
 
@@ -155,10 +147,9 @@ async def set_codex_import(
 
 @router.get("/entries", response_model=HubEntryListOut)
 async def list_entries(
-    project: str = Query("", description="A project key; empty or `global` for global memories."),
+    project: str = Query(..., description="A project key."),
     view: MemorySyncView = Depends(get_sync_view),  # noqa: B008
 ) -> HubEntryListOut:
-    project = "" if project == "global" else project
     rows = await view.entries(project)
     return HubEntryListOut(
         project=project,
@@ -174,7 +165,6 @@ async def list_entries(
                 created_at=r.entry.created_at,
                 updated_at=r.entry.updated_at,
                 copies=r.copies,
-                to_sort=r.to_sort,
             )
             for r in rows
         ],
@@ -221,46 +211,6 @@ async def curation_handoff(
     if prompt is None:
         raise ResourceNotFound(f"a curation hand-off for {body.agent_type}")
     return CurationHandoffOut(handoff=HandoffOut(prompt=prompt))
-
-
-@router.get("/to-sort", response_model=ToSortOut)
-async def to_sort(
-    view: MemorySyncView = Depends(get_sync_view),  # noqa: B008
-) -> ToSortOut:
-    """The task material no one has sorted yet, newest first."""
-    return ToSortOut(
-        entries=[
-            ToSortEntryOut(
-                id=e.id,
-                title=e.title or e.description,
-                project=e.project,
-                origin_agent=e.origin.agent,
-                updated_at=e.updated_at,
-            )
-            for e in await view.to_sort()
-        ]
-    )
-
-
-@router.post("/sort/handoff", response_model=SortHandoffOut)
-async def sort_handoff(
-    view: MemorySyncView = Depends(get_sync_view),  # noqa: B008
-    actor: str = Depends(get_actor),
-) -> SortHandoffOut:
-    """**Sort into knowledge**: the prompt that asks Claude Code, in a terminal
-    the person watches, to sort the waiting task material."""
-    return SortHandoffOut(handoff=HandoffOut(prompt=await view.sort_handoff(actor)))
-
-
-@router.post("/sorted", response_model=SortedOut)
-async def mark_sorted(
-    body: SortedIn,
-    view: MemorySyncView = Depends(get_sync_view),  # noqa: B008
-    actor: str = Depends(get_actor),
-) -> SortedOut:
-    """Record where the person's agent sorted memories; 404 for an id not in
-    the hub."""
-    return SortedOut(ids=await view.mark_sorted(body.ids, body.outcome, body.where, actor))
 
 
 @router.post("/curation/enable", response_model=CurationEnableOut)

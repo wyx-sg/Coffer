@@ -42,11 +42,7 @@ class SyncState:
     codex_imports_claude: bool | None
     agents: list[AgentRow]
     projects: list[ProjectRow]
-    global_memories: int
     machine: str
-    #: Task material no one has sorted yet (spec memory "Sort task material
-    #: into knowledge on request").
-    to_sort: int = 0
 
 
 @dataclass(frozen=True)
@@ -54,8 +50,6 @@ class EntryRow:
     entry: HubEntry
     #: ``agent type → copy state`` on this machine.
     copies: dict[str, str] = field(default_factory=dict)
-    #: Task material no one has sorted yet.
-    to_sort: bool = False
 
 
 @dataclass(frozen=True)
@@ -65,7 +59,7 @@ class CopyLocation:
     agent_type: str
     state: str
     #: The file on this machine: the agent's own (the origin), Coffer's copy,
-    #: or the rules file; ``""`` when there is none here.
+    #: or the project's ``MEMORY.md``; ``""`` when there is none here.
     path: str = ""
 
 

@@ -3,7 +3,7 @@ sync in the web UI and on the command line")."""
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -69,10 +69,7 @@ class MemorySyncStateOut(BaseModel):
     codex_imports_claude: bool | None = None
     agents: list[SyncAgentOut] = Field(default_factory=list)
     projects: list[SyncProjectOut] = Field(default_factory=list)
-    global_memories: int = 0
     machine: str = ""
-    #: Task material no one has sorted yet (**Sort into knowledge**).
-    to_sort: int = 0
 
 
 class MemorySyncReportOut(BaseModel):
@@ -93,11 +90,9 @@ class HubEntryOut(BaseModel):
     created_at: str
     updated_at: str
     #: ``agent type → copy state`` on this machine (``written``, ``edited``,
-    #: ``removed``, ``held_back``, ``deferred``, ``rules``, ``block``,
-    #: ``stays_home``, ``origin``, ``pending``).
+    #: ``removed``, ``held_back``, ``deferred``, ``block``, ``origin``,
+    #: ``pending``).
     copies: dict[str, str] = Field(default_factory=dict)
-    #: Task material no one has sorted yet.
-    to_sort: bool = False
 
 
 class HubEntryListOut(BaseModel):
@@ -145,36 +140,6 @@ class CurationHandoffOut(BaseModel):
     handoff: HandoffOut
 
 
-class SortHandoffOut(BaseModel):
-    """**Sort into knowledge**: the prompt the page starts Claude Code with."""
-
-    handoff: HandoffOut
-
-
-class ToSortEntryOut(BaseModel):
-    id: str
-    title: str
-    project: str = ""
-    origin_agent: str
-    updated_at: str
-
-
-class ToSortOut(BaseModel):
-    entries: list[ToSortEntryOut] = Field(default_factory=list)
-
-
-class SortedIn(BaseModel):
-    #: The hub entries sorted, by id.
-    ids: list[str] = Field(min_length=1)
-    outcome: Literal["knowledge", "skill", "memory", "drop"]
-    #: Where they went, in the agent's words (a collection and page, a skill).
-    where: str = ""
-
-
-class SortedOut(BaseModel):
-    ids: list[str] = Field(default_factory=list)
-
-
 class CurationEnableOut(BaseModel):
     #: Whether a setting was written (``false`` when it was already on, or the
     #: agent has no switch for it).
@@ -193,12 +158,7 @@ __all__ = [
     "HubEntryOut",
     "MemorySyncReportOut",
     "MemorySyncStateOut",
-    "SortHandoffOut",
-    "SortedIn",
-    "SortedOut",
     "SyncAgentOut",
     "SyncProjectOut",
-    "ToSortEntryOut",
-    "ToSortOut",
     "WriterStatusOut",
 ]

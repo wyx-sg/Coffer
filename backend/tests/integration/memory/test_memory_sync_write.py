@@ -5,6 +5,7 @@ sorted" and the requirements that decide where and when)."""
 
 from __future__ import annotations
 
+import os
 import pathlib
 import re
 
@@ -19,6 +20,7 @@ from tests.integration.memory._sync_harness import (
     cc_memory_dir,
     cc_project,
     codex_memory,
+    hub_files,
 )
 from tests.integration.memory.conftest import init_repository
 
@@ -36,11 +38,6 @@ def _resources(codex: pathlib.Path) -> list[pathlib.Path]:
 def _block(memory: pathlib.Path) -> str:
     index = (memory / "MEMORY.md").read_text(encoding="utf-8")
     return index[index.index(BLOCK_BEGIN) : index.index(BLOCK_END)]
-
-
-async def _sort_all_into_memory(machine: Machine) -> None:
-    waiting = [e.id for e in await machine.view.to_sort()]
-    await machine.view.mark_sorted(waiting, "memory", "", "agent")
 
 
 @pytest.mark.acceptance(spec="memory", scenario="a project's memories reach only that project")
@@ -61,8 +58,6 @@ async def test_a_project_s_memories_reach_only_that_project(
     other = init_repository(tmp_path / "src" / "other", remote="git@github.com:acme/other.git")
     elsewhere = cc_project(cc, other, {"MEMORY.md": "# other\n"})
     await a.sync()
-    await _sort_all_into_memory(a)
-    await a.sync()
 
     index = (memory / "MEMORY.md").read_text(encoding="utf-8")
     assert index.startswith(own)
@@ -74,27 +69,29 @@ async def test_a_project_s_memories_reach_only_that_project(
     assert backups and backups[0].read_text(encoding="utf-8") == own
 
 
-@pytest.mark.acceptance(spec="memory", scenario="a Codex profile reaches every Claude Code session")
-async def test_a_codex_profile_reaches_every_claude_code_session(
+@pytest.mark.acceptance(
+    spec="memory", scenario="a memory learned outside any repository is not synced"
+)
+async def test_a_memory_learned_outside_any_repository_is_not_synced(
     tmp_path: pathlib.Path, payments: pathlib.Path
 ) -> None:
     a = Machine("machine-a", tmp_path / "a")
     a.codex(memory_md="", summary_md=CHINESE)
     cc = a.claude()
     memory = cc_project(cc, payments, {"MEMORY.md": "# index\n"})
+    rules = cc / "rules" / "coffer-memory.md"
+    rules.parent.mkdir(parents=True)
+    rules.write_text("# Memories from your other agents\n\n- Old line\n", encoding="utf-8")
     await a.sync()
 
-    rules = (cc / "rules" / "coffer-memory.md").read_text(encoding="utf-8")
-    assert "Coffer writes this file" in rules
-    assert "- Prefers replies in Chinese. (from Codex)" in rules
+    assert hub_files(pathlib.Path(os.environ["HOME"]) / ".coffer" / "vault") == []
+    assert not rules.exists()
     assert not (cc / "projects" / "-coffer-global").exists()
     assert (memory / "MEMORY.md").read_text(encoding="utf-8") == "# index\n"
 
 
-@pytest.mark.acceptance(
-    spec="memory", scenario="task material stays with its own agent until it is sorted"
-)
-async def test_task_material_stays_with_its_own_agent_until_it_is_sorted(
+@pytest.mark.acceptance(spec="memory", scenario="a task note syncs like any project memory")
+async def test_a_task_note_syncs_like_any_project_memory(
     tmp_path: pathlib.Path, payments: pathlib.Path
 ) -> None:
     a = Machine("machine-a", tmp_path / "a")
@@ -109,24 +106,9 @@ async def test_task_material_stays_with_its_own_agent_until_it_is_sorted(
     )
     await a.sync()
 
-    assert _resources(codex) == []
-    assert not (memory / "MEMORY.md").exists()
-    assert (await a.view.state()).to_sort == 2
-    rows = await a.view.entries("github.com/acme/payments")
-    assert {r.copies["codex"] for r in rows if r.entry.origin.agent == "claude_code"} == {
-        "stays_home"
-    }
-    assert all(r.to_sort for r in rows)
-
-    (codex_id,) = [r.entry.id for r in rows if r.entry.origin.agent == "codex"]
-    (claude_id,) = [r.entry.id for r in rows if r.entry.origin.agent == "claude_code"]
-    await a.view.mark_sorted([claude_id], "knowledge", "payments/dashboards", "agent")
-    await a.view.mark_sorted([codex_id], "memory", "", "agent")
-    await a.sync()
-
-    assert (await a.view.state()).to_sort == 0
-    assert _resources(codex) == []
     assert "Remarks go in column F." in _block(memory)
+    (copy,) = _resources(codex)
+    assert "Grafana board payments-p99." in copy.read_text(encoding="utf-8")
 
 
 @pytest.mark.acceptance(spec="memory", scenario="a Claude Code memory reaches Codex")
@@ -256,8 +238,6 @@ async def test_the_marked_block_is_bounded(tmp_path: pathlib.Path, payments: pat
     bullets = [f"Fact number {i} about the payments ledger, " + "x" * 200 for i in range(45)]
     a.codex(memory_md=codex_memory([("Payments", str(payments), bullets)]))
     memory = cc_project(a.claude(), payments, {})
-    await a.sync()
-    await _sort_all_into_memory(a)
     await a.sync()
 
     lines = _block(memory).splitlines()[1:]

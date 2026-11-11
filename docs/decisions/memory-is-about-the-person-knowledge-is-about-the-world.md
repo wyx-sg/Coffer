@@ -1,5 +1,7 @@
 # Memory Is About the Person, Knowledge Is About the World; Task Notes Are Sorted Into Knowledge on Request
 
+> **Superseded in part (2026-11-11).** [Sync Only Project Memories](sync-only-project-memories.md): task notes are no longer flagged, kept with their agent or sorted; they sync like any project memory, and Sort into knowledge, the sorted records and the reminder are gone. The split of memory and knowledge by content stands.
+
 **Status**: Accepted
 **Date**: 2026-11-03
 **Deciders**: Yuxing Wu

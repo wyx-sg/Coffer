@@ -257,6 +257,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`memory-page-lists-memories-by-scope`](memory-page-lists-memories-by-scope.md) | The Memory Page Lists the Memories by Scope; the Sync Shows Only When It Needs the Person |
 | [`follow-codex-memory-into-every-version-folder`](follow-codex-memory-into-every-version-folder.md) | Follow Codex's Memory Into Every Version Folder It Keeps |
 | [`memory-is-about-the-person-knowledge-is-about-the-world`](memory-is-about-the-person-knowledge-is-about-the-world.md) | Memory Is About the Person, Knowledge Is About the World; Task Notes Are Sorted Into Knowledge on Request |
+| [`sync-only-project-memories`](sync-only-project-memories.md) | Sync Only Project Memories; Task Notes Sync Like Any Other |
 | [`claude-code-reads-other-agents-memories-as-text`](claude-code-reads-other-agents-memories-as-text.md) | Claude Code Reads Other Agents' Memories as Text It Loads |
 
 ### Sync & secrets

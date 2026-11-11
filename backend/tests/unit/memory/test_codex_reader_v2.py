@@ -11,7 +11,6 @@ from coffer.domain.agent.codex_memory import parse_codex_v2_topics
 from coffer.domain.memory.hub import TYPE_PROJECT, TYPE_USER
 from coffer.domain.memory.reader import RawEntry
 from coffer.infrastructure.agent_files.codex_rollout_summaries import header_cwd
-from coffer.infrastructure.memory.codex_identity import is_profile, task_group
 from coffer.infrastructure.memory.readers.codex import CodexMemoryReader
 
 V2 = """v1
@@ -107,14 +106,6 @@ def test_v2_yields_profile_preferences_tips_and_topics(tmp_path: pathlib.Path) -
 def test_with_v2_beside_it_v1_gives_only_what_v2_does_not_say(tmp_path: pathlib.Path) -> None:
     v1 = _read(_codex(tmp_path, v1_summary=V1_SUMMARY))["memories/memory_summary.md"]
     assert [e.body for e in v1] == ["Only v1 knows this."]
-
-
-def test_a_v2_topic_is_filed_under_its_scope_and_the_profile_stays_pinned() -> None:
-    source = "memories_v2/memory_summary.md::Payments ledger::What's in Memory::ab"
-    assert task_group(source) == "Payments ledger"
-    assert task_group("memories_v2/memory_summary.md::profile::User preferences::ab") == ""
-    assert task_group("memories_v2/memory_summary.md::profile::General Tips::ab") == ""
-    assert is_profile("memories_v2/memory_summary.md::profile::user-profile")
 
 
 def test_topics_are_parsed_with_scope_date_and_pointer() -> None:

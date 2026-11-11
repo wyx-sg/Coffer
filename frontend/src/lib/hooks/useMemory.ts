@@ -15,7 +15,6 @@ import { translateApiError } from "@/lib/api/errors";
 import {
   cancelPreview,
   curationHandoff,
-  sortHandoff,
   enableCuration,
   getEntry,
   getSyncState,
@@ -47,7 +46,7 @@ export function useMemorySyncState() {
   });
 }
 
-/** One project's memories (`""`: global ones), each with where it was written here. */
+/** One project's memories, each with where it was written here. */
 export function useMemoryEntries(project: string | null) {
   return useQuery({
     queryKey: memoryEntriesKey(project ?? ""),
@@ -188,28 +187,6 @@ export function useCurateNow() {
       const prompt = (await curationHandoff(agentType)).handoff.prompt;
       await openTerminal(
         { agent: agentType, prompt },
-        {
-          label: t("handoff.copyPrompt"),
-          onClick: () => void navigator.clipboard?.writeText(prompt),
-        },
-      );
-    },
-    onError: (error) => toast.error(translateApiError(t, error)),
-  });
-}
-
-/** Sort into knowledge: Claude Code opens in the person's terminal with the
- *  daemon's prompt listing the task notes waiting to be sorted; it proposes
- *  where each goes and records each one with `coffer memory sorted`. */
-export function useSortIntoKnowledge() {
-  const { t } = useTranslation();
-  const { toast } = useToast();
-  const openTerminal = useOpenInTerminal();
-  return useMutation({
-    mutationFn: async () => {
-      const prompt = (await sortHandoff()).handoff.prompt;
-      await openTerminal(
-        { agent: "claude_code", prompt },
         {
           label: t("handoff.copyPrompt"),
           onClick: () => void navigator.clipboard?.writeText(prompt),
