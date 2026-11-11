@@ -21,6 +21,7 @@ from coffer.application.channel.schedule.ports import ScheduledRunRepoPort, Task
 from coffer.application.resource_service import ResourceService
 from coffer.domain.channel.scheduled_run import ScheduledRun
 from coffer.domain.channel.scheduled_task import (
+    OLD_CONFIG_KEYS,
     ScheduledTaskConfig,
     clean_prompt,
     is_retired_follow_up,
@@ -109,13 +110,19 @@ class TaskService:
         prompt: str | None = None,
     ) -> Resource:
         """Register the task and write its ``PROMPT.md``. The prompt comes as
-        ``prompt`` or, as older callers send it, inside ``config``."""
+        ``prompt`` or, as older callers send it, inside ``config``. It may be
+        left out: the file is then created empty, to be written in the task's
+        Files tab, the task must be named, as there is nothing to name it
+        after, and it is created paused: it resumes once the prompt is there."""
         rest = {k: v for k, v in config.items() if k != "prompt"}
         if prompt is None:
             prompt = config.get("prompt")
         try:
             parsed = ScheduledTaskConfig.model_validate(rest)
-            text = clean_prompt(prompt if isinstance(prompt, str) else "")
+            given = prompt if isinstance(prompt, str) else ""
+            text = clean_prompt(given) if given.strip() else ""
+            if not text and not (name or "").strip():
+                raise ValueError("a task created without a prompt needs a name")
         except (ValidationError, ValueError) as e:
             raise ConfigValidationError(str(e)) from e
         task = await self._resources.register(
@@ -126,6 +133,8 @@ class TaskService:
             description or None,
         )
         self._folders.write_prompt(task.uid, text)
+        if not text:
+            task = await self._resources.set_enabled(task.uid, False, actor)
         return task
 
     async def set_prompt(self, uid: str, prompt: str) -> TaskView:
@@ -139,16 +148,18 @@ class TaskService:
         return await self._view(view.task, view.last_run)
 
     async def move_prompts_to_files(self) -> int:
-        """Move the prompt a task file written before 2026-11-11 carries into
-        the task's ``PROMPT.md`` (kept when one is already there)."""
+        """Take what a task file written before 2026-11-11 carries out of it:
+        its prompt goes into the task's ``PROMPT.md`` (kept when one is already
+        there), its directory is dropped (every run works in the folder)."""
         moved = 0
         for task in await self._resources.list(kind=KIND):
-            prompt = task.config.get("prompt")
-            if prompt is None:
+            if not any(k in task.config for k in OLD_CONFIG_KEYS):
                 continue
-            if self._folders.read_prompt(task.uid) is None and str(prompt).strip():
-                self._folders.write_prompt(task.uid, str(prompt).strip())
-            rest = {k: v for k, v in task.config.items() if k != "prompt"}
+            prompt = task.config.get("prompt")
+            text = str(prompt).strip() if prompt is not None else ""
+            if text and self._folders.read_prompt(task.uid) is None:
+                self._folders.write_prompt(task.uid, text)
+            rest = {k: v for k, v in task.config.items() if k not in OLD_CONFIG_KEYS}
             config = ScheduledTaskConfig.model_validate(rest)
             await self._resources.update_config(
                 task.uid, config.model_dump(mode="json", exclude_none=True), _UPGRADE_ACTOR

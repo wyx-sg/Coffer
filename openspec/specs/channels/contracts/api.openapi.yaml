@@ -1259,11 +1259,6 @@ components:
           default: true
           title: Catch Up
           type: boolean
-        cwd:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Cwd
         model:
           anyOf:
           - type: string

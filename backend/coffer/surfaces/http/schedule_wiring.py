@@ -145,7 +145,7 @@ async def wire_scheduled_tasks(
         is_running=scheduler.is_running,
         folders=folders,
     )
-    app.state.kinds[KIND] = make_scheduled_task_kind()
+    app.state.kinds[KIND] = make_scheduled_task_kind(prompt_of=folders.read_prompt)
     # Follow-ups an older Coffer let agents book have no chat to run in now.
     await tasks.drop_retired_follow_ups()
     # A task written before 2026-11-11 carries its prompt in its file.

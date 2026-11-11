@@ -33,8 +33,8 @@ export function TaskOverview({ task }: { task: ScheduledTask }) {
         <Row label={t("scheduledTasks.dialog.model")}>
           {c.model || t("scheduledTasks.dialog.agentDefault")}
         </Row>
-        <Row label={t("scheduledTasks.dialog.cwd")}>
-          <span className="font-mono">{c.cwd || task.folder}</span>
+        <Row label={t("scheduledTasks.detail.folder")}>
+          <span className="font-mono">{task.folder}</span>
         </Row>
         <Row label={t("scheduledTasks.dialog.catchUp")}>
           {c.catch_up ? t("scheduledTasks.on") : t("scheduledTasks.off")}

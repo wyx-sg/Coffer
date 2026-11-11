@@ -170,11 +170,11 @@ def _config(**changes: object) -> dict[str, object]:
     return {**base, **changes}
 
 
-def test_a_task_names_its_agent_model_and_directory() -> None:
-    config = ScheduledTaskConfig.model_validate(
-        _config(agent="codex", model="gpt-5", cwd="/tmp/work")
-    )
-    assert config.agent == "codex" and config.model == "gpt-5" and config.cwd == "/tmp/work"
+def test_a_task_names_its_agent_and_model_but_no_directory() -> None:
+    config = ScheduledTaskConfig.model_validate(_config(agent="codex", model="gpt-5"))
+    assert config.agent == "codex" and config.model == "gpt-5"
+    with pytest.raises(ValueError, match="own folder"):
+        ScheduledTaskConfig.model_validate(_config(cwd="/tmp/work"))
 
 
 @pytest.mark.parametrize(

@@ -11,13 +11,12 @@ import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { DataTable, type Column, type FilterDef } from "@/components/DataTable";
-import { RelativeTime } from "@/components/RelativeTime";
 import { StatusPill } from "@/components/status/StatusPill";
 import type { RunOutcome, ScheduledRun } from "@/lib/api/scheduledTasks";
 import { formatDuration } from "@/lib/format/duration";
 import { useScheduledTaskRuns } from "@/lib/hooks/useScheduledTasks";
 import { OUTCOME_TONE } from "@/lib/scheduledTasks/format";
-import { formatMoment } from "@/lib/time";
+import { formatExact, formatMoment } from "@/lib/time";
 
 const OUTCOMES: readonly RunOutcome[] = ["running", "done", "skipped", "failed", "stopped"];
 
@@ -39,7 +38,16 @@ export function TaskRuns({ uid }: { uid: string }) {
       className: "w-[18%]",
       sortable: true,
       sortValue: (r) => r.started_at,
-      cell: (r) => <RelativeTime iso={r.started_at} className="text-text-muted" />,
+      // The moment itself ("today at 17:42"), not "6 min ago": runs are read by when they ran.
+      cell: (r) => (
+        <time
+          dateTime={r.started_at}
+          title={formatExact(r.started_at, i18n.language)}
+          className="text-text-muted"
+        >
+          {formatMoment(r.started_at, i18n.language, t)}
+        </time>
+      ),
     },
     {
       key: "outcome",

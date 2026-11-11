@@ -135,7 +135,7 @@ coffer task show [OPTIONS] UID
 
 ## task add
 
-Add a scheduled task. Body: name, description, prompt (written to the task's PROMPT.md), config (schedule with an optional IANA timezone, agent, model, cwd; no cwd runs in the task's own folder). Every run opens a new conversation on the agent.
+Add a scheduled task. Body: name, description, prompt (optional; written to the task's PROMPT.md, which `task prompt` replaces later; without one the name is required), config (schedule with an optional IANA timezone, agent, model). Every run opens a new conversation on the agent in the task's own folder.
 
 <p class="cli-label">Synopsis</p>
 

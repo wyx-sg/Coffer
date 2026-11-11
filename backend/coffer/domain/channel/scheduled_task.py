@@ -55,6 +55,12 @@ def clean_prompt(value: str) -> str:
     return stripped
 
 
+#: Keys a task file written before 2026-11-11 may carry, taken out of it at
+#: startup: the prompt (moved into ``PROMPT.md``) and the directory (dropped:
+#: every run works in the task's folder).
+OLD_CONFIG_KEYS = ("prompt", "cwd")
+
+
 #: Fields a task file written before 2026-11-06 may still carry: the chat it
 #: ran in, how it opened its conversation there, whom it mentioned, the daily
 #: report's material and template, and the follow-up's origin and chain.
@@ -99,12 +105,11 @@ class ScheduledTaskConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     schedule: Schedule
-    #: The agent (its key, ``claude_code`` or ``codex`` — one agent per type),
-    #: model and directory every run opens a new conversation with. No model
-    #: is the agent's default; no directory is the task's own folder.
+    #: The agent (its key, ``claude_code`` or ``codex`` — one agent per type)
+    #: and model every run opens a new conversation with, always in the task's
+    #: own folder. No model is the agent's default.
     agent: str = Field(min_length=1)
     model: str | None = None
-    cwd: str | None = None
     #: A run missed while this Mac slept or Coffer was stopped runs once on
     #: return while it is still within its grace; off skips it.
     catch_up: bool = True
@@ -116,10 +121,16 @@ class ScheduledTaskConfig(BaseModel):
         # refused here with that reason rather than as an unknown field. A file
         # written before 2026-11-11 carries one: it is moved into PROMPT.md at
         # startup, before the file is read as a task.
+        # A directory is refused the same way: every run works in the task's
+        # folder (2026-11-11); one written earlier is dropped at startup.
         if isinstance(raw, dict) and raw.get("prompt") is not None:
             raise ValueError(f"a task's prompt is its {PROMPT_FILE}, not part of its config")
+        if isinstance(raw, dict) and raw.get("cwd") is not None:
+            raise ValueError(
+                "a task always runs in its own folder; name another directory in its prompt"
+            )
         if isinstance(raw, dict):
-            raw = {k: v for k, v in raw.items() if k != "prompt"}
+            raw = {k: v for k, v in raw.items() if k not in OLD_CONFIG_KEYS}
         return _upgrade(raw)
 
 

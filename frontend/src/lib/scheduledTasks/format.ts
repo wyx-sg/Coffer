@@ -127,10 +127,8 @@ export interface TaskForm {
   timezone: string;
   /** A one-off task's moment, as a datetime-local input holds it. */
   at: string;
-  prompt: string;
   agent: string;
   model: string;
-  cwd: string;
   catchUp: boolean;
 }
 
@@ -152,10 +150,8 @@ export function formFrom(task?: ScheduledTask): TaskForm {
     expr: s?.kind === "cron" ? s.expr : "0 9 * * 1-5",
     timezone: s && "timezone" in s ? (s.timezone ?? "") : "",
     at: s?.kind === "once" ? localInput(s.at) : "",
-    prompt: task?.prompt ?? "",
     agent: c?.agent ?? "claude_code",
     model: c?.model ?? "",
-    cwd: c?.cwd ?? "",
     catchUp: c?.catch_up ?? true,
   };
 }
@@ -185,14 +181,13 @@ export function configFrom(form: TaskForm): ScheduledTaskConfig {
     schedule: scheduleFrom(form),
     agent: form.agent,
     model: form.model.trim() || null,
-    cwd: form.cwd.trim() || null,
     catch_up: form.catchUp,
   };
 }
 
-/** Whether the form can be saved. Editing leaves the prompt to the Files tab. */
-export function formValid(form: TaskForm, editing = false): boolean {
-  if ((!editing && !form.prompt.trim()) || !form.agent) return false;
+/** Whether the form can be saved: a name and an agent (the prompt is written in the Files tab). */
+export function formValid(form: TaskForm): boolean {
+  if (!form.name.trim() || !form.agent) return false;
   if (form.kind === "once") return form.at !== "" && !Number.isNaN(new Date(form.at).getTime());
   if (form.kind === "cron") return form.expr.trim().split(/\s+/).length === 5;
   return true;

@@ -106,8 +106,8 @@ upload named instead of dropped).
 ## Decision
 
 A task's prompt is `PROMPT.md` in its own folder,
-`~/.coffer/content/workspace/scheduled-tasks/<uid>/`, never in its config; a
-task without a directory runs in that folder; a run's files are plain files
+`~/.coffer/content/workspace/scheduled-tasks/<uid>/`, never in its config;
+every run works in that folder (a task names no directory, see History); a run's files are plain files
 there, named by the prompt; notify can send files.
 
 Rules a change must keep:
@@ -149,3 +149,17 @@ Rules a change must keep:
   `PROMPT.md` open first and editable (chosen, as Claude Code's scheduled tasks
   keep the prompt as one file in the task's folder). The Files card now
   reaches the bottom of the window like every file browser.
+- 2026-11-11 evening: a task names no directory any more, and is created
+  without its prompt. The owner asked "新建任务的时候不应该支持选目录，直接就使用内部目录是不是更合理？"
+  and "提示词也不用先填吧". Options for the directory, put to the owner on a
+  card: drop it from New task only and keep it in Edit (for a task that must
+  start in a repository, as the dev follow-up does), or drop it everywhere and
+  let a prompt that needs another directory say so (chosen by the owner, the
+  lean answer: the agent can `cd` itself). Every run now works in the task's
+  folder; a `cwd` in a config is refused, and one written earlier is dropped
+  at startup. Lost: a run no longer starts where a repository's `AGENTS.md`
+  would load by itself, so such a prompt has to point the agent at it. A task
+  created without a prompt gets an empty `PROMPT.md`, must be named, and is
+  created paused; at the owner's word ("必须有提示词才能开始运行") Resume and
+  Run now are refused while the file is empty. A file emptied by hand later
+  still fails the run that finds it so.

@@ -1,11 +1,10 @@
 // src/components/scheduled-tasks/TaskSessionFields.tsx — the agent, model and directory every run of a task opens its new conversation with.
 //
 // The agent is required; the model lists the agent's catalogue, with the
-// agent's own default first; the directory is picked like every other folder
-// in Coffer (the native dialog, or typed), and left empty is Coffer's workspace.
+// agent's own default first. There is no directory: every run works in the
+// task's own folder, and a prompt that needs another one names it.
 import { useTranslation } from "react-i18next";
 
-import { FolderPickerField } from "@/components/FolderPickerField";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -84,17 +83,6 @@ export function TaskSessionFields({ form, set }: Props) {
             ))}
           </SelectContent>
         </Select>
-      </div>
-      <div className="col-span-2 space-y-1.5">
-        <Label htmlFor="task-cwd">{t("scheduledTasks.dialog.cwd")}</Label>
-        <FolderPickerField
-          inputId="task-cwd"
-          value={form.cwd || null}
-          onChange={(cwd) => set({ cwd: cwd ?? "" })}
-          placeholder={t("scheduledTasks.dialog.workspaceFolder")}
-          clearable
-          typeable
-        />
       </div>
     </div>
   );

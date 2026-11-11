@@ -65,7 +65,6 @@ async def test_a_task_is_created(env: ChannelEnv, monkeypatch: pytest.MonkeyPatc
         None,
         task_config(
             agent="codex",
-            cwd="/tmp/site",
             schedule={"kind": "daily", "time": "11:00", "timezone": "Asia/Singapore"},
         ),
         actor="test",
@@ -73,7 +72,7 @@ async def test_a_task_is_created(env: ChannelEnv, monkeypatch: pytest.MonkeyPatc
     assert task.kind == KIND
     assert env.resources.storage_of(KIND, task.config) is StorageClass.LOCAL
     assert task.name == "Summarise the open pull requests"
-    assert task.config["agent"] == "codex" and task.config["cwd"] == "/tmp/site"
+    assert task.config["agent"] == "codex" and "cwd" not in task.config
     assert "chat" not in task.config
     view = await s.tasks.view(task.uid)
     # Thursday 10:00 UTC is 18:00 in Singapore: the next 11:00 there is
@@ -330,9 +329,7 @@ async def test_a_task_runs_in_a_new_conversation_each_time(
     s = build_scheduling(env, monkeypatch)
     channel, adapter = await env.paired_channel()
     env.provider.adapter = default_reply_adapter("The build is green.")
-    task = await s.tasks.create(
-        "Nightly build", task_config(cwd="/tmp/site", schedule=daily("10:30")), actor="t"
-    )
+    task = await s.tasks.create("Nightly build", task_config(schedule=daily("10:30")), actor="t")
 
     s.clock.advance(timedelta(minutes=30))
     await s.tick()
@@ -346,7 +343,6 @@ async def test_a_task_runs_in_a_new_conversation_each_time(
         assert run.outcome == "done" and run.reason == ""
         conversation = await env.chat.get_conversation(run.conversation_id)
         assert conversation.agent_key == "builtin"
-        assert conversation.agent_config.cwd == "/tmp/site"
         assert conversation.channel_uid is None
         assert conversation.title == "Nightly build"
         assert env.raw_prompts(run.conversation_id) == ["Summarise the open pull requests"]
@@ -356,10 +352,8 @@ async def test_a_task_runs_in_a_new_conversation_each_time(
     assert await env.active_conversation(channel) is None
 
 
-@pytest.mark.acceptance(
-    spec="channels", scenario="a task that names no directory runs in its own folder"
-)
-async def test_a_task_without_a_directory_runs_in_its_own_folder(
+@pytest.mark.acceptance(spec="channels", scenario="every run works in the task's own folder")
+async def test_every_run_works_in_the_task_s_own_folder(
     env: ChannelEnv, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     s = build_scheduling(env, monkeypatch)
@@ -374,6 +368,29 @@ async def test_a_task_without_a_directory_runs_in_its_own_folder(
     folder = (await s.tasks.view(task.uid)).folder
     assert conversation.agent_config.cwd == folder
     assert folder.endswith(f"/.coffer/content/workspace/scheduled-tasks/{task.uid}")
+
+
+@pytest.mark.acceptance(spec="channels", scenario="a task file naming a directory loses it")
+async def test_a_task_file_naming_a_directory_loses_it(
+    env: ChannelEnv, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    s = build_scheduling(env, monkeypatch)
+    with pytest.raises(ConfigValidationError, match="own folder"):
+        await s.tasks.create("Site", task_config(cwd="/tmp/site"), actor="t")
+    # A file written before 2026-11-11, with its directory, read at startup.
+    env.kinds[KIND] = Kind(
+        name=KIND,
+        display_name="Scheduled task",
+        config_schema=_AnyConfig,
+        free_name=True,
+        storage=StorageClass.LOCAL,
+    )
+    old = await env.resources.register(
+        KIND, "Old", {"schedule": daily(), "agent": "builtin", "cwd": "/tmp/site"}, "t"
+    )
+    env.kinds[KIND] = make_scheduled_task_kind(clock=s.clock)
+    assert await s.tasks.move_prompts_to_files() == 1
+    assert "cwd" not in (await s.tasks.view(old.uid)).task.config
 
 
 # --- the prompt file -----------------------------------------------------------
@@ -421,6 +438,30 @@ async def test_a_run_whose_prompt_file_is_missing_fails(
     (run,) = await s.settled(task.uid)
     assert run.outcome == "failed"
     assert run.reason == "PROMPT.md is missing or empty"
+
+
+@pytest.mark.acceptance(spec="channels", scenario="a task is created before its prompt is written")
+async def test_a_task_is_created_before_its_prompt_is_written(
+    env: ChannelEnv, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    s = build_scheduling(env, monkeypatch)
+    env.provider.adapter = adapter = default_reply_adapter("Done.")
+    config = {k: v for k, v in task_config().items() if k != "prompt"}
+    with pytest.raises(ConfigValidationError):
+        await s.tasks.create(None, config, actor="t")
+    task = await s.tasks.create("Nightly build", config, actor="t")
+    assert (await s.tasks.view(task.uid)).prompt.strip() == ""
+    assert task.enabled is False
+    with pytest.raises(ConfigValidationError, match=r"PROMPT\.md"):
+        await env.resources.set_enabled(task.uid, True, "t")
+
+    await s.tasks.set_prompt(task.uid, "Check the nightly build.")
+    resumed = await env.resources.set_enabled(task.uid, True, "t")
+    assert resumed.enabled is True
+    s.clock.advance(timedelta(minutes=30))
+    await s.tick()
+    await s.settled(task.uid)
+    assert "Check the nightly build." in adapter.recorded_prompts[-1]
 
 
 @pytest.mark.acceptance(spec="channels", scenario="a prompt in a task's file is refused on edit")

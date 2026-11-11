@@ -17,7 +17,7 @@ __all__ = ["FreshTurnPort", "ScheduledRunRepoPort", "TaskFolderPort"]
 class FreshTurnPort(Protocol):
     """Starts a run's turn (spec channels "Run a scheduled task in a fresh
     conversation of its own"): a new conversation
-    on ``agent``, in ``cwd`` (the task's directory, or its own folder), on ``model`` (the
+    on ``agent``, in ``cwd`` (the task's own folder), on ``model`` (the
     agent's default when ``None``), titled ``title``, whose one turn is given
     ``text``. Returns the conversation's id once the turn is under way;
     ``on_end`` is told how it ended. Raises ``CofferError`` when the

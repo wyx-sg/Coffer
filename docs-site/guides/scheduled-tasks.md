@@ -19,21 +19,22 @@ A task holds:
 - **Prompt**: what the agent is asked. To use a skill, name it in the prompt. The prompt is a Markdown file, `PROMPT.md`, in the task's own folder (see [The task's folder](#the-task-s-folder)).
 - **Agent**: Claude Code or Codex.
 - **Model**: one from the agent's list, or the agent's default.
-- **Directory**: where the conversation opens; left empty, the task's own folder.
 - **Catch up**: on by default. See [When the Mac was asleep](#when-the-mac-was-asleep).
 
-Tasks are kept on this Mac only and never synced: a task names an agent and a directory on this machine, and two Macs must not both run it.
+Every run works in the task's own folder. If the work belongs in another directory, such as a repository, say so in the prompt (`cd ~/work/site first`).
+
+Tasks are kept on this Mac only and never synced: a task names an agent and a folder on this machine, and two Macs must not both run it.
 
 ## Create a task
 
-On the Scheduled tasks page, press **New task**. Name it (left empty, it is named after the prompt), choose when, write the prompt, and pick the agent, model and directory. **Create task** saves it and opens it.
+On the Scheduled tasks page, press **New task**. Name it, choose when, and pick the agent and model. **Create task** saves it, paused, and opens its **Files** tab with `PROMPT.md` in the editor: write the prompt, save, then press **Resume**. A task cannot run or resume while its `PROMPT.md` is empty.
 
 You can also ask an agent to set one up: it can run `coffer task add` like any other command.
 
 ```bash
-coffer task add --data '{"prompt": "Check last night'"'"'s build",
+coffer task add --data '{"prompt": "In ~/work/site, check last night'"'"'s build",
   "config": {"schedule": {"kind": "daily", "time": "02:00", "timezone": "Asia/Singapore"},
-  "agent": "codex", "cwd": "~/work/site"}}'
+  "agent": "codex"}}'
 coffer task list
 ```
 
@@ -42,8 +43,8 @@ coffer task list
 Every task has a folder of its own, `~/.coffer/content/workspace/scheduled-tasks/<uid>/` (`coffer task show` prints it as `folder`), and everything in it shows on the task's **Files** tab. It holds:
 
 - **`PROMPT.md`**, the prompt. Edit it on the task's **Files** tab, in any editor, or ask an agent to; the next run reads the file as it is then. `coffer task prompt <task> --data '{"prompt": "…"}'` replaces it.
-- **Whatever its runs write**, when the task names no directory: a run works in this folder, so a daily report the prompt asks for (say `reports/2026-11-11.md`) lands here and shows on the task's **Files** tab.
-- **Anything else the task needs**: a script the prompt runs, intermediate files it keeps between runs. Put them here and the prompt can name them by relative path (`python3 digest.py`) when the task names no directory.
+- **Whatever its runs write**: a run works in this folder, so a daily report the prompt asks for (say `reports/2026-11-11.md`) lands here and shows on the task's **Files** tab.
+- **Anything else the task needs**: a script the prompt runs, intermediate files it keeps between runs. Put them here and the prompt can name them by relative path (`python3 digest.py`).
 
 Naming the files, or keeping one file up to date instead of one per day, is the prompt's job. The folder is yours: it is not synced, and deleting the task leaves it in place.
 
@@ -78,9 +79,9 @@ The list shows every task, soonest first; each row says when it runs next, or th
 
 Open a task for its header (**Run now**, **Pause** or **Resume**, **Edit**, and **⋯ › Delete**) and three tabs:
 
-- **Overview**: when it runs, its next run, agent, model, directory and catch-up.
-- **History**: every run as a table — when it started, how it ended (**Done**, **Skipped**, **Failed**, **Stopped**), whether the schedule, a catch-up or you started it, and how long it took — with the reason under a skipped or failed run. Search it, filter by result and by what started it, and sort by start or duration.
+- **Overview**: when it runs, its next run, agent, model, folder and catch-up.
 - **Files**: the task's folder, reaching the bottom of the window, with the open file beside the tree. `PROMPT.md` opens first, rendered, with **Source** to see the Markdown; **Edit** opens it in an editor and **Save** writes the file. Every other file is read-only here; change it on disk. **Edit** in the header changes everything but the prompt.
+- **History**: every run as a table — when it started (date and time), how it ended (**Done**, **Skipped**, **Failed**, **Stopped**), whether the schedule, a catch-up or you started it, and how long it took — with the reason under a skipped or failed run. Search it, filter by result and by what started it, and sort by start or duration.
 
 Each run in the history names its conversation as a link: it takes you to that conversation on the **Conversations** page, selected in the list; open it in your terminal from its row to read what the run did and carry the conversation on. Runs are kept for 90 days by default; change it in Settings › Data.
 

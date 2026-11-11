@@ -6728,7 +6728,8 @@
     "detail": {
       "next": "下次 {{next}}",
       "what": "任务内容",
-      "nextRun": "下次运行"
+      "nextRun": "下次运行",
+      "folder": "文件夹"
     },
     "runs": {
       "none": "还没有运行过。",
@@ -6749,9 +6750,8 @@
     "dialog": {
       "title": "新建定时任务",
       "editTitle": "编辑 {{name}}",
-      "body": "到了你选的时间，Coffer 用下面的智能体开一个新会话，把提示词发过去。要通知你、发到某个聊天、写报告，都写在提示词里，或者让它用某个 skill。",
+      "body": "到了你选的时间，Coffer 用下面的智能体在任务自己的文件夹里开一个新会话，把任务的 PROMPT.md 发过去。建好后在任务的「文件」里写提示词，写好后点恢复才会开始运行：要通知你、写报告、用某个 skill、去别的目录干活，都写在里面。",
       "name": "名称",
-      "namePlaceholder": "留空则按提示词命名",
       "when": "时间",
       "weekday": "星期",
       "time": "时刻",
@@ -6769,19 +6769,14 @@
       "localTime": "按这台 Mac 的本地时间。",
       "cronHint": "五个字段：分 时 日 月 星期，按你填的时区，或这台 Mac 的本地时间。",
       "manualHint": "只在你点击立即运行时运行。",
-      "prompt": "提示词",
-      "promptPlaceholder": "汇总昨天还开着的 PR",
-      "promptHint": "回复留在这次运行的会话里，可以从任务的运行记录打开。运行写在任务文件夹里的文件会出现在「文件」里。想收到通知，就在提示词里让智能体通知你。",
       "agent": "智能体",
       "model": "模型",
-      "cwd": "目录",
       "catchUp": "补跑",
       "catchUpHint": "Mac 休眠或 Coffer 未运行时错过的一次，会迟到补跑一次。",
       "submit": "创建任务",
       "addFailed": "无法创建任务",
       "editFailed": "无法保存任务",
       "agentDefault": "智能体默认",
-      "workspaceFolder": "任务文件夹",
       "timezone": "时区",
       "timezonePlaceholder": "这台 Mac 的时间",
       "timezoneHint": "按你填的时区（IANA 名称，例如 Asia/Singapore），不填就按这台 Mac 的本地时间。",
@@ -6796,6 +6791,7 @@
       "unsaved": "有未保存的修改",
       "revert": "撤销修改",
       "edit": "编辑提示词"
-    }
+    },
+    "needsPrompt": "先在「文件」里写好 PROMPT.md"
   }
 }

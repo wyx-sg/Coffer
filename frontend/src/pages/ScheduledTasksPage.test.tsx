@@ -69,7 +69,6 @@ const NIGHTLY = task({
     schedule: { kind: "cron", expr: "0 2 * * *" },
     agent: "codex",
     model: "gpt-5",
-    cwd: "~/work/site",
   },
 });
 
@@ -116,11 +115,18 @@ describe("ScheduledTasksPage", () => {
     expect(screen.getAllByText(/Every day at 09:00 · next/).length).toBeGreaterThan(0);
   });
 
-  test("an open task names its agent, model and directory", async () => {
+  test("an open task names its agent, model and folder", async () => {
     renderPage("/scheduled-tasks/t-2");
     expect(await screen.findByRole("heading", { name: "Nightly build" })).toBeInTheDocument();
     expect(screen.getByText("gpt-5")).toBeInTheDocument();
-    expect(screen.getByText("~/work/site")).toBeInTheDocument();
+    expect(screen.getByText(NIGHTLY.folder)).toBeInTheDocument();
+  });
+
+  test("a task without its prompt can neither run nor resume", async () => {
+    api.list.mockResolvedValue([task({ uid: "t-3", name: "Draft", prompt: "", enabled: false })]);
+    renderPage("/scheduled-tasks/t-3");
+    expect(await screen.findByRole("button", { name: "Run now" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Resume" })).toBeDisabled();
   });
 
   test("Run now starts the open task", async () => {
@@ -232,27 +238,23 @@ describe("ScheduledTasksPage", () => {
       expect(screen.getByRole("option", { name: "Sonnet" })).toBeInTheDocument();
     });
     fireEvent.click(screen.getByRole("option", { name: "Sonnet" }));
-    fireEvent.change(within(dialog).getByLabelText(/Directory/), {
-      target: { value: "~/work/site" },
-    });
-    fireEvent.change(within(dialog).getByLabelText(/Prompt/), {
-      target: { value: "Check the nightly build" },
-    });
+    // No directory and no prompt: every run works in the task's folder, and
+    // PROMPT.md is written in the Files tab, opened once the task is created.
+    expect(within(dialog).queryByLabelText(/Directory/)).toBeNull();
+    expect(within(dialog).queryByLabelText(/Prompt/)).toBeNull();
     fireEvent.click(within(dialog).getByRole("button", { name: "Create task" }));
     await waitFor(() => expect(api.create).toHaveBeenCalledTimes(1));
     expect(api.create.mock.calls[0][0]).toEqual({
       name: "Nightly build",
-      prompt: "Check the nightly build",
       config: {
         schedule: { kind: "daily", time: "09:00" },
         agent: "claude_code",
         model: "claude-sonnet",
-        cwd: "~/work/site",
         catch_up: true,
       },
     });
     await waitFor(() =>
-      expect(screen.getByTestId("where")).toHaveTextContent("/scheduled-tasks/t-new"),
+      expect(screen.getByTestId("where")).toHaveTextContent("/scheduled-tasks/t-new/files"),
     );
   });
 });

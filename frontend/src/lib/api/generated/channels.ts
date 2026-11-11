@@ -610,8 +610,6 @@ export interface components {
              * @default true
              */
             catch_up?: boolean;
-            /** Cwd */
-            cwd?: string | null;
             /** Model */
             model?: string | null;
             /** Schedule */

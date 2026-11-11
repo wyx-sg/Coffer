@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 from coffer.application.skill import file_ops
 from coffer.domain.channel.scheduled_run import ScheduledRun
 from coffer.domain.channel.scheduled_task import ScheduledTaskConfig
+from coffer.domain.errors import ConfigValidationError
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor
 from coffer.surfaces.http.skill_file_routes import (
@@ -116,10 +117,11 @@ class ScheduledRunListOut(BaseModel):
 
 
 class ScheduledTaskIn(BaseModel):
-    #: Omitted: named after the prompt's first words.
+    #: Omitted: named after the prompt's first words (required without a prompt).
     name: str | None = None
     description: str = ""
     #: Written to the task's ``PROMPT.md``. Older callers send it in ``config``.
+    #: Omitted or blank: the file is created empty, written later in Files.
     prompt: str | None = None
     config: ScheduledTaskConfig
 
@@ -241,6 +243,8 @@ async def list_task_runs(
 async def run_task_now(uid: str) -> ScheduledRunOut:
     """Run the task once, now, whatever its schedule."""
     view = await _tasks().view(uid)
+    if not view.prompt.strip():
+        raise ConfigValidationError("write the task's PROMPT.md before running it")
     try:
         return run_out(await _WIRED.scheduler.run_now(view.task))
     except ValueError as e:  # it is already running

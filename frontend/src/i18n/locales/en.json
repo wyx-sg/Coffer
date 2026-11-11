@@ -6728,7 +6728,8 @@
     "detail": {
       "next": "next {{next}}",
       "what": "What it does",
-      "nextRun": "Next run"
+      "nextRun": "Next run",
+      "folder": "Folder"
     },
     "runs": {
       "none": "It hasn't run yet.",
@@ -6749,9 +6750,8 @@
     "dialog": {
       "title": "New scheduled task",
       "editTitle": "Edit {{name}}",
-      "body": "At the time you choose, Coffer sends the prompt to the agent below in a new conversation. Anything else — telling you, posting in a chat, a report — goes in the prompt or a skill it names.",
+      "body": "At the time you pick, Coffer opens a new conversation with the agent below in the task's own folder and sends it the task's PROMPT.md. Once the task is created, write the prompt in its Files tab, then press Resume to start it: notifying you, writing a report, using a skill or working in another directory all go there.",
       "name": "Name",
-      "namePlaceholder": "Named after the prompt when left empty",
       "when": "When",
       "weekday": "Day",
       "time": "Time",
@@ -6769,19 +6769,14 @@
       "localTime": "In this Mac's local time.",
       "cronHint": "Five fields: minute hour day month weekday, in the timezone you name or this Mac's local time.",
       "manualHint": "Runs only when you press Run now.",
-      "prompt": "Prompt",
-      "promptPlaceholder": "Summarise yesterday's open pull requests",
-      "promptHint": "The answer stays in the run's conversation; open it from the task's history. Files a run writes in the task's folder show in its Files tab. To hear about it, ask the agent in the prompt to notify you.",
       "agent": "Agent",
       "model": "Model",
-      "cwd": "Directory",
       "catchUp": "Catch up",
       "catchUpHint": "A run missed while the Mac slept or Coffer was off runs once, late.",
       "submit": "Create task",
       "addFailed": "Couldn’t create the task",
       "editFailed": "Couldn’t save the task",
       "agentDefault": "Agent default",
-      "workspaceFolder": "Task folder",
       "timezone": "Timezone",
       "timezonePlaceholder": "This Mac's time",
       "timezoneHint": "In the timezone you name (an IANA name such as Asia/Singapore), or this Mac's local time.",
@@ -6796,6 +6791,7 @@
       "unsaved": "Unsaved changes",
       "revert": "Revert",
       "edit": "Edit prompt"
-    }
+    },
+    "needsPrompt": "Write PROMPT.md in the Files tab first"
   }
 }

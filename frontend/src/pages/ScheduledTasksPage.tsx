@@ -84,7 +84,8 @@ export function ScheduledTasksPage() {
       <TaskDialog
         open={adding}
         onOpenChange={setAdding}
-        onSaved={(id) => navigate(`/scheduled-tasks/${encodeURIComponent(id)}`)}
+        // A new task's prompt is written next, in its Files tab.
+        onSaved={(id) => navigate(`/scheduled-tasks/${encodeURIComponent(id)}/files`)}
       />
     </div>
   );

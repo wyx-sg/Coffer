@@ -1,4 +1,8 @@
-// src/components/scheduled-tasks/TaskDialog.tsx — New task, or edit one: its name, when, what the agent is asked (new only; an open task's prompt is edited in its Files tab), and the agent, model and directory every run opens with.
+// src/components/scheduled-tasks/TaskDialog.tsx — New task, or edit one: its name, when, and the agent and model every run opens with.
+//
+// The prompt is not asked for here: a new task's PROMPT.md is created empty and
+// written in its Files tab, which the page opens once the task is created; the
+// task stays paused until it is. Every run works in the task's own folder.
 //
 // Spec channels "Manage scheduled tasks from the Scheduled tasks page". Every
 // run is a new conversation of its own; what it does with a chat or a report
@@ -23,7 +27,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
 import { translateApiError } from "@/lib/api/errors";
 import type { ScheduledTask } from "@/lib/api/scheduledTasks";
 import { useCreateScheduledTask, useEditScheduledTask } from "@/lib/hooks/useScheduledTasks";
@@ -51,7 +54,7 @@ function Form({ onOpenChange, existing, onSaved }: Omit<Props, "open">) {
     setForm((f) => ({ ...f, ...patch }));
     if (save.error) save.reset();
   };
-  const valid = formValid(form, editing) && (!editing || form.name.trim() !== "");
+  const valid = formValid(form);
 
   const submit = () => {
     if (!valid || save.isPending) return;
@@ -66,10 +69,7 @@ function Form({ onOpenChange, existing, onSaved }: Omit<Props, "open">) {
         { onSuccess: () => done(existing.uid) },
       );
     } else {
-      create.mutate(
-        { name: form.name.trim() || null, prompt: form.prompt.trim(), config },
-        { onSuccess: (task) => done(task.uid) },
-      );
+      create.mutate({ name: form.name.trim(), config }, { onSuccess: (task) => done(task.uid) });
     }
   };
 
@@ -91,7 +91,7 @@ function Form({ onOpenChange, existing, onSaved }: Omit<Props, "open">) {
       </DialogHeader>
       <div className="-mx-5 min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-1">
         <div className="space-y-1.5">
-          <Label htmlFor="task-name" required={editing}>
+          <Label htmlFor="task-name" required>
             {t("scheduledTasks.dialog.name")}
           </Label>
           <Input
@@ -99,27 +99,10 @@ function Form({ onOpenChange, existing, onSaved }: Omit<Props, "open">) {
             value={form.name}
             autoComplete="off"
             autoFocus
-            placeholder={t("scheduledTasks.dialog.namePlaceholder")}
             onChange={(e) => set({ name: e.target.value })}
           />
         </div>
         <TaskScheduleFields form={form} set={set} />
-        {/* An open task's prompt is its PROMPT.md, edited in the Files tab. */}
-        {editing ? null : (
-          <div className="space-y-1.5">
-            <Label htmlFor="task-prompt" required>
-              {t("scheduledTasks.dialog.prompt")}
-            </Label>
-            <Textarea
-              id="task-prompt"
-              rows={4}
-              value={form.prompt}
-              placeholder={t("scheduledTasks.dialog.promptPlaceholder")}
-              onChange={(e) => set({ prompt: e.target.value })}
-            />
-            <p className="text-xs text-text-muted">{t("scheduledTasks.dialog.promptHint")}</p>
-          </div>
-        )}
         <TaskSessionFields form={form} set={set} />
         <label className="flex items-start justify-between gap-3">
           <span className="space-y-0.5">

@@ -90,6 +90,7 @@ class TaskRunner:
 
         prompt = (self._folders.read_prompt(task.uid) or "").strip()
         if not prompt:
+            # A task without one cannot be resumed; this is a file emptied by hand.
             return await self._fail(task, run, f"{PROMPT_FILE} is missing or empty")
         text = run_message(
             prompt=prompt,
@@ -102,7 +103,7 @@ class TaskRunner:
             conversation_id = await self._fresh.start(
                 agent=config.agent,
                 model=config.model,
-                cwd=config.cwd or self._folders.path(task.uid),
+                cwd=self._folders.path(task.uid),
                 title=task.name,
                 text=text,
                 on_end=on_end,

@@ -28,8 +28,9 @@ export function TaskPromptFile({ task }: { task: ScheduledTask }) {
   const { toast } = useToast();
   const edit = useSetTaskPrompt();
   const [view, setView] = useState<FileView>("preview");
-  const [draft, setDraft] = useState<string | null>(null);
   const prompt = task.prompt;
+  // A task not yet given its prompt opens straight in the editor.
+  const [draft, setDraft] = useState<string | null>(() => (prompt.trim() ? null : ""));
   const editing = draft !== null;
   const dirty = editing && draft !== prompt;
   const invalid = editing && (draft.trim() === "" || draft.length > PROMPT_MAX_LENGTH);

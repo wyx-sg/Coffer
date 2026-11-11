@@ -96,7 +96,7 @@ def build_scheduling(
         is_running=scheduler.is_running,
         folders=folders,
     )
-    env.kinds[KIND] = make_scheduled_task_kind(clock=clock)
+    env.kinds[KIND] = make_scheduled_task_kind(clock=clock, prompt_of=folders.read_prompt)
     return Scheduling(
         env=env, clock=clock, runs=runs, runner=runner, scheduler=scheduler, tasks=tasks
     )
