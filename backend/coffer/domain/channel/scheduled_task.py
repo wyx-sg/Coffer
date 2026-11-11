@@ -18,7 +18,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from coffer.domain.channel.schedule import (
     MIN_REPEAT,
@@ -99,11 +99,6 @@ class ScheduledTaskConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     schedule: Schedule
-    #: Never set: the prompt is the task's ``PROMPT.md``. Named only so a
-    #: config that carries one is refused with a reason rather than as an
-    #: unknown field. A file written before 2026-11-11 carries one; it is
-    #: moved into ``PROMPT.md`` at startup, before the file is read as a task.
-    prompt: None = Field(default=None, exclude=True)
     #: The agent (its key, ``claude_code`` or ``codex`` — one agent per type),
     #: model and directory every run opens a new conversation with. No model
     #: is the agent's default; no directory is the task's own folder.
@@ -117,14 +112,15 @@ class ScheduledTaskConfig(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def _old_file(cls, raw: Any) -> Any:
-        return _upgrade(raw)
-
-    @field_validator("prompt", mode="before")
-    @classmethod
-    def _prompt(cls, value: Any) -> None:
-        if value is not None:
+        # The prompt is the task's PROMPT.md, never part of its config; it is
+        # refused here with that reason rather than as an unknown field. A file
+        # written before 2026-11-11 carries one: it is moved into PROMPT.md at
+        # startup, before the file is read as a task.
+        if isinstance(raw, dict) and raw.get("prompt") is not None:
             raise ValueError(f"a task's prompt is its {PROMPT_FILE}, not part of its config")
-        return None
+        if isinstance(raw, dict):
+            raw = {k: v for k, v in raw.items() if k != "prompt"}
+        return _upgrade(raw)
 
 
 def min_repeat_ok(schedule: Schedule, gap: timedelta | None) -> bool:

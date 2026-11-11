@@ -602,7 +602,7 @@ export interface components {
          * ScheduledTaskConfig
          * @description ``Resource.config`` of a ``scheduled_task``.
          */
-        "ScheduledTaskConfig-Input": {
+        ScheduledTaskConfig: {
             /** Agent */
             agent: string;
             /**
@@ -614,33 +614,12 @@ export interface components {
             cwd?: string | null;
             /** Model */
             model?: string | null;
-            /** Prompt */
-            prompt?: null;
-            /** Schedule */
-            schedule: components["schemas"]["OnceSchedule"] | components["schemas"]["HourlySchedule"] | components["schemas"]["DailySchedule"] | components["schemas"]["WeeklySchedule"] | components["schemas"]["CronSchedule"] | components["schemas"]["ManualSchedule"];
-        };
-        /**
-         * ScheduledTaskConfig
-         * @description ``Resource.config`` of a ``scheduled_task``.
-         */
-        "ScheduledTaskConfig-Output": {
-            /** Agent */
-            agent: string;
-            /**
-             * Catch Up
-             * @default true
-             */
-            catch_up: boolean;
-            /** Cwd */
-            cwd: string | null;
-            /** Model */
-            model: string | null;
             /** Schedule */
             schedule: components["schemas"]["OnceSchedule"] | components["schemas"]["HourlySchedule"] | components["schemas"]["DailySchedule"] | components["schemas"]["WeeklySchedule"] | components["schemas"]["CronSchedule"] | components["schemas"]["ManualSchedule"];
         };
         /** ScheduledTaskIn */
         ScheduledTaskIn: {
-            config: components["schemas"]["ScheduledTaskConfig-Input"];
+            config: components["schemas"]["ScheduledTaskConfig"];
             /**
              * Description
              * @default
@@ -658,7 +637,7 @@ export interface components {
         };
         /** ScheduledTaskOut */
         ScheduledTaskOut: {
-            config: components["schemas"]["ScheduledTaskConfig-Output"];
+            config: components["schemas"]["ScheduledTaskConfig"];
             /**
              * Created At
              * Format: date-time

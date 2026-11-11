@@ -1247,55 +1247,7 @@ components:
       - conversation
       title: ScheduledRunOut
       type: object
-    ScheduledTaskConfig-Input:
-      additionalProperties: false
-      description: '``Resource.config`` of a ``scheduled_task``.'
-      properties:
-        agent:
-          minLength: 1
-          title: Agent
-          type: string
-        catch_up:
-          default: true
-          title: Catch Up
-          type: boolean
-        cwd:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Cwd
-        model:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Model
-        prompt:
-          title: Prompt
-          type: 'null'
-        schedule:
-          discriminator:
-            mapping:
-              cron: '#/components/schemas/CronSchedule'
-              daily: '#/components/schemas/DailySchedule'
-              hourly: '#/components/schemas/HourlySchedule'
-              manual: '#/components/schemas/ManualSchedule'
-              once: '#/components/schemas/OnceSchedule'
-              weekly: '#/components/schemas/WeeklySchedule'
-            propertyName: kind
-          oneOf:
-          - $ref: '#/components/schemas/OnceSchedule'
-          - $ref: '#/components/schemas/HourlySchedule'
-          - $ref: '#/components/schemas/DailySchedule'
-          - $ref: '#/components/schemas/WeeklySchedule'
-          - $ref: '#/components/schemas/CronSchedule'
-          - $ref: '#/components/schemas/ManualSchedule'
-          title: Schedule
-      required:
-      - schedule
-      - agent
-      title: ScheduledTaskConfig
-      type: object
-    ScheduledTaskConfig-Output:
+    ScheduledTaskConfig:
       additionalProperties: false
       description: '``Resource.config`` of a ``scheduled_task``.'
       properties:
@@ -1338,15 +1290,12 @@ components:
       required:
       - schedule
       - agent
-      - model
-      - cwd
-      - catch_up
       title: ScheduledTaskConfig
       type: object
     ScheduledTaskIn:
       properties:
         config:
-          $ref: '#/components/schemas/ScheduledTaskConfig-Input'
+          $ref: '#/components/schemas/ScheduledTaskConfig'
         description:
           default: ''
           title: Description
@@ -1379,7 +1328,7 @@ components:
     ScheduledTaskOut:
       properties:
         config:
-          $ref: '#/components/schemas/ScheduledTaskConfig-Output'
+          $ref: '#/components/schemas/ScheduledTaskConfig'
         created_at:
           format: date-time
           title: Created At
