@@ -418,7 +418,9 @@ description: 每一个网页界面和桌面应用操作、它调用的接口、�
 | Scheduled tasks · Delete | `DELETE /resources/{uid}` | `coffer task delete` | `test_cli_parity.py` |
 | Scheduled tasks · switch off | `POST /resources/{uid}/disable` | `coffer task disable` | `test_cli_parity.py` |
 | Scheduled tasks · switch on | `POST /resources/{uid}/enable` | `coffer task enable` | `test_cli_parity.py` |
+| Scheduled tasks · Files tab | `GET /scheduled-tasks/{uid}/files` | `coffer task files` | `test_cli_parity.py` |
 | Scheduled tasks · list | `GET /scheduled-tasks` | `coffer task list` | `test_cli_parity.py` |
+| Scheduled tasks · Prompt · Edit | `PUT /scheduled-tasks/{uid}/prompt` | `coffer task prompt` | `test_cli_parity.py` |
 | Scheduled tasks · Run now | `POST /scheduled-tasks/{uid}/run` | `coffer task run` | `test_cli_parity.py` |
 | Scheduled tasks · a task's run history | `GET /scheduled-tasks/{uid}/runs` | `coffer task runs` | `test_cli_parity.py` |
 | Scheduled tasks · open a task | `GET /scheduled-tasks/{uid}` | `coffer task show` | `test_cli_parity.py` |
@@ -470,6 +472,7 @@ description: 每一个网页界面和桌面应用操作、它调用的接口、�
 | `GET /knowledge/asset` | 普通文件: a knowledge picture is a plain file |
 | `DELETE /knowledge/file` | 普通文件: a knowledge document is a plain file |
 | `GET /knowledge/file` | 普通文件: a knowledge document is a plain file |
+| `GET /scheduled-tasks/{uid}/files/content` | 普通文件: a task's folder holds plain files |
 | `GET /skills/{uid}/files/content` | 普通文件: a skill's files are plain files |
 | `POST /sync/join-choices/editor` | 窗口操作: opens a conflicting file in the editor |
 | `POST /sync/stop/files/editor` | 窗口操作: opens a conflicting file in the editor |

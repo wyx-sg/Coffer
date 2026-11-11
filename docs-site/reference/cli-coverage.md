@@ -418,7 +418,9 @@ Every management operation a person does on a Coffer page or in the desktop app 
 | Scheduled tasks · Delete | `DELETE /resources/{uid}` | `coffer task delete` | `test_cli_parity.py` |
 | Scheduled tasks · switch off | `POST /resources/{uid}/disable` | `coffer task disable` | `test_cli_parity.py` |
 | Scheduled tasks · switch on | `POST /resources/{uid}/enable` | `coffer task enable` | `test_cli_parity.py` |
+| Scheduled tasks · Files tab | `GET /scheduled-tasks/{uid}/files` | `coffer task files` | `test_cli_parity.py` |
 | Scheduled tasks · list | `GET /scheduled-tasks` | `coffer task list` | `test_cli_parity.py` |
+| Scheduled tasks · Prompt · Edit | `PUT /scheduled-tasks/{uid}/prompt` | `coffer task prompt` | `test_cli_parity.py` |
 | Scheduled tasks · Run now | `POST /scheduled-tasks/{uid}/run` | `coffer task run` | `test_cli_parity.py` |
 | Scheduled tasks · a task's run history | `GET /scheduled-tasks/{uid}/runs` | `coffer task runs` | `test_cli_parity.py` |
 | Scheduled tasks · open a task | `GET /scheduled-tasks/{uid}` | `coffer task show` | `test_cli_parity.py` |
@@ -470,6 +472,7 @@ Plain files are read and edited with your own tools, and a few acts only make se
 | `GET /knowledge/asset` | plain file: a knowledge picture is a plain file |
 | `DELETE /knowledge/file` | plain file: a knowledge document is a plain file |
 | `GET /knowledge/file` | plain file: a knowledge document is a plain file |
+| `GET /scheduled-tasks/{uid}/files/content` | plain file: a task's folder holds plain files |
 | `GET /skills/{uid}/files/content` | plain file: a skill's files are plain files |
 | `POST /sync/join-choices/editor` | the window: opens a conflicting file in the editor |
 | `POST /sync/stop/files/editor` | the window: opens a conflicting file in the editor |
