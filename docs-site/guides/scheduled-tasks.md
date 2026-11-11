@@ -40,18 +40,27 @@ coffer task list
 
 ## The task's folder {#the-task-s-folder}
 
-Every task has a folder of its own, `~/.coffer/content/workspace/scheduled-tasks/<uid>/` (`coffer task show` prints it as `folder`), and everything in it shows on the task's **Files** tab. It holds:
+Every task has a folder of its own, `~/.coffer/content/workspace/scheduled-tasks/<uid>/` (`coffer task show` prints it as `folder`), and everything in it shows on the task's **Files** tab. Every run works in it, so the prompt names its files by relative path.
 
-- **`PROMPT.md`**, the prompt. Edit it on the task's **Files** tab, in any editor, or ask an agent to; the next run reads the file as it is then. `coffer task prompt <task> --data '{"prompt": "…"}'` replaces it.
-- **Whatever its runs write**: a run works in this folder, so a daily report the prompt asks for (say `reports/2026-11-11.md`) lands here and shows on the task's **Files** tab.
-- **Anything else the task needs**: a script the prompt runs, intermediate files it keeps between runs. Put them here and the prompt can name them by relative path (`python3 digest.py`).
+Only `PROMPT.md` is required. The rest is a suggested layout, which Coffer does not create or check:
+
+```text
+PROMPT.md     the prompt
+config/       settings and input data the task reads
+state/        what it keeps between runs
+output/       what each run produces, e.g. output/2026-11-11.md
+scripts/      a script only this task uses
+```
+
+- **`PROMPT.md`**: edit it on the task's **Files** tab, in any editor, or ask an agent to; the next run reads the file as it is then. `coffer task prompt <task> --data '{"prompt": "…"}'` replaces it.
+- **Simple or complex**: a simple task is its prompt. For a complex one, put the *how* (steps and scripts) in a [skill](/guides/skills), which is synced, reusable and callable from any chat, and keep the prompt to one line naming it, such as `Use the release-check skill with config/release.json`. The task's folder then holds only that task's own data: `config/`, `state/`, `output/`.
 
 Naming the files, or keeping one file up to date instead of one per day, is the prompt's job. The folder is yours: it is not synced, and deleting the task leaves it in place.
 
 To get a report on your phone too, ask in the prompt for a short message with the file attached, through your channel:
 
 ```bash
-coffer channel notify seatalk --data '{"text": "Today'"'"'s report", "files": ["/Users/me/.coffer/content/workspace/scheduled-tasks/<uid>/reports/2026-11-11.md"]}'
+coffer channel notify seatalk --data '{"text": "Today'"'"'s report", "files": ["/Users/me/.coffer/content/workspace/scheduled-tasks/<uid>/output/2026-11-11.md"]}'
 ```
 
 Files are absolute paths on this Mac, up to ten, sent after the text. An agent can do the same with the `coffer__channel_notify` tool.

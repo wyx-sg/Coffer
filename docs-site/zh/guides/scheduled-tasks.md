@@ -40,18 +40,27 @@ coffer task list
 
 ## 任务文件夹 {#the-task-s-folder}
 
-每个任务都有自己的文件夹 `~/.coffer/content/workspace/scheduled-tasks/<uid>/`（`coffer task show` 里的 `folder`），里面的所有东西都显示在任务的**文件**页里。里面有：
+每个任务都有自己的文件夹 `~/.coffer/content/workspace/scheduled-tasks/<uid>/`（`coffer task show` 里的 `folder`），里面的所有东西都显示在任务的**文件**页里。每次运行都在这个文件夹里，所以提示词用相对路径就能找到里面的文件。
 
-- **`PROMPT.md`**，就是提示词。可以在任务的**文件**页里改，也可以用任何编辑器改，或者让智能体改；下次运行读的是那时的文件。`coffer task prompt <任务> --data '{"prompt": "…"}'` 会替换它。
-- **运行写出的文件**：运行就在这个文件夹里，所以提示词要的日报（比如 `reports/2026-11-11.md`）会落在这里，并出现在任务的**文件**页里。
-- **任务需要的其他东西**：提示词要跑的脚本、几次运行之间留着的中间文件。放在这里，提示词用相对路径就能找到它们（`python3 digest.py`）。
+只有 `PROMPT.md` 是必需的，其余是推荐结构，Coffer 不会自动创建，也不检查：
+
+```text
+PROMPT.md     提示词
+config/       任务要读的配置和输入数据
+state/        几次运行之间留着的状态
+output/       每次运行的产出，例如 output/2026-11-11.md
+scripts/      只给这个任务用的脚本
+```
+
+- **`PROMPT.md`**：可以在任务的**文件**页里改，也可以用任何编辑器改，或者让智能体改；下次运行读的是那时的文件。`coffer task prompt <任务> --data '{"prompt": "…"}'` 会替换它。
+- **简单还是复杂**：简单的任务就是一段提示词。复杂的任务，把「怎么做」（步骤和脚本）写成一个 [skill](/zh/guides/skills)，它会同步、可复用、在任何聊天里都能调用；提示词只写一行指向它，比如 `Use the release-check skill with config/release.json`。任务文件夹里就只放这个任务自己的数据：`config/`、`state/`、`output/`。
 
 文件怎么命名、是每天一个文件还是持续更新同一个文件，都由提示词决定。这个文件夹是你的：不会同步，删除任务也不会删掉它。
 
 想同时在手机上收到报告，就在提示词里让智能体通过渠道发一句话并附上文件：
 
 ```bash
-coffer channel notify seatalk --data '{"text": "今天的日报", "files": ["/Users/me/.coffer/content/workspace/scheduled-tasks/<uid>/reports/2026-11-11.md"]}'
+coffer channel notify seatalk --data '{"text": "今天的日报", "files": ["/Users/me/.coffer/content/workspace/scheduled-tasks/<uid>/output/2026-11-11.md"]}'
 ```
 
 文件是这台 Mac 上的绝对路径，最多十个，跟在文字后面发送。智能体用 `coffer__channel_notify` 工具也能做到。

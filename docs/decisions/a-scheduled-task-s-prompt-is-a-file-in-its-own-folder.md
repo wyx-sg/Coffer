@@ -94,6 +94,36 @@ or agent. A run reads the file as it is when it starts.
   per-run viewer for what an agent does by naming a file; reconsidered only if
   several real tasks need files tied to a single run.
 
+### How the folder is laid out, and where a complex task's logic lives
+
+Asked by the owner on 2026-11-11 ("这个文件的组织架构是不是应该好好设计一下？",
+then "定时任务是不是应该直接选择一个skill执行就好？"). Claude Code's scheduled
+tasks require only `SKILL.md` and leave the rest free; Agent Skills suggest
+`scripts/`, `references/`, `assets/` without enforcing them.
+
+#### A — Only `PROMPT.md` is required; a suggested layout in the guide; the how in a skill (chosen)
+
+`config/` (settings, input), `state/` (kept between runs), `output/` (each
+run's products), `scripts/` (a script only this task uses). A complex task's
+steps and scripts are a skill (synced, reusable, callable from any chat) and
+its `PROMPT.md` is one line naming it; the folder holds that task's own data.
+
+- **Good:** nothing to build or check; one mechanism stays one mechanism; the
+  line between reusable logic (skill, synced) and this machine's data (task
+  folder, local) is the line Coffer already draws.
+- **Costs:** a layout nobody enforces drifts; the guide is the only place it is.
+
+#### B — Coffer creates and enforces the folders
+
+- **Lost because:** Coffer would own a structure the agent writes and the
+  prompt names; an empty `state/` in every task is noise.
+
+#### C — A task is either a prompt or a picked skill (a skill picker)
+
+- **Lost because:** a line in the prompt already does it, works with every
+  agent, and carries arguments (a project path) a picker cannot; the owner
+  dropped the skill picker on 2026-11-06 for the same reason.
+
 ### Sending a report as a file
 
 `coffer channel notify` (`POST /channels/{uid}/notify`) gains `files`, absolute
