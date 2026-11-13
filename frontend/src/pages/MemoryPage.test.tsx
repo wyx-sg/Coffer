@@ -31,12 +31,8 @@ vi.mock("@/lib/api/memory", () => ({
   setCodexImport: vi.fn(),
   listEntries: vi.fn(),
   getEntry: vi.fn(),
-  curate: vi.fn(),
 }));
 const api = await import("@/lib/api/memory");
-
-const openTerminal = vi.fn();
-vi.mock("@/lib/hooks/useTerminals", () => ({ useOpenInTerminal: () => openTerminal }));
 
 vi.mock("@/lib/hooks/useInternalEngine", () => ({
   useInternalEngineConfig: () => ({ data: undefined }),
@@ -50,7 +46,6 @@ function agent(type: string, over: Partial<SyncAgent> = {}): SyncAgent {
     agent: type === "codex" ? "codex" : "claude-code",
     agent_type: type,
     copies: { written: 0 },
-    curation: { memory: "on", curation: "on", source: "", last_curated_at: "" },
     writer: { state: "ok", reason: "", path: "" },
     locations: [],
     ...over,
@@ -197,6 +192,23 @@ describe("MemoryPage — scopes and memories", () => {
     expect(other).toHaveTextContent("Removed by Claude Code");
   });
 
+  test("a memory left out of Claude Code's full block says so on its row", async () => {
+    vi.mocked(api.listEntries).mockResolvedValue({
+      project: PROJECT.key,
+      entries: [
+        entry({
+          id: "e5",
+          title: "Old lesson",
+          origin_agent: "codex",
+          copies: { claude_code: "over_limit", codex: "origin" },
+        }),
+      ],
+    });
+    renderPage(`/memory?scope=${PROJECT.folder}`);
+    const list = await screen.findByTestId("memory-list");
+    expect(rowOf(list, "Old lesson")).toHaveTextContent("Did not fit in Claude Code");
+  });
+
   test("a project not checked out here says when its memories are written", async () => {
     renderPage("/memory?scope=github.com--me--elsewhere");
     const list = await screen.findByTestId("memory-list");
@@ -298,7 +310,7 @@ describe("MemoryPage — what needs the person", () => {
       },
       {
         agent: "claude_code",
-        project: "",
+        project: "github.com/acme/docs",
         write: 0,
         update: 0,
         remove: 1,
@@ -327,12 +339,12 @@ describe("MemoryPage — what needs the person", () => {
     // Each group is folded to its counts; one that removes anything starts open.
     const groups = drawer.querySelectorAll("details");
     expect(groups).toHaveLength(2);
-    const [app, global] = [...groups];
+    const [app, docs] = [...groups];
     expect(app.querySelector("summary")).toHaveTextContent(/Codex.*app.*2 new · 1 updated/);
     expect(app).not.toHaveAttribute("open");
-    expect(global.querySelector("summary")).toHaveTextContent(/Global memories.*1 removed/);
-    expect(global).toHaveAttribute("open");
-    expect(global).toHaveTextContent("Removecoffer_old-note");
+    expect(docs.querySelector("summary")).toHaveTextContent(/Claude Code.*docs.*1 removed/);
+    expect(docs).toHaveAttribute("open");
+    expect(docs).toHaveTextContent("Removecoffer_old-note");
     expect(api.writePreview).not.toHaveBeenCalled();
 
     vi.mocked(api.getSyncState).mockResolvedValue(state());
@@ -372,7 +384,6 @@ describe("MemoryPage — what needs the person", () => {
         agents: [
           agent("claude_code"),
           agent("codex", {
-            curation: { memory: "off", curation: "off", source: "", last_curated_at: "" },
             writer: { state: "off", reason: "", path: "" },
           }),
         ],

@@ -52,8 +52,8 @@ _HOME_TOKEN = re.compile(_BOUNDARY_BEFORE + re.escape(HOME) + r"(?=/|$|\s)", re.
 
 
 def from_portable(text: str, *, repo_root: str | None, home: str) -> str:
-    """``text`` with ``<repo>`` expanded to ``repo_root`` (left as is when the
-    memory is global) and ``~`` at the start of a path to ``home``."""
+    """``text`` with ``<repo>`` expanded to ``repo_root`` (left as is when
+    there is none) and ``~`` at the start of a path to ``home``."""
     if repo_root:
         root = repo_root.rstrip("/")
         text = _REPO_TOKEN.sub(lambda _m: root, text)

@@ -1,8 +1,9 @@
 """Whether an agent's change to its own memory only restates what Coffer
 delivered to it (spec memory "Never republish Coffer's own copies").
 
-When an agent's curation folds a copy into one of its own memories (Auto
-Dream merges a ``coffer_`` file and deletes it; Codex rewrites a bullet), that
+When an agent's curation folds a copy into one of its own memories (Claude
+Code restates a line of Coffer's block in a file of its own; Codex rewrites a
+resource into its summary), that
 memory is the agent's and syncs like any other. Its rewording of what it
 absorbed must not circulate forever, so every sentence Coffer delivers to an
 agent is fingerprinted, and a change whose added sentences are all among

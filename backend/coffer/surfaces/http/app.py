@@ -37,7 +37,6 @@ from coffer.application.binary_deploy import deploy_frozen_sidecars
 from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.channel.kind import make_channel_kind
 from coffer.application.channel.schedule.kind import make_scheduled_task_kind
-from coffer.application.memory.legacy_removal import remove_memory_hooks
 from coffer.application.provider.reach_retirement import migrate_saved_connections
 from coffer.application.reconcile.hints import HintingResourceRepo
 from coffer.application.resource_service import ResourceService
@@ -45,11 +44,9 @@ from coffer.application.runtime import loop_lag
 from coffer.application.runtime.supervisor import spawn_restarting
 from coffer.domain.resource import Kind
 from coffer.domain.vault.layout import KNOWLEDGE as KNOWLEDGE_SUBTREE
-from coffer.infrastructure.agent.config_file_store import ConfigFileStore
 from coffer.infrastructure.agent.legacy_cleanup import remove_transcript_sidecar
 from coffer.infrastructure.daemon.orphan_sweep import startup_sweep
 from coffer.infrastructure.logging.setup import configure_logging
-from coffer.infrastructure.memory.retired_tree import remove_retired_trees
 from coffer.infrastructure.persistence.attention_ignore_repo import SqlAlchemyAttentionIgnoreRepo
 from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
@@ -147,9 +144,6 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     sm = session_maker(engine)
     # The vault repository, the resource files, derived.db and the one
     # validator every vault write passes (ADR storage-is-five-classes-by-nature).
-    # ONE-TIME (sync-memory-into-agents): the retired memory layer's derived
-    # tree and partition rows go before the resource store indexes ``derived/``.
-    await asyncio.to_thread(remove_retired_trees)
     vault = await build_vault_stores(app.state.kinds)
 
     secrets = await init_secret_store()
@@ -276,9 +270,6 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     await asyncio.to_thread(remove_transcript_sidecar)
     # ONE-TIME (require-an-agent-while-on): an empty agent list becomes off.
     await asyncio.to_thread(switch_off_empty_scopes)
-    # ONE-TIME (sync-memory-into-agents): take the retired memory hook out of
-    # every agent; a no-op once it has run.
-    await remove_memory_hooks(await resource_svc.list(kind="agent"), ConfigFileStore(), audit)
 
     workers = start_background_workers(
         retention_svc=retention_svc,

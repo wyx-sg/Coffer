@@ -1,9 +1,9 @@
 """Publish: this machine's agents' own memories into the hub (spec memory
 "Publish only what the origin agent wrote, and only from its machine").
 
-Each registered agent's native memory is read through its reader, as the
-older aggregation read it. Every memory the agent wrote itself becomes, or
-updates, one hub entry; a memory it no longer holds is deleted from the hub.
+Each registered agent's native memory is read through its reader. Every memory
+the agent wrote itself becomes, or updates, one hub entry; a memory it no
+longer holds is deleted from the hub.
 Only entries this machine and this agent published are ever changed or
 deleted here. A source that is unchanged since the last sync is not re-read
 ("Skip unchanged sources"); a reader that fails costs only that source, and
@@ -28,7 +28,6 @@ from __future__ import annotations
 import pathlib
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from difflib import SequenceMatcher
 
 from coffer.application.memory.sources import AgentSource, SourceFailure
 from coffer.domain.memory import absorption
@@ -92,9 +91,8 @@ def source_identity(agent_type: str, config_dir: str, source: SourceFile, anchor
     """What names one memory inside an agent, stable across a re-read.
 
     Claude Code: the topic file's path under the config directory. Codex: the
-    file plus the reader's anchor (task group, section and the bullet's content
-    hash); a rewritten bullet keeps the identity of the one it replaced through
-    :func:`_codex_identities`.
+    summary file plus the reader's anchor (the topic's scope and content
+    hash), so a topic Codex rewrote is a new memory.
     """
     try:
         rel = pathlib.Path(source.path).relative_to(config_dir).as_posix()
@@ -103,74 +101,6 @@ def source_identity(agent_type: str, config_dir: str, source: SourceFile, anchor
     if agent_type == CLAUDE_CODE:
         return rel.removesuffix(".md")
     return f"{rel}::{anchor}"
-
-
-#: How alike a Codex bullet must be to a vanished one in its section to be
-#: that memory rewritten rather than a new one (``difflib`` ratio). Bullets
-#: that merely share a section score well below it.
-SAME_MEMORY_RATIO = 0.6
-
-
-def _section(identity: str) -> str:
-    return identity.rpartition("::")[0]
-
-
-def _codex_identities(
-    agent: AgentSource,
-    source: SourceFile,
-    entries: Sequence[RawEntry],
-    hub: Mapping[str, HubEntry],
-    machine: str,
-) -> list[str]:
-    """Each Codex bullet's source identity (spec memory "Keep a Codex memory's
-    id when its bullet moves or is rewritten").
-
-    A bullet that is still in the hub under its content identity keeps it, so
-    inserting, removing or reordering bullets around it changes nothing. A
-    bullet that is not there takes over the identity of the most alike entry
-    this source published that no bullet claimed any more, in the same
-    section, when they are at least :data:`SAME_MEMORY_RATIO` alike: that is
-    the same memory rewritten, and stays an update. Any other bullet is new.
-    """
-    identities = [
-        source_identity(agent.agent_type, agent.config_dir, source, raw.anchor) for raw in entries
-    ]
-    seen: dict[str, int] = {}
-    for i, identity in enumerate(identities):
-        n = seen.get(identity, 0)
-        seen[identity] = n + 1
-        if n:
-            identities[i] = f"{identity}#{n + 1}"
-    prefix = source_identity(agent.agent_type, agent.config_dir, source, "")
-    published = {
-        e.origin.source: e
-        for e in hub.values()
-        if _mine(e, machine, agent.agent_type) and e.origin.source.startswith(prefix)
-    }
-    claimed = {i for i in identities if i in published}
-    vanished = [e for s, e in published.items() if s not in claimed]
-    pairs = sorted(
-        (
-            -SequenceMatcher(None, one_line(raw.description, 400), old.description).ratio(),
-            i,
-            old.origin.source,
-        )
-        for i, raw in enumerate(entries)
-        if identities[i] not in claimed
-        for old in vanished
-        if _section(old.origin.source) == _section(identities[i])
-    )
-    taken: set[str] = set()
-    moved: set[int] = set()
-    for negative_ratio, i, old_identity in pairs:
-        if -negative_ratio < SAME_MEMORY_RATIO:
-            break
-        if i in moved or old_identity in taken:
-            continue
-        identities[i] = old_identity
-        moved.add(i)
-        taken.add(old_identity)
-    return identities
 
 
 def publish(
@@ -247,16 +177,22 @@ def _publish_source(
 ) -> set[str]:
     """Publish one source's entries; answer the ids it stands for in the hub."""
     kept: set[str] = set()
-    identities = (
-        [source_identity(agent.agent_type, agent.config_dir, source, e.anchor) for e in entries]
-        if agent.agent_type == CLAUDE_CODE
-        else _codex_identities(agent, source, entries, hub, ctx.machine)
-    )
     delivered = ledger.delivered.get(agent.agent_type, [])
-    for raw, identity in zip(entries, identities, strict=True):
+    seen: set[str] = set()
+    for raw in entries:
+        identity = source_identity(agent.agent_type, agent.config_dir, source, raw.anchor)
         eid = entry_id(ctx.machine, agent.agent_type, identity)
+        if eid in seen:
+            continue
+        seen.add(eid)
         placed = _place(raw, ctx)
         if placed is None:
+            # The agent still holds the memory and its repository is gone from
+            # this machine: another machine may still use the entry, so it
+            # stays ("Publish only what the origin agent wrote, and only from
+            # its machine").
+            if eid in hub and _gone(raw):
+                kept.add(eid)
             continue
         project, roots = placed
         text = "\n".join((raw.title, raw.description, raw.body))
@@ -286,7 +222,6 @@ def _publish_source(
             body=to_portable(raw.body.strip("\n"), repo_roots=roots, home=ctx.home),
             created_at=existing.created_at if existing else ctx.now,
             updated_at=ctx.now,
-            search_terms=tuple(raw.search_terms),
         )
         kept.add(eid)
         if existing is not None and existing.same_content(entry):
@@ -304,20 +239,24 @@ def _place(raw: RawEntry, ctx: PublishContext) -> tuple[str, list[str]] | None:
     entry is not published.
 
     An entry stays where its agent filed it, whatever its type: under the
-    first of its directories inside a repository, as that repository's
-    project. A memory learned in no repository (Codex's profile, a scratch
-    directory, a session with no working directory) is not published: there
-    is no global memory ("Sync only project memories")."""
-    for directory in (raw.project_root, *raw.other_roots):
-        if not directory:
-            continue
-        checkout = ctx.project_of(directory)
-        if checkout is not None:
-            roots = [checkout.root]
-            if directory.rstrip("/") != checkout.root.rstrip("/"):
-                roots.append(directory)
-            return checkout.key, roots
-    return None
+    repository its directory is inside, as that repository's project. A memory
+    learned in no repository (a scratch directory, a session with no working
+    directory) is not published ("Sync only project memories")."""
+    directory = raw.project_root
+    if not directory:
+        return None
+    checkout = ctx.project_of(directory)
+    if checkout is None:
+        return None
+    roots = [checkout.root]
+    if directory.rstrip("/") != checkout.root.rstrip("/"):
+        roots.append(directory)
+    return checkout.key, roots
+
+
+def _gone(raw: RawEntry) -> bool:
+    """Whether the directory the entry was learned in is no longer there."""
+    return bool(raw.project_root) and not pathlib.Path(raw.project_root).exists()
 
 
 __all__ = [

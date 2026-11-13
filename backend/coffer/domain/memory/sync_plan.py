@@ -48,8 +48,8 @@ class Target:
     """One hub entry to write into one agent on this machine."""
 
     entry: HubEntry
-    #: The project's checkout here, or ``None`` for a global entry.
-    root: str | None
+    #: The project's checkout here.
+    root: str
     #: The entry's text with ``<repo>`` and ``~`` expanded for this machine.
     body: str
 

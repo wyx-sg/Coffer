@@ -199,7 +199,6 @@ give the status each code is actually sent with.
 | `MEMORY_UNREADABLE` | 422 | An agent's native memory file cannot be parsed. | Repair the file the message names. |
 | `MEMORY_SYNC_RUNNING` | 409 | A memory sync is already running. | Wait for it to finish, then sync again. |
 | `MEMORY_SYNC_NO_PREVIEW` | 409 | No memory sync preview is waiting to be written or cancelled. | Refresh the Memory page. |
-| `MEMORY_DELIVERY_CONFIG_INVALID` | 422 | The agent's settings or hooks file is not a JSON object, so the retired memory hook could not be removed from it. | Repair the file; the next start removes the hook. |
 
 ## Chat and channels
 

@@ -98,6 +98,8 @@ REMOVED: tuple[tuple[str, str], ...] = (
     ("coffer memory context", "coffer memory reading"),
     ("coffer memory delivery", "coffer agent connect"),
     ("coffer memory distil", "coffer memory sync"),
+    ("coffer memory curate", "nothing: each agent curates its own memory"),
+    ("coffer memory curation-enable", "the agent's own settings"),
     ("coffer daemon service", "coffer daemon residency set"),
     ("coffer log prune", "coffer settings retention prune"),
     ("coffer mcp edit", "coffer mcp update"),

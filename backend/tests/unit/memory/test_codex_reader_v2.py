@@ -1,14 +1,13 @@
-"""Codex's v2 memory (``memories_v2/memory_summary.md``), read beside v1 (spec
-memory "Read Codex's v2 memory")."""
+"""Codex's v2 summary (``memories_v2/memory_summary.md``), the one Codex file
+the memory sync reads (spec memory "Read Codex's memory from its v2
+summary")."""
 
 from __future__ import annotations
 
 import pathlib
 
-import pytest
-
 from coffer.domain.agent.codex_memory import parse_codex_v2_topics
-from coffer.domain.memory.hub import TYPE_PROJECT, TYPE_USER
+from coffer.domain.memory.hub import TYPE_PROJECT
 from coffer.domain.memory.reader import RawEntry
 from coffer.infrastructure.agent_files.codex_rollout_summaries import header_cwd
 from coffer.infrastructure.memory.readers.codex import CodexMemoryReader
@@ -77,35 +76,39 @@ def _read(config: pathlib.Path) -> dict[str, list[RawEntry]]:
     }
 
 
-def test_the_v2_summary_is_a_source(tmp_path: pathlib.Path) -> None:
-    config = _codex(tmp_path)
+def test_only_the_v2_summary_is_a_source(tmp_path: pathlib.Path) -> None:
+    config = _codex(tmp_path, v1_summary=V1_SUMMARY)
+    (config / "memories" / "MEMORY.md").write_text("# Task Group: x\n", encoding="utf-8")
     assert list(_read(config)) == ["memories_v2/memory_summary.md"]
 
 
-def test_v2_yields_profile_preferences_tips_and_topics(tmp_path: pathlib.Path) -> None:
+def test_only_the_topics_are_read(tmp_path: pathlib.Path) -> None:
     entries = _read(_codex(tmp_path))["memories_v2/memory_summary.md"]
+    assert len(entries) == 3
     by_title = {e.title: e for e in entries}
-    assert by_title["User Profile"].type == TYPE_USER
-    assert "Lead with the point" in by_title
-    tip = by_title["Separate evidence from hypotheses"]
-    assert tip.type == TYPE_PROJECT and tip.project_root == ""
-    assert not any("inspect the diff" in e.body for e in entries)
     topic = by_title["Ledger retries are idempotent"]
     assert topic.type == TYPE_PROJECT
     assert topic.project_root == "/Users/dev/payments"
-    assert "PR: payments!42 merged." in topic.body
+    assert topic.body == (
+        "Ledger retries are idempotent; use before replaying\n  - PR: payments!42 merged."
+    )
     assert topic.anchor.startswith("Payments ledger::What's in Memory::")
     (escape,) = [e for e in entries if "Pointer that leaves the folder" in e.body]
     assert escape.project_root == ""
     assert by_title["SPB-66270 buffered UserID history"].anchor.startswith("Historic programs::")
 
 
-@pytest.mark.acceptance(
-    spec="memory", scenario="with v2 beside it, v1's summary gives only what v2 does not say"
-)
-def test_with_v2_beside_it_v1_gives_only_what_v2_does_not_say(tmp_path: pathlib.Path) -> None:
-    v1 = _read(_codex(tmp_path, v1_summary=V1_SUMMARY))["memories/memory_summary.md"]
-    assert [e.body for e in v1] == ["Only v1 knows this."]
+def test_a_topic_derived_from_coffer_is_skipped(tmp_path: pathlib.Path) -> None:
+    config = _codex(tmp_path)
+    summary = config / "memories_v2" / "memory_summary.md"
+    summary.write_text(
+        summary.read_text(encoding="utf-8").replace(
+            "SPB-66270 buffered UserID history", "SPB-66270 history [via Coffer]"
+        ),
+        encoding="utf-8",
+    )
+    entries = _read(config)["memories_v2/memory_summary.md"]
+    assert not [e for e in entries if "SPB-66270" in e.body]
 
 
 def test_topics_are_parsed_with_scope_date_and_pointer() -> None:

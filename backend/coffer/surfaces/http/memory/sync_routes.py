@@ -4,8 +4,7 @@ sync in the web UI and on the command line").
 The sync's state, **Sync now**, the pending preview's **Write** and
 **Cancel**, **Undo sync…**, the person's answer to "Codex imports Claude
 Code's memories itself", the hub's memories for one project with where each
-was written here, one memory's text with the file each agent holds it in,
-**Curate now**, and **Turn on** for an agent's own curation.
+was written here, and one memory's text with the file each agent holds it in.
 """
 
 from __future__ import annotations
@@ -18,14 +17,9 @@ from coffer.application.memory.sync_view import MemorySyncView, SyncState
 from coffer.domain.errors import ResourceNotFound
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor
-from coffer.surfaces.http.handoff_schemas import HandoffOut
 from coffer.surfaces.http.memory.sync_dependencies import get_sync_service, get_sync_view
 from coffer.surfaces.http.memory.sync_schemas import (
     CodexImportIn,
-    CurateIn,
-    CurationEnableOut,
-    CurationHandoffOut,
-    CurationStateOut,
     EntryCopyOut,
     HubEntryDetailOut,
     HubEntryListOut,
@@ -61,12 +55,6 @@ def _state(state: SyncState) -> MemorySyncStateOut:
                 agent=a.agent,
                 agent_type=a.agent_type,
                 writer=WriterStatusOut(**a.writer),
-                curation=CurationStateOut(
-                    memory=a.curation.memory,
-                    curation=a.curation.curation,
-                    source=a.curation.source,
-                    last_curated_at=a.curation.last_curated_at,
-                ),
                 copies=a.copies,
                 locations=[
                     SyncLocationOut(
@@ -196,32 +184,6 @@ async def get_entry(
             EntryCopyOut(agent_type=c.agent_type, state=c.state, path=c.path) for c in detail.copies
         ],
     )
-
-
-@router.post("/curation/handoff", response_model=CurationHandoffOut)
-async def curation_handoff(
-    body: CurateIn,
-    view: MemorySyncView = Depends(get_sync_view),  # noqa: B008
-    actor: str = Depends(get_actor),
-) -> CurationHandoffOut:
-    """**Curate now**: the prompt that asks the agent to consolidate its memory
-    in a terminal the person watches. Claude Code only: Codex consolidates
-    whenever its memories are on."""
-    prompt = await view.curation_handoff(body.agent_type, actor)
-    if prompt is None:
-        raise ResourceNotFound(f"a curation hand-off for {body.agent_type}")
-    return CurationHandoffOut(handoff=HandoffOut(prompt=prompt))
-
-
-@router.post("/curation/enable", response_model=CurationEnableOut)
-async def enable_curation(
-    body: CurateIn,
-    view: MemorySyncView = Depends(get_sync_view),  # noqa: B008
-    actor: str = Depends(get_actor),
-) -> CurationEnableOut:
-    """**Turn on** an agent's own curation (Claude Code's Auto Dream) in its
-    settings, backed up first."""
-    return CurationEnableOut(changed=await view.enable_curation(body.agent_type, actor))
 
 
 __all__ = ["router"]

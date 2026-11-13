@@ -9,7 +9,6 @@ from typing import Any
 
 from coffer.application.memory.sync_locations import LocationRow
 from coffer.domain.memory.hub import HubEntry
-from coffer.infrastructure.memory.curation import CurationState
 
 
 @dataclass(frozen=True)
@@ -18,7 +17,6 @@ class AgentRow:
     agent_type: str
     #: The first location that cannot be written, else the first location's.
     writer: dict[str, str]
-    curation: CurationState
     #: Summed over the locations.
     copies: dict[str, int]
     locations: list[LocationRow] = field(default_factory=list)

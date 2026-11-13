@@ -1984,7 +1984,6 @@
     "MCP_SSE_NOT_SUPPORTED": "This entry uses the old SSE transport, which Coffer doesn't support. Keep it in the agent, or switch it to the server's Streamable HTTP URL.",
     "MCP_ENTRY_SOURCE_AMBIGUOUS": "The MCP entry's source is ambiguous — specify which one",
     "MCP_INSTALL_UNSUPPORTED": "This agent does not support installing Coffer's MCP entry",
-    "MEMORY_DELIVERY_CONFIG_INVALID": "That agent's settings file isn't something Coffer can edit",
     "MEMORY_UNREADABLE": "That memory file could not be read",
     "MEMORY_UNSAFE_PATH": "That path isn't allowed in the memory store",
     "NAME_IMMUTABLE": "This name is fixed once added, because agents quote it. Delete it and add it again under the new name",
@@ -3502,94 +3501,24 @@
         "remove": "{{count}} removed"
       }
     },
-    "projects": {
-      "global": "Global memories"
-    },
     "agents": {
-      "title": "Agents on this machine",
-      "cols": {
-        "memory": "Own memory",
-        "curation": "Own curation",
-        "copies": "Copies Coffer wrote here"
-      },
+      "copies": "Copies Coffer wrote here",
       "written_one": "{{count}} copy",
       "written_other": "{{count}} copies",
       "edited_one": "{{count}} edited by the agent",
       "edited_other": "{{count}} edited by the agent",
       "removed_one": "{{count}} removed by the agent",
       "removed_other": "{{count}} removed by the agent",
-      "asText": "As text in each project's MEMORY.md and a rules file",
+      "asText": "As text in each project's MEMORY.md",
       "writer": {
         "off": "Nothing written: its memory is off",
         "blocked": "Nothing written"
       },
-      "memory": {
-        "claude_code": {
-          "on": "Auto memory on",
-          "off": "Auto memory off",
-          "unknown": "Auto memory unknown"
-        },
-        "codex": {
-          "on": "Memories on",
-          "off": "Memories off",
-          "unknown": "Memories unknown"
-        },
-        "other": {
-          "on": "On",
-          "off": "Off",
-          "unknown": "Unknown"
-        }
-      },
-      "curation": {
-        "claude_code": {
-          "on": "Auto Dream on",
-          "off": "Auto Dream off",
-          "unknown": "Auto Dream unknown"
-        },
-        "codex": {
-          "on": "Consolidation on",
-          "off": "Consolidation off",
-          "unknown": "Consolidation unknown"
-        },
-        "other": {
-          "on": "On",
-          "off": "Off",
-          "unknown": "Unknown"
-        }
-      },
-      "hint": {
-        "claude_code": {
-          "memory": "Turn auto memory on in Claude Code’s /memory.",
-          "curation": "Auto Dream is a Claude Code preview: it tidies a project's memory in the background once a day has passed and you have opened a few sessions there.",
-          "curationUnknown": "Check Auto Dream in Claude Code’s /memory."
-        },
-        "codex": {
-          "memory": "Turn memories on in Codex: memories = true under [features] in config.toml.",
-          "curation": "Codex consolidates whenever its memories are on."
-        },
-        "other": {
-          "memory": "Turn the agent’s own memory on.",
-          "curation": "Turn the agent’s own curation on."
-        }
-      },
-      "curateNow": "Curate now",
-      "curateNowFor": "Curate now: {{agent}}",
-      "curationSource": {
-        "default": "account default",
-        "setting": "set in settings.json"
-      },
-      "lastCurated": "Last ran",
-      "neverCurated": "Has not run on this machine yet",
-      "enableCuration": {
-        "button": "Turn on",
-        "title": "Turn on Auto Dream?",
-        "body": "Coffer adds \"autoDreamEnabled\": true to {{path}} and keeps a backup of the file. Auto Dream is not in Claude Code’s documentation yet and may change.",
-        "confirm": "Turn on",
-        "failed": "Couldn't turn Auto Dream on",
-        "done": "Auto Dream is on for new Claude Code sessions",
-        "already": "Auto Dream was already on"
-      },
-      "curateNowHint": "Opens Claude Code in your terminal to tidy the memory folders Coffer wrote into; you see and confirm each change."
+      "turnOn": {
+        "claude_code": "Turn auto memory on in Claude Code’s /memory.",
+        "codex": "Turn memories on in Codex: memories = true under [features] in config.toml.",
+        "other": "Turn the agent’s own memory on."
+      }
     },
     "codexImport": {
       "label": "Codex imports Claude Code’s memories itself",
@@ -3643,7 +3572,8 @@
       "deferred": "Codex imports it",
       "edited": "Edited by agent",
       "removed": "Removed by agent",
-      "block": "In project memory"
+      "block": "In project memory",
+      "over_limit": "Did not fit"
     },
     "scopes": {
       "label": "Memory scopes",
@@ -3654,7 +3584,8 @@
     "note": {
       "pending": "Not in {{agent}} yet",
       "edited": "Edited in {{agent}}",
-      "removed": "Removed by {{agent}}"
+      "removed": "Removed by {{agent}}",
+      "over_limit": "Did not fit in {{agent}}"
     },
     "drawer": {
       "updated": "updated {{when}}",

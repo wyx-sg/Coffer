@@ -161,8 +161,8 @@ class MemorySyncService:
         self.previews.clear()
 
     async def undo(self, actor: str) -> SyncReport:
-        """Remove every unedited copy, Coffer's block, rules file and
-        extension folder from this machine's agents ("Undo sync")."""
+        """Remove every unedited copy, Coffer's block and extension folder
+        from this machine's agents ("Undo sync")."""
         if self._lock.locked():
             raise MemorySyncRunning()
         async with self._lock:
@@ -203,10 +203,10 @@ class MemorySyncService:
 
         planned = self._plan(agents, hub, ledger, report)
         ops = [op for p in planned for op in p.plan.ops]
-        pending_globals = any(p.targets.globals for p in planned) and not ledger.previewed
-        if (ops or pending_globals) and (not ledger.previewed or len(ops) > self._threshold):
+        pending_inline = any(p.targets.inline for p in planned) and not ledger.previewed
+        if (ops or pending_inline) and (not ledger.previewed or len(ops) > self._threshold):
             self.previews.save(now, ops)
-            report.preview = preview_summary(ops, planned_globals(planned))
+            report.preview = preview_summary(ops, planned_inline(planned))
         else:
             self.previews.clear()
             for p in planned:
@@ -310,8 +310,9 @@ def report_key(local: LocalAgent) -> str:
     return local.agent_type
 
 
-def planned_globals(planned: Sequence[_Planned]) -> dict[str, int]:
-    return {p.local.agent_type: len(p.targets.globals) for p in planned if p.targets.globals}
+def planned_inline(planned: Sequence[_Planned]) -> dict[str, int]:
+    """Per agent, how many memories a sync would write as lines of a block."""
+    return {p.local.agent_type: len(p.targets.inline) for p in planned if p.targets.inline}
 
 
 def _locals(agents: Sequence[AgentSource]) -> list[LocalAgent]:

@@ -90,7 +90,7 @@ def wire_memory_sync(
         find_secret=_find_secret,
         stop_automatic=_stop_automatic,
     )
-    view = MemorySyncView(service, machine=_machine, home=_home, audit=audit)
+    view = MemorySyncView(service, machine=_machine, home=_home)
     set_sync_services(service, view)
     return service
 

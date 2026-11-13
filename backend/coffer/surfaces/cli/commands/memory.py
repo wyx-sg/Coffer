@@ -2,7 +2,7 @@
 
 Spec memory "Manage memory sync in the web UI and on the command line". The hub and each agent's own
 memory are plain files, read and edited with the reader's own tools; the sync,
-its preview, undo, the Codex import switch and curation are commands.
+its preview, undo and the Codex import switch are commands.
 """
 
 from __future__ import annotations
@@ -74,23 +74,6 @@ SPECS = [
         _UI + "a memory",
         "One memory's text and the file each agent on this machine holds it in.",
         args={"entry_id": "The memory's id (from coffer memory entries)"},
-    ),
-    RouteCommand(
-        "memory curate",
-        "POST",
-        "/memory/sync/curation/handoff",
-        _UI + "Curate now",
-        "The prompt that asks Claude Code to consolidate its memory; give it to the agent. "
-        "Body: agent_type.",
-        body=True,
-    ),
-    RouteCommand(
-        "memory curation-enable",
-        "POST",
-        "/memory/sync/curation/enable",
-        _UI + "agent · Memory · Turn on (Auto Dream)",
-        "Turn on an agent's own curation in its settings, backed up first. Body: agent_type.",
-        body=True,
     ),
 ]
 

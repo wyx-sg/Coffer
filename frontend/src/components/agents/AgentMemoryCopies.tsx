@@ -1,7 +1,7 @@
 // frontend/src/components/agents/AgentMemoryCopies.tsx
 //
 // The **Copies Coffer wrote here** row of an agent's Memory sync section (spec
-// memory "Show each agent's own curation and ask it to curate now"): per place
+// memory "Show on each agent what Coffer wrote into it"): per place
 // Coffer writes into, how many copies it holds and how many the agent edited
 // or removed, or why it cannot write there. Claude Code gets text, not copies,
 // so its row says so.
@@ -41,7 +41,7 @@ function CopiesIn({
   }
   const edited = copies.edited ?? 0;
   const removed = copies.removed ?? 0;
-  // Claude Code gets text (MEMORY.md blocks, a rules file), no copies to count.
+  // Claude Code gets text (a block in each project's MEMORY.md), no copies to count.
   if (asText && !copies.written && !edited && !removed) {
     return <span className="text-sm">{t("memory.agents.asText")}</span>;
   }

@@ -1,114 +1,27 @@
-"""Reads Codex's distilled memory: `MEMORY.md` task groups and a profile.
+"""Reads Codex's memory: the topics of its v2 summary (spec memory "Read
+Codex's memory from its v2 summary").
 
-## Two memory versions
+Codex keeps its consolidated memory in ``<config_dir>/memories_v2/
+memory_summary.md``. Each bullet of its ``## What's in Memory`` section is one
+topic: something Codex learned in one piece of work, with a pointer to the
+rollout summary it came from. A topic is one memory. It is filed under the
+working directory in the header of that rollout summary, the first lines of
+that file and nothing else; the summaries' accounts and Codex's transcripts
+are never read.
 
-Codex keeps v1 memory in `memories/` and v2 memory in `memories_v2/`, side by
-side, and Codex Desktop picks one per thread (spec memory "Read Codex's v2
-memory"). Both are read while both are there. v2 has no `MEMORY.md`: its
-`memory_summary.md` is the whole consolidated memory, so from it this reader
-takes the profile, the preferences, each `## General Tips` paragraph (in v1
-they restate `MEMORY.md`; in v2 there is nothing they restate) and each topic
-bullet of `## What's in Memory`. A topic is filed under the working directory
-in the header of the rollout summary it points at, the first lines of that
-file and nothing else. While a v2 summary is there, it is the profile's
-source, and v1's summary yields only the preferences v2 does not state word
-for word. During Codex's dual write the same piece of work can arrive twice,
-once as v1 task-group bullets and once as a v2 topic: accepted, because the
-two are different text and Coffer does no content-level dedup (see the ADR
-"Follow Codex's Memory Into Every Version Folder It Keeps").
+The rest of the summary is about the person rather than a project (the User
+Profile, the preferences, the General Tips), and only memories learned in a
+repository are synced, so it is not read.
 
-Two files matter, both under `<config_dir>/memories/`:
+Codex's older ``memories/`` folder (``MEMORY.md`` task groups) is not read
+either: its bullets are working notes of single tasks, several hundred of
+them, and what in them is worth carrying is what Codex consolidates into the
+v2 summary (ADR sync-memories-not-task-notes).
 
-- `MEMORY.md` — repeated `# Task Group: <name>` sections, each carrying an
-  `applies_to: cwd=<path>; ...` line and, among its subsections, exactly
-  three bullet lists this reader turns into entries: `## User preferences`,
-  `## Reusable knowledge`, `## Failures and how to do differently`. The
-  group's own `## Task N: ...` subsections (rollout file references, search
-  keywords) describe *how the group was produced*, not something learned, so
-  they are read for context only and never become an entry.
-- `memory_summary.md` — a `## User Profile` prose block and its own
-  `## User preferences` bullet list, both about the person rather than any
-  project, plus `## What's in Memory`, which is read for one thing only: the
-  **search terms** Codex states per task group (see below). `## General Tips`
-  restates what `MEMORY.md` already holds — the same kind of index Claude Code's
-  own `MEMORY.md` is, and skipped for the same reason (see "Read Claude Code and
-  Codex memory with their search terms").
-
-What a reader produces is a `RawEntry`, and a raw entry is **the input layer,
-not the product** (see "Keep raw entries verbatim and hidden"). It is written
-verbatim under the partition's `.raw/`, and the distil pass is what turns
-entries into Coffer's own notes (see "Distil each raw entry into a note mechanically"). That
-is why nothing here tries to write something a person will read: a title derived
-from a bullet's first clause would be a poor note title, and is a perfectly good
-handle for a pass that is going to rewrite the material anyway. The verbatim
-rule that used to govern what Coffer *stored* now governs only this layer, which
-is exactly where it earns its keep — a note's claim stays checkable against the
-agent's own words.
-
-## The search terms, and why they are matched rather than read off
-
-"Read Claude Code and Codex memory with their search terms" requires that where
-a source states its own search terms, the reader carries them: Codex has already
-answered "what would you look this up by" better than any later guess, and
-discarding that answer is what left the previous design's retrieval to
-guesswork. Codex states them in `memory_summary.md`, one bullet per task group;
-the material they belong to is in `MEMORY.md`. So `_read_groups` reads the
-sibling summary alongside the groups (`_sibling_summary`) and joins the two on
-the group's title.
-
-**That join is fuzzy, and deliberately conservative.** Codex does not repeat
-a group's title verbatim in its summary — it re-words it. On the maintainer's
-live files, 16 summary topics against 29 task groups produced **zero** exact
-title matches: `account SPACE Config Center cache-pipeline regional
-configuration` is summarised as `SPACE Config Center cache-pipeline regional
-configuration`, and `account core SPB-66270 UserID Buffer producer control
-and balanced scheduler design` as `SPB-66270 UserID Buffer Producer Error
-Handling and scheduler_balanced`. Reading the terms off an exact match would
-therefore have carried none of them.
-
-So the match is on token coverage (`_match_terms_to_groups`) with one rule
-standing over it: **a wrong attribution is worse than none.** Terms are
-attached only when exactly one group clears the coverage bar and exactly one
-summary topic claims that group. On the live files that carries terms for 12
-of 16 topics, every one of them correct by inspection; the four it declines
-are genuinely ambiguous — two summary topics that roll several task groups
-into one line, and two that score identically against two groups apiece
-(`SPB-65312 privacy compatibility` fits both of the two SPB-65312 groups).
-Those four groups get no terms, which is the intended outcome, not a gap to
-be closed by lowering the bar.
-
-`## What's in Memory` also carries a `desc:` and a `learnings:` line per topic,
-and `learnings:` in particular is Codex's sharpest prose — a distilled
-conclusion where the group's own bullets are working notes. Neither becomes an
-entry, for two reasons. The spec (see "Read Claude Code and Codex memory with
-their search terms") names which sections become entries and those are not among
-them; and `.raw/` is the layer that must stay *faithful* (see "Keep raw entries
-verbatim and hidden") while Coffer's own distillation happens later and in one
-place (see "Distil each raw entry into a note mechanically"). Feeding the pass Codex's
-pre-compressed summary instead of the material it was compressed from would
-distil a distillation — the same mistake, one level up, that this layer's
-rewrite was built to stop making. The terms are different: they are metadata
-about where material is findable, not a second telling of it, and nothing else
-in either file records them.
-
-A bullet tagged `[via Coffer]` is what Codex derived from a memory Coffer
+A topic tagged ``[via Coffer]`` is what Codex derived from a memory Coffer
 synced into it from another agent (spec memory "Never republish Coffer's own
-copies"), and is skipped; so is everything under `extensions/`, which this
+copies") and is skipped; so is everything under ``extensions/``, which this
 reader never lists.
-
-`raw_memories.md` and `rollout_summaries/` are never read: they are the raw
-transcripts Codex already distilled into the two files above, and "Read no
-transcripts or rollouts" forbids this layer from reading transcripts a second
-time.
-
-Codex's file *format* — splitting `MEMORY.md` into groups and extracting each
-group's routed cwd(s), and parsing the summary's topic bullets into titles
-and terms — is `domain.agent.codex_memory`'s job, shared with the agent
-page's native-memory listing (`infrastructure.agent.codex_memory_store`) so
-the two never drift apart on what counts as a path in an `applies_to` line.
-This reader owns the aggregation-specific policy on top: which sections
-become entries, how a bullet gets a title, how its anchor is built, and which
-summary topic is judged to describe which group.
 """
 
 from __future__ import annotations
@@ -116,86 +29,32 @@ from __future__ import annotations
 import hashlib
 import pathlib
 import re
-from collections.abc import Iterable
 
-from coffer.domain.agent.codex_memory import (
-    parse_codex_memory,
-    parse_codex_summary_topics,
-    section_bullets,
-)
+from coffer.domain.agent.codex_memory import parse_codex_v2_topics
 from coffer.domain.memory.errors import UnreadableMemory
-from coffer.domain.memory.hub import TYPE_PROJECT, TYPE_USER
+from coffer.domain.memory.hub import TYPE_PROJECT
 from coffer.domain.memory.reader import RawEntry, SourceFile
-from coffer.infrastructure.memory.readers.codex_summary import (
-    anchor,
-    bullet_title,
-    read_summary,
-    read_summary_v2,
-    v2_summary_beside,
-)
+from coffer.infrastructure.agent_files.codex_rollout_summaries import rollout_cwd
 from coffer.infrastructure.memory.writers.codex import VIA_COFFER
 
-_MEMORY_NAME = "MEMORY.md"
-_SUMMARY_NAME = "memory_summary.md"
-_V1_FOLDER = "memories"
-_V2_FOLDER = "memories_v2"
-
-# The three per-group bullet lists this reader turns into entries, and the
-# type each maps to. "User preferences" is the person's own standing
-# preference — TYPE_USER. "Reusable knowledge" and "Failures and how to do
-# differently" are both about the *project* the group's `cwd` names — a
-# technique that works in this codebase, or a trap already hit in it — which
-# is TYPE_PROJECT per note.py's own description ("a decision, a trap, a piece
-# of its history"). TYPE_FEEDBACK is reserved for a standing instruction the
-# developer gave about how to work (Claude Code's `feedback` type); a group's
-# "Failures" bullets are Codex's own retrospective on a past attempt, not an
-# instruction from the user, so they land as TYPE_PROJECT rather than
-# TYPE_FEEDBACK.
-_GROUP_SECTIONS = {
-    "User preferences": TYPE_USER,
-    "Reusable knowledge": TYPE_PROJECT,
-    "Failures and how to do differently": TYPE_PROJECT,
-}
-
-# Title-matching policy for joining a summary topic to a task group.
-_TOKEN_SPLIT_RE = re.compile(r"[^a-z0-9]+")
-# Words that carry no distinguishing weight in a title and would otherwise
-# lift a near-miss over the bar.
-_TITLE_STOPWORDS = frozenset({"a", "an", "and", "for", "in", "of", "on", "or", "the", "to", "with"})
-# A topic title with fewer distinguishing tokens than this is not matched at
-# all: two or three shared generic words are not evidence, and a short title
-# can score a perfect coverage against a group it has nothing to do with.
-_MIN_TITLE_TOKENS = 3
-# The share of a topic title's tokens a group's title must account for. 0.6
-# separates every correct pairing on the maintainer's files (lowest correct
-# score: 0.75) from every incorrect one (highest: 0.40) with room on both
-# sides, and the uniqueness rule below is what actually guards the result.
-_MIN_TITLE_COVERAGE = 0.6
+SUMMARY_NAME = "memory_summary.md"
+V2_FOLDER = "memories_v2"
+#: The heading part of a topic's anchor.
+TOPICS_HEADING = "What's in Memory"
 
 
 class CodexMemoryReader:
-    """`MemoryReader` for Codex's `MEMORY.md` and `memory_summary.md`."""
+    """``MemoryReader`` for Codex's v2 ``memory_summary.md``."""
 
     agent_type = "codex"
 
     def sources(self, config_dir: str) -> tuple[SourceFile, ...]:
-        base = pathlib.Path(config_dir)
-        out: list[SourceFile] = []
-        files = (
-            base / _V1_FOLDER / _MEMORY_NAME,
-            base / _V1_FOLDER / _SUMMARY_NAME,
-            base / _V2_FOLDER / _SUMMARY_NAME,
-        )
-        for file in files:
-            try:
-                digest = hashlib.sha256(file.read_bytes()).hexdigest()
-            except OSError:
-                # Missing or unreadable — skip it, the other file (and the other
-                # agent) still gets aggregated ("Fail a broken reader loudly and
-                # in isolation").
-                continue
-            out.append(SourceFile(path=str(file), digest=digest))
-        return tuple(out)
+        file = pathlib.Path(config_dir) / V2_FOLDER / SUMMARY_NAME
+        try:
+            digest = hashlib.sha256(file.read_bytes()).hexdigest()
+        except OSError:
+            return ()
+        return (SourceFile(path=str(file), digest=digest),)
 
     def read(self, source: SourceFile) -> tuple[RawEntry, ...]:
         path = pathlib.Path(source.path)
@@ -203,123 +62,43 @@ class CodexMemoryReader:
             text = path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError) as exc:
             raise UnreadableMemory(source.path, str(exc)) from exc
-
-        if path.name == _SUMMARY_NAME and path.parent.name == _V2_FOLDER:
-            return read_summary_v2(text, path.parent)
-        if path.name == _SUMMARY_NAME:
-            return read_summary(text, v2_summary_beside(path))
-        if path.name == _MEMORY_NAME:
-            return _read_groups(text, _sibling_summary(path))
-        raise UnreadableMemory(source.path, f"unrecognised Codex memory file {path.name!r}")
-
-
-def _sibling_summary(memory_path: pathlib.Path) -> str:
-    """The summary text beside a `MEMORY.md`, or "" when there is none.
-
-    The search terms belong to `MEMORY.md`'s groups but are written in the file
-    next door, so reading the groups means opening both (the acceptance scenario
-    says as much: "when the Codex reader reads both files"). The path is derived
-    from the source's own parent, never from anything inside a file, so the
-    traversal guard of "Confine reads to registered agents' memory paths" has
-    nothing to catch here.
-
-    A missing or unreadable sibling degrades to no terms rather than raising:
-    the group material itself parsed fine, and the loud failure of "Fail a
-    broken reader loudly and in isolation" is for a source Coffer cannot read at
-    all, not for an absent optional one. The cost of the degradation is that a
-    pass in which only the summary changed leaves `MEMORY.md` hash-unchanged and
-    therefore unre-read (see "Skip unchanged sources"), so newly stated terms
-    arrive with the group's next edit. Codex regenerates both files in one pass,
-    so in practice they move together.
-    """
-    try:
-        return (memory_path.parent / _SUMMARY_NAME).read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
-        return ""
-
-
-def _read_groups(text: str, summary_text: str) -> tuple[RawEntry, ...]:
-    groups = parse_codex_memory(text)
-    terms_by_title = _match_terms_to_groups(summary_text, (g.title for g in groups))
-    entries: list[RawEntry] = []
-    for entry in groups:
-        # A group can route to more than one cwd (`applies_to: cwd=A (work in
-        # B)`): Codex's app runs each chat in a scratch directory and names the
-        # repository worked on beside it. An entry gets one home, so every cwd
-        # is carried and publishing files the entry under the first inside a
-        # repository. A group with none files under "" (global).
-        project_root = entry.cwds[0] if entry.cwds else ""
-        search_terms = terms_by_title.get(entry.title, ())
-        for heading, entry_type in _GROUP_SECTIONS.items():
-            for bullet in section_bullets(entry.body, heading):
-                if VIA_COFFER in bullet:
-                    continue
-                entries.append(
-                    RawEntry(
-                        title=bullet_title(bullet),
-                        description=bullet,
-                        type=entry_type,
-                        body=bullet,
-                        anchor=anchor(entry.title, heading, bullet),
-                        project_root=project_root,
-                        other_roots=entry.cwds[1:],
-                        search_terms=search_terms,
-                    )
+        entries: list[RawEntry] = []
+        for topic in parse_codex_v2_topics(text):
+            if VIA_COFFER in topic.body:
+                continue
+            # The topic's sentence and its indented details, without the
+            # pointer and thread id Codex keeps for itself.
+            body = "\n".join([topic.text, *topic.body.split("\n")[1:]])
+            entries.append(
+                RawEntry(
+                    title=topic_title(topic.text),
+                    description=topic.text,
+                    type=TYPE_PROJECT,
+                    body=body,
+                    anchor=anchor(topic.scope or "memory", body),
+                    project_root=rollout_cwd(path.parent, topic.rollout_file),
                 )
-    return tuple(entries)
+            )
+        return tuple(entries)
 
 
-def _match_terms_to_groups(
-    summary_text: str, group_titles: Iterable[str]
-) -> dict[str, tuple[str, ...]]:
-    """Which task group each summary topic's search terms belong to.
-
-    Keyed by group title, so `_read_groups` can look one up directly. A group
-    absent from the result is one no topic could be attributed to without
-    guessing — see this module's docstring for why that is common and why it
-    is preferred to the alternative.
-
-    Two independent uniqueness rules, both of which must hold:
-
-    - **One group clears the bar for a topic.** Two groups scoring above
-      `_MIN_TITLE_COVERAGE` means the topic does not identify either of them;
-      a higher score is not a tie-break, because Codex genuinely writes one
-      summary line covering two related groups and the higher score would
-      then be attaching a group's terms to the wrong half.
-    - **One topic claims a group.** Two topics landing on one group is the
-      same ambiguity read from the other end, and neither claim survives it.
-    """
-    titles = tuple(dict.fromkeys(group_titles))
-    scored = [(title, _title_tokens(title)) for title in titles]
-    claims: dict[str, list[tuple[str, ...]]] = {}
-    for topic in parse_codex_summary_topics(summary_text):
-        if not topic.search_terms:
-            continue
-        topic_tokens = _title_tokens(topic.title)
-        if len(topic_tokens) < _MIN_TITLE_TOKENS:
-            continue
-        above = [
-            title
-            for title, tokens in scored
-            if len(topic_tokens & tokens) / len(topic_tokens) >= _MIN_TITLE_COVERAGE
-        ]
-        if len(above) != 1:
-            continue
-        claims.setdefault(above[0], []).append(topic.search_terms)
-    return {title: terms[0] for title, terms in claims.items() if len(terms) == 1}
+def topic_title(text: str) -> str:
+    """A short title from a topic's first clause (up to the first ``->``,
+    ``. `` or ``; ``): Codex's topics are prose with no title of their own."""
+    clause = re.split(r"\s*->\s*|\.\s|;\s", text, maxsplit=1)[0].strip().rstrip(".")
+    if not clause:
+        clause = text.strip()
+    if len(clause) > 100:
+        clause = clause[:97].rstrip() + "..."
+    return clause
 
 
-def _title_tokens(title: str) -> frozenset[str]:
-    """A title reduced to the words that distinguish it.
+def anchor(scope: str, body: str) -> str:
+    """A topic's identity inside the summary: its scope and its text. The same
+    topic re-read on a later sync has the same anchor; a topic Codex rewrote
+    is a new memory."""
+    digest = hashlib.sha256(body.encode("utf-8")).hexdigest()[:16]
+    return f"{scope}::{TOPICS_HEADING}::{digest}"
 
-    Lowercased, split on everything that is not a letter or a digit — which
-    also dissolves the backticks Codex quotes identifiers in and the
-    punctuation the two files disagree about (`account.gateway` against
-    `account-gateway`, `scheduler_balanced` against `balanced scheduler`) —
-    and stripped of stopwords.
-    """
-    return frozenset(
-        token
-        for token in _TOKEN_SPLIT_RE.split(title.lower())
-        if token and token not in _TITLE_STOPWORDS
-    )
+
+__all__ = ["CodexMemoryReader", "anchor", "topic_title"]

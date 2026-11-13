@@ -135,9 +135,10 @@ class SyncReport:
         }
 
 
-def preview_summary(ops: Sequence[CopyOp], globals_: Mapping[str, int]) -> dict[str, Any]:
+def preview_summary(ops: Sequence[CopyOp], inline: Mapping[str, int]) -> dict[str, Any]:
     """Per agent and project, how many copies a preview would write, update
-    and remove, and each memory it would do that to."""
+    and remove, and each memory it would do that to; and per agent, how many
+    memories it would write as lines of a block."""
     rows: dict[tuple[str, str], dict[str, Any]] = {}
     for op in ops:
         row = rows.setdefault(
@@ -159,7 +160,7 @@ def preview_summary(ops: Sequence[CopyOp], globals_: Mapping[str, int]) -> dict[
     return {
         "copies": len(ops),
         "rows": sorted(rows.values(), key=lambda r: (r["agent"], r["project"])),
-        "global": dict(globals_),
+        "block": dict(inline),
     }
 
 

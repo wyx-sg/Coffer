@@ -3,32 +3,23 @@ hub into Claude Code as text it loads", ADR
 claude-code-reads-other-agents-memories-as-text).
 
 Claude Code loads a project's ``MEMORY.md`` (its first 200 lines) in every
-session in that project, and every file under ``<config_dir>/rules/`` in every
-session; it opens a memory's own file only when the model decides to, which in
-practice it does not. So Coffer writes no file per memory:
-
-- **Project memories** go, as text, into a marked block at the end of the
-  project's ``MEMORY.md`` in ``<config_dir>/projects/<slug>/memory/``, the
-  directory Claude Code keeps for a repository root (``slug`` is
-  :func:`coffer.domain.agent.native_memory.encode_slug` of the root, shared by
-  every worktree of it). Only the bytes between the markers change; the file
-  is backed up before each change.
-
-There is no global memory ("Sync only project memories"). What earlier builds
-wrote (``coffer_*.md`` files, a ``-coffer-global`` project, and the global
-rules file ``<config_dir>/rules/coffer-memory.md``) is no longer a target, so
-the first sync removes the copies still as written, empties their blocks and
-deletes the rules file.
+session in that project; it opens a memory's own file only when the model
+decides to, which in practice it does not. So Coffer writes no file per
+memory: a project's memories go, as text, into a marked block at the end of
+the project's ``MEMORY.md`` in ``<config_dir>/projects/<slug>/memory/``, the
+directory Claude Code keeps for a repository root (``slug`` is
+:func:`coffer.domain.agent.native_memory.encode_slug` of the root, shared by
+every worktree of it). Only the bytes between the markers change; the file is
+backed up before each change.
 """
 
 from __future__ import annotations
 
 import pathlib
 from collections.abc import Mapping, Sequence
-from typing import Any
 
 from coffer.domain.agent.native_memory import encode_slug
-from coffer.domain.memory.hub import AGENT_LABELS, check_segment, one_line, title_slug
+from coffer.domain.memory.hub import check_segment
 from coffer.domain.memory.native_writer import (
     STATUS_MISSING,
     STATUS_OK,
@@ -38,36 +29,16 @@ from coffer.domain.memory.native_writer import (
 )
 from coffer.domain.memory.sync_plan import CopyRecord, Target
 from coffer.infrastructure.memory import native_files
-from coffer.infrastructure.memory.frontmatter import render_frontmatter
-from coffer.infrastructure.memory.writers.claude_code_lines import (
-    COPY_PREFIX,
-    INDEX_NAME,
-    block_lines,
-)
+from coffer.infrastructure.memory.writers.claude_code_lines import INDEX_NAME, block_lines
 
-RULES_NAME = "coffer-memory.md"
 BLOCK_BEGIN = "<!-- coffer:memory-sync:begin -->"
 BLOCK_END = "<!-- coffer:memory-sync:end -->"
-#: The pseudo project earlier builds filed global memories under; its copies
-#: and block are removed by the first sync.
-GLOBAL_ROOT = "/coffer-global"
-
-
-def is_coffer_copy(name: str, frontmatter: Mapping[str, Any]) -> bool:
-    """Whether a memory file is a copy Coffer wrote: its name starts with
-    ``coffer_`` **and** its frontmatter names a hub entry."""
-    coffer = frontmatter.get("coffer")
-    return name.startswith(COPY_PREFIX) and isinstance(coffer, dict) and bool(coffer.get("entry"))
 
 
 def memory_dir(config_dir: str, root: str) -> pathlib.Path:
     """Claude Code's memory directory for the repository at ``root``."""
     slug = check_segment(encode_slug(root.rstrip("/")))
     return pathlib.Path(config_dir) / "projects" / slug / "memory"
-
-
-def rules_path(config_dir: str) -> pathlib.Path:
-    return pathlib.Path(config_dir) / "rules" / RULES_NAME
 
 
 def replace_block(text: str, lines: Sequence[str]) -> str:
@@ -109,57 +80,29 @@ class ClaudeCodeMemoryWriter:
         return WriterStatus(STATUS_OK, config_dir)
 
     def wants(self, target: Target) -> bool:
-        # Every memory reaches Claude Code through a block or the rules file.
+        # Every memory reaches Claude Code as a line of its project's block.
         return False
 
     def path_for(self, config_dir: str, target: Target, taken: set[str]) -> str:
-        folder = memory_dir(config_dir, target.root or GLOBAL_ROOT)
-        slug = title_slug(target.entry.title)
-        for name in (
-            f"{COPY_PREFIX}{slug}.md",
-            f"{COPY_PREFIX}{slug}-{target.entry.id[:6]}.md",
-        ):
-            path = str(folder / name)
-            if path not in taken and not pathlib.Path(path).exists():
-                return path
-        n = 2
-        while True:
-            path = str(folder / f"{COPY_PREFIX}{slug}-{target.entry.id[:6]}-{n}.md")
-            if path not in taken and not pathlib.Path(path).exists():
-                return path
-            n += 1
+        raise AssertionError("Claude Code holds no file per memory")
 
     def render(self, target: Target) -> str:
-        entry = target.entry
-        origin = AGENT_LABELS.get(entry.origin.agent, entry.origin.agent)
-        fm: dict[str, Any] = {
-            "name": entry.title,
-            "description": one_line(entry.description or entry.title),
-            "metadata": {"type": entry.type},
-            "coffer": {
-                "entry": entry.id,
-                "from": entry.origin.agent,
-                "synced_at": entry.updated_at,
-            },
-        }
-        body = target.body.strip("\n")
-        return render_frontmatter(fm, f"\n{body}\n\n_Learned by {origin}; synced by Coffer._\n")
+        raise AssertionError("Claude Code holds no file per memory")
 
     def aux(
         self,
         config_dir: str,
         copies: Mapping[str, CopyRecord],
         targets: Mapping[str, Target],
-        global_targets: Sequence[Target],
+        inline: Sequence[Target],
     ) -> list[AuxWrite]:
         out: list[AuxWrite] = []
         # Every folder holding a block, so one whose last memory went is emptied.
         by_dir: dict[pathlib.Path, list[Target]] = {
             folder: [] for folder in _block_folders(config_dir)
         }
-        for target in global_targets:
-            if target.root:
-                by_dir.setdefault(memory_dir(config_dir, target.root), []).append(target)
+        for target in inline:
+            by_dir.setdefault(memory_dir(config_dir, target.root), []).append(target)
         for folder, held in sorted(by_dir.items()):
             index = folder / INDEX_NAME
             current = native_files.read(index) or ""
@@ -167,10 +110,6 @@ class ClaudeCodeMemoryWriter:
             new = replace_block(current, lines)
             if new != current:
                 out.append(AuxWrite(str(index), new or None, backup=bool(current)))
-        # An earlier build's global rules file.
-        rules = rules_path(config_dir)
-        if rules.exists():
-            out.append(AuxWrite(str(rules), None))
         return out
 
     def undo(self, config_dir: str, copies: Mapping[str, CopyRecord]) -> list[AuxWrite]:
@@ -183,9 +122,6 @@ class ClaudeCodeMemoryWriter:
                 continue
             new = replace_block(current, [])
             out.append(AuxWrite(str(index), new or None, backup=True))
-        rules = rules_path(config_dir)
-        if rules.exists():
-            out.append(AuxWrite(str(rules), None))
         return out
 
 
@@ -202,11 +138,7 @@ def _block_folders(config_dir: str) -> list[pathlib.Path]:
 __all__ = [
     "BLOCK_BEGIN",
     "BLOCK_END",
-    "COPY_PREFIX",
-    "RULES_NAME",
     "ClaudeCodeMemoryWriter",
-    "is_coffer_copy",
     "memory_dir",
     "replace_block",
-    "rules_path",
 ]

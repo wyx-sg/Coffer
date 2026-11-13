@@ -15,7 +15,7 @@ type Schemas = MemoryWire["schemas"];
  *  pending preview, the hub's projects and this machine's agents. */
 export type MemorySyncState = Schemas["MemorySyncStateOut"];
 
-/** One local agent: its writer's status, its own curation, and the copies
+/** One local agent: its writer's status and the copies
  *  Coffer holds in it on this machine, by state. */
 export type SyncAgent = Schemas["SyncAgentOut"];
 
@@ -32,6 +32,3 @@ export type HubEntryList = Schemas["HubEntryListOut"];
 /** One hub entry with its text and, per local agent, its copy's state and file. */
 export type HubEntryDetail = Schemas["HubEntryDetailOut"];
 export type EntryCopy = Schemas["EntryCopyOut"];
-
-export type CurationHandoff = Schemas["CurationHandoffOut"];
-export type CurationEnableResult = Schemas["CurationEnableOut"];

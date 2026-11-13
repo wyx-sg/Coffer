@@ -32,7 +32,7 @@ Releases, the one-line installer and the desktop app are built for **macOS on Ap
 
 ## Does Coffer run a language model?
 
-No model runs inside Coffer, with one optional exception: transcribing voice messages, which calls a model provider you pick under **Settings › General → Speech to text**. Until you pick one, voice messages reach the agent as audio files. Tidying knowledge is your agent's job: **Tidy** on a knowledge collection opens a conversation with your default agent and sends it the instructions. Curating memory is each agent's own: **Curate now** on the Memory page asks the agent to consolidate its memory, with its own model.
+No model runs inside Coffer, with one optional exception: transcribing voice messages, which calls a model provider you pick under **Settings › General → Speech to text**. Until you pick one, voice messages reach the agent as audio files. Tidying knowledge is your agent's job: **Tidy** on a knowledge collection opens a conversation with your default agent and sends it the instructions. Curating memory is each agent's own, with its own model and on its own schedule; Coffer does not start it.
 
 Everything else is deterministic and local. `coffer__search_tools` ranks tools by keyword, agents find knowledge with their own file tools and memory in their own memory, and nothing is embedded. See [Model providers](/guides/providers).
 

@@ -7,25 +7,11 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from coffer.surfaces.http.handoff_schemas import HandoffOut
-
 
 class WriterStatusOut(BaseModel):
     state: str
     path: str = ""
     reason: str = ""
-
-
-class CurationStateOut(BaseModel):
-    #: ``on`` / ``off`` / ``unknown``: the agent's own memory.
-    memory: str
-    #: ``on`` / ``off`` / ``unknown``: the agent's own curation.
-    curation: str
-    #: ``setting`` (the agent's own setting says so), ``default`` (the
-    #: vendor's default for the account), or ``""`` when unknown.
-    source: str = ""
-    #: When the agent's curation last ran on this machine, ``""`` if never seen.
-    last_curated_at: str = ""
 
 
 class SyncLocationOut(BaseModel):
@@ -44,7 +30,6 @@ class SyncAgentOut(BaseModel):
     agent_type: str
     #: The first location that cannot be written, else the first location's.
     writer: WriterStatusOut
-    curation: CurationStateOut
     #: How many copies this machine holds in the agent, by state, summed over
     #: its locations.
     copies: dict[str, int] = Field(default_factory=dict)
@@ -90,8 +75,8 @@ class HubEntryOut(BaseModel):
     created_at: str
     updated_at: str
     #: ``agent type → copy state`` on this machine (``written``, ``edited``,
-    #: ``removed``, ``held_back``, ``deferred``, ``block``, ``origin``,
-    #: ``pending``).
+    #: ``removed``, ``held_back``, ``deferred``, ``block``, ``over_limit``,
+    #: ``origin``, ``pending``).
     copies: dict[str, str] = Field(default_factory=dict)
 
 
@@ -130,28 +115,8 @@ class CodexImportIn(BaseModel):
     value: bool | None = None
 
 
-class CurateIn(BaseModel):
-    agent_type: str
-
-
-class CurationHandoffOut(BaseModel):
-    """**Curate now**: the prompt the page starts the agent with in a terminal."""
-
-    handoff: HandoffOut
-
-
-class CurationEnableOut(BaseModel):
-    #: Whether a setting was written (``false`` when it was already on, or the
-    #: agent has no switch for it).
-    changed: bool
-
-
 __all__ = [
     "CodexImportIn",
-    "CurateIn",
-    "CurationEnableOut",
-    "CurationHandoffOut",
-    "CurationStateOut",
     "EntryCopyOut",
     "HubEntryDetailOut",
     "HubEntryListOut",

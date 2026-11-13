@@ -98,10 +98,11 @@ class AuditEventType(StrEnum):
     # spec memory: the sync into each agent's own memory
     MEMORY_SYNCED = "memory_synced"
     MEMORY_SYNC_UNDONE = "memory_sync_undone"
+    # No longer emitted (Coffer neither shows nor starts an agent's own
+    # curation, sorts no task notes and has no hook to remove): kept so a row
+    # written by an earlier build keeps its name.
     MEMORY_CURATION_REQUESTED = "memory_curation_requested"
     MEMORY_CURATION_ENABLED = "memory_curation_enabled"
-    # No longer emitted (task notes are not synced): kept so a row written by an
-    # earlier build keeps its name.
     MEMORY_SORT_REQUESTED = "memory_sort_requested"
     MEMORY_SORTED = "memory_sorted"
     MEMORY_HOOK_REMOVED = "memory_hook_removed"

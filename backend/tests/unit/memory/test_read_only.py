@@ -41,13 +41,15 @@ applies_to: cwd=/Users/dev/alpha; reuse_rule=recheck
 
 _CODEX_SUMMARY_MD = """v1
 
-## User Profile
-
-Some profile prose.
-
 ## User preferences
 
 - a global preference. [ad-hoc]
+
+## What's in Memory
+
+### Alpha
+#### 2026-11-02
+- rollout_summaries/a.md — a topic about alpha; thread_id=t-1
 """
 
 
@@ -62,7 +64,12 @@ def _build_fixtures(tmp_path: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path]
     codex_memories = codex_dir / "memories"
     codex_memories.mkdir(parents=True)
     (codex_memories / "MEMORY.md").write_text(_CODEX_MEMORY_MD, encoding="utf-8")
-    (codex_memories / "memory_summary.md").write_text(_CODEX_SUMMARY_MD, encoding="utf-8")
+    codex_v2 = codex_dir / "memories_v2"
+    (codex_v2 / "rollout_summaries").mkdir(parents=True)
+    (codex_v2 / "memory_summary.md").write_text(_CODEX_SUMMARY_MD, encoding="utf-8")
+    (codex_v2 / "rollout_summaries" / "a.md").write_text(
+        "thread_id: t-1\ncwd: /Users/dev/alpha\n\nWhat happened.\n", encoding="utf-8"
+    )
 
     return claude_dir, codex_dir
 
@@ -89,7 +96,7 @@ def test_a_full_read_leaves_every_fixture_file_untouched(tmp_path: pathlib.Path)
     codex_entries_seen = 0
     for source in codex_reader.sources(str(codex_dir)):
         codex_entries_seen += len(codex_reader.read(source))
-    assert codex_entries_seen == 3  # 1 group preference + profile + 1 global preference
+    assert codex_entries_seen == 1  # the one v2 topic
 
     after = _snapshot(tmp_path)
     assert after == before

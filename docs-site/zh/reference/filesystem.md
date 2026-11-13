@@ -219,7 +219,7 @@ Coffer 只会为你要求的事写入已注册智能体自己的配置目录：�
 | `memories/extensions/coffer/`、`memories_v2/extensions/coffer/` | 每个存在的 Codex 记忆文件夹里各一个。`instructions.md`（告诉 Codex 的整合这些文件是什么）和 `resources/<id>-<slug>.md`（另一个智能体或另一台机器学到的每条记忆一个）。Codex 的记忆关闭时什么都不写。 | 记忆同步。见[记忆](/zh/guides/memory#what-coffer-writes-into-each-agent)。 |
 | `skills/<name>` | 指向 `~/.coffer/vault/skills/<name>` 的符号链接。 | 向智能体投递技能时。 |
 
-Coffer 通过 `coffer` 服务器键，以及运行 `coffer` CLI（裸名或任意路径）加 `proxy token` 的 `apiKeyHelper` 来识别自己的条目，并且只删除这些。其他条目——你自己的 MCP 服务器、你的 Hook、你的 `env`——保持原样。在智能体的记忆里，Coffer 只写上面列出的文件和标记区块（早先版本的 `coffer_*.md` 副本、`-coffer-global` 项目和 `rules/coffer-memory.md` 会在第一次同步时移除），从不写智能体自己写的记忆；记忆页上的**撤销同步…**会移除它们。升级后首次启动时，守护进程会移除早期版本装在 `settings.json` 和 `hooks.json` 里的 `: coffer-memory` Hook 条目。
+Coffer 通过 `coffer` 服务器键，以及运行 `coffer` CLI（裸名或任意路径）加 `proxy token` 的 `apiKeyHelper` 来识别自己的条目，并且只删除这些。其他条目——你自己的 MCP 服务器、你的 Hook、你的 `env`——保持原样。在智能体的记忆里，Coffer 只写上面列出的文件和标记区块，从不写智能体自己写的记忆；记忆页上的**撤销同步…**会移除它们。
 
 ::: tip 清理智能体
 要移除 Coffer，运行 `coffer uninstall`（桌面应用里是**设置 › 关于 › 卸载 Coffer**）。它会断开每个智能体与 Coffer 的连接、移除每个智能体上的提供商投影，并删除技能链接、开机自启动、终端启动文件、安装脚本加的 `PATH` 行和 `~/.coffer/bin`；`~/.coffer` 会保留，除非加上 `--delete-data`。先手动删 `~/.coffer` 的话，智能体会指向一个已经不存在的 shim。见[安装 → 卸载](/zh/start/install#uninstall)。

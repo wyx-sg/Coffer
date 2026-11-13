@@ -9,7 +9,7 @@ description: Coffer 怎样在保险库里保存一个汇集每个智能体记忆
 
 ## 要解决的问题 {#the-problem}
 
-每个编程智能体都有自己的记忆，彼此却看不到对方的。Claude Code 在每个项目下一条记忆写一个 Markdown 文件，每次会话加载它的 `MEMORY.md` 索引。Codex 把它的 rollout 提炼成任务组和一份档案，每次会话加载它的摘要。现在两者也都会整理自己的记忆：Claude Code 的 Auto Dream 负责合并和清理，Codex 的整合在输入变化时重写记忆。它们做不到的，是看到对方学到了什么，或者自己在你另一台机器上学到了什么。
+每个编程智能体都有自己的记忆，彼此却看不到对方的。Claude Code 在每个项目下一条记忆写一个 Markdown 文件，每次会话加载它的 `MEMORY.md` 索引。Codex 把它的会话提炼成一份记忆摘要，每次会话加载。现在两者也都会整理自己的记忆：Claude Code 的 Auto Dream 负责合并和清理，Codex 的整合在输入变化时重写记忆。它们做不到的，是看到对方学到了什么，或者自己在你另一台机器上学到了什么。
 
 Coffer 的答案是一次同步，而不是一套自己的记忆系统：
 
@@ -17,7 +17,7 @@ Coffer 的答案是一次同步，而不是一套自己的记忆系统：
 2. **写入。** 每台机器把中心库里的每个条目，按对方自己的格式，写进本机除来源之外的每个智能体，智能体会把它当作自己的记忆加载。
 3. **整理和加载交给智能体。** Coffer 不往会话里投递任何东西，也从不修改智能体自己写的记忆。合并、纠正和遗忘都是每个智能体自己的整理。
 
-记忆管人，[知识](/zh/architecture/knowledge)管事。记忆保存你是谁、怎么和你合作、一个项目当前的状态；它到达会话的方式和智能体自己的记忆一样。知识保存外部系统、团队和流程怎么运作，带来源和复查日期，智能体通过 `coffer-guide` 目录按需拉取。固定的一串步骤是技能。智能体仍会把任务笔记写进自己的记忆；Coffer 把它们和其他项目记忆一样同步，把它移进知识库是你和你的智能体的事。只同步在仓库里学到的记忆：智能体在任何仓库之外学到的留在它自己那里（见[只同步项目记忆](#project-memories-only)）。往智能体的记忆里写东西，是[拉取，而非推送](/zh/architecture/design-principles#pull-not-push)的一个有边界的例外：Coffer 只写自己的文件和一个标记区块，修改前先备份，首次或大量同步先给预览，每次同步都审计，并提供一键撤销。这个决定和权衡过的方案见 ADR [Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-memory-into-each-agents-own-memory.md)。
+记忆管人，[知识](/zh/architecture/knowledge)管事。记忆保存你是谁、怎么和你合作、一个项目当前的状态；它到达会话的方式和智能体自己的记忆一样。知识保存外部系统、团队和流程怎么运作，带来源和复查日期，智能体通过 `coffer-guide` 目录按需拉取。固定的一串步骤是技能。智能体在项目里留下的每条记忆，不论讲的是什么，Coffer 都同步，把它移进知识库是你和你的智能体的事；Codex 按任务留下的工作笔记不是记忆，不读取。只同步在仓库里学到的记忆：智能体在任何仓库之外学到的留在它自己那里（见[只同步项目记忆](#project-memories-only)）。往智能体的记忆里写东西，是[拉取，而非推送](/zh/architecture/design-principles#pull-not-push)的一个有边界的例外：Coffer 只写自己的文件和一个标记区块，修改前先备份，首次或大量同步先给预览，每次同步都审计，并提供一键撤销。这个决定和权衡过的方案见 ADR [Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-memory-into-each-agents-own-memory.md)。
 
 ## 中心库 {#the-hub}
 
@@ -28,12 +28,12 @@ Coffer 的答案是一次同步，而不是一套自己的记忆系统：
         └── <id>.md
 ```
 
-早先版本写下的 `sorted/` 文件夹不再读取；`global/` 文件夹按[只同步项目记忆](#project-memories-only)所述清空。
+只读取 `projects/`：早先版本写下的 `sorted/` 或 `global/` 文件夹会被忽略。
 
 - **项目键。** 项目以仓库的 `origin` URL 命名，并经过规范化：去掉协议、凭据、端口和末尾的 `.git`，主机名转为小写，路径保留大小写（`git@host:owner/repo.git` 和 `https://host/owner/repo` 得到同一个键）。没有远端的仓库退而使用目录名，因为路径不能跨机器使用。主检出、它的工作树，以及 `origin` 相同的另一份克隆，无论在哪台机器上，都是同一个项目。文件夹名是把键里 `[A-Za-z0-9._-]` 之外的字符都换成 `-` 后的结果；键本身写在每个条目 frontmatter 的 `project:` 里，所以从不需要反解文件夹名。
-- **归档。** 记忆放在智能体放它的地方，不看类型：在某个仓库里学到的归入那个项目。Codex 任务组的 `applies_to` 可能写着临时聊天目录，旁边再写上实际处理的仓库；其中每个路径都会读取，第一个位于仓库内的胜出。工作目录不在任何仓库里的记忆（Codex 的档案和偏好、没写目录的任务组、临时文件夹）不发布。参见 [ADR：记忆放在智能体放它的地方](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/file-a-memory-where-its-agent-filed-it.md)。
-- **条目 id。** `sha256(machine_id, agent_type, source_identity)` 的前 16 个十六进制字符。来源标识是 Claude Code 记忆文件在配置目录下的路径，或者 Codex 的文件加上任务组、小节和条目内容的哈希。没变过的来源重读时映射到同一个 id；一条记忆前后的 Codex 条目增加、删除或换位，都不会改变它的 id。中心库里找不到的 Codex 条目，会接过同一小节里已经消失、且与它最相似的那条记忆的标识（相似度至少 0.6），所以改写过的条目算一次更新，而不是一个新条目；更不相似的就是一条新记忆。
-- **Frontmatter。** `id`、`origin`（`machine`、`agent`、`source`）、`project`、`type`（`user`、`feedback`、`project` 或 `reference`）、`title`、`description`、来源给出时的 `search_terms`、`created_at` 和 `updated_at`。正文是记忆的文本。
+- **归档。** 记忆放在智能体放它的地方，不看类型：在某个仓库里学到的归入那个项目。工作目录不在任何仓库里的记忆（Claude Code 的项目目录是个临时文件夹，Codex 的某个条目所属会话不在仓库里）不发布；在保险库自己的检出 `~/.coffer/vault` 里学到的也不发布，那是 Coffer 的数据，不是一个项目。参见 [ADR：记忆放在智能体放它的地方](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/file-a-memory-where-its-agent-filed-it.md)。
+- **条目 id。** `sha256(machine_id, agent_type, source_identity)` 的前 16 个十六进制字符。来源标识是 Claude Code 记忆文件在配置目录下的路径，或者 Codex 摘要的路径加上条目的项目范围和它文本的哈希。没变过的来源重读时映射到同一个 id。被 Codex 改写过的条目是一条新记忆，旧的那条在同一次同步里离开中心库。
+- **Frontmatter。** `id`、`origin`（`machine`、`agent`、`source`）、`project`、`type`（`user`、`feedback`、`project` 或 `reference`）、`title`、`description`、`created_at` 和 `updated_at`。正文是记忆的文本。
 - **可移植的路径。** 发布时，先把仓库根目录（以及智能体记录的每个工作树根目录）换成 `<repo>`，再把主目录换成 `~`，最长匹配优先，并且只在路径边界上替换。写入时，`<repo>` 展开成项目在写入机器上的检出位置，`~` 展开成那台机器的主目录。其他路径保持原样。
 - **每个条目只有一个写入者。** 只有来源机器和来源智能体会创建、修改或删除一个条目；一台机器从不因为自己的智能体没有某些条目，就删除另一台机器的条目。所以两台机器从不编辑同一个文件，保险库同步合并中心库时总是干净的。
 - **每次同步一次提交。** 一次同步对中心库的改动是一次保险库提交，写入者为 `memory-sync`，走保险库常规的经过校验的写入路径。
@@ -43,21 +43,20 @@ Coffer 的答案是一次同步，而不是一套自己的记忆系统：
 
 ## 读取原生记忆 {#reading-native-memory}
 
-每个受支持的智能体有一个读取器，每个读取器都遵循同样的两步约定：**列出来源**（智能体的记忆文件，各自计算哈希，不解析），然后**读取一个来源**（把一个文件解析成条目：标题、描述、类型、原文正文、锚点、项目根目录和可选的检索词）。把两步分开，同步就能在付出解析代价之前跳过没变的文件。Coffer 只读取**已注册**的智能体，路径由每个智能体自己的配置目录推出。
+每个受支持的智能体有一个读取器，每个读取器都遵循同样的两步约定：**列出来源**（智能体的记忆文件，各自计算哈希，不解析），然后**读取一个来源**（把一个文件解析成条目：标题、描述、类型、原文正文、锚点和项目根目录）。把两步分开，同步就能在付出解析代价之前跳过没变的文件。Coffer 只读取**已注册**的智能体，路径由每个智能体自己的配置目录推出。
 
 | | Claude Code | Codex |
 | --- | --- | --- |
-| 读取的文件 | `<config_dir>/projects/<slug>/memory/*.md` | `<config_dir>/memories/MEMORY.md` 和 `memory_summary.md`；v2：`<config_dir>/memories_v2/memory_summary.md` |
-| 一个条目对应 | 一个记忆文件 | 任务组里一个有内容的条目小节（`User preferences`、`Reusable knowledge`、`Failures and how to do differently`），加上摘要里的档案和档案偏好；v2 另有每段 `## General Tips` 和 `## What's in Memory` 里的每个条目 |
-| 标题和描述 | frontmatter 的 `name` 和 `description` | 由条目推出 |
-| 类型 | `metadata.type`：`user`、`feedback`、`project` 或 `reference` | 任务组偏好 → `user`；知识和失败 → `project`；档案 → `user` |
-| 项目根目录 | 同目录下会话记录里记下的 `cwd`，退而解码项目 slug | 任务组的 `applies_to: cwd=…` 行；v2 条目取它指向的 rollout 摘要开头的 `cwd:` |
-| 检索词 | 没有，因为格式里没有 | 来自摘要里的 `## What's in Memory`，按保守的词覆盖率关联到任务组 |
-| 跳过 | 智能体自己的 `MEMORY.md` 索引，以及 Coffer 的副本 | v1 的 `## General Tips`、rollout 引用小节、`raw_memories.md`、`rollout_summaries/`、`extensions/` 下的一切，以及标了 `[via Coffer]` 的条目 |
+| 读取的文件 | `<config_dir>/projects/<slug>/memory/*.md` | `<config_dir>/memories_v2/memory_summary.md` |
+| 一个条目对应 | 一个记忆文件 | 摘要 `## What's in Memory` 一节里的一个条目 |
+| 标题和描述 | frontmatter 的 `name` 和 `description` | 条目的第一个分句，以及它的那句话 |
+| 类型 | `metadata.type`：`user`、`feedback`、`project` 或 `reference` | `project` |
+| 项目根目录 | 同目录下会话记录里记下的 `cwd`，退而解码项目 slug | 条目指向的 rollout 摘要开头的 `cwd:` |
+| 跳过 | 智能体自己的 `MEMORY.md` 索引，以及其中 Coffer 的区块 | 用户档案、偏好和通用提示（讲的是人，不是项目）、整个 v1 文件夹 `memories/`、`rollout_summaries/` 的正文、`extensions/` 下的一切，以及标了 `[via Coffer]` 的条目 |
 
-两个读取器都不把会话记录或 rollout 当作来源。Claude Code 读取器读会话记录里的 `cwd`，Codex 读取器读 v2 rollout 摘要开头的 `cwd:` 一行（下面的内容不读），都只为一件事：找出条目的项目根目录。
+两个读取器都不把会话记录或 rollout 当作来源。Claude Code 读取器读会话记录里的 `cwd`，Codex 读取器读 rollout 摘要开头的 `cwd:` 一行（下面的内容不读），都只为一件事：找出条目的项目根目录。
 
-Codex 把 v1 记忆放在 `memories/`，v2 放在 `memories_v2/`，Codex Desktop 按线程选用其中一个。两个都在时两个都读。v2 没有 `MEMORY.md` 也没有任务组：它的摘要把每项工作归在 Codex 用文字命名的项目范围下，并指向该会话的 rollout 摘要。v2 条目的标识里带着项目范围，所以它和任务组条目一样处理，不列入常驻记忆。有 v2 摘要时，档案以它为准，v1 摘要只给出 v2 没有逐字写过的偏好。Codex 双写期间，同一项工作可能出现两次，一次是 v1 的条目，一次是 v2 的一句话；见 ADR [Follow Codex's Memory Into Every Version Folder It Keeps](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/follow-codex-memory-into-every-version-folder.md)。
+Codex 在 v2 摘要之外，还在 `memories/` 里留着旧的记忆（`MEMORY.md`，每项工作一个任务组，各有偏好、可复用知识和失败记录的条目）。Coffer 不读它。那些条目是单次任务的工作笔记：在维护者的机器上，中心库 308 条里有 232 条是它们，而 Claude Code 会加载的 4 KB 区块只放得下某个项目 90 条记忆里的 14 条，真正重要的反而被挤了出去。一次任务里值得带走的东西，Codex 自己会整合进 v2 摘要。还没有 `memories_v2/` 的 Codex 不发布任何记忆；Coffer 仍然往它里面写。见 ADR [Sync Memories, Not Task Notes](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-memories-not-task-notes.md)。
 
 无法解析来源的读取器会**大声地、隔离地**失败：这个智能体在这次同步里什么都不发布，记忆页写明路径和原因，另一个智能体照常读取，它之前发布的条目留在中心库里，不会被删除。
 
@@ -65,7 +64,7 @@ Codex 把 v1 记忆放在 `memories/`，v2 放在 `memories_v2/`，Codex Desktop
 
 ## 写入每个智能体 {#writing-into-each-agent}
 
-一台机器把中心库的条目写进本机每个已注册的智能体，只有该条目的来源智能体在来源机器上除外：台式机上的 Claude Code 会收到笔记本上的 Claude Code 学到的东西。一个项目的条目只写到该项目在本机**已检出**的地方。检出位置在每次同步时从已注册智能体记录的工作目录（Claude Code 的项目目录，Codex 任务组的 `cwd=`）得出，每个都解析到它的仓库；不会扫描磁盘。一个项目在本机检出了不止一份时，主检出优先于工作树，其次是最近使用的。
+一台机器把中心库的条目写进本机每个已注册的智能体，只有该条目的来源智能体在来源机器上除外：台式机上的 Claude Code 会收到笔记本上的 Claude Code 学到的东西。一个项目的条目只写到该项目在本机**已检出**的地方。检出位置在每次同步时从已注册智能体记录的工作目录（Claude Code 的项目目录，Codex rollout 摘要的 `cwd:`）得出，每个都解析到它的仓库；不会扫描磁盘。一个项目在本机检出了不止一份时，主检出优先于工作树，其次是最近使用的。
 
 ### Claude Code {#claude-code}
 
@@ -73,8 +72,7 @@ Claude Code 只读取它自己会加载的文字：项目 `MEMORY.md` 的前 200
 
 - **项目记忆**写进该项目 `MEMORY.md` 末尾的标记区块，位于 `<config_dir>/projects/<slug>/memory/`，slug 是 Claude Code 自己对仓库根目录的编码，各工作树共用（不存在时会创建）。它们只在该项目的会话里加载。区块在 `<!-- coffer:memory-sync:begin -->` 和 `<!-- coffer:memory-sync:end -->` 之间；写入只替换两个标记之间的字节，没有标记时追加区块，之前的文件先存到 `~/.coffer/config-backups/`。
 - **每条记忆一行**：它的原文，最多 800 个字符；原文不以标题开头时，前面加粗写上标题（Codex 用记忆的第一个分句作标题）；最后写明来自哪个智能体，最新的在前。
-- **有上限。** 区块不超过 4 KB。放不下的记忆在最后一行计数，并写出列出它们的命令 `coffer memory entries --project <项目>`。
-- **以前的副本。** 早先的版本给每条记忆写一个 `coffer_<slug>.md` 文件，全局记忆放在一个 `-coffer-global` 项目里，后来放在 `<config_dir>/rules/coffer-memory.md`。它们不再是写入目标，所以第一次同步会按常规计划移除仍保持原样的那些（大量移除会先给预览），清空旧区块，并删除这个规则文件。
+- **有上限。** 区块不超过 4 KB。放不下的记忆在最后一行计数，并写出列出它们的命令 `coffer memory entries --project <项目>`；记忆页也会把每一条标为放不下，让你看得到 Claude Code 没有加载哪些。
 
 ### Codex {#codex}
 
@@ -94,7 +92,7 @@ Codex 可以自己导入 Claude Code 的项目记忆并保持更新。当它这�
 
 写进智能体、下次同步再读回来，这个过程不能形成循环。
 
-- **认得出副本。** 在 Claude Code 上，读取器跳过标记区块，以及早先版本留下的、frontmatter 里有 `coffer.entry` 的 `coffer_` 文件。在 Codex 上，读取器跳过 `extensions/` 下的一切，以及标了 `[via Coffer]` 的条目；用户画像是成段的文字，读取器去掉其中标了 `[via Coffer]` 的句子，其余照读。
+- **认得出副本。** 在 Claude Code 上，读取器跳过标记区块。在 Codex 上，读取器从不列出 `extensions/` 下的任何东西，并跳过标了 `[via Coffer]` 的条目。
 - **吸收不会循环流转。** 智能体会把 Coffer 交给它的内容并入自己的记忆：Claude Code 在自己的某个文件里复述区块里的一行；Codex 的整合把一个资源改写成一个条目。那条记忆属于智能体，会被同步，但它的改写不能无休止地来回流转。账本为每个智能体保存 Coffer 交给它的每个句子的指纹（转小写、合并空白、去标点后取哈希）。当智能体自己的记忆发生变化，而新增的每个句子都是 Coffer 交给它的，这次变化只记录、不发布。一个事实只跨过每个智能体边界一次；改写到指纹认不出时，它作为该智能体自己的记忆发布，每一侧的整理再把它和已有的内容合并。
 - **被修改或移除的副本归智能体所有。** 摘要与 Coffer 写入时不一致的 Codex 资源是 `edited`；不见了的是 `removed`。只要中心库条目没变，两者都保持不动。条目变化时，新版本作为一份新资源写在被修改的那份旁边，或者把被移除的重新写入。移除副本从不删除它的中心库条目。Coffer 的区块归 Coffer 自己，每次整体重写。
 
@@ -102,11 +100,11 @@ Coffer 从不创建、修改、移动或删除智能体记忆里的其他任何�
 
 ## 只同步项目记忆 {#project-memories-only}
 
-只有智能体在仓库里学到的记忆，Coffer 才会发布。Codex 的档案、偏好和通用提示，以及在临时文件夹里学到的任何东西，留在写下它的智能体里，不会到达其他智能体：Codex 在仓库之外学到的大多是某个雇主内部工具的习惯，把它们放进每个 Claude Code 会话，会把它们带进不相干的项目。对你本人的长期偏好，应写进每个智能体自己的说明文件（`~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md`），由你自己写。
+只有智能体在仓库里学到的记忆，Coffer 才会发布。Codex 的档案、偏好和通用提示，以及在临时文件夹里学到的任何东西，留在写下它的智能体里，不会到达其他智能体：Codex 在仓库之外学到的大多是某个雇主内部工具的习惯，把它们放进每个 Claude Code 会话，会把它们带进不相干的项目。对你本人的长期偏好，应写进每个智能体自己的说明文件（`~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md`），由你自己写。保险库自己的检出也不算项目：智能体在 `~/.coffer/vault` 里干活是在打理 Coffer 的数据，在那里学到的东西讲的不是某个代码库。
 
-在一个项目内，每条记忆都会同步，包括任务笔记：Coffer 不按智能体把记忆记在项目里的哪个位置来评判它。过时的内容由每个智能体自己的整理清理。
+在一个项目内，智能体留下的每条记忆都会同步，不看类型：Coffer 不按智能体把记忆记在项目里的哪个位置来评判它。过时的内容由每个智能体自己的整理清理。
 
-早先版本发布的 `global/` 条目不写进任何智能体，也不列出；账本里的读取器版本让它的来源机器第一次同步时重新读取每个来源，并删除这些条目。见 ADR [Sync Only Project Memories](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-only-project-memories.md)。
+只要来源里还有这条记忆，它就留在中心库里，即使它的仓库已经从来源机器上删掉：删掉一份检出并不等于你说这条经验错了，别的机器上可能还有这个项目。智能体或你把它从智能体自己的记忆里删掉时，它才离开中心库。见 ADR [Sync Only Project Memories](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-only-project-memories.md) 和 [Sync Memories, Not Task Notes](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-memories-not-task-notes.md)。
 
 ## 账本与预览 {#the-ledger-and-the-preview}
 
@@ -142,9 +140,9 @@ flowchart TD
 
 ## 整理留给智能体 {#curation-stays-with-the-agents}
 
-每个智能体的记忆标签页从智能体自己的配置读取它的状态，从不读未公开的内部数据库：Claude Code 的自动记忆（`settings.json` 里的 `autoMemoryEnabled`，缺省即开启）；Codex 的记忆功能（`config.toml` 里的 `[features] memories`），记忆开启时它的整合就会运行。Auto Dream 没有公开的设置项：Coffer 读取 `settings.json` 里的 `autoDreamEnabled`，缺省时读取 Claude Code 缓存在 `~/.claude.json` 里的账号默认值，并说明是哪一个决定的；Claude Code 各项目记忆文件夹里最新的 `.consolidate-lock` 说明它上次运行的时间。Coffer 读不到的状态显示为未知。**开启**在你确认后只往 `settings.json` 写入 `"autoDreamEnabled": true`，并留下备份，记录 `memory_curation_enabled`；Coffer 从不擅自改这个设置（[ADR](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/curate-claude-memory-in-the-open.md)）。
+合并重复、纠正错误、遗忘过时内容，是每个智能体自己的事，按它自己的节奏进行：Claude Code 的 Auto Dream，Codex 的整合。Coffer 不展示、不开启也不启动它们，不为此读取智能体的任何设置或缓存，也不写任何设置。早先的版本展示过 Auto Dream 的状态，提供过**开启**和**立即整理**的移交；它们被移除了，因为那个状态来自一个没有文档的设置和一份缓存的账号默认值，Claude Code 的副本改成一个区块之后移交提示里已经列不出任何文件夹，而且智能体自己的功能应该由智能体自己来解释（[ADR](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/leave-agent-memory-curation-to-the-agent.md)）。
 
-Claude Code 的**立即整理**是一次移交，代替 Auto Dream 做事：Coffer 在你的终端里打开 Claude Code，给它一个提示，列出 Coffer 在这台机器上写入过的记忆文件夹，请它逐个文件夹整合 Claude Code 自己的记忆（先给计划，合并重复，丢掉被推翻或过时的内容，使用绝对日期，不动 Coffer 的区块，不改其他东西，报告前后条数），并记录 `memory_curation_requested`。你能看到每一步，并按 Claude Code 自己的权限批准编辑。Codex 没有这个按钮：它的整合会自己运行。因此整理按智能体自己的节奏进行：一个很少使用的项目，在智能体下次整理之前，可能同时放着一份副本和智能体自己对同一教训的版本。Coffer 的正确性不依赖整理，因为它写的内容本身就是有效的。
+因此整理按智能体自己的节奏进行：一个很少使用的项目，在智能体下次整理之前，可能同时放着一份副本和智能体自己对同一教训的版本。Coffer 的正确性不依赖整理，因为它写的内容本身就是有效的。每个智能体的记忆标签页只显示 Coffer 这一侧：它在那里写了哪些副本，或者为什么写不进去。
 
 ## 撤销 {#undo}
 
@@ -156,19 +154,12 @@ Claude Code 的**立即整理**是一次移交，代替 Auto Dream 做事：Coff
 | --- | --- |
 | `memory_synced` | 一次同步（或预览的**写入**）有了改动；列出发布、更新和删除的中心库条目，按智能体和路径列出写入、更新和移除的副本，扣下的记忆和失败的来源 |
 | `memory_sync_undone` | 运行了**撤销同步** |
-| `memory_curation_requested` | **立即整理**把整理移交给了 Claude Code |
-| `memory_curation_enabled` | **开启**往 Claude Code 的设置里加了 `autoDreamEnabled` |
-| `memory_hook_removed` | 升级时从一个智能体中移除了已停用的 `coffer-memory` Hook |
 
 智能体自己对记忆的修改不是 Coffer 的行为，不审计。
 
 ## 没有表，也没有资源类型 {#no-table-no-resource-kind}
 
 中心库是保险库里的文件，一台机器往智能体里写了什么记录在一个本机文件里。这一层不新增任何表，也不新增资源类型。
-
-## 升级 {#upgrade}
-
-一个一次性、幂等的启动步骤，会移除早期版本装进 Claude Code `settings.json` 和 Codex `hooks.json` 里带 `coffer-memory` 标记的 Hook 条目：使用智能体那个会先备份的配置写入器，其他 Hook 和键原样保留，并为每个改动过的智能体记录一条 `memory_hook_removed` 事件。它在资源存储索引 `derived/` 之前删除 `~/.coffer/derived/memory/` 和 `~/.coffer/derived/resources/memory/`。不会丢失任何东西：两者都是从智能体自己的记忆重建出来的，第一次同步会把这些记忆发布出去。内部引擎设置会把旧的聚合开关和间隔沿用到 `memory_sync`。
 
 ## 权衡与备选方案 {#trade-offs-and-alternatives}
 
@@ -186,13 +177,13 @@ Claude Code 的**立即整理**是一次移交，代替 Auto Dream 做事：Coff
 | 关注点 | 位置 |
 | --- | --- |
 | 仓库标识、中心库条目、可移植路径、同步计划、吸收指纹和原生写入器的渲染 | 领域层的 `memory` 包 |
-| 同步服务和工作器、发布、写入、报告、页面视图和升级移除 | 应用层的 `memory` 包 |
-| 原生记忆读取器和写入器、中心库存储、检出位置、整理状态和账本 | 基础设施层的 `memory` 包 |
+| 同步服务和工作器、发布、写入、报告和页面视图 | 应用层的 `memory` 包 |
+| 原生记忆读取器和写入器、中心库存储、检出位置和账本 | 基础设施层的 `memory` 包 |
 | `/api/v1/memory/sync/*` 路由和工作器的装配 | HTTP 表面 |
 | `coffer memory` | CLI 表面 |
 
 ## 相关内容 {#related}
 
 - 规格：[memory](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/memory/spec.md)
-- 决策记录：[Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-memory-into-each-agents-own-memory.md)、[Memory Is About the Person, Knowledge Is About the World](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/memory-is-about-the-person-knowledge-is-about-the-world.md)、[Claude Code Reads Other Agents' Memories as Text It Loads](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/claude-code-reads-other-agents-memories-as-text.md)
+- 决策记录：[Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-memory-into-each-agents-own-memory.md)、[Memory Is About the Person, Knowledge Is About the World](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/memory-is-about-the-person-knowledge-is-about-the-world.md)、[Claude Code Reads Other Agents' Memories as Text It Loads](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/claude-code-reads-other-agents-memories-as-text.md)、[Sync Memories, Not Task Notes](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-memories-not-task-notes.md)、[Leave an Agent's Memory Curation to the Agent](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/leave-agent-memory-curation-to-the-agent.md)
 - [记忆指南](/zh/guides/memory) · [知识架构](/zh/architecture/knowledge) · [保险库同步](/zh/architecture/vault-sync) · [持久化](/zh/architecture/persistence)

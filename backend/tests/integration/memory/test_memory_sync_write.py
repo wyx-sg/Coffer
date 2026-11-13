@@ -1,7 +1,6 @@
 """The memory sync's write half: the hub into each agent's own memory (spec
 memory "Write the hub into Claude Code as text it loads", "Write the hub into
-Codex's memory extension", "Keep task material with its own agent until it is
-sorted" and the requirements that decide where and when)."""
+Codex's memory extension" and the requirements that decide where and when)."""
 
 from __future__ import annotations
 
@@ -14,12 +13,11 @@ import pytest
 from coffer.infrastructure.memory.writers.claude_code import BLOCK_BEGIN, BLOCK_END
 from coffer.infrastructure.vault.home import config_backups_dir
 from tests.integration.memory._sync_harness import (
-    CHINESE,
     Machine,
     cc_file,
     cc_memory_dir,
     cc_project,
-    codex_memory,
+    codex_topics,
     hub_files,
 )
 from tests.integration.memory.conftest import init_repository
@@ -46,9 +44,7 @@ async def test_a_project_s_memories_reach_only_that_project(
 ) -> None:
     a = Machine("machine-a", tmp_path / "a")
     a.codex(
-        memory_md=codex_memory(
-            [("Payments", str(payments), ["Run uv sync --frozen before tests."])]
-        )
+        memory=codex_topics([("Payments", str(payments), ["Run uv sync --frozen before tests."])])
     )
     cc = a.claude()
     own = "# Memory index\n\n- [Own](own.md) — something I learned\n"
@@ -75,29 +71,25 @@ async def test_a_project_s_memories_reach_only_that_project(
 async def test_a_memory_learned_outside_any_repository_is_not_synced(
     tmp_path: pathlib.Path, payments: pathlib.Path
 ) -> None:
+    scratch = tmp_path / "Documents" / "notes"
+    scratch.mkdir(parents=True)
     a = Machine("machine-a", tmp_path / "a")
-    a.codex(memory_md="", summary_md=CHINESE)
+    codex = a.codex(memory=codex_topics([("Payments", str(payments), [])]))
     cc = a.claude()
-    memory = cc_project(cc, payments, {"MEMORY.md": "# index\n"})
-    rules = cc / "rules" / "coffer-memory.md"
-    rules.parent.mkdir(parents=True)
-    rules.write_text("# Memories from your other agents\n\n- Old line\n", encoding="utf-8")
+    cc_project(cc, scratch, {"lang.md": cc_file("Chinese", "Replies", "user", "Reply in Chinese.")})
+    cc_project(cc, payments, {})
     await a.sync()
 
     assert hub_files(pathlib.Path(os.environ["HOME"]) / ".coffer" / "vault") == []
-    assert not rules.exists()
-    assert not (cc / "projects" / "-coffer-global").exists()
-    assert (memory / "MEMORY.md").read_text(encoding="utf-8") == "# index\n"
+    assert _resources(codex) == []
 
 
-@pytest.mark.acceptance(spec="memory", scenario="a task note syncs like any project memory")
-async def test_a_task_note_syncs_like_any_project_memory(
+@pytest.mark.acceptance(spec="memory", scenario="a reference memory syncs like any project memory")
+async def test_a_reference_memory_syncs_like_any_project_memory(
     tmp_path: pathlib.Path, payments: pathlib.Path
 ) -> None:
     a = Machine("machine-a", tmp_path / "a")
-    codex = a.codex(
-        memory_md=codex_memory([("IA sheet", str(payments), ["Remarks go in column F."])])
-    )
+    codex = a.codex(memory=codex_topics([("IA sheet", str(payments), ["Remarks go in column F."])]))
     cc = a.claude()
     memory = cc_project(
         cc,
@@ -121,9 +113,7 @@ async def test_a_claude_code_memory_reaches_codex(
         payments,
         {"p.md": cc_file("Ledger", "Retries", "project", "Retries are idempotent.")},
     )
-    codex = a.codex(
-        memory_md=codex_memory([("Payments", str(payments), ["Something Codex knows."])])
-    )
+    codex = a.codex(memory=codex_topics([("Payments", str(payments), ["Something Codex knows."])]))
     await a.sync()
 
     (resource,) = _resources(codex)
@@ -140,7 +130,7 @@ async def test_codex_with_memories_off_is_reported_not_written(
 ) -> None:
     a = Machine("machine-a", tmp_path / "a")
     cc_project(a.claude(), payments, {"p.md": cc_file("Ledger", "Retries", "project", "x")})
-    codex = a.codex(memory_md="", memories_on=False)
+    codex = a.codex(memories_on=False)
     before = sorted(p.relative_to(codex) for p in codex.rglob("*"))
     await a.sync()
 
@@ -148,7 +138,6 @@ async def test_codex_with_memories_off_is_reported_not_written(
     state = await a.view.state()
     (row,) = [r for r in state.agents if r.agent_type == "codex"]
     assert row.writer["state"] == "off"
-    assert row.curation.memory == "off"
 
 
 @pytest.mark.acceptance(spec="memory", scenario="an unrecognised layout is not written into")
@@ -157,7 +146,7 @@ async def test_an_unrecognised_layout_is_not_written_into(
 ) -> None:
     a = Machine("machine-a", tmp_path / "a")
     cc_project(a.claude(), payments, {"p.md": cc_file("Ledger", "Retries", "project", "x")})
-    codex = a.codex(memory_md="")
+    codex = a.codex()
     (codex / "memories" / "MEMORY.md").unlink()
     await a.sync()
 
@@ -196,12 +185,12 @@ async def test_a_memory_returns_to_its_own_agent_on_another_machine_only(
     a = Machine("machine-a", tmp_path / "a")
     a_cc = a.claude()
     cc_project(a_cc, payments, {"p.md": cc_file("Ledger", "Retries", "project", "x")})
-    a_codex = a.codex(memory_md=codex_memory([("Payments", str(payments), [])]))
+    a_codex = a.codex(memory=codex_topics([("Payments", str(payments), [])]))
     await a.sync()
     b = Machine("machine-b", tmp_path / "b")
     b_cc = b.claude()
     cc_project(b_cc, payments, {})
-    b_codex = b.codex(memory_md=codex_memory([("Payments", str(payments), [])]))
+    b_codex = b.codex(memory=codex_topics([("Payments", str(payments), [])]))
     await b.sync()
 
     assert not (cc_memory_dir(a_cc, payments) / "MEMORY.md").exists()
@@ -220,7 +209,7 @@ async def test_codex_own_import_turns_the_claude_code_to_codex_direction_off(
     a = Machine("machine-a", tmp_path / "a")
     cc = a.claude()
     cc_project(cc, payments, {"p.md": cc_file("Ledger", "Retries", "project", "x")})
-    codex = a.codex(memory_md=codex_memory([("Payments", str(payments), ["Codex fact here."])]))
+    codex = a.codex(memory=codex_topics([("Payments", str(payments), ["Codex fact here."])]))
     await a.service.set_codex_imports_claude(True)
     await a.sync()
 
@@ -236,7 +225,7 @@ async def test_codex_own_import_turns_the_claude_code_to_codex_direction_off(
 async def test_the_marked_block_is_bounded(tmp_path: pathlib.Path, payments: pathlib.Path) -> None:
     a = Machine("machine-a", tmp_path / "a", threshold=100)
     bullets = [f"Fact number {i} about the payments ledger, " + "x" * 200 for i in range(45)]
-    a.codex(memory_md=codex_memory([("Payments", str(payments), bullets)]))
+    a.codex(memory=codex_topics([("Payments", str(payments), bullets)]))
     memory = cc_project(a.claude(), payments, {})
     await a.sync()
 
@@ -244,3 +233,23 @@ async def test_the_marked_block_is_bounded(tmp_path: pathlib.Path, payments: pat
     assert 0 < len(lines) < 45
     assert lines[-1].startswith("- …and ")
     assert lines[-1].endswith("`coffer memory entries --project github.com/acme/payments`")
+
+
+@pytest.mark.acceptance(spec="memory", scenario="a memory left out of a full block says so")
+async def test_a_memory_left_out_of_a_full_block_says_so(
+    tmp_path: pathlib.Path, payments: pathlib.Path
+) -> None:
+    a = Machine("machine-a", tmp_path / "a", threshold=100)
+    topics = [f"Fact number {i} about the payments ledger, " + "x" * 200 for i in range(45)]
+    a.codex(memory=codex_topics([("Payments", str(payments), topics)]))
+    memory = cc_project(a.claude(), payments, {})
+    await a.sync()
+
+    rows = await a.view.entries("github.com/acme/payments")
+    states = [r.copies["claude_code"] for r in rows]
+    held = len(_block(memory).splitlines()) - 2
+    assert states.count("block") == held
+    assert states.count("over_limit") == 45 - held
+    block = _block(memory)
+    for row in rows:
+        assert (row.entry.body in block) == (row.copies["claude_code"] == "block")

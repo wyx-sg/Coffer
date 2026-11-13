@@ -90,13 +90,15 @@ def located(writer: NativeWriter, local: LocalAgent) -> list[LocalAgent]:
 
 @dataclass
 class AgentTargets:
+    #: Written as one file each (Codex's extension resources).
     copies: list[Target] = field(default_factory=list)
-    globals: list[Target] = field(default_factory=list)
+    #: Written as lines of a file the writer keeps (Claude Code's block).
+    inline: list[Target] = field(default_factory=list)
     #: Project entries held back because the project is not checked out here.
     held_back: int = 0
 
     def by_entry(self) -> dict[str, Target]:
-        return {t.entry.id: t for t in [*self.copies, *self.globals]}
+        return {t.entry.id: t for t in [*self.copies, *self.inline]}
 
 
 def targets_for(
@@ -116,10 +118,6 @@ def targets_for(
             continue
         if agent_type == CODEX and entry.origin.agent == CLAUDE_CODE and codex_imports_claude:
             continue
-        if not entry.project:
-            # A global entry another machine published before it upgraded:
-            # there is no global memory, and its machine deletes it.
-            continue
         root = checkouts.get(entry.project)
         if root is None:
             out.held_back += 1
@@ -130,7 +128,7 @@ def targets_for(
         if writer.wants(target):
             out.copies.append(target)
         else:
-            out.globals.append(target)
+            out.inline.append(target)
     return out
 
 
@@ -152,7 +150,7 @@ class Applied:
     written: list[CopyOp] = field(default_factory=list)
     updated: list[CopyOp] = field(default_factory=list)
     removed: list[CopyOp] = field(default_factory=list)
-    #: Coffer's own files beside the copies that changed (block, rules, instructions).
+    #: Coffer's own files beside the copies that changed (block, instructions).
     aux: list[str] = field(default_factory=list)
     skipped: list[CopyOp] = field(default_factory=list)
 
@@ -199,10 +197,10 @@ def apply_ops(
         )
         ledger.deliver(local.agent_type, absorption.fingerprints(op.content))
         (done.written if op.action == ACTION_WRITE else done.updated).append(op)
-    for aux in writer.aux(local.where, copies, targets.by_entry(), targets.globals):
+    for aux in writer.aux(local.where, copies, targets.by_entry(), targets.inline):
         if _apply_aux(aux):
             done.aux.append(aux.path)
-    for target in targets.globals:
+    for target in targets.inline:
         ledger.deliver(local.agent_type, absorption.fingerprints(target.body))
     return done
 
