@@ -36,15 +36,7 @@ class CollectionOut(BaseModel):
     #: First paragraph of the collection's ``README.md`` ("Read a collection's
     #: description from its README").
     description: str
-    #: Pages under ``pages/`` and sources under ``sources/`` ("Keep sources and
-    #: pages apart in each collection").
-    page_count: int = 0
-    source_count: int = 0
-    #: Sources no page cites and none marks skipped ("Derive which sources wait
-    #: from the pages that cite them").
-    waiting_source_count: int = 0
-    #: Mechanical findings, as ``/check`` lists them ("Check a collection
-    #: mechanically on every read").
+    #: Broken links, as ``/check`` lists them ("Check every link in a collection").
     finding_count: int = 0
     #: The collection directory's absolute path — what Reveal folder opens
     #: ("Return absolute paths on reads").
@@ -62,10 +54,15 @@ class CollectionOut(BaseModel):
     #: the person keeps themselves"): Coffer only shares it with the agents,
     #: so it has no tidy, check, history, upload or sync.
     linked: bool = False
-    #: A linked folder's Markdown files; 0 for a collection Coffer keeps.
+    #: The Markdown files in the collection, its README left out.
     note_count: int = 0
-    #: A linked folder's own rules file at its root, empty when none.
+    #: The file whose rules agents follow in it, relative to the collection;
+    #: empty when none ("Let each collection declare its own rules").
     rules_file: str = ""
+    #: The page an agent starts reading from; empty when it names none.
+    entry_file: str = ""
+    #: Where uploads land, relative to the collection; empty for a linked folder.
+    uploads_dir: str = ""
 
 
 def collection_out(entry: CollectionEntry) -> CollectionOut:
@@ -73,9 +70,6 @@ def collection_out(entry: CollectionEntry) -> CollectionOut:
         uid=entry.uid,
         name=entry.name,
         description=entry.description,
-        page_count=entry.page_count,
-        source_count=entry.source_count,
-        waiting_source_count=entry.waiting_source_count,
         finding_count=entry.finding_count,
         folder_path=entry.folder_path,
         updated_at=entry.updated_at,
@@ -84,41 +78,26 @@ def collection_out(entry: CollectionEntry) -> CollectionOut:
         linked=entry.linked,
         note_count=entry.note_count,
         rules_file=entry.rules_file,
+        entry_file=entry.entry_file,
+        uploads_dir=entry.uploads_dir,
     )
 
 
-FindingKind = Literal[
-    "dead_link",
-    "ambiguous_link",
-    "outside_link",
-    "duplicate_slug",
-    "missing_source",
-    "superseded_source",
-    "incomplete_page",
-    "unsourced_page",
-    "stale_page",
-    "orphan_page",
-    "waiting_source",
-]
+FindingKind = Literal["dead_link", "ambiguous_link", "outside_link"]
 
 
 class FindingOut(BaseModel):
     kind: FindingKind
-    #: The file the finding concerns, knowledge-root-relative.
+    #: The file the link is in, knowledge-root-relative.
     path: str
-    #: The link, slug or source it names; for ``incomplete_page`` the missing
-    #: keys, comma-separated; for ``stale_page`` the ``verified`` date as
-    #: written (``null`` when the page has none).
+    #: The link as written.
     target: str | None = None
-    #: The other files a duplicate slug or an ambiguous link involves; for
-    #: ``superseded_source`` the newest source that replaces the cited one.
+    #: The files an ambiguous link could mean.
     others: list[str] = Field(default_factory=list)
 
 
 class CheckOut(BaseModel):
-    """One collection's mechanical check ("Check a collection mechanically on
-    every read"): what Coffer found, and the prompt that hands the rest to the
-    agent."""
+    """One collection's broken links ("Check every link in a collection")."""
 
     collection: CollectionOut
     findings: list[FindingOut]
@@ -146,6 +125,10 @@ class CollectionListOut(BaseModel):
 class CollectionCreate(BaseModel):
     name: str = Field(min_length=1, max_length=64)
     description: str | None = None
+    #: The template the collection starts from ("Start a collection from a
+    #: template"): ``llm-wiki`` (rules for a wiki compiled from kept sources, and
+    #: an index) or ``blank`` (a README alone).
+    template: Literal["llm-wiki", "blank"] = "llm-wiki"
 
 
 class CollectionLink(BaseModel):
@@ -161,32 +144,12 @@ class DirectoryOut(BaseModel):
     file_count: int
 
 
-FileKind = Literal["page", "source", "file"]
-
-
 class FileSummaryOut(BaseModel):
     path: str
     title: str
     description: str
     actor: str
     updated_at: str
-    #: ``page`` under ``pages/``, ``source`` under ``sources/``, else ``file``.
-    kind: FileKind = "file"
-    #: A page's ``type``; empty otherwise.
-    page_type: str = ""
-    #: A source no page cites, none marks skipped and none superseded.
-    waiting: bool = False
-    #: A page due a recheck: its ``verified`` date missing or older than the
-    #: collection's ``verify_after_days``.
-    stale: bool = False
-    #: A source's replacement: the path its ``superseded_by`` resolves to, or
-    #: the slug itself when it names none; empty when it is current.
-    superseded_by: str = ""
-    #: A source's ``summary``.
-    summary: str = ""
-    #: How many pages cite a source, and whether it is marked ``ingest: skipped``.
-    cited_count: int = 0
-    skipped: bool = False
 
 
 def file_summary_out(entry: FileEntry) -> FileSummaryOut:
@@ -194,8 +157,8 @@ def file_summary_out(entry: FileEntry) -> FileSummaryOut:
 
 
 class CollectionFilesOut(BaseModel):
-    """Every page and source of one collection, for its page's Contents
-    ("Show a collection's contents by page type")."""
+    """Every Markdown file of one collection but its README, each with its
+    title and description ("List a collection's files")."""
 
     files: list[FileSummaryOut]
 
@@ -204,14 +167,6 @@ class TreeOut(BaseModel):
     path: str
     directories: list[DirectoryOut]
     files: list[FileSummaryOut]
-
-
-class SourceRefOut(BaseModel):
-    #: The slug the page's ``sources`` entry names.
-    slug: str
-    #: The source it resolves to; ``null`` when no source has that slug.
-    path: str | None = None
-    title: str = ""
 
 
 class LinkRefOut(BaseModel):
@@ -228,11 +183,6 @@ class LinkRefOut(BaseModel):
     outside: bool = False
 
 
-class PageRefOut(BaseModel):
-    path: str
-    title: str
-
-
 class FileOut(BaseModel):
     path: str
     title: str
@@ -245,25 +195,8 @@ class FileOut(BaseModel):
     #: absolute paths on reads").
     file_path: str
     folder_path: str
-    kind: FileKind = "file"
-    #: A page's ``type``, ``aliases``, resolved ``sources`` and ``[[links]]``
-    #: ("Link pages by slug or relative path and check every link").
-    page_type: str = ""
-    aliases: list[str] = Field(default_factory=list)
-    #: A page's ``verified`` date, as written; empty when it carries none.
-    verified: str = ""
-    #: Whether the page is due a recheck (see ``FileSummaryOut.stale``).
-    stale: bool = False
-    sources: list[SourceRefOut] = Field(default_factory=list)
+    #: Every link in its body, each resolved ("Check every link in a collection").
     links: list[LinkRefOut] = Field(default_factory=list)
-    #: A source's citing pages and whether it waits ("Derive which sources
-    #: wait from the pages that cite them").
-    cited_by: list[PageRefOut] = Field(default_factory=list)
-    waiting: bool = False
-    #: A source's replacement, resolved; ``null`` when it is current.
-    superseded_by: SourceRefOut | None = None
-    #: A source's ``summary``.
-    summary: str = ""
     #: An uploaded source's original file name; where it is on this Mac, or
     #: ``None`` when it was uploaded on another one.
     original: str = ""

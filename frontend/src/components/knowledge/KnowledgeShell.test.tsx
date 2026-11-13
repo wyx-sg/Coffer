@@ -4,13 +4,13 @@
 // 5.1.13, 5.1.26–28; Foundations 0.6.04): the header (title, Experimental tag,
 // one subtitle, Tidy all and the one primary Add menu, each entry saying what
 // it keeps in Coffer), the landing with no collection open, the first-run
-// empty state, the tree (a Collections strip with New collection, each page
-// with its type's icon) and the Upload dialog — several files at once, each
+// empty state, the tree (a Collections strip with New collection, folders
+// first by their own names) and the Upload dialog — several files at once, each
 // with its own outcome, and Cancel. Mocked only at the network boundary, like the page tests.
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
-import { COLLECTION, GATEWAY, OTHER, TREES, UID } from "@/components/knowledge/knowledgeTestData";
+import { COLLECTION, GATEWAY, OTHER, UID } from "@/components/knowledge/knowledgeTestData";
 import { answerFromFixtures, renderKnowledge } from "@/test/knowledgeHarness";
 
 import { acceptance } from "@/test/acceptance";
@@ -45,7 +45,7 @@ vi.mock("@/lib/api/fs", () => ({
 
 const api = vi.mocked(await import("@/lib/api/knowledge"));
 
-const SUBTITLE = "Pages your agents write from the sources you keep. Every agent can read them.";
+const SUBTITLE = "Markdown you and your agents write, each collection by its own rules. Every agent can read it.";
 
 beforeEach(() => {
   answerFromFixtures();
@@ -152,7 +152,7 @@ describe("the tree", () => {
   test("no node shows a count and no Inbox node is listed; Collections strip holds New collection", async () => {
     renderKnowledge(`/knowledge/${UID}`);
     const nav = tree();
-    await within(nav).findByRole("button", { name: "Pages" });
+    await within(nav).findByRole("button", { name: "pages" });
     expect(within(nav).queryByRole("button", { name: /^Inbox/ })).toBeNull();
     // The collection rows carry no number.
     const row = within(nav).getByRole("button", { name: new RegExp(`^${COLLECTION.name}$`) });
@@ -166,48 +166,14 @@ describe("the tree", () => {
     expect(await screen.findByRole("dialog")).toHaveTextContent("New collection");
   });
 
-  acceptance("knowledge", "the tree marks each page with its type's icon", async () => {
-    const page = (slug: string, page_type: string) => ({
-      path: `${COLLECTION.name}/pages/${slug}.md`,
-      kind: "page" as const,
-      title: slug,
-      description: "",
-      page_type,
-      waiting: false,
-      stale: false,
-      superseded_by: "",
-      summary: "",
-      cited_count: 0,
-      skipped: false,
-      actor: "user",
-      updated_at: "2026-09-20T00:00:00Z",
-    });
-    api.getTree.mockImplementation(async (path: string) => {
-      if (path === `${COLLECTION.name}/pages`) {
-        return {
-          path,
-          directories: [],
-          files: [page("map", "overview"), page("runbook", "playbook"), page("loose", "")],
-        };
-      }
-      return TREES[path] ?? { path, directories: [], files: [] };
-    });
+  test("the tree shows each folder by its own name and each file by its file name", async () => {
     renderKnowledge(`/knowledge/${UID}`);
     const nav = tree();
-    fireEvent.click(await within(nav).findByRole("button", { name: "Pages" }));
-    fireEvent.click(within(nav).getByRole("button", { name: "Sources" }));
-    const icon = async (name: RegExp) =>
-      (await within(nav).findByRole("button", { name })).querySelector("svg[data-icon]");
-    expect(await icon(/^map\.md/)).toHaveAttribute("data-icon", "overview");
-    expect(await icon(/^map\.md/)).toHaveClass("lucide-compass");
-    // A type the README defines has no icon of its own: the generic page icon.
-    expect(await icon(/^runbook\.md/)).toHaveClass("lucide-file-text");
-    expect(await icon(/^loose\.md/)).toHaveAttribute("data-icon", "untyped");
-    expect(await icon(/^loose\.md/)).toHaveClass("lucide-file-question-mark");
+    fireEvent.click(await within(nav).findByRole("button", { name: "pages" }));
+    fireEvent.click(within(nav).getByRole("button", { name: "sources" }));
     const source = await within(nav).findByRole("button", { name: /^release-notes\.md/ });
-    expect(source.querySelector("svg[data-icon]")).toHaveAttribute("data-icon", "source");
-    expect(source.querySelector("svg[data-icon]")).toHaveClass("lucide-scroll-text");
-    expect(source).toHaveTextContent("Waiting");
+    expect(source.querySelector("svg[data-icon]")).toHaveAttribute("data-icon", "markdown");
+    expect(source).not.toHaveTextContent("Waiting");
   });
 
   acceptance("knowledge", "the tree comes back as the person left it", async () => {
@@ -215,7 +181,7 @@ describe("the tree", () => {
     let nav = tree();
     // Open a collection, then its Sources folder, and open a second collection.
     fireEvent.click(await within(nav).findByRole("button", { name: `Expand ${COLLECTION.name}` }));
-    fireEvent.click(await within(nav).findByRole("button", { name: "Sources" }));
+    fireEvent.click(await within(nav).findByRole("button", { name: "sources" }));
     expect(await within(nav).findByRole("button", { name: /^release-notes\.md/ })).toBeVisible();
     fireEvent.click(within(nav).getByRole("button", { name: `Expand ${OTHER.name}` }));
     cleanup();
@@ -227,12 +193,12 @@ describe("the tree", () => {
       await within(nav).findByRole("button", { name: `Collapse ${COLLECTION.name}` }),
     ).toHaveAttribute("aria-expanded", "true");
     expect(within(nav).getByRole("button", { name: `Collapse ${OTHER.name}` })).toBeVisible();
-    expect(await within(nav).findByRole("button", { name: "Sources" })).toHaveAttribute(
+    expect(await within(nav).findByRole("button", { name: "sources" })).toHaveAttribute(
       "aria-expanded",
       "true",
     );
     expect(await within(nav).findByRole("button", { name: /^release-notes\.md/ })).toBeVisible();
-    expect(within(nav).getByRole("button", { name: "Pages" })).toHaveAttribute(
+    expect(within(nav).getByRole("button", { name: "pages" })).toHaveAttribute(
       "aria-expanded",
       "false",
     );

@@ -137,13 +137,6 @@ def read(data: bytes) -> Page | None:
     return None
 
 
-def folder_for(page: Page) -> str:
-    """Where a page's files go: one folder per page and version, so a
-    re-import of a newer version never overwrites what the older one kept."""
-    version = f"-v{page.version}" if page.version is not None else ""
-    return f"confluence-{page.page_id or 'page'}{version}"
-
-
 def _companions(ctx: Context, page: Page) -> None:
     """Say which downloaded attachments nothing refers to."""
     for name in sorted(page.attachments):
@@ -160,8 +153,7 @@ def _companions(ctx: Context, page: Page) -> None:
 def convert(page: Page, *, fetched_at: str | None = None) -> Conversion:
     """The page as a source: its Markdown under its own title, its files, and
     the metadata and report its frontmatter keeps."""
-    folder = folder_for(page)
-    ctx = Context(folder=folder, attachments=dict(page.attachments))
+    ctx = Context(attachments=dict(page.attachments))
     markdown = storage.convert(page.storage, ctx)
     _companions(ctx, page)
     title = page.title or f"Confluence page {page.page_id}"
@@ -186,7 +178,6 @@ def convert(page: Page, *, fetched_at: str | None = None) -> Conversion:
         converter=CONVERTER,
         metadata={ORIGIN_KEY: {k: v for k, v in origin.items() if v not in (None, "")}},
         files=tuple(ctx.files),
-        asset_folder=folder,
         report=report,
     )
 
@@ -195,4 +186,4 @@ def missing(report: ImportReport) -> list[ImportItem]:
     return [i for i in (*report.attachments, *report.macros) if i.status == ITEM_MISSING]
 
 
-__all__ = ["CONVERTER", "ORIGIN_KEY", "Page", "convert", "folder_for", "missing", "read"]
+__all__ = ["CONVERTER", "ORIGIN_KEY", "Page", "convert", "missing", "read"]

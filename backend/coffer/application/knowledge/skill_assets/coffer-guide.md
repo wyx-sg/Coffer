@@ -33,49 +33,60 @@ Coffer's own `coffer__` tools are always listed and never consume that budget,
 so this only ever concerns upstream tools.
 
 <!-- when:knowledge -->
-## Knowledge is a wiki of files, and you read it yourself
+## Knowledge is files, and each collection sets its own rules
 
 The developer's knowledge lives under `<KNOWLEDGE_ROOT>/<collection>/`, one
-wiki per collection, which the developer and agents like you write together:
+folder of Markdown files per collection, which the developer and agents like
+you write together. **Coffer sets no format for it.** Each collection decides
+its own layout, page types, frontmatter and upkeep, and writes them in its
+**rules file**; the catalogue at the bottom of this file names each one's rules
+file and, where it has one, the page to start reading at.
 
-- `README.md` is the collection's **schema**: what belongs in it, the page
-  types it uses and any conventions, and in its frontmatter
-  `verify_after_days`, how long a page's check holds. Where it disagrees with
-  this file, it wins.
-- `sources/` holds the **sources**: material as it arrived (an upload, a file
-  dropped into the inbox), converted to Markdown. Sources are never edited,
-  beyond the few keys rule 6 allows.
-- `pages/` holds the **pages**: the wiki itself, compiled from the sources and
-  kept up to date. This is what you read first and what you write.
-- `assets/` holds the pictures Coffer took out of uploaded documents, one
-  folder per upload. A source links its own (`../assets/<folder>/image-1.png`);
-  open one when the text around it is not enough, and link it the same way from
-  a page that needs the picture. An uploaded source's `original` names the file
-  it came from, which stays on the developer's Mac and is not in the collection.
-  An imported Confluence page keeps its folder there too
-  (`confluence-<page id>-v<version>/`): its attachments. A draw.io diagram is
-  its picture or a viewer link, a PlantUML one a `plantuml` code block. Its
-  export is its `original`, on the Mac.
-- Anything else is the collection's own: an `index.md`, a `log.md` or a
-  `schema.md` at its root, a folder the developer keeps. Coffer never moves or
-  renames it. Its links count (an index's links make the pages it lists
-  reachable), and it is never asked for a type, sources or a recheck.
+- **Before you write in a collection, read its rules file** and follow it. It
+  wins over anything you would do by default. A collection that names none is
+  written the way its existing files are written.
+- **Read from its start page** (an `index.md`, say) when it names one; otherwise
+  the catalogue lists its files with their titles.
+- Its `README.md` says what it is about: its first paragraph is the description
+  you see below. The keys at the top of the README are what it declares to
+  Coffer: `rules`, `entry` and `uploads`.
 
 **There is no Coffer tool for reading, listing, searching or grepping it.** Use
-your own file tools on those paths. The catalogue at the bottom of this file
-lists every page by type and every source still waiting to be integrated, so
-you never have to guess at a filename. When the pages do not carry what you are
-after, grep `sources/` for a literal string — an identifier, a service name, a
-phrase in any language. It matches bytes, so nothing is stemmed away.
+your own file tools on those paths, and grep for a literal string (an
+identifier, a service name, a phrase in any language) when the start page does
+not lead you there; follow the collection's rules on what to read first.
 
 Check it before asking the developer something they may already have written
-down.
+down. When you work out an answer the collection does not already give, by
+reading the code, a system or a document, write it back where its rules say,
+and tell the developer in one line what you added. Do not write back a guess,
+an opinion, or something true only of this conversation.
+
+What Coffer does with a collection, whatever its format:
+
+- It keeps every change in the vault's git history, so the developer can read
+  a file's versions and restore one. Never run git inside the vault on your own
+  initiative: a commit of your own would be attributed to nobody.
+- It reports every **broken link**: a `[[slug]]` (a file's name without `.md`,
+  or one of its frontmatter `aliases`) that names no file or more than one, a
+  relative link to a file that is not there, and one that climbs out of the
+  knowledge root. Links in the uploads folder are not checked: that material is
+  kept as it arrived.
+- It writes uploads into the collection's **uploads folder** (`sources/` unless
+  the README's `uploads` names another), converted to Markdown; an upload with
+  pictures is a folder holding the source and its pictures side by side. Coffer writes `title`, `description`, `actor`, the
+  timestamps, `original` and `original_sha256` on what it writes there; leave
+  those keys as they are.
+- Nothing else: it never moves, renames or rewrites a file you write, and it
+  never asks a file for a key.
+
+The collection must already exist: only the developer creates one.
 
 Some collections are **linked folders**: folders the developer keeps with their
 own tools, an Obsidian vault say, which Coffer shares with you but does not
-keep. Each one's section in the catalogue names its own path and its own rules
-file. Read it the same way; write in it only by those rules, never by this
-file's, and do not tidy, upload into or drop files for the inbox of one.
+keep. Each one's section in the catalogue names its own path and rules file.
+Read it the same way; write in it only by its rules, and do not tidy, upload
+into or drop files for the inbox of one.
 
 ### Memory, knowledge or a skill
 
@@ -89,123 +100,19 @@ memory); is it about an outside system or does it need a source (yes:
 knowledge); is it a procedure (yes: skill). What the repository already says,
 and a one-off request, belong nowhere. Coffer keeps a memory you filed as task
 notes away from the developer's other agents until it is sorted, so write such
-a fact into a page instead.
+a fact into knowledge instead.
 
-### Writing a page
+### Bringing in a Confluence page
 
-When you learn something durable — a fact about a service, a convention this
-developer follows, a decision and the reason behind it, a trap and how to avoid
-it — put it into the collection's pages yourself, with your own file tools.
-Coffer does not rewrite what you write: where a fact ends up is your decision,
-so make it the right one.
-
-That includes **answers you work out**. When you answer the developer's
-question by reading a source, the code or a system, and the pages do not
-already say it, write the answer into the page that owns the subject before you
-finish: add what you read to `sources` when it is a source, set `verified` to
-today, and tell the developer in one line what you added. Do not write back a
-guess, an opinion, or something true only of this conversation.
-
-1. **Find its home.** Read the catalogue at the bottom of this file and grep
-   `pages/` for the subject. If a page already answers the question this fact
-   belongs to, read it in full and fold the fact into the section it belongs
-   in. Only when no page owns the subject, create one under `pages/` at a slug
-   of its title (`pages/session-ownership.md`).
-2. **Lose nothing.** Integrate; never regenerate. Every fact already in a page
-   you rewrite must survive your edit.
-3. **Organise by subject, never by provenance.** A reader wants the page to be
-   about the thing. Never add sections like "Added today" or "From the
-   ticket" — put the fact where a reader would look for it.
-4. **Where two statements disagree, the newer wins unless the older one is
-   shown to be right** — by a source, a date, a command's output or the code.
-   Whoever wrote either, the developer included. Keep the superseded statement
-   legible where the corrected fact is: "(previously recorded as X; corrected
-   YYYY-MM-DD)".
-5. **Link pages by `[[slug]]`, or by a relative path.** A page's slug is its
-   file name without `.md`; write `[[session-ownership]]` or
-   `[[session-ownership|the session service]]`. A link may also name a source's
-   slug. An ordinary Markdown link by relative path works too,
-   `[the cache](cache-ttl.md)` or, into another collection,
-   `[Kafka](../../platform/pages/kafka.md)`; a `[[slug]]` survives a move, a
-   path does not. When you rename or move a page, update the links to it, or
-   keep its old slug in its `aliases`. Coffer reports every link that names
-   nothing, and every relative link that climbs out of the knowledge root.
-6. **Never edit a source.** A source is the record of what arrived. The only
-   keys you may add to one are `ingest: skipped`, `superseded_by: <slug>` when
-   a newer source replaces it, and `summary`, one or two sentences on what it
-   says (see "Integrating sources"). Coffer writes `original` and
-   `original_sha256` on an upload; leave them as they are.
-7. **Give every page frontmatter**: a `title`; a `type` — `concept`, `entity`,
-   `how-to`, `decision` or `overview` unless the README defines its own, and
-   any other key the README asks for (a `subject_kind`, say); a one-line
-   `description` saying what *question* the page answers (it is the only
-   thing a future reader chooses by); `sources`, the slugs of the sources it
-   draws on; any `aliases`; when you last checked the page against its
-   sources or the code, as `verified: YYYY-MM-DD`; and `actor: agent`. Leave
-   any other key a person added alone. Where a page's facts came from belongs
-   in `sources` and `verified`, never in a paragraph of the body listing what
-   you read; a source that is not in the collection is cited where its fact
-   is, as a link. A page whose facts rest on code, configuration or what
-   someone observed rather than on a source names that in `evidence`
-   (`code: <repo>/<path>`, `config: <where>`, `observed: <date>, <where>`); a
-   type the README lists under `types_without_sources` (an `overview` by
-   default) needs neither. Never write a `verified` date for a check you did
-   not make: leave it out until you have. A page may set its own
-   `verify_after_days` when its subject changes faster or slower than the
-   collection's.
-
-```markdown
----
-title: Session ownership
-type: concept
-description: Which service owns a login session, and how long it lives
-sources: [auth-design-2024, oncall-notes]
-aliases: [sessions]
-verified: 2026-10-12
-actor: agent
----
-```
-
-The collection must already exist: only the developer creates one. Coffer
-never moves or renames a file you write: put a page under `pages/`, and
-anything else where the README says it goes. Coffer commits every change it finds on disk to the vault's
-git history, so a bad edit can be brought back from it;
-never run git inside the vault on your own initiative, because a commit of your
-own would be attributed to nobody. The developer reads a file's versions and restores an
-earlier one from its history in Coffer.
-
-### Integrating sources
-
-A source **waits** while no page lists it in `sources` and it is not marked
-`ingest: skipped`; the catalogue names the waiting ones. To integrate one:
-
-1. Read the source in full, and the README.
-2. Fold what it says into the pages that own its subjects, by the rules of
-   "Writing a page". Create a page for a subject no page owns.
-3. Add the source's slug to the `sources` of every page you changed with it.
-4. Give the source a `summary`: one or two sentences on what it says, so a
-   reader of the catalogue knows without opening it.
-5. When it replaces an older source (a newer version of the same document),
-   add `superseded_by: <its slug>` to the older one and recheck every page that
-   cites the older one against it. Coffer flags a page that still cites only
-   the older one (`superseded_source`). A superseded source stays: a page may
-   still cite it for what used to be true.
-6. When nothing in it is worth keeping (a duplicate, an empty export), add
-   `ingest: skipped` to the source's frontmatter instead.
-
-One source may touch many pages; that is the point. Integrate the waiting
-sources one at a time, oldest first.
-
-To bring in a **Confluence page**, export it with the developer's Confluence
-tool as JSON, with its attachments, and run
-`coffer knowledge upload <collection> <page>.json` (`--attachments <dir>` adds
-attachments downloaded beside it). Coffer converts its macros, keeps its
-attachments, and names what it could not keep in the
-source's `import_report`; `--preview` shows all of that and writes nothing. A
-page imported before is refused until you add `--replace`, which keeps the
-older source and marks it `superseded_by` the new one. The source's `origin`
-says where it came from and when it was fetched; a fetch is not a check, so it
-sets no page's `verified`.
+Export it with the developer's Confluence tool as JSON, with its attachments,
+and run `coffer knowledge upload <collection> <page>.json` (`--attachments
+<dir>` adds attachments downloaded beside it). Coffer converts its macros,
+keeps its attachments, and names what it could not keep in the source's
+`import_report`; `--preview` shows all of that and writes nothing. A page
+imported before is refused until you add `--replace`, which keeps the older
+file and marks it `superseded_by` the new one. The file's `origin` says where
+it came from and when it was fetched. What to do with it next is the
+collection's rules.
 
 ### Tidying a collection
 
@@ -215,36 +122,16 @@ work through one collection at a time:
 1. Run `coffer knowledge tidy-start <collection>` before you change anything.
    Until you finish, Coffer keeps your edits in that collection together, so
    the developer sees the whole tidy as one change and can undo it at once.
-2. Integrate its waiting sources first (see "Integrating sources").
-3. Fix what Coffer found: the mechanical findings the prompt lists, or
-   `coffer knowledge check <collection>` prints — dead and ambiguous links,
-   links outside the knowledge root, orphan and incomplete pages, pages without sources, missing sources, pages
-   that lean on a superseded source. A **stale** page (`stale_page`: its
-   `verified` date is missing or older than the README's `verify_after_days`,
-   90 days by default) is rechecked: read it against its sources or the code,
-   fix what changed, and set `verified` to today. A page you cannot recheck
-   keeps its date and goes into your report. Give every source without a
-   `summary` one.
-4. Read its README and every page's title and description, then read the pages
-   in full before changing them.
-5. **Merge** pages that answer the same question into one, keeping every fact
-   and every source; keep the merged-away slug in the survivor's `aliases`, and
-   delete the pages you merged away.
-6. **Split** a page that answers several unrelated questions, one subject per
-   page, and link them to each other.
-7. **Fix** what is wrong, stale or contradictory by rule 4 of "Writing a page",
-   and a description that does not say what question its page answers. Give a
-   subject mentioned across pages but owned by none a page of its own.
-8. **Leave alone what you are not sure about** — two pages that disagree with
+2. Read the collection's rules file and tidy it by those rules: what they say
+   a tidy checks and fixes is the tidy. Fix every broken link Coffer reports
+   (`coffer knowledge check <collection>` prints them).
+3. Leave alone what you are not sure about (two files that disagree with
    nothing to tell which is right, a deletion of much text, a change to the
-   README's page types — and put it in your report for the developer to decide.
-9. Run `coffer knowledge tidy-finish <collection> --set summary="<report>"`.
-   The report says which sources you integrated or skipped, what you merged,
-   split, corrected, rechecked and deleted, and what you left for the
-   developer. End it with **Gaps**: questions the pages cannot answer,
-   subjects mentioned across pages but owned by none, and sources worth
-   finding (a spec, a runbook, a person to ask). It is shown with the tidy in
-   the collection's change log.
+   rules file) and put it in your report for the developer to decide.
+4. Run `coffer knowledge tidy-finish <collection> --set summary="<report>"`.
+   The report says what you changed and what you left for the developer, and
+   ends with **Gaps**: questions the collection cannot answer and sources worth
+   finding. It is shown with the tidy in the collection's change log.
 
 Change nothing that does not need changing. When the developer asks only for a
 check or a review, report what you would do and change nothing.
@@ -370,9 +257,8 @@ text does not explain, not as a debugger for the developer's own program.
 - **Not the repository in front of you.** If the answer is in code you can
   already read, read the code. Knowledge is for what the repository cannot say.
 - **Not a scratch pad.** What goes in should still be true in a month.
-- Address knowledge files by collection and relative path, and link pages by
-  `[[slug]]` or a relative path. A path that climbs out of the knowledge root
-  is refused.
+- Address knowledge files by collection and relative path. A link that climbs
+  out of the knowledge root is reported.
 
 <!-- end:knowledge -->
 ## This file

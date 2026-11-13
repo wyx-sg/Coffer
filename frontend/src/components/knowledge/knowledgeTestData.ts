@@ -1,8 +1,8 @@
 // frontend/src/components/knowledge/knowledgeTestData.ts — wire fixtures shared by the Knowledge page tests.
 //
 // Test-only data (imported by `*.test.tsx` files, never by the app): one
-// collection laid out as a wiki — a page in `pages/`, a page in a folder under
-// it, and a waiting source in `sources/` — plus a person's change in the other
+// collection — a page in `pages/`, a page in a folder under it, and an
+// uploaded source in `sources/` — plus a person's change in the other
 // collection, in the generated wire shapes. The collection's uid and name are
 // deliberately unlike each other: the URL carries the uid, every path is built
 // from the name.
@@ -21,26 +21,22 @@ export const COLLECTION: CollectionOut = {
   uid: UID,
   name: NAME,
   description: "How the shop is built.",
-  page_count: 2,
-  source_count: 1,
-  waiting_source_count: 1,
   finding_count: 1,
   folder_path: `/home/u/.coffer/knowledge/${NAME}`,
   updated_at: "2026-09-30T13:30:00Z",
   tidy_handoff: { prompt: `Tidy the ${NAME} collection.` },
   tidy_running: false,
   linked: false,
-  note_count: 0,
-  rules_file: "",
+  note_count: 3,
+  rules_file: "AGENTS.md",
+  entry_file: "index.md",
+  uploads_dir: "sources",
 };
 
 export const OTHER: CollectionOut = {
   uid: "kn-77aa",
   name: "runbooks",
   description: "On-call runbooks.",
-  page_count: 0,
-  source_count: 0,
-  waiting_source_count: 0,
   finding_count: 0,
   folder_path: "/home/u/.coffer/knowledge/runbooks",
   updated_at: null,
@@ -49,24 +45,16 @@ export const OTHER: CollectionOut = {
   linked: false,
   note_count: 0,
   rules_file: "",
+  entry_file: "",
+  uploads_dir: "sources",
 };
 
 export function file(path: string, over: Partial<FileOut> = {}): FileOut {
   return {
     path,
-    kind: "page",
     title: path.split("/").pop() ?? path,
     description: "a page",
-    page_type: "concept",
-    aliases: [],
-    verified: "",
-    sources: [],
     links: [],
-    cited_by: [],
-    waiting: false,
-    stale: false,
-    superseded_by: null,
-    summary: "",
     original: "",
     original_path: null,
     readable_body: null,
@@ -93,12 +81,9 @@ export const SESSION = file(`${NAME}/pages/account/session.md`, {
   body: "Login state is owned by account.session.",
 });
 
-/** A source no page cites yet. */
+/** An uploaded source. */
 export const RELEASE = file(`${NAME}/sources/release-notes.md`, {
-  kind: "source",
   title: "Release notes",
-  page_type: "",
-  waiting: true,
   body: "Release notes, converted.",
 });
 
@@ -111,28 +96,20 @@ export const FILES: Record<string, FileOut> = {
 export function summary(f: FileOut): FileSummaryOut {
   return {
     path: f.path,
-    kind: f.kind,
     title: f.title,
     description: f.description,
-    page_type: f.page_type,
-    waiting: f.waiting,
-    stale: f.stale,
-    superseded_by: f.superseded_by?.path ?? f.superseded_by?.slug ?? "",
-    summary: f.summary,
-    cited_count: f.cited_by.length,
-    skipped: false,
     actor: f.actor,
     updated_at: f.updated_at,
   };
 }
 
 export const TREES: Record<string, TreeOut> = {
-  // Listed sources-first by the daemon: the tree puts Pages first itself.
+  // Folders first, each by name, as the daemon lists them.
   [NAME]: {
     path: NAME,
     directories: [
-      { path: `${NAME}/sources`, name: "sources", file_count: 1 },
       { path: `${NAME}/pages`, name: "pages", file_count: 2 },
+      { path: `${NAME}/sources`, name: "sources", file_count: 1 },
     ],
     files: [],
   },

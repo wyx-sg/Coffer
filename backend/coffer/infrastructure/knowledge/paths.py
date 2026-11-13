@@ -3,13 +3,13 @@
 One root, one tree per collection: ``~/.coffer/vault/knowledge/<collection>/…``
 — inside the vault repository (ADR storage-is-five-classes-by-nature), so a
 collection's history is the vault's history under ``knowledge/``.
-A collection holds two things (spec knowledge "Keep sources and pages apart in
-each collection"): ``sources/``, the material that arrived, kept as it came, and
-``pages/``, the wiki pages a person and the agents write from it, in whatever
-nesting either of them chooses ("Allow nesting without giving it meaning").
-:func:`kind_of` says which a path is. The collection's ``README.md`` sits at
-its root and is the collection's schema rather than content in it (see "Keep
-the collection README out of the corpus").
+A collection's layout is its own (spec knowledge "Let each collection declare
+its own rules"): Coffer gives no folder a meaning except the one it writes
+into itself, the uploads folder the README declares (``sources/`` by default,
+:func:`uploads_dir`), where an upload that keeps pictures or attachments is a
+folder of its own. The
+collection's ``README.md`` sits at its root and describes the collection rather
+than being content in it (see "Keep the collection README out of the corpus").
 
 There is exactly one hidden directory, and it is Coffer's: ``.inbox/``, the drop
 zone where material lands before it is a document — an upload's extracted
@@ -33,6 +33,7 @@ import pathlib
 import re
 
 from coffer.domain.knowledge.errors import UnsafeKnowledgePath
+from coffer.infrastructure.knowledge import collection_settings
 from coffer.infrastructure.vault.home import vault_root
 
 README_NAME = "README.md"
@@ -43,21 +44,10 @@ VAULT_PREFIX = "knowledge"
 #: Where material lands before it is adopted as a collection's source.
 INBOX_DIR_NAME = ".inbox"
 
-#: A collection's wiki pages, and the kept material they are compiled from.
-PAGES_DIR_NAME = "pages"
-SOURCES_DIR_NAME = "sources"
-
-#: The pictures taken out of uploads, one folder per upload. Visible on
-#: purpose: the vault leaves hidden knowledge entries out of git.
-ASSETS_DIR_NAME = "assets"
-
-#: What a file under a collection is (see :func:`kind_of`).
-KIND_PAGE = "page"
-KIND_SOURCE = "source"
-KIND_FILE = "file"
-
 _DOTS_ONLY = re.compile(r"^\.+$")
-_SAFE_SEGMENT = re.compile(r"^[A-Za-z0-9._\- 一-鿿]+$")
+#: Characters no path segment may hold: separators and control characters. Any
+#: other name a person's or an agent's tools wrote is theirs to keep.
+_UNSAFE_CHARS = re.compile(r"[/\\\x00-\x1f\x7f]")
 
 
 def knowledge_root() -> pathlib.Path:
@@ -85,7 +75,7 @@ def check_segment(segment: str, relpath: str) -> None:
         raise UnsafeKnowledgePath(relpath, "traversal segment")
     if segment.startswith("."):
         raise UnsafeKnowledgePath(relpath, "hidden entries are not addressable")
-    if not _SAFE_SEGMENT.fullmatch(segment):
+    if _UNSAFE_CHARS.search(segment):
         raise UnsafeKnowledgePath(relpath, f"unsafe segment {segment!r}")
 
 
@@ -209,25 +199,8 @@ def inbox_parts(relpath: str) -> tuple[str, str | None] | None:
     return segments[0], segments[2]
 
 
-def pages_dir(collection: str) -> pathlib.Path:
-    """Where a collection's wiki pages live."""
-    return collection_dir(collection) / PAGES_DIR_NAME
-
-
-def sources_dir(collection: str) -> pathlib.Path:
-    """Where a collection's kept material lives."""
-    return collection_dir(collection) / SOURCES_DIR_NAME
-
-
-def kind_of(relpath: str) -> str:
-    """``page`` for Markdown under ``pages/``, ``source`` for Markdown under
-    ``sources/``, else ``file`` — an original kept beside a source, a file a
-    person put anywhere else."""
-    segments = [s for s in (relpath or "").strip().strip("/").split("/") if s]
-    if len(segments) < 3 or not segments[-1].endswith(".md"):
-        return KIND_FILE
-    if segments[1] == PAGES_DIR_NAME:
-        return KIND_PAGE
-    if segments[1] == SOURCES_DIR_NAME:
-        return KIND_SOURCE
-    return KIND_FILE
+def uploads_dir(collection: str) -> pathlib.Path:
+    """Where Coffer writes a collection's uploads and dropped files: the folder
+    its README declares as ``uploads``, ``sources/`` by default."""
+    folder = collection_settings.read(collection_dir(collection)).uploads
+    return collection_dir(collection).joinpath(*folder.split("/"))

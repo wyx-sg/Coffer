@@ -63,7 +63,7 @@ async def test_a_page_becomes_one_source_with_its_files_and_report(service) -> N
     )
 
     assert result.converter == "confluence"
-    assert result.path == "shopee/sources/account-core.md"
+    assert result.path == "shopee/sources/account-core/account-core.md"
     assert result.page_id == "42"
     text = _raw(result.path)
     # One frontmatter block, the page's own title, a description from its prose.
@@ -74,10 +74,10 @@ async def test_a_page_becomes_one_source_with_its_files_and_report(service) -> N
     assert fm["origin"]["page_id"] == "42" and fm["origin"]["version"] == 7
     assert fm[REPORT_KEY]["complete"] is False
     assert fm[REPORT_KEY]["missing"] == ["gone.png: not downloaded with the page"]
-    assert "![a.png](../assets/confluence-42-v7/a.png)" in body
+    assert "![a.png](a.png)" in body
     assert sorted(_on_disk()) == [
-        "assets/confluence-42-v7/a.png",
-        "sources/account-core.md",
+        "sources/account-core/a.png",
+        "sources/account-core/account-core.md",
     ]
     # The export itself is the source's original, kept on this Mac only.
     assert fm["original"] == "page.json"
@@ -105,12 +105,12 @@ async def test_a_page_imported_again_is_refused_unless_replaced(service) -> None
     )
 
     assert second.replaces == (first.path,)
-    assert second.path == "shopee/sources/account-core-2.md"
+    assert second.path == "shopee/sources/account-core-2/account-core-2.md"
     older, _ = split_frontmatter(_raw(first.path))
     assert older["superseded_by"] == "account-core-2"
     # The older import's files are untouched; the newer one has its own folder.
-    assert "assets/confluence-42-v7/a.png" in _on_disk()
-    assert "assets/confluence-42-v8/a.png" in _on_disk()
+    assert "sources/account-core/a.png" in _on_disk()
+    assert "sources/account-core-2/a.png" in _on_disk()
 
 
 async def test_the_same_version_imported_again_never_overwrites_its_files(service) -> None:  # type: ignore[no-untyped-def]
@@ -119,8 +119,10 @@ async def test_the_same_version_imported_again_never_overwrites_its_files(servic
         collection="shopee", filename="page.json", data=_export(), actor="t", replace=True
     )
 
+    assert again.path == "shopee/sources/account-core-2/account-core-2.md"
+    assert "sources/account-core/a.png" in _on_disk()
     _, body = split_frontmatter(_raw(again.path))
-    assert "../assets/confluence-42-v7-2/a.png" in body
+    assert "](a.png)" in body
 
 
 @pytest.mark.acceptance(
@@ -132,8 +134,8 @@ async def test_a_preview_writes_nothing(service) -> None:  # type: ignore[no-unt
     )
 
     assert result.preview
-    assert result.path == "shopee/sources/account-core.md"
-    assert "shopee/assets/confluence-42-v7/a.png" in result.files
+    assert result.path == "shopee/sources/account-core/account-core.md"
+    assert "shopee/sources/account-core/a.png" in result.files
     assert _on_disk() == []
 
 
@@ -188,4 +190,4 @@ async def test_a_marked_up_export_keeps_its_upload_as_the_original(service) -> N
     assert fm["original"] == "notes.md"
     kept = originals.local_copy(fm["original_sha256"], "notes.md")
     assert kept is not None and pathlib.Path(kept).read_bytes() == data
-    assert not any(p.startswith("assets/") for p in _on_disk())
+    assert all(p.count("/") == 1 for p in _on_disk())

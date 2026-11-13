@@ -11,9 +11,10 @@
 // The body is one 720-wide page: the folder name as the heading, its
 // description — the opening paragraph of its README — edited in place
 // (KnowledgeDescriptionEditor), its summary line and what Coffer does with it
-// (KnowledgeSummaryLine), its To do, its Contents by page type and its Change
-// log. A just created, empty collection is the same page with one muted line
-// under the summary saying how the first source gets in.
+// (KnowledgeSummaryLine), the rules file and start page it declares, its
+// Broken links and its Change log. A collection with no Markdown file yet is
+// the same page with one muted line under the summary saying how the first
+// file gets in.
 //
 // No switch and no reach: every collection is served to every agent (spec
 // knowledge "Serve every collection to every agent").
@@ -22,14 +23,13 @@ import { useTranslation } from "react-i18next";
 import { Loader2 } from "lucide-react";
 
 import { AgentHandoff } from "@/components/handoff/AgentHandoff";
+import { KnowledgeBrokenLinks } from "@/components/knowledge/KnowledgeBrokenLinks";
 import { KnowledgeChangeLog } from "@/components/knowledge/KnowledgeChangeLog";
-import { KnowledgeContents } from "@/components/knowledge/KnowledgeContents";
 import { KnowledgeDeleteCollection } from "@/components/knowledge/KnowledgeDeleteCollection";
 import { KnowledgeDescriptionEditor } from "@/components/knowledge/KnowledgeDescriptionEditor";
 import { KnowledgePaneBar } from "@/components/knowledge/KnowledgePaneBar";
 import { KnowledgeRenameDialog } from "@/components/knowledge/KnowledgeRenameDialog";
 import { KnowledgeSummaryLine } from "@/components/knowledge/KnowledgeSummaryLine";
-import { KnowledgeTodoSection } from "@/components/knowledge/KnowledgeTodoSection";
 import { ActionMenu } from "@/components/ui/menu";
 import { useToast } from "@/components/ui/toast";
 import type { CollectionOut } from "@/lib/api/knowledge";
@@ -48,7 +48,7 @@ export function KnowledgeCollectionView({ collection }: Props) {
   const [renaming, setRenaming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const obsidian = useOpenInObsidian(collection.folder_path);
-  const empty = collection.page_count === 0 && collection.source_count === 0;
+  const empty = collection.note_count === 0;
 
   const revealFolder = () =>
     void reveal(collection.folder_path).catch(() => toast.error(t("fileActions.revealFailed")));
@@ -158,8 +158,7 @@ export function KnowledgeCollectionView({ collection }: Props) {
               </p>
             ) : null}
           </div>
-          {empty ? null : <KnowledgeTodoSection collection={collection} />}
-          {empty ? null : <KnowledgeContents collection={collection} />}
+          {empty ? null : <KnowledgeBrokenLinks collection={collection} />}
           <KnowledgeChangeLog collection={collection} />
         </div>
       </div>

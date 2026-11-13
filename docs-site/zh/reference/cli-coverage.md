@@ -160,12 +160,12 @@ description: 每一个网页界面和桌面应用操作、它调用的接口、�
 | 界面操作 | 接口 | 命令 | 验收 |
 | --- | --- | --- | --- |
 | Knowledge · recent changes | `GET /knowledge/changes` | `coffer knowledge changes` | `test_cli_parity.py` |
-| Knowledge · a collection's Check | `GET /knowledge/collections/{uid}/check` | `coffer knowledge check` | `test_cli_parity.py` |
+| Knowledge · a collection's Broken links | `GET /knowledge/collections/{uid}/check` | `coffer knowledge check` | `test_cli_parity.py` |
 | Knowledge · collections | `GET /knowledge/collections` | `coffer knowledge collections` | `test_cli_parity.py` |
 | Knowledge · New collection | `POST /knowledge/collections` | `coffer knowledge create` | `test_cli_parity.py` |
 | Knowledge · Delete | `DELETE /resources/{uid}` | `coffer knowledge delete` | `test_cli_parity.py` |
 | Knowledge · edit a collection's description | `PUT /knowledge/collections/{uid}/description` | `coffer knowledge describe` | `test_cli_parity.py` |
-| Knowledge · a collection's Contents | `GET /knowledge/collections/{uid}/files` | `coffer knowledge files` | `test_cli_parity.py` |
+| Knowledge · a collection's files | `GET /knowledge/collections/{uid}/files` | `coffer knowledge files` | `test_cli_parity.py` |
 | Knowledge · Add · Link an external folder | `POST /knowledge/collections/link` | `coffer knowledge link` | `test_cli_parity.py` |
 | Knowledge · list | `GET /resources` | `coffer knowledge list` | `test_cli_parity.py` |
 | Knowledge · Undo a delete | `POST /knowledge/changes/{version}/restore` | `coffer knowledge restore` | `test_cli_parity.py` |

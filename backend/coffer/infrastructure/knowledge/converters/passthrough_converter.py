@@ -19,9 +19,6 @@ page as a readable source with its attachments"):
 
 from __future__ import annotations
 
-import hashlib
-from typing import Any
-
 from coffer.domain.knowledge.converter import (
     BODY_CONVERTED,
     BODY_PARTIAL,
@@ -32,8 +29,6 @@ from coffer.domain.knowledge.converter import (
 from coffer.infrastructure.knowledge.converters.confluence import markers
 from coffer.infrastructure.knowledge.converters.confluence.context import Context
 from coffer.infrastructure.knowledge.frontmatter import split_frontmatter
-from coffer.infrastructure.knowledge.naming import slugify
-from coffer.infrastructure.knowledge.source_imports import page_id_of
 
 _MARKDOWN = frozenset({"md", "markdown", "mdx"})
 
@@ -92,8 +87,7 @@ class PassthroughConverter:
         title = str(meta.get("title") or "").strip() or derive_title(body, filename)
         if not markers.has_markers(body):
             return Conversion(markdown=body, title=title, converter="passthrough", metadata=meta)
-        folder = _folder(meta, title, data)
-        ctx = Context(folder=folder)
+        ctx = Context()
         expanded = markers.expand(body, ctx)
         return Conversion(
             markdown=expanded.markdown,
@@ -101,24 +95,9 @@ class PassthroughConverter:
             converter="passthrough",
             metadata=meta,
             files=tuple(ctx.files),
-            asset_folder=folder,
             report=ImportReport(
                 body=BODY_PARTIAL if ctx.partial else BODY_CONVERTED,
                 attachments=tuple(ctx.attachment_items),
                 macros=tuple(reversed(ctx.macro_items)),
             ),
         )
-
-
-def _folder(meta: dict[str, Any], title: str, data: bytes) -> str:
-    """The folder a marked-up page's files go in: by page id and version when
-    the frontmatter says them, as an imported page's are, else by title."""
-    page = page_id_of(meta)
-    if page:
-        origin = meta.get("origin")
-        version = meta.get("version") or (
-            origin.get("version") if isinstance(origin, dict) else None
-        )
-        return f"confluence-{page}" + (f"-v{version}" if version not in (None, "") else "")
-    digest = hashlib.sha256(data).hexdigest()[:8]
-    return f"{slugify(title)[:60].strip('-') or 'upload'}-{digest}"

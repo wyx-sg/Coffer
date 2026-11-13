@@ -4,10 +4,10 @@ collection put back.
 
 A collection has no title (spec knowledge "Read a collection's description from
 its README"): its heading is its folder name, and what it is about is the first
-paragraph of its ``README.md``, before its first section. A new collection's
-README also carries the default page types and rules, written out so the
-person sees what they can change (spec knowledge "Start a collection's README
-with its rules written out"). Editing that description rewrites exactly that
+paragraph of its ``README.md``, before its first section. A new collection
+starts from a template (spec knowledge "Start a collection from a template"):
+a blank one is a README with a heading and that paragraph and nothing else, because
+the format is the collection's own. Editing that description rewrites exactly that
 paragraph and leaves the rest of the README — anything a person wrote under it —
 as it was.
 
@@ -26,49 +26,23 @@ from coffer.infrastructure.knowledge import paths
 from coffer.infrastructure.knowledge.assets import write_bytes
 from coffer.infrastructure.knowledge.frontmatter import split_frontmatter
 from coffer.infrastructure.knowledge.fs import atomic_write, decode
-from coffer.infrastructure.knowledge.wiki import DEFAULT_VERIFY_DAYS
-from coffer.infrastructure.knowledge.wiki_rules import DEFAULT_SOURCELESS_TYPES, SOURCELESS_KEY
-
-#: The rules a new collection's README starts with, below its description.
-#: The page types are the guide's defaults; the person changes them here.
-DEFAULT_RULES = """\
-## Page types
-
-Every page under `pages/` has one `type` from this list. Change, add or remove
-types here; agents follow this list over their defaults.
-
-- `overview`: where to start. What this collection covers and which pages to read first.
-- `concept`: what something is and why it works the way it does.
-- `entity`: one service, system or team. What it owns and how to reach it.
-- `how-to`: the steps for one task.
-- `decision`: a choice that was made, the options and the reason.
-
-## Rules
-
-- One subject per page. Link related pages with `[[slug]]`, or with an ordinary
-  relative link such as `[the cache](cache-ttl.md)`; Coffer checks both.
-- Every page lists the sources it draws on in `sources`, and the day it was last
-  checked against them or the code in `verified`. A page that rests on code,
-  configuration or what someone observed names that in `evidence` instead.
-  `types_without_sources` at the top of this file lists the types that need
-  neither.
-- `verify_after_days` at the top of this file is how many days a check holds
-  before Coffer asks for another. `0` turns it off. A page may set its own.
-- Files anywhere else in the collection, such as an `index.md`, a `log.md` or a
-  folder of your own, stay where they are. Their links count; they are never
-  asked for a type or sources.
-"""
 
 
-def default_readme(collection: str, description: str | None) -> str:
-    """A new collection's README: its heading, its description and the
-    default rules, with the default recheck interval in its frontmatter."""
-    head = (
-        f"---\nverify_after_days: {DEFAULT_VERIFY_DAYS}\n"
-        f"{SOURCELESS_KEY}: [{', '.join(DEFAULT_SOURCELESS_TYPES)}]\n---\n\n# {collection}\n\n"
-    )
+def blank_readme(collection: str, description: str | None) -> str:
+    """A blank collection's README: its heading and its description."""
     text = (description or "").strip()
-    return head + (f"{text}\n\n" if text else "") + DEFAULT_RULES
+    return f"# {collection}\n" + (f"\n{text}\n" if text else "")
+
+
+def write_template(collection: str, files: dict[str, str]) -> None:
+    """Write a template's files into a new collection: each a path relative to
+    the collection and its text. Nothing is overwritten."""
+    for relpath, text in files.items():
+        target = paths.resolve(f"{collection}/{relpath}")
+        if target.exists():
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        atomic_write(target, text)
 
 
 def _is_section(stripped: str) -> bool:
@@ -113,7 +87,7 @@ def write_description(collection: str, description: str) -> None:
     creating the README (headed by the folder name) when there is none."""
     readme = paths.readme_path(collection)
     if not readme.is_file():
-        atomic_write(readme, default_readme(collection, description))
+        atomic_write(readme, blank_readme(collection, description))
         return
     raw = readme.read_text(encoding="utf-8", errors="replace")
     _, body = split_frontmatter(raw)
@@ -161,4 +135,11 @@ def remove_file(relpath: str) -> None:
     target.unlink(missing_ok=True)
 
 
-__all__ = ["current_bytes", "remove_file", "restore_file", "write_description"]
+__all__ = [
+    "blank_readme",
+    "current_bytes",
+    "remove_file",
+    "restore_file",
+    "write_description",
+    "write_template",
+]

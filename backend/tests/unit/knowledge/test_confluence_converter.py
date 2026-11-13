@@ -58,7 +58,7 @@ def _picture(name: str) -> str:
 
 
 def _convert(xml: str, **attachments: bytes) -> tuple[str, Context]:
-    ctx = Context(folder="confluence-1-v2", attachments=dict(attachments))
+    ctx = Context(attachments=dict(attachments))
     return storage.convert(xml, ctx), ctx
 
 
@@ -155,7 +155,7 @@ def test_an_unknown_macro_keeps_its_text_or_is_reported_unsupported() -> None:
 def test_a_downloaded_picture_is_kept_and_linked_relatively() -> None:
     md, ctx = _convert(_picture("arch diagram.png"), **{"arch diagram.png": b"PNG"})
 
-    assert "![arch diagram.png](../assets/confluence-1-v2/arch-diagram.png)" in md
+    assert "![arch diagram.png](arch-diagram.png)" in md
     assert [f.name for f in ctx.files] == ["arch-diagram.png"]
     assert ctx.attachment_items[0].status == ITEM_KEPT
 
@@ -203,7 +203,7 @@ def test_draw_io_diagrams_show_as_their_picture_or_a_link() -> None:
     md, ctx = _convert(xml, **{"flow.png": b"png", "flow": b"<mxfile/>"})
 
     # An attached diagram shows its picture; its source is not taken along.
-    assert "![flow](../assets/confluence-1-v2/flow.png)" in md
+    assert "![flow](flow.png)" in md
     assert [f.name for f in ctx.files] == ["flow.png"]
     # The page's link stays the link it was, read as what it is.
     assert f"[draw.io diagram]({link})" in md
@@ -231,13 +231,13 @@ def test_a_plantuml_macro_shows_its_source() -> None:
 
 
 def test_names_are_made_safe_and_never_collide() -> None:
-    ctx = Context(folder="f", attachments={"a b.png": b"1", "a-b.png": b"2"})
+    ctx = Context(attachments={"a b.png": b"1", "a-b.png": b"2"})
 
     first = ctx.attachment("a b.png", reason_missing="")
     second = ctx.attachment("a-b.png", reason_missing="")
 
-    assert first == "../assets/f/a-b.png"
-    assert second == "../assets/f/a-b-2.png"
+    assert first == "a-b.png"
+    assert second == "a-b-2.png"
     assert safe_name("../../etc/passwd") == "passwd"
     assert safe_name(".hidden") == "hidden"
 
@@ -276,7 +276,6 @@ def test_a_page_export_converts_with_its_origin_raw_storage_and_report() -> None
 
     assert conversion.title == "Account Core"
     assert conversion.markdown.startswith("# Account Core\n\n# Intro")
-    assert conversion.asset_folder == "confluence-42-v7"
     origin = conversion.metadata["origin"]
     assert origin["page_id"] == "42" and origin["version"] == 7
     assert origin["url"].endswith("pageId=42")
@@ -328,7 +327,7 @@ def test_storage_markers_are_expanded_where_they_stand() -> None:
         f"<!-- skynet-confluence-storage:v1 kind=structured-macro\n{inner}\n-->\n\n"
         "<!-- a person's own comment -->\nAfter\n"
     )
-    ctx = Context(folder="f")
+    ctx = Context()
     out = markers.expand(text, ctx)
 
     assert "# Hidden Heading" in out.markdown and "Body text" in out.markdown
@@ -353,7 +352,6 @@ async def test_markdown_frontmatter_is_read_not_passed_on() -> None:
     assert conversion.title == "Original Title"
     assert not conversion.markdown.startswith("---")
     assert conversion.metadata["version"] == 4
-    assert conversion.asset_folder == "confluence-5-v4"
     assert conversion.files == ()
     assert conversion.report is not None
     assert "> **Info**" in conversion.markdown

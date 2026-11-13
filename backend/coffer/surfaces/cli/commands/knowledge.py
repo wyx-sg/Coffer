@@ -1,7 +1,7 @@
 """``coffer knowledge`` — the Knowledge page's collections, changes and uploads.
 
 Spec knowledge "Manage knowledge in the web UI and on the command line". A
-collection's pages and sources are plain files under the knowledge root, read,
+collection's files are plain files under the knowledge root, read,
 edited and deleted with the reader's own tools; creating and describing a
 collection, checking one, listing its contents, opening and closing a tidy,
 uploading sources, reading the changes feed, undoing a delete and undoing a
@@ -31,14 +31,14 @@ SPECS = [
         "GET",
         "/knowledge/collections",
         _UI + "collections",
-        "Every collection with its description, page, source, waiting-source and finding counts.",
+        "Every collection with its description, rules file, start page and counts.",
     ),
     RouteCommand(
         "knowledge create",
         "POST",
         "/knowledge/collections",
         _UI + "New collection",
-        "Create a collection. Body: name, description.",
+        "Create a collection. Body: name, description, template (llm-wiki or blank).",
         body=True,
     ),
     RouteCommand(
@@ -63,8 +63,8 @@ SPECS = [
         "knowledge check",
         "GET",
         "/knowledge/collections/{uid}/check",
-        _UI + "a collection's Check",
-        "A collection's mechanical findings: dead links, orphan pages, waiting sources.",
+        _UI + "a collection's Broken links",
+        "A collection's broken links: dead, ambiguous or leaving the knowledge root.",
         names=K,
     ),
     RouteCommand(
@@ -94,8 +94,8 @@ SPECS = [
         "knowledge files",
         "GET",
         "/knowledge/collections/{uid}/files",
-        _UI + "a collection's Contents",
-        "Every page and source of a collection with its title, page type and waiting mark.",
+        _UI + "a collection's files",
+        "Every Markdown file of a collection with its title and description.",
         names=K,
     ),
     RouteCommand(

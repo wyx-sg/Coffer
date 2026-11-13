@@ -246,10 +246,10 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`git-source-partial-clone-prefetch`](git-source-partial-clone-prefetch.md) | A Git Skill's Folder Is Fetched in One Request From a Partial Clone, With One Full-Clone Fallback |
 | [`knowledge-is-plain-files`](knowledge-is-plain-files.md) | Knowledge Is a Directory of Markdown Files, Not an Index |
 | [`tidying-knowledge-is-the-agents-job`](tidying-knowledge-is-the-agents-job.md) | Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change |
-| [`knowledge-is-a-wiki-of-pages-compiled-from-kept-sources`](knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md) | Knowledge Is a Wiki of Pages Compiled From Kept Sources |
-| [`knowledge-stays-current-through-flags-coffer-computes`](knowledge-stays-current-through-flags-coffer-computes.md) | Knowledge Stays Current Through Flags Coffer Computes and an Agent Clears |
+| [`knowledge-collections-own-their-format`](knowledge-collections-own-their-format.md) | Knowledge Collections Own Their Format; Coffer Checks Only Links |
 | [`knowledge-sources-keep-their-images-and-originals-stay-on-this-mac`](knowledge-sources-keep-their-images-and-originals-stay-on-this-mac.md) | Knowledge Sources Keep Their Images; Originals Stay on This Mac |
 | [`knowledge-files-stay-where-their-writer-put-them`](knowledge-files-stay-where-their-writer-put-them.md) | Knowledge Files Stay Where Their Writer Put Them, and Every Link Is Checked |
+| [`markdown-diagrams-render-with-mermaid`](markdown-diagrams-render-with-mermaid.md) | Markdown Diagrams Render With Mermaid, in the Browser, Loaded on Demand |
 | [`confluence-pages-import-as-readable-sources`](confluence-pages-import-as-readable-sources.md) | Confluence Pages Import as Readable Sources With Their Attachments |
 | [`linked-knowledge-folders-are-read-only-and-machine-local`](linked-knowledge-folders-are-read-only-and-machine-local.md) | A Linked Knowledge Folder Is Shared in Place, Read-Only to Coffer, and Recorded Machine-Local |
 | [`sync-memory-into-each-agents-own-memory`](sync-memory-into-each-agents-own-memory.md) | Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault |

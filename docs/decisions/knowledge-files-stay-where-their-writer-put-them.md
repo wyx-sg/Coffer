@@ -1,15 +1,16 @@
 # Knowledge Files Stay Where Their Writer Put Them, and Every Link Is Checked
 
 **Status**: Accepted
-**Date**: 2026-10-13
+**Date**: 2026-11-11
 **Deciders**: Yuxing Wu
-**Related**: [Knowledge Is a Wiki of Pages Compiled From Kept Sources](knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md); [Knowledge Stays Current Through Flags Coffer Computes and an Agent Clears](knowledge-stays-current-through-flags-coffer-computes.md); [Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](tidying-knowledge-is-the-agents-job.md); [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md); [Confluence Pages Import as Readable Sources With Their Attachments](confluence-pages-import-as-readable-sources.md); spec knowledge "Sweep the knowledge root on its mechanical duties", "Link pages by slug or relative path and check every link", "Check a collection mechanically on every read"; OpenSpec change `respect-knowledge-file-locations-and-import-confluence`
+**Related**: [Knowledge Collections Own Their Format; Coffer Checks Only Links](knowledge-collections-own-their-format.md); [Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](tidying-knowledge-is-the-agents-job.md); [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md); [Confluence Pages Import as Readable Sources With Their Attachments](confluence-pages-import-as-readable-sources.md); spec knowledge "Sweep the knowledge root on its mechanical duties", "Resolve links by slug or relative path", "Check every link in a collection"; OpenSpec change `respect-knowledge-file-locations-and-import-confluence`
 
 ## Context
 
-A collection is a wiki: pages under `pages/`, sources under `sources/`, the
-README with its rules at the root. Until now the sweep also *filed* loose
-files. A Markdown file it found at a collection's root, or anywhere outside
+When this was decided a collection was a wiki: pages under `pages/`, sources
+under `sources/`, the README with its rules at the root (today a collection's
+layout is its own, see [Knowledge Collections Own Their Format](knowledge-collections-own-their-format.md)).
+The sweep also *filed* loose files. A Markdown file it found at a collection's root, or anywhere outside
 `pages/` and `sources/`, was moved into `pages/` and a `daemon` change was
 recorded. This was meant to keep the tree tidy without an agent.
 
@@ -86,14 +87,11 @@ where files live**, and evidence is whatever the reader can follow.
 - Links are `[[slug]]` or a relative Markdown path. The check resolves both,
   relative to the file that holds them, reports a dead one as `dead_link` and
   one that climbs out of the knowledge root as `outside_link`.
-- A page names its evidence in `evidence:` (URLs, tickets, people, sources);
-  `sources:` remains for kept sources. A page with either is sourced. The
-  README's `types_without_sources` names the page types that need neither,
-  `[overview]` by default.
-- `verified: null` is "not yet checked", never a date. A page may set
-  `verify_after_days`; it overrides the README's `verify_after_days`.
-- Any page type is accepted. The README lists the suggested ones; an unknown
-  type is shown, not flagged.
+- Evidence, rechecks and page types were widened at the time (an
+  `evidence:` key, per-page intervals, open types). They are now the
+  collection's own rules, not Coffer's
+  ([Knowledge Collections Own Their Format](knowledge-collections-own-their-format.md));
+  the `llm-wiki` template's rules keep them.
 
 - Pro: what the writer laid out stays laid out; nothing breaks behind them.
 - Pro: every link is checked, including the relative ones agents write.
@@ -102,26 +100,20 @@ where files live**, and evidence is whatever the reader can follow.
 - Con: Coffer no longer guarantees the `pages/`/`sources/` shape. A collection
   can drift; the check reports dead and outside links, but not "a page in the
   wrong folder", because there is no wrong folder.
-- Con: `evidence:` is free text. Coffer checks that it is present, not that it
-  is true.
 
 ## Decision
 
 **Option C.** Files stay where their writer put them. The sweep records and
 adds frontmatter but moves nothing. Every link, `[[slug]]` or relative path,
 is resolved and checked; a dead one is `dead_link`, one that climbs out
-of the knowledge root `outside_link`. Pages cite kept sources or name other evidence; the
-README names the types that need none and the default interval, and a page may
-set its own.
+of the knowledge root `outside_link`.
 
 Rules a future change must respect:
 
 - **Coffer never moves a knowledge file on its own.** A move happens only when
   a writer (person, agent, restore) makes it.
 - **Root files are the collection's.** The README and any file beside it are
-  never pages or sources, and a restore brings them back byte for byte.
-- **Unchecked is null.** No writer, Coffer included, puts a date in `verified`
-  that nobody checked.
+  the collection's own, and a restore brings them back byte for byte.
 - **A link is checked where it is written.** Relative links resolve against
   the file that holds them, not the collection root.
 

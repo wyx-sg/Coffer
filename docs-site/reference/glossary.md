@@ -83,9 +83,9 @@ receive notifications when you are away from the machine. A channel is a
 
 ### Collection
 
-One knowledge tree under `~/.coffer/vault/knowledge/<collection>/`: a small wiki of
-[pages](#page) under `pages/`, compiled by you and your agents from the [sources](#source) kept
-under `sources/`, with a `README.md` at its root. A collection is a
+One knowledge folder under `~/.coffer/vault/knowledge/<collection>/`: Markdown files you and
+your agents write together, kept by the collection's own [rules file](#rules-file), with a
+`README.md` at its root that describes it. A collection is a
 [resource](#resource) of kind `knowledge`. See [Knowledge](/guides/knowledge).
 
 ### `coffer-guide`
@@ -175,7 +175,7 @@ machines; only the machine a memory came from changes its file. See [Memory](/gu
 ### Inbox
 
 A collection's hidden `.inbox/` directory, a drop zone: a file an agent or another machine
-leaves there is adopted and kept as a [source](#source) by the next [sweep](#upkeep-pass). See
+leaves there is moved into the collection's [uploads folder](#uploads-folder) by the next [sweep](#upkeep-pass). See
 [Knowledge](/architecture/knowledge).
 
 ### Invocation log
@@ -226,7 +226,8 @@ machine from **Settings › Security › Import a master key**. See [Secret stor
 ### Material
 
 New knowledge submitted to a collection: an upload, or a file left in the
-[inbox](#inbox). It becomes a [source](#source) as it stands. See
+[inbox](#inbox). It is kept, converted to Markdown, in the collection's
+[uploads folder](#uploads-folder). See
 [Knowledge](/guides/knowledge).
 
 ### MCP gateway
@@ -270,12 +271,6 @@ with it becomes the channel's owner, and every other sender is ignored silently.
 [Channels](/guides/channels).
 
 ## P
-
-### Page
-
-A Markdown file under a [collection's](#collection) `pages/`: the wiki itself, written and kept
-current by you and your agents from the collection's [sources](#source). See
-[Knowledge](/guides/knowledge).
 
 ### Pre-apply snapshot
 
@@ -321,6 +316,13 @@ Per-table limits on how long Coffer keeps log-like rows, such as the audit log a
 [invocation log](#invocation-log), enforced by a background pruner. Manage it in
 **Settings → Data**. See [Observability](/architecture/observability#retention).
 
+### Rules file
+
+The file a knowledge [collection](#collection) is written and kept by: its layout, the
+frontmatter its files carry, what a tidy checks. Its `README.md` names it in `rules`; without
+that, it is the first of `AGENTS.md`, `CLAUDE.md` and `README.md` at the collection's root.
+Agents follow it over their own defaults. See [Knowledge](/guides/knowledge#what-a-readme-declares).
+
 ## S
 
 ### Scope
@@ -355,12 +357,6 @@ needed, and reports the agent's uid (`--agent-uid`). See
 A folder with a `SKILL.md` that teaches an agent a task. Coffer keeps managed skills in its
 [master store](#master-store) and [binds](#binding) each to the agents in its reach. A skill
 is a [resource](#resource) of kind `skill`. See [Skills](/guides/skills).
-
-### Source
-
-A Markdown file under a [collection's](#collection) `sources/`: [material](#material) kept as
-it arrived, which agents read and never edit. [Pages](#page) say which sources they draw on. See
-[Knowledge](/guides/knowledge).
 
 ### Standalone secret
 
@@ -400,7 +396,7 @@ the target asks again. See [Secrets](/guides/secrets#approvals).
 
 The button on a knowledge [collection](#collection) (and
 **Tidy all** on the list page) that starts your default hand-off agent in your preferred terminal,
-with a prompt to integrate waiting sources, fix what Coffer found, and merge, split and correct what is there, following the `coffer-guide`
+with a prompt to tidy the collection by its own [rules file](#rules-file) and fix its broken links, following the `coffer-guide`
 skill, sent as the session's first message. When no managed agent is available, it offers the prompt to copy. The agent's edits land as
 one change carrying its report, which **Undo this tidy…** puts back. Coffer does the
 tidying through your agent, never on its own. Memory has no Tidy: each agent curates its own. See [Knowledge](/guides/knowledge).
@@ -443,6 +439,12 @@ and the sweep for knowledge (re-render the guide, adopt files left in the
 [inbox](#inbox), commit edits made on disk). None of them calls a model. The memory sync can be switched
 off or retimed from the **▾** on **Sync now** on the Memory page.
 See [Memory](/architecture/memory#the-sync-pass) and [Knowledge](/architecture/knowledge#the-sweep).
+
+### Uploads folder
+
+The folder of a [collection](#collection) where Coffer writes [material](#material): `sources/`
+unless the collection's `README.md` names another in `uploads`. Links in it are not checked. See
+[Knowledge](/guides/knowledge#what-a-readme-declares).
 
 ## V
 

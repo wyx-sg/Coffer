@@ -44,17 +44,15 @@ const api = vi.mocked(await import("@/lib/api/knowledge"));
 const fs = vi.mocked((await import("@/lib/api/fs")).fsApi);
 
 const PICTURE = "data:image/png;base64,iVBORw0KGgo=";
-const ASSET = `${COLLECTION.name}/assets/deck-1a2b3c4d/image-1.png`;
-const DECK = file(`${COLLECTION.name}/sources/deck.md`, {
-  kind: "source",
+const ASSET = `${COLLECTION.name}/sources/deck/image-1.png`;
+const DECK = file(`${COLLECTION.name}/sources/deck/deck.md`, {
   title: "Deck",
-  page_type: "",
-  body: "The flow:\n\n![Login flow](../assets/deck-1a2b3c4d/image-1.png)\n",
+  body: "The flow:\n\n![Login flow](image-1.png)\n",
   original: "deck.pptx",
   original_path: "/Users/dev/.coffer/local/knowledge-originals/abc.pptx",
 });
 const ELSEWHERE = { ...RELEASE, original: "release.pdf", original_path: null };
-const IMAGE = file(ASSET, { kind: "file", title: "image-1.png", page_type: "", body: "" });
+const IMAGE = file(ASSET, { title: "image-1.png", body: "" });
 
 beforeEach(() => {
   answerFromFixtures();

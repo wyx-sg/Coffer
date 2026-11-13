@@ -54,7 +54,7 @@ export function useCreateCollection() {
   const { t } = useTranslation();
   const { toast } = useToast();
   return useMutation({
-    mutationFn: (input: { name: string; description?: string | null }) => createCollection(input),
+    mutationFn: (input: Parameters<typeof createCollection>[0]) => createCollection(input),
     onSuccess: () => void qc.invalidateQueries({ queryKey: knowledgeCollectionsKey }),
     onError: (error) => toast.error(translateApiError(t, error)),
   });

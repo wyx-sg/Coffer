@@ -1,21 +1,22 @@
-"""The pictures an uploaded source keeps, under its collection's ``assets/``
-(ADR knowledge-sources-keep-their-images-and-originals-stay-on-this-mac; spec
+"""The pictures and attachments an upload keeps, in a folder of its own under
+the uploads folder with the source beside them (ADR
+knowledge-sources-keep-their-images-and-originals-stay-on-this-mac; spec
 knowledge "Keep the pictures of an upload beside its source").
 
-Each upload gets a folder of its own, ``assets/<title-slug>-<hash>/``, named
-before the source is written so the Markdown can link its pictures with a
-plain relative path (``../assets/<folder>/image-1.png``) that any Markdown
-reader, an agent's included, follows. The pictures are ordinary files of the
-collection: they sync with the vault and keep their history like the Markdown.
+An upload that keeps files is a folder, ``<uploads>/<title-slug>/``, holding
+its Markdown and every file it links by bare name (``image-1.png``) — a plain
+relative path any Markdown reader, an agent's included, follows, and one that
+stays right when the folder is moved or renamed as a whole. The files are
+ordinary files of the collection: they sync with the vault and keep their
+history like the Markdown.
 """
 
 from __future__ import annotations
 
 import os
 import pathlib
-import re
+from collections.abc import Iterable, Mapping
 
-from coffer.domain.knowledge.converter import ConvertedImage
 from coffer.domain.knowledge.errors import KnowledgeFileNotFound
 from coffer.infrastructure.knowledge import linked, paths
 from coffer.infrastructure.knowledge.naming import slugify
@@ -33,34 +34,35 @@ IMAGE_TYPES = {
 #: The largest picture the read route hands back.
 MAX_ASSET_BYTES = 10 * 1024 * 1024
 
-_LINK = re.compile(r"\]\((image-\d+\.[a-z]+)\)")
+
+def folder_for(title: str) -> str:
+    """The name an upload's own folder wants: its title as a slug."""
+    return slugify(title)[:60].strip("-") or "upload"
 
 
-def folder_for(title: str, digest: str) -> str:
-    """The folder one upload's pictures go in: readable, and unique per file."""
-    return f"{slugify(title)[:60].strip('-') or 'upload'}-{digest[:8]}"
+def free_folder(collection: str, title: str, names: Iterable[str]) -> str:
+    """The folder under the uploads folder an upload keeping ``names`` goes
+    in: its title as a slug, with a ``-2`` of its own when that name is taken
+    — by a folder, by a source of the same slug (so ``[[slug]]`` stays one
+    file), or by a kept file the source would overwrite."""
+    wanted = folder_for(title)
+    base = paths.uploads_dir(collection)
+    kept = set(names)
+    folder, n = wanted, 2
+    while (base / folder).exists() or (base / f"{folder}.md").exists() or f"{folder}.md" in kept:
+        folder, n = f"{wanted}-{n}", n + 1
+    return folder
 
 
-def link_pictures(markdown: str, folder: str, images: tuple[ConvertedImage, ...]) -> str:
-    """``markdown`` with each kept picture's bare name pointed at where it is
-    kept, relative to the source under ``sources/``."""
-    names = {image.name for image in images}
-
-    def _point(match: re.Match[str]) -> str:
-        name = match.group(1)
-        if name not in names:
-            return match.group(0)
-        return f"](../{paths.ASSETS_DIR_NAME}/{folder}/{name})"
-
-    return _LINK.sub(_point, markdown)
-
-
-def picture_paths(
-    collection: str, folder: str, images: tuple[ConvertedImage, ...]
+def bundle_paths(
+    collection: str, folder: str | None, files: Mapping[str, bytes]
 ) -> dict[str, bytes]:
-    """Each picture by its knowledge-root-relative path."""
-    base = f"{collection}/{paths.ASSETS_DIR_NAME}/{folder}"
-    return {f"{base}/{image.name}": image.data for image in images}
+    """Each kept file by its knowledge-root-relative path in the upload's
+    folder; none without a folder."""
+    if not folder:
+        return {}
+    base = f"{paths.relative_of(paths.uploads_dir(collection))}/{folder}"
+    return {f"{base}/{name}": data for name, data in files.items()}
 
 
 def write_bytes(relpath: str, data: bytes) -> None:
@@ -111,11 +113,10 @@ def picture_at(relpath: str, folder: str | None) -> tuple[bytes, str]:
 __all__ = [
     "IMAGE_TYPES",
     "MAX_ASSET_BYTES",
+    "bundle_paths",
     "folder_for",
     "image_type",
-    "link_pictures",
     "picture_at",
-    "picture_paths",
     "read_picture",
     "write_bytes",
 ]

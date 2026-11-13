@@ -1,7 +1,7 @@
 // frontend/src/components/knowledge/KnowledgeLink.tsx
 //
-// Every link in an open knowledge file (spec knowledge "Link pages by slug or
-// relative path and check every link"):
+// Every link in an open knowledge file (spec knowledge "Resolve links by slug
+// or relative path", "Check every link in a collection"):
 //
 // - a `[[link]]` opens the file the daemon resolved it to (KnowledgeWikiLink);
 // - a link by relative path opens the file it names in the Knowledge page,

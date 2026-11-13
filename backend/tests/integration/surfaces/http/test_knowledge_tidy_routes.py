@@ -144,10 +144,8 @@ def test_undo_names_files_edited_since_and_needs_force(client) -> None:  # type:
     assert "Old text." in (knowledge_root() / page).read_text(encoding="utf-8")
 
 
-@pytest.mark.acceptance(
-    spec="knowledge", scenario="a collection lists its pages and sources with their types"
-)
-def test_a_collection_lists_its_pages_and_sources_with_their_types(client) -> None:  # type: ignore[no-untyped-def]
+@pytest.mark.acceptance(spec="knowledge", scenario="a collection lists its files with their titles")
+def test_a_collection_lists_its_files_with_their_titles(client) -> None:  # type: ignore[no-untyped-def]
     _create_collection(client, "shopee")
     page = _write_page("shopee", "gateway", "Text.")
     source = _submit(client, collection="shopee", title="Notes", description="d", body="b")
@@ -155,5 +153,7 @@ def test_a_collection_lists_its_pages_and_sources_with_their_types(client) -> No
     r = client.get(f"/api/v1/knowledge/collections/{_uid(client, 'shopee')}/files")
     assert r.status_code == 200, r.text
     by_path = {f["path"]: f for f in r.json()["files"]}
-    assert by_path[page]["kind"] == "page" and by_path[page]["page_type"] == "concept"
-    assert by_path[source]["kind"] == "source" and by_path[source]["waiting"] is True
+    assert sorted(by_path) == sorted([page, source])
+    assert by_path[page]["title"] == "gateway"
+    assert (by_path[source]["title"], by_path[source]["description"]) == ("Notes", "d")
+    assert set(by_path[page]) == {"path", "title", "description", "actor", "updated_at"}

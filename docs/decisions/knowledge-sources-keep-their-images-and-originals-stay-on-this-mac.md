@@ -3,13 +3,13 @@
 **Status**: Accepted
 **Date**: 2026-10-12
 **Deciders**: Yuxing Wu
-**Related**: [Knowledge Is a Wiki of Pages Compiled From Kept Sources](knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md); [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md); [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md); [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md); [The Loopback Daemon Performs OS File Actions for the UI](daemon-proxies-os-file-actions.md); [Coffer Ships Its Own Manual as a Skill Resource](coffer-ships-its-own-skill.md); spec knowledge "Keep every upload as a Markdown source", "Keep the pictures of an upload beside its source", "Keep an upload's original on this Mac only"; OpenSpec change `keep-upload-pictures-and-originals`
+**Related**: [Knowledge Collections Own Their Format; Coffer Checks Only Links](knowledge-collections-own-their-format.md); [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md); [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md); [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md); [The Loopback Daemon Performs OS File Actions for the UI](daemon-proxies-os-file-actions.md); [Coffer Ships Its Own Manual as a Skill Resource](coffer-ships-its-own-skill.md); spec knowledge "Keep every upload as a Markdown source", "Keep the pictures of an upload beside its source", "Keep an upload's original on this Mac only"; OpenSpec change `keep-upload-pictures-and-originals`
 
 ## Context
 
 An upload becomes a source: the converted Markdown with frontmatter under the
 collection's `sources/`
-([Knowledge Is a Wiki of Pages Compiled From Kept Sources](knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md)).
+([Knowledge Collections Own Their Format; Coffer Checks Only Links](knowledge-collections-own-their-format.md)).
 Until now that was all Coffer kept. MarkItDown was run without its picture
 options, so every picture in a PDF, a slide deck or a Word document was
 dropped, and the uploaded file itself was thrown away once converted.
@@ -214,3 +214,15 @@ Rules a future change must respect:
   and bounds), `infrastructure/knowledge/assets.py` (layout, links and the read
   route's guard), `infrastructure/knowledge/originals.py` (the machine-local
   store), `application/knowledge/ingest.py`.
+
+## Amendment (2026-11-11): an upload with pictures is one folder
+
+With [Knowledge Collections Own Their Format](knowledge-collections-own-their-format.md)
+a collection declares its own uploads folder (`sources/` by default). An
+upload that keeps pictures or attachments is now one folder there,
+`<uploads>/<slug>/`, holding the source as `<slug>.md` and its files beside
+it, linked by bare name (`image-1.png`), so the upload moves, renames and
+deletes as a whole. An upload with no pictures is still a single
+`<uploads>/<slug>.md`. The root `assets/` this record describes is gone:
+existing collections were migrated once, and Coffer keeps no code for it. The
+layouts weighed are in that record's sub-choices.

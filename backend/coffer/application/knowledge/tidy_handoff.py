@@ -1,11 +1,12 @@
 """The prompts that hand tidying knowledge to the person's agent.
 
 Coffer makes no model call over the corpus: judging what to fold in, merge,
-split, correct or delete is the agent's work, following the coffer-guide skill.
+split, correct or delete is the agent's work, following the collection's own
+rules file (ADR knowledge-collections-own-their-format).
 The person starts it with **Tidy** or **Tidy all**, which pre-fills a
 conversation with one of these prompts and sends it (spec knowledge "Hand a
-tidy to the agent"). The prompt carries the collection's mechanical findings,
-so the agent fixes what Coffer found as well as what it judges, and it names
+tidy to the agent"). The prompt carries the collection's broken links,
+so the agent fixes what Coffer found as well as what its rules ask, and it names
 the two commands that make the tidy one change in the collection's change log
 (spec knowledge "Record a tidy as one change").
 """
@@ -18,20 +19,17 @@ from coffer.domain.handoff import Handoff, render_handoff
 from coffer.domain.knowledge.entry import CollectionEntry, Finding
 
 _STEPS = (
-    'Read the "Integrating sources" and "Tidying a collection" sections of the '
-    "coffer-guide skill first.",
+    'Read the "Tidying a collection" section of the coffer-guide skill first.',
     "Before you change anything in a collection, run `coffer knowledge tidy-start <collection>`.",
-    "Integrate every waiting source, then fix the mechanical findings, then merge, "
-    "split and correct the pages. Recheck every stale page against its sources or the "
-    "code and set its `verified` to today; give every source without a `summary` one.",
-    "Leave alone anything you are not sure about — two pages that disagree with "
-    "no way to tell which is right, a large deletion, a change to the README's "
-    "page types — and list it in your report for the developer to decide.",
+    "Read the collection's rules file and tidy it by those rules; fix every broken link "
+    "listed here.",
+    "Leave alone anything you are not sure about — two files that disagree with "
+    "no way to tell which is right, a large deletion, a change to the rules file — "
+    "and list it in your report for the developer to decide.",
     "When you finish a collection, run `coffer knowledge tidy-finish <collection> "
-    '--set summary="<your report>"`. The report says which sources you '
-    "integrated or skipped, what you merged, split, corrected, rechecked and "
-    "deleted, and what you left for the developer to decide, and ends with Gaps: "
-    "questions the pages cannot answer and sources worth finding.",
+    '--set summary="<your report>"`. The report says what you changed and what you '
+    "left for the developer to decide, and ends with Gaps: questions the collection "
+    "cannot answer and sources worth finding.",
 )
 
 #: How many findings a prompt lists before it says how many it left out.
@@ -44,9 +42,8 @@ def _plural(n: int, word: str) -> str:
 
 def _counts(entry: CollectionEntry) -> str:
     return (
-        f"{_plural(entry.page_count, 'page')}, "
-        f"{_plural(entry.waiting_source_count, 'waiting source')}, "
-        f"{_plural(entry.finding_count, 'finding')}"
+        f"{_plural(entry.note_count, 'Markdown file')}, "
+        f"{_plural(entry.finding_count, 'broken link')}"
     )
 
 
@@ -61,8 +58,8 @@ def _finding_line(finding: Finding) -> str:
 
 def _finding_facts(findings: Sequence[Finding]) -> list[str]:
     if not findings:
-        return ["Mechanical findings: none"]
-    facts = [f"Mechanical findings: {len(findings)}"]
+        return ["Broken links: none"]
+    facts = [f"Broken links: {len(findings)}"]
     facts += [_finding_line(f) for f in findings[:MAX_FINDING_LINES]]
     if len(findings) > MAX_FINDING_LINES:
         facts.append(f"… and {len(findings) - MAX_FINDING_LINES} more")
@@ -74,15 +71,15 @@ def collection_tidy_prompt(entry: CollectionEntry) -> str:
     return render_handoff(
         Handoff(
             task=(
-                f"Tidy the knowledge collection `{entry.name}`: integrate its waiting "
-                'sources by the "Integrating sources" section of the coffer-guide skill, '
-                'fix what Coffer found, then tidy its pages by "Tidying a collection".'
+                f"Tidy the knowledge collection `{entry.name}` by its own rules file, "
+                'fixing the broken links Coffer found, as "Tidying a collection" in the '
+                "coffer-guide skill says."
             ),
             facts=(
                 f"Collection: {entry.name}",
                 f"Path: {entry.folder_path}",
-                f"Pages: {entry.page_count}",
-                f"Waiting sources: {entry.waiting_source_count}",
+                f"Rules file: {entry.rules_file or 'none'}",
+                f"Markdown files: {entry.note_count}",
                 *_finding_facts(entry.findings),
             ),
             steps=_STEPS,
@@ -99,10 +96,10 @@ def all_tidy_prompt(root: str, entries: Sequence[CollectionEntry]) -> str:
     return render_handoff(
         Handoff(
             task=(
-                "Tidy every knowledge collection, one collection at a time: integrate "
-                'its waiting sources by the "Integrating sources" section of the '
-                "coffer-guide skill, fix what `coffer knowledge check <collection>` "
-                'finds, then tidy its pages by "Tidying a collection".'
+                "Tidy every knowledge collection, one collection at a time, each by its "
+                "own rules file, fixing the broken links `coffer knowledge check "
+                '<collection>` lists, as "Tidying a collection" in the coffer-guide '
+                "skill says."
             ),
             facts=tuple(facts),
             steps=_STEPS,

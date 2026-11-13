@@ -31,14 +31,7 @@ class CollectionEntry:
     name: str
     #: First paragraph of the collection's ``README.md``; empty when absent.
     description: str
-    #: Pages under ``pages/`` and sources under ``sources/`` (spec knowledge
-    #: "Keep sources and pages apart in each collection").
-    page_count: int = 0
-    source_count: int = 0
-    #: Sources no page cites and none marks skipped ("Derive which sources wait
-    #: from the pages that cite them").
-    waiting_source_count: int = 0
-    #: Every mechanical finding ("Check a collection mechanically on every read").
+    #: Mechanical findings: only broken links ("Check every link in a collection").
     finding_count: int = 0
     findings: tuple[Finding, ...] = ()
     #: The collection directory's absolute path, so a surface can reveal it
@@ -51,11 +44,18 @@ class CollectionEntry:
     #: shares with the agents (ADR
     #: linked-knowledge-folders-are-read-only-and-machine-local).
     linked: bool = False
-    #: A linked folder's Markdown files; 0 for a collection Coffer keeps.
+    #: The Markdown files in the collection, its README left out.
     note_count: int = 0
-    #: A linked folder's own rules file at its root (``AGENTS.md``,
-    #: ``CLAUDE.md`` or ``README.md``, the first present); empty when none.
+    #: The file whose rules agents follow in it, relative to the collection: what
+    #: its README declares as ``rules``, else the first of ``AGENTS.md``,
+    #: ``CLAUDE.md`` and ``README.md`` at its root; empty when none ("Let each
+    #: collection declare its own rules").
     rules_file: str = ""
+    #: The page an agent starts from (its README's ``entry``); empty when none.
+    entry_file: str = ""
+    #: Where Coffer writes uploads and dropped files (its README's ``uploads``,
+    #: ``sources`` by default); empty for a linked folder.
+    uploads_dir: str = ""
 
 
 @dataclass(frozen=True)
@@ -78,22 +78,6 @@ class FileEntry:
     description: str
     actor: str
     updated_at: str
-    #: ``page``, ``source`` or ``file`` (``paths.kind_of``).
-    kind: str = "file"
-    #: A page's ``type``; empty otherwise.
-    page_type: str = ""
-    #: A source no page cites, none marks skipped and none superseded.
-    waiting: bool = False
-    #: A page due a recheck (its ``verified`` date missing or too old).
-    stale: bool = False
-    #: A source's replacement: the path its ``superseded_by`` resolves to, or
-    #: the slug itself when it names none; empty when it is current.
-    superseded_by: str = ""
-    #: A source's ``summary``: what it says, in a line or two.
-    summary: str = ""
-    #: How many pages cite a source, and whether it is marked ``ingest: skipped``.
-    cited_count: int = 0
-    skipped: bool = False
 
 
 @dataclass(frozen=True)
@@ -103,16 +87,6 @@ class CatalogueLevel:
     path: str
     directories: tuple[DirectoryEntry, ...] = field(default_factory=tuple)
     files: tuple[FileEntry, ...] = field(default_factory=tuple)
-
-
-@dataclass(frozen=True)
-class SourceRef:
-    """A page's ``sources`` entry: the slug it names and the source it resolves
-    to, ``path`` ``None`` when it names none."""
-
-    slug: str
-    path: str | None = None
-    title: str = ""
 
 
 @dataclass(frozen=True)
@@ -131,21 +105,12 @@ class LinkRef:
 
 
 @dataclass(frozen=True)
-class PageRef:
-    """A page, as a source names the pages that cite it."""
-
-    path: str
-    title: str
-
-
-@dataclass(frozen=True)
 class Finding:
-    """One mechanical finding about a collection (spec knowledge "Check a
-    collection mechanically on every read").
+    """One broken link in a collection (spec knowledge "Check every link in a
+    collection").
 
-    ``path`` is the file it concerns; ``target`` the link or source it names,
-    where it names one; ``others`` the other files a duplicate or an ambiguous
-    link involves.
+    ``path`` is the file it is in; ``target`` the link as written; ``others``
+    the files an ambiguous link could mean.
     """
 
     kind: str
@@ -170,28 +135,8 @@ class KnowledgeFile:
     file_path: str
     #: Absolute path of its containing folder.
     folder_path: str
-    #: ``page``, ``source`` or ``file`` (``paths.kind_of``).
-    kind: str = "file"
-    #: A page's ``type`` and ``aliases``.
-    page_type: str = ""
-    aliases: tuple[str, ...] = ()
-    #: A page's ``verified`` date: when it was last checked against its
-    #: sources or the code; empty when it carries none.
-    verified: str = ""
-    #: A page's ``sources`` entries, each resolved to the source it names.
-    sources: tuple[SourceRef, ...] = ()
-    #: A page's ``[[links]]``, and any Markdown file's links by relative
-    #: path, each resolved to the file it names.
+    #: Every link in its body, each resolved to the file it names.
     links: tuple[LinkRef, ...] = ()
-    #: Whether a page is due a recheck (see ``FileEntry.stale``).
-    stale: bool = False
-    #: A source's pages that cite it, and whether it waits.
-    cited_by: tuple[PageRef, ...] = ()
-    waiting: bool = False
-    #: A source's replacement, resolved; ``None`` when it is current.
-    superseded_by: SourceRef | None = None
-    #: A source's ``summary``.
-    summary: str = ""
     #: An uploaded source's original file name (its ``original``), and where
     #: that file is on this Mac — ``None`` on any other Mac.
     original: str = ""

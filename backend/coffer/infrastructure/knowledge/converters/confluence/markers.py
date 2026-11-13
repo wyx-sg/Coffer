@@ -71,7 +71,7 @@ def readable(markdown: str) -> str | None:
     written: the file keeps its markers until it is imported again."""
     if not has_markers(markdown):
         return None
-    return expand(markdown, Context(folder="", keeps_files=False)).markdown
+    return expand(markdown, Context(keeps_files=False)).markdown
 
 
 def storage_of(markdown: str) -> tuple[str, ...]:

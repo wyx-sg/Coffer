@@ -108,3 +108,13 @@ export function useThemePreference(): ThemePreference {
 export function useSetThemePreference(): (preference: ThemePreference) => void {
   return useCallback((preference: ThemePreference) => setThemePreference(preference), []);
 }
+
+function resolvedTheme(): ResolvedTheme {
+  return document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+}
+
+/** Reactive read of the theme on screen, for the few things drawn outside the
+ *  colour tokens (a Mermaid diagram's own palette). */
+export function useResolvedTheme(): ResolvedTheme {
+  return useSyncExternalStore(subscribe, resolvedTheme, () => "light");
+}

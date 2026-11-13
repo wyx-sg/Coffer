@@ -47,9 +47,6 @@ const WORK: CollectionOut = {
   uid: "kn-work",
   name: "Work",
   description: "My work notes.",
-  page_count: 0,
-  source_count: 0,
-  waiting_source_count: 0,
   finding_count: 0,
   folder_path: "/Users/u/Obsidian/Work",
   updated_at: null,
@@ -58,6 +55,8 @@ const WORK: CollectionOut = {
   linked: true,
   note_count: 12,
   rules_file: "AGENTS.md",
+  entry_file: "Home.md",
+  uploads_dir: "",
 };
 const NOTE = file("Work/Projects/Gateway.md", {
   title: "Payment gateway",
@@ -118,6 +117,8 @@ describe("a linked folder's page", () => {
     expect(facts).toHaveTextContent("/Users/u/Obsidian/Work");
     expect(facts).toHaveTextContent("12 Markdown notes");
     expect(facts).toHaveTextContent("AGENTS.md");
+    expect(facts).toHaveTextContent("Start page");
+    expect(facts).toHaveTextContent("Home.md");
     expect(facts).toHaveTextContent("Its own tools. Coffer only shares it with agents");
     // Nothing to manage: no Tidy, To do, Contents or Change log.
     expect(screen.queryByRole("button", { name: /Tidy/ })).toBeNull();

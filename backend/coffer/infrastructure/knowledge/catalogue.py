@@ -5,14 +5,14 @@ tree of Markdown files"): a catalogue is produced by walking the tree and
 reading frontmatter when someone asks, so it cannot drift from what is on
 disk — there is no second copy to keep in sync.
 
-A walk sees every visible file under a collection and says what each is — a
-page, a source or a plain file (``paths.kind_of``) — with a page's type and
-whether a source waits, read off the collection's wiki graph (``wiki.build``).
-It never sees the hidden ``.inbox/`` — material there is not knowledge yet.
-A level lists the collection's ``README.md`` like any other root file, but no
-count, catalogue walk or check treats it as a page or a source, because it is
-the collection's schema rather than content in it (see "Keep the collection
-README out of the corpus").
+A walk sees every visible file under a collection, each with its title and
+description as its own frontmatter or first heading gives them; no folder and
+no key means anything to it (spec knowledge "Let each collection declare its
+own rules"). It never sees the hidden ``.inbox/`` — material there is not
+knowledge yet. A level lists the collection's ``README.md`` like any other root
+file, but no count or catalogue walk includes it, because it describes the
+collection rather than being content in it (see "Keep the collection README
+out of the corpus").
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ from coffer.domain.knowledge.entry import (
     FileEntry,
 )
 from coffer.domain.knowledge.errors import KnowledgeFileNotFound
-from coffer.infrastructure.knowledge import paths, wiki
+from coffer.infrastructure.knowledge import collection_settings, link_graph, paths
 from coffer.infrastructure.knowledge.frontmatter import split_frontmatter
 
 MARKDOWN_SUFFIX = ".md"
@@ -100,7 +100,7 @@ def latest_edit(directory: pathlib.Path) -> str | None:
 
 def readme_description(collection: str) -> str:
     """A collection's one-line description: its README's first paragraph,
-    before its first section (``##``), where its rules begin.
+    before its first section (``##``).
 
     Deliberately read from the file rather than stored (see "Read a collection's
     description from its README") — the person browsing the folder must be
@@ -108,24 +108,7 @@ def readme_description(collection: str) -> str:
     own description is built from (see "Describe Coffer and the collections'
     subjects in the skill description").
     """
-    readme = paths.readme_path(collection)
-    if not readme.is_file():
-        return ""
-    _, body = split_frontmatter(readme.read_text(encoding="utf-8", errors="replace"))
-    paragraph: list[str] = []
-    for line in body.splitlines():
-        stripped = line.strip()
-        if stripped.startswith("##"):
-            # The rules begin: the description is what comes before them.
-            break
-        if stripped.startswith("#"):
-            continue
-        if not stripped:
-            if paragraph:
-                break
-            continue
-        paragraph.append(stripped)
-    return " ".join(paragraph)
+    return collection_settings.description(paths.collection_dir(collection))
 
 
 def list_collections() -> tuple[CollectionEntry, ...]:
@@ -138,11 +121,13 @@ def list_collections() -> tuple[CollectionEntry, ...]:
 
 
 def collection_entry(
-    directory: pathlib.Path, graph: wiki.WikiGraph | None = None
+    directory: pathlib.Path, graph: link_graph.LinkGraph | None = None
 ) -> CollectionEntry:
-    """One collection directory with its counts, read off its wiki graph."""
-    graph = graph if graph is not None else wiki.build(directory.name)
+    """One collection directory with its counts, its declarations and its
+    broken links."""
+    graph = graph if graph is not None else link_graph.build(directory.name)
     findings = tuple(graph.findings())
+    settings = collection_settings.read(directory, bound=paths.knowledge_root())
     return CollectionEntry(
         # Empty here by construction: this walks the DIRECTORY, which knows
         # names and counts and nothing about identity. The application layer
@@ -151,17 +136,18 @@ def collection_entry(
         uid="",
         name=directory.name,
         description=readme_description(directory.name),
-        page_count=len(graph.pages),
-        source_count=len(graph.sources),
-        waiting_source_count=len(graph.waiting()),
         finding_count=len(findings),
         findings=findings,
         folder_path=str(directory),
         updated_at=latest_edit(directory),
+        note_count=count_files(directory, markdown_only=True),
+        rules_file=settings.rules,
+        entry_file=settings.entry,
+        uploads_dir=settings.uploads,
     )
 
 
-def _file_entry(path: pathlib.Path, graph: wiki.WikiGraph | None = None) -> FileEntry:
+def _file_entry(path: pathlib.Path) -> FileEntry:
     if not is_markdown(path.name):
         # A file a person dropped in that is not Markdown: bytes, not prose. It
         # has no frontmatter to read and may be large, so it is described by
@@ -174,39 +160,14 @@ def _file_entry(path: pathlib.Path, graph: wiki.WikiGraph | None = None) -> File
             updated_at="",
         )
     text = path.read_text(encoding="utf-8", errors="replace")
-    fm, _ = split_frontmatter(text)
-    relpath = paths.relative_of(path)
-    kind = paths.kind_of(relpath)
-    waiting = stale = skipped = False
-    superseded_by = summary = ""
-    cited_count = 0
-    if kind == paths.KIND_SOURCE and graph is not None:
-        waiting = relpath in {s.path for s in graph.waiting()}
-        source = graph.source(relpath)
-        if source is not None:
-            superseded_by = (
-                (graph.successor(source) or source.superseded_by) if source.superseded_by else ""
-            )
-            summary = source.summary
-            skipped = source.skipped
-            cited_count = len(graph.citing(source.path))
-    elif kind == paths.KIND_PAGE and graph is not None:
-        page = graph.page(relpath)
-        stale = page is not None and graph.is_stale(page)
+    fm, body = split_frontmatter(text)
+    described = fm.get("description")
     return FileEntry(
-        path=relpath,
-        title=str(fm.get("title") or path.stem),
-        description=str(fm.get("description") or ""),
+        path=paths.relative_of(path),
+        title=collection_settings.title_of(fm, body, path.stem),
+        description=" ".join(str(described).split()) if described else "",
         actor=str(fm.get("actor") or ACTOR_AGENT),
         updated_at=str(fm.get("updated_at") or ""),
-        kind=kind,
-        page_type=str(fm.get("type") or "").strip() if kind == paths.KIND_PAGE else "",
-        waiting=waiting,
-        stale=stale,
-        superseded_by=superseded_by,
-        summary=summary,
-        cited_count=cited_count,
-        skipped=skipped,
     )
 
 
@@ -215,18 +176,10 @@ def list_level(relpath: str) -> CatalogueLevel:
     directory = paths.resolve(relpath)
     if not directory.is_dir():
         raise KnowledgeFileNotFound(relpath)
-    graph = wiki.build(paths.collection_of(relpath))
     directories: list[DirectoryEntry] = []
     files: list[FileEntry] = []
-    # At a collection's root its pages and sources come first, in that order
-    # (spec knowledge "Show a collection as one tree of read-only documents in
-    # the web UI"); everything else follows by name.
-    first = {paths.PAGES_DIR_NAME: 0, paths.SOURCES_DIR_NAME: 1}
-    at_root = len(paths.split(relpath)) == 1
-    children = sorted(
-        directory.iterdir(),
-        key=lambda c: (first.get(c.name, 2) if at_root else 2, c.name),
-    )
+    # Folders first, then files, each by name: no folder means more than another.
+    children = sorted(directory.iterdir(), key=lambda c: (not c.is_dir(), c.name.lower()))
     for child in children:
         if not visible(child):
             continue
@@ -240,9 +193,8 @@ def list_level(relpath: str) -> CatalogueLevel:
             )
         elif is_listed(child.name):
             # The README is listed too, as the plain file it is: a person browses
-            # and opens a collection's own files — its README, an index, a log —
-            # where they are. It is never a page or a source and never counted.
-            files.append(_file_entry(child, graph))
+            # and opens a collection's own files where they are.
+            files.append(_file_entry(child))
     return CatalogueLevel(
         path=relpath.strip("/"),
         directories=tuple(directories),
@@ -251,24 +203,21 @@ def list_level(relpath: str) -> CatalogueLevel:
 
 
 def walk_files(directory: pathlib.Path) -> tuple[FileEntry, ...]:
-    """Every page and source under a collection ``directory``, recursively, in
-    path order, each with its kind, its type and whether it waits.
+    """Every Markdown file under a collection ``directory`` but its README,
+    recursively, in path order, each with its title and description.
 
-    The catalogue a skill carries is a whole collection at once (see "Merge the
-    manual and the catalogue in the skill body"), unlike the level-at-a-time
-    listing a human surface pages through — so this is the shape that builds
-    it. A Markdown file outside ``pages/`` and ``sources/`` — an ``index.md``
-    or a ``log.md`` at the root, a note in a folder of the person's own — is
-    listed as a plain file where it is: nothing moves it.
+    The catalogue a skill carries is a whole collection at once when the
+    collection names no entry page (see "Merge the manual and the catalogue in
+    the skill body"), unlike the level-at-a-time listing a human surface pages
+    through — so this is the shape that builds it.
     """
     if not directory.is_dir():
         return ()
-    graph = wiki.build(directory.name)
     found: list[FileEntry] = []
     for root, dirnames, filenames in os.walk(directory):
         dirnames[:] = sorted(d for d in dirnames if not d.startswith("."))
         for name in sorted(filenames):
             # The narrow rule: this feeds the catalogue, which needs text.
             if is_markdown(name) and not is_collection_readme(pathlib.Path(root) / name):
-                found.append(_file_entry(pathlib.Path(root) / name, graph))
+                found.append(_file_entry(pathlib.Path(root) / name))
     return tuple(sorted(found, key=lambda f: f.path))

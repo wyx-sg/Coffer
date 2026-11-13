@@ -49,7 +49,7 @@ State is kept in five [storage classes](/architecture/persistence), one director
 ├── state/settings/internal-engine.json
 ├── state/secret-notes/notes.json
 ├── state/cli-tools/tools.json
-├── knowledge/<collection>/             # README.md, pages/, sources/, assets/, hidden .inbox/
+├── knowledge/<collection>/             # README.md, its rules file, sources/, hidden .inbox/
 ├── skills/<name>/                      # skill master folders
 ├── memory/                             # the memory hub: projects/<project>/
 ├── secret/<ref>.enc
@@ -66,11 +66,9 @@ State is kept in five [storage classes](/architecture/persistence), one director
 | `state/settings/internal-engine.json` | The speech-to-text model, and the memory sync's switch and interval. Absent means defaults. | you, daemon | Yes | Yes: the settings return to their defaults. |
 | `state/secret-notes/notes.json` | Each secret's label and description (never its value). | you, daemon | Yes | The labels and descriptions are lost; the values stay. |
 | `state/cli-tools/tools.json` | The command-line tools you added by hand, and your edits to ones a skill requires. | you, daemon | Yes | Yes: hand-added tools and your edits are gone. |
-| `knowledge/<collection>/` | A collection: a `README.md` describing it, plus `pages/`, `sources/` and `assets/`. Files of its own (an `index.md`, a `log.md`) stay where they are written; Coffer moves no file. A Tidy hands the merging and correcting to an agent. | you, daemon | Yes | **No.** This is written knowledge. |
-| `knowledge/<collection>/pages/` | The wiki: Markdown pages in any nesting, written and kept current by you and your agents. | you, your agents, daemon | Yes | **No.** This is written knowledge. |
-| `knowledge/<collection>/sources/` | The material that arrived — each upload and each inbox file — kept as Markdown, as it came. Agents read sources and never edit them. | daemon | Yes | **No.** Pages cite these sources. |
-| `knowledge/<collection>/assets/` | The pictures taken out of uploaded documents, one folder per upload, linked from their source. | daemon | Yes | **No.** The sources show these pictures. |
-| `knowledge/<collection>/.inbox/` | A drop zone: a Markdown file an agent or another machine leaves here is adopted and kept as a source under `sources/` by the next sweep (within a minute), then the file is gone. | you, your agents, daemon | Yes | No: a file not yet adopted is lost. |
+| `knowledge/<collection>/` | A collection: a `README.md` describing it, its rules file (an `AGENTS.md`, say) and whatever files and folders its rules give it. Coffer moves no file. A Tidy hands keeping it to an agent, by those rules. | you, your agents, daemon | Yes | **No.** This is written knowledge. |
+| `knowledge/<collection>/sources/` | The uploads folder (`sources/` unless the README's `uploads` names another): each upload and each inbox file, converted to Markdown; an upload with pictures or attachments is a folder holding the file and its pictures. | daemon | Yes | **No.** Its files may be cited by others, and show these pictures. |
+| `knowledge/<collection>/.inbox/` | A drop zone: a Markdown file an agent or another machine leaves here is moved into the uploads folder by the next sweep (within a minute). | you, your agents, daemon | Yes | No: a file not yet adopted is lost. |
 | `skills/<name>/` | The master copy of a managed skill: `SKILL.md`, its other files, and `.coffer.meta.json` (Coffer's metadata). Agents receive a symlink to this folder. | you, daemon | Yes | **No.** Deleting a folder breaks the links delivered to agents. |
 | `memory/` | The [memory](/guides/memory) hub: one Markdown file per memory an agent on any of your machines wrote for itself in a repository, under `projects/<project>/` (the project's repository remote, with every character outside `[A-Za-z0-9._-]` turned into `-`). Frontmatter names the origin machine, agent and source; paths in the text are stored as `<repo>` and `~`. Only the machine an entry came from changes it. | memory sync | Yes | Each machine publishes its own agents' memories again at the next sync; another machine's memories come back only from that machine. |
 | `secret/<ref>.enc` | One secret's Fernet ciphertext, mode `0600`. Never the key. Excluded from the repository unless the sync remote carries secrets. | daemon | Only with `--with-secret` | **No.** The secret is gone. |

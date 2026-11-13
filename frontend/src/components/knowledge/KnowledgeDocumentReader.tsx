@@ -11,7 +11,7 @@
 // export's own frontmatter or Confluence storage markers is shown the way an
 // import reads it now (`readable_body`), with a note that the file itself is
 // unchanged; Source shows the raw text in the code viewer. A picture the Markdown links by a relative path (an upload's,
-// under `assets/`) shows inline (KnowledgeImage). Every file is the same here, whoever wrote it last (spec knowledge
+// beside it in its folder) shows inline (KnowledgeImage). Every file is the same here, whoever wrote it last (spec knowledge
 // "Let only a person delete a document"); its file actions live in the pane
 // bar, not beside the text.
 //
@@ -81,8 +81,9 @@ export function KnowledgeDocumentReader({ file, collectionUid, source }: Props) 
     () => splitTitleHeading(readable ?? file.body, file.title),
     [readable, file.body, file.title],
   );
-  // A page's or a note's `[[links]]`; a source is material, linked as written.
-  const wiki = file.kind !== "source";
+  // A file's `[[links]]`, when the daemon read any: material in the uploads
+  // folder is kept as it arrived, so its `[[` text is not read as links.
+  const wiki = file.links.some((link) => link.kind === "wiki");
   const rendered = useMemo(() => (wiki ? markWikiLinks(body) : body), [wiki, body]);
   const components = useMemo<Components>(() => {
     const img: Components["img"] = ({ src, alt }) => {
@@ -126,7 +127,7 @@ export function KnowledgeDocumentReader({ file, collectionUid, source }: Props) 
     <div className="min-h-0 flex-1 overflow-auto px-8 py-7">
       <div className="mx-auto max-w-[720px]">
         <h1 className="text-xl font-bold">{title}</h1>
-        <KnowledgeFileLine file={file} collectionUid={collectionUid} />
+        <KnowledgeFileLine file={file} />
         {readable !== null ? (
           <p
             data-testid="readable-body-note"
