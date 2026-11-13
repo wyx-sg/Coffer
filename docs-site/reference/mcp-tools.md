@@ -242,6 +242,10 @@ called over a recent window, with at least one tool per server. Unlisted tools s
 callable by name and are found with `coffer__search_tools`. The budget is set by
 environment variables on the daemon; see [Configuration](/reference/configuration).
 
+A search that finds nothing in the agent's reach says so. If a server matches the query but is not reached by this agent, the result carries a `note` naming it and the command that reaches it (`coffer mcp reach <server> --agent <agent>`). Server names are shown only in that case.
+
+When the agent's reach, scope or a server's enabled switch changes, a running session is told that its tool list changed, so the agent lists tools again without a restart.
+
 | Setting | Default |
 | --- | --- |
 | Budget (upstream tools listed) | 50 |

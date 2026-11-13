@@ -1667,3 +1667,11 @@ add|update --response-rules`, and on the Custom tools page.
 - **WHEN** the API answers `200`, an empty body, `X-Sp-Error: 101` and `X-Sp-Errmsg: ERROR_SP_NEED_AUTH`, then `200`, `X-Sp-Error: 0`, `X-Sp-Errmsg: SUCCESS` and a JSON body
 - **THEN** the first result is an in-band error naming `101` and `ERROR_SP_NEED_AUTH`, recorded `error`, and the second a success carrying the body
 - **AND** the same group with no rules judges both answers a success
+
+### Requirement: Name the unreached server when a search finds nothing
+
+When `coffer__search_tools` finds no tool in the agent's reach and a server that is enabled but not in reach for this agent shares a word with the query, the result MUST carry a `note` that names that server and gives the command that reaches it (`coffer mcp reach <server> --agent <agent>`). Server names MUST NOT appear in a search that finds a tool, nor in a search whose query matches no unreached server. The note never grants access: the tools stay unreachable until the developer changes the server's reach.
+
+### Requirement: Tell live sessions when their tool list changes
+
+When a server's reach, scope or enabled switch changes, every live MCP session MUST receive `notifications/tools/list_changed`, so the agent lists tools again without restarting. `tools/list` itself is recomputed on each request, so the notification is what makes the change visible to a client that cached its list.

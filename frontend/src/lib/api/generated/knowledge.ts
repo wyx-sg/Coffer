@@ -733,6 +733,16 @@ export interface components {
         TidyFinishOut: {
             /** @description The tidy's one change; null when it changed nothing. */
             change: components["schemas"]["ChangeOut"] | null;
+            /**
+             * Reason
+             * @description Why there is no change: 'no tidy open' or 'nothing to commit'; null when there is a change.
+             */
+            reason: string | null;
+            /**
+             * Tidy Was Open
+             * @description Whether a tidy was open when this call ran (started with tidy-start).
+             */
+            tidy_was_open: boolean;
         };
         /**
          * TidyStatusOut

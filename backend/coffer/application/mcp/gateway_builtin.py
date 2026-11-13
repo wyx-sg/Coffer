@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime
 from typing import Any
 
@@ -280,12 +280,13 @@ async def dispatch_tool_search(
     session_agent_uid: str | None = None,
     exposure: Mapping[str, str] | None = None,
     about: Mapping[str, str] | None = None,
+    out_of_reach: Sequence[str] = (),
 ) -> dict[str, Any]:
     """Run ``coffer__search_tools`` over ``aggregated_tools``; log + wrap."""
     started = clock()
     try:
         args = params.get("arguments") or {}
-        result = await execute_tool_search(args, aggregated_tools, exposure, about)
+        result = await execute_tool_search(args, aggregated_tools, exposure, about, out_of_reach)
         # Capture the (intent -> ranked tools) shape for the eval flywheel.
         # Best-effort and opt-in (ADR eval-capture-and-regression-gate); a no-op unless
         # COFFER_EVAL_CAPTURE is set. ``query`` is a validated non-empty str by
@@ -335,6 +336,7 @@ async def run_tool_search(
     session_agent_uid: str | None = None,
     exposure: Mapping[str, str] | None = None,
     about: Mapping[str, str] | None = None,
+    out_of_reach: Sequence[str] = (),
 ) -> dict[str, Any]:
     """Aggregate the catalogue, then search it.
 
@@ -354,4 +356,5 @@ async def run_tool_search(
         session_agent_uid=session_agent_uid,
         exposure=exposure,
         about=about,
+        out_of_reach=out_of_reach,
     )

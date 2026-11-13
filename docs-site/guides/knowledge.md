@@ -216,6 +216,8 @@ The prompt points the agent at the **Tidying a collection** section of the `coff
 4. **Leaves alone what it is not sure about** — two files that disagree with nothing to tell which is right, a deletion of much text, a change to the rules file — and lists it in its report for you to decide.
 5. **Finishes the tidy** with `coffer knowledge tidy-finish <collection> --set summary="<report>"`. The report says what it changed and what it left for you, and ends with **Gaps**: questions the collection cannot answer and sources worth finding — a spec, a runbook, a person to ask.
 
+`tidy-finish` says why nothing was committed: `tidy_was_open` tells whether a tidy was open, and `reason` is `no tidy open` or `nothing to commit`.
+
 It changes nothing that does not need changing. You can also ask any agent that has the `coffer-guide` skill to do this in your own words: "tidy up the payments knowledge."
 
 ### A tidy is one change {#a-tidy-is-one-change}

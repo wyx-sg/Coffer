@@ -25,16 +25,13 @@ import sys
 from typing import Any
 
 import typer
-from rich.console import Console
-from rich.table import Table
 
 from coffer.domain.secrets import secret_uri
 from coffer.surfaces.cli import _client as _cli_client
-from coffer.surfaces.cli import _io
+from coffer.surfaces.cli import _io, _output
 from coffer.surfaces.cli._options import ExitCode
 
 app = typer.Typer(help="Manage encrypted secrets.")
-_console = Console()
 
 
 def _read_value(value: str | None) -> str:
@@ -169,12 +166,9 @@ def list_refs(
     if not refs:
         typer.echo("(no secret refs registered in any resource)")
         return
-    table = Table(title="Secrets")
-    table.add_column("Label")
-    table.add_column("Ref")
-    table.add_column("Present in store")
-    table.add_column("Used by")
-    table.add_column("Readable by local processes")
+    # A plain table, never a box-drawn one: Rich shrinks a narrow terminal's
+    # columns and cuts the ref (secret/fc5bf…), which must be copied whole.
+    rows: list[dict[str, Any]] = []
     for entry in refs:
         cited_by = entry.get("cited_by", [])
         used = [f"{citer['kind']} {citer['name']}" for citer in cited_by]
@@ -182,11 +176,13 @@ def list_refs(
         pending = [b for b in entry.get("bindings", []) if b.get("status") == "pending"]
         if pending:
             used.append(f"{len(pending)} waiting for approval")
-        table.add_row(
-            entry.get("label") or "",
-            entry["ref"],
-            "yes" if entry.get("present") else "no",
-            ", ".join(used) or "(unreferenced)",
-            "yes" if entry.get("readable_by_local_processes") else "no",
+        rows.append(
+            {
+                "label": entry.get("label") or "",
+                "ref": entry["ref"],
+                "present": "yes" if entry.get("present") else "no",
+                "used_by": ", ".join(used) or "(unreferenced)",
+                "readable": "yes" if entry.get("readable_by_local_processes") else "no",
+            }
         )
-    _console.print(table)
+    _output.table(rows, ["label", "ref", "present", "used_by", "readable"])

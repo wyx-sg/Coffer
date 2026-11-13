@@ -216,6 +216,8 @@ coffer knowledge upload payments account-core.json --attachments account-core-fi
 4. **拿不准的不动手**：两个文件说法冲突却看不出哪个对、要删掉大段内容、要改规则文件，这些写进汇报，留给你决定。
 5. 用 `coffer knowledge tidy-finish <collection> --set summary="<汇报>"` **结束整理**。汇报写明它改了什么、留给你决定的事，最后一部分是**缺口**：知识集回答不了的问题，以及值得去找的来源（一份规格、一份运行手册、一个可以问的人）。
 
+`tidy-finish` 会说明没有提交的原因：`tidy_was_open` 表示是否开着整理，`reason` 为 `no tidy open`（没有开着的整理）或 `nothing to commit`（没有改动）。
+
 不需要改的地方，它一概不动。你也可以用自己的话请任何装有 `coffer-guide` 技能的智能体去做这件事：「把 payments 的知识整理一下。」
 
 ### 一次整理就是一次改动 {#a-tidy-is-one-change}

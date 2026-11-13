@@ -93,6 +93,18 @@ def test_finishing_a_tidy_that_changed_nothing_commits_nothing(client) -> None: 
     finished = client.post(f"/api/v1/knowledge/collections/{uid}/tidy/finish", json={})
     assert finished.status_code == 200, finished.text
     assert finished.json()["change"] is None
+    assert finished.json()["tidy_was_open"] is True
+    assert finished.json()["reason"] == "nothing to commit"
+
+
+def test_finishing_with_no_tidy_open_says_so(client) -> None:  # type: ignore[no-untyped-def]
+    _create_collection(client, "shopee")
+    uid = _uid(client, "shopee")
+    finished = client.post(f"/api/v1/knowledge/collections/{uid}/tidy/finish", json={})
+    assert finished.status_code == 200, finished.text
+    assert finished.json()["change"] is None
+    assert finished.json()["tidy_was_open"] is False
+    assert finished.json()["reason"] == "no tidy open"
 
 
 @pytest.mark.acceptance(spec="knowledge", scenario="undo a tidy")

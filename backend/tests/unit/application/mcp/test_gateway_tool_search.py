@@ -185,3 +185,24 @@ async def test_a_query_matching_only_a_parameter_finds_the_tool():
     assert "account__get_account_list" in [t["name"] for t in by_name["tools"]]
     assert by_enum["tools"][0]["name"] == "account__get_account_list"
     assert by_param_description["tools"][0]["name"] == "account__get_account_list"
+
+
+async def test_empty_search_names_an_out_of_reach_server():
+    out = await execute_tool_search({"query": "grafana"}, _agg(), out_of_reach=["grafana"])
+    assert out["tools"] == []
+    assert "grafana" in out["note"]
+    assert "coffer mcp reach" in out["note"]
+
+
+async def test_empty_search_without_a_match_has_no_note():
+    out = await execute_tool_search({"query": "weather"}, _agg(), out_of_reach=["grafana"])
+    assert out["tools"] == []
+    assert "note" not in out
+
+
+async def test_a_search_with_results_has_no_note():
+    out = await execute_tool_search(
+        {"query": "create github issue"}, _agg(), out_of_reach=["grafana"]
+    )
+    assert out["tools"]
+    assert "note" not in out

@@ -9,7 +9,8 @@ invocation-logging + result-wrapping live in ``gateway_builtin`` (DRY).
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+import re
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from coffer.application.builtin_tools import COFFER_TOOL_PREFIX
@@ -110,6 +111,7 @@ async def execute_tool_search(
     aggregated_tools: list[dict[str, Any]],
     exposure: Mapping[str, str] | None = None,
     about: Mapping[str, str] | None = None,
+    out_of_reach: Sequence[str] = (),
 ) -> dict[str, Any]:
     """Rank ``aggregated_tools`` against ``args['query']``; return the top-k.
 
@@ -142,7 +144,22 @@ async def execute_tool_search(
     ranked = rank_tools(query, catalogue, top_k, prefer=prefer)
 
     tools = [_result_entry(candidates[s.index], s.score, groups) for s in ranked]
-    return {"tools": tools, "total_searched": len(candidates)}
+    result: dict[str, Any] = {"tools": tools, "total_searched": len(candidates)}
+    if not tools:
+        matches = _out_of_reach_matches(query, out_of_reach)
+        if matches:
+            result["note"] = (
+                f"No tool in your reach matched. These servers match the query but are not "
+                f"in reach for this agent: {', '.join(matches)}. The developer can reach one "
+                f"with `coffer mcp reach <server> --agent <this agent>`."
+            )
+    return result
+
+
+def _out_of_reach_matches(query: str, names: Sequence[str]) -> list[str]:
+    """The unreached server names that share a word with the query."""
+    words = {w for w in re.split(r"[^a-z0-9]+", query.lower()) if len(w) >= 3}
+    return [n for n in names if any(w in n.lower() for w in words)]
 
 
 __all__ = [

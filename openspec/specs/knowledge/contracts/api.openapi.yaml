@@ -1477,8 +1477,20 @@ components:
           - $ref: '#/components/schemas/ChangeOut'
           - type: 'null'
           description: The tidy's one change; null when it changed nothing.
+        reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: 'Why there is no change: ''no tidy open'' or ''nothing to commit''; null when there is a change.'
+          title: Reason
+        tidy_was_open:
+          description: Whether a tidy was open when this call ran (started with tidy-start).
+          title: Tidy Was Open
+          type: boolean
       required:
       - change
+      - tidy_was_open
+      - reason
       title: TidyFinishOut
       type: object
     TidyStatusOut:
