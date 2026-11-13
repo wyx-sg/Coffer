@@ -122,9 +122,7 @@ flowchart LR
   A["Fetch the remote"] --> B["Merge outside the vault"]
   B --> C{"Conflict?"}
   C -- "yes" --> S["Stop and ask you"]
-  C -- "no" --> D{"Loses too much?"}
-  D -- "yes" --> H["Hold and ask you"]
-  D -- "no" --> E["Snapshot, then check out"]
+  C -- "no" --> E["Snapshot, then check out"]
   E --> P{"Plaintext secret?"}
   P -- "yes" --> N["Push nothing and ask you"]
   P -- "no" --> F["Push"]
@@ -170,18 +168,9 @@ An encrypted secret (`secret/*.enc`) is never handed to an agent or edited by ha
 
 A resource with the same name but a different uid on each side (two machines created `jira` independently) is a conflict too. In a round, secret ciphertext never conflicts: the more recently encrypted value wins.
 
-## When a round is held for deletions
+## When files are deleted
 
-A round that would lose **20 or more** files in one area, or **5 or more** that are over **half** of one area, stops before touching anything. Removing a few files from a small area — three of five MCP servers — goes through. The thresholds are fixed. The breaker runs in both directions:
-
-- **incoming**: the remote would delete a large part of this vault;
-- **outgoing**: this machine would push the deletion of a large part of the remote, which is what a reinstall, a failed restore or a stray `rm -rf` looks like from inside.
-
-A file that reappears at another path in the same round is a move, not a loss, and a resource file counts by its uid, so reorganising or renaming never asks.
-
-Deletions Coffer can explain are not counted either: memories the memory sync removed from the hub (they follow your agents' own memories, which stay where they are) and documents a **Tidy** you started removed. Whatever removed them, an area that would be left with no files is still held. A hand deletion, a shell's `rm -rf` and deletions you make in Coffer count as before.
-
-Either answer continues the round. On the web the **Status** tab says who deleted how many files, and **Review deletions** lists every one of them, folder by folder; the file list and the diff sit side by side at the same height, each scrolling on its own; the chosen file shows its whole text as the lines a delete removes. Its foot has two buttons, **Keep the files** and **Delete N files**. Each acts at once: the page already shows what a delete removes, so no second dialog repeats it, and a safety snapshot is taken before a delete. If this machine was just reinstalled or restored, keep the files: do not delete. Once you delete, the round does not ask about the same files again, even if it next stops on something else, such as a plaintext secret, and the fix adds a commit; it asks again only if the remote moved meanwhile.
+A deletion syncs like any other change, however many files it removes and in whichever direction: no round waits for you to confirm it. If a deletion reached your other machines by mistake (a reinstall that lost the vault, a failed restore, a stray `rm -rf`), undo it after the fact: on a machine that pulled it, [roll back](#roll-back-a-round) the round that did, and the next round pushes the files back to every machine. For a single file or folder, the vault's [history](/guides/vault-files#history-and-restore) keeps every version that was deleted.
 
 ## When a round finds a plaintext secret
 
@@ -194,7 +183,7 @@ To decide whether a place is a real secret, open it on the Sync page. It shows t
 - **Move it into secrets.** **Move into secrets…** opens the Secrets page's [Find plaintext keys](./secrets.md) right on the Sync page, listing only what it finds in the flagged files: review the dry run, then apply, and each value moves into the encrypted store with a `coffer://secret/<id>` reference in its place. It moves values out of skill files; a flagged file that is not one (a knowledge document, say) you edit yourself so it refers to a secret by name, and when none of the flagged files is a skill's, the dialog says so. A secret is never handed to an agent here: a prompt would send the agent to the file that holds it. Then press **Sync now**. The old value is still in the unpushed commits, so the round folds them into one commit that holds the files as they are now, and pushes that. The files on disk do not change; the separate history entries of those unpushed edits become one.
 - **Push anyway.** If a place is an example or a test value and not a real secret, **Push anyway…** asks first, records who pushed which files in the audit log, and pushes exactly the versions it showed you. It also remembers each of those values as [not a secret](/guides/secrets#the-secrets-page) on this machine, so editing another line of the same file later does not stop the push again; a changed value does.
 
-A round that stopped for you keeps why. Click it on the **Status** tab and its drawer leads with what stopped it — the deletions held, the conflicting files, or where the plaintext secret was — and lists those files, even after you have answered and a later round did the work.
+A round that stopped for you keeps why. Click it on the **Status** tab and its drawer leads with what stopped it — the conflicting files, or where the plaintext secret was — and lists those files, even after you have answered and a later round did the work.
 
 ## Roll back a round
 
@@ -229,7 +218,7 @@ The **Machines** tab lists every machine with when it was last seen, its last ro
 | `remote too new` | Another machine runs a newer Coffer. | Upgrade this machine. |
 | `older remote has changes` | This machine runs a newer Coffer than the remote's, and another machine pushed changes this one never pulled. Replacing the remote now would lose them. | Upgrade Coffer on the machine the message names and let it sync; this machine then syncs on its own. |
 | `waiting on an edit` | You have an unsaved or invalid edit on a file the round would change. | Finish or fix the edit (`coffer vault problems` lists invalid ones); the next round continues. |
-| A held round after reinstalling Coffer | The empty vault would push its loss. | **Keep the files** in **Review deletions** on the **Status** tab. |
+| Files deleted by mistake reached the other machines | A reinstall, a failed restore or a stray `rm -rf` was synced like any deletion. | On a machine that pulled it, [roll back](#roll-back-a-round) that round. |
 | `key mismatch` | The remote carries secrets and another Mac's master key differs from this one's (or this Mac has none yet). Nothing moved. | **Import a master key** on **Settings › Security** with the key the other Macs use, then press **Sync now**. |
 | Secrets cannot be decrypted | This machine lacks the master key they were encrypted with. | **Import a master key** on **Settings › Security**, with the key from a machine that has it. |
 
@@ -239,7 +228,7 @@ For failures that do not fit here, the round's message is on the **Status** tab,
 
 ## How it works
 
-The round's steps, the breaker, joining and the reasons behind each are in [Vault sync architecture](/architecture/vault-sync).
+The round's steps, joining and the reasons behind each are in [Vault sync architecture](/architecture/vault-sync).
 
 ## Related
 

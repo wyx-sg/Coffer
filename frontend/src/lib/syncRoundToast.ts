@@ -1,6 +1,6 @@
 // frontend/src/lib/syncRoundToast.ts
 //
-// What a finished round's toast says. Stopped, held and failed rounds come
+// What a finished round's toast says. Stopped and failed rounds come
 // back as a 200 carrying their story, so the HTTP status cannot decide the
 // toast — the round's own status does.
 import type { TFunction } from "i18next";
@@ -15,7 +15,6 @@ export interface RoundToast {
 /** Rounds that ended waiting on a person: news, not a failure. */
 const NEEDS_ANSWER: ReadonlySet<RoundStatus> = new Set([
   "stopped",
-  "held",
   "waiting_on_edit",
   "join_required",
   "plaintext_found",

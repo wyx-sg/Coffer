@@ -126,13 +126,6 @@ and API token, mode `0600`, written at start and removed at exit. Its companion
 `daemon-config.json` holds settings read before the daemon binds: the fixed port, the machine
 name and the experimental-feature switches. See [Files and directories](/reference/filesystem#daemon-files).
 
-### Deletion breaker
-
-The [vault sync](#vault-sync) safeguard that holds a [sync round](#sync-round) that would
-lose 20 or more files, or 5 or more that are over half of an area, in either direction, until you answer
-it on the **Sync** page: **Delete N files** or **Keep the files**. Moves and renames are not losses. See
-[Vault sync](/architecture/vault-sync#the-deletion-breaker).
-
 ### Delivery
 
 Getting something Coffer holds into an agent: a [skill](#skill) by [binding](#binding). Memory
@@ -378,7 +371,7 @@ the rest). The class decides whether something syncs and whether it is safe to d
 ### Sync round
 
 One pass of [vault sync](#vault-sync): fetch the remote, merge it with this vault outside the
-working tree, stop on any conflict, run the [deletion breaker](#deletion-breaker), take a
+working tree, stop on any conflict, take a
 [pre-apply snapshot](#pre-apply-snapshot), check the merge out and push. A round that stops
 waits for an answer per file on the **Sync** page. See
 [Vault sync](/architecture/vault-sync#the-round).

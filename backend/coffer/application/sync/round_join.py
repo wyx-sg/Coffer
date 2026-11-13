@@ -200,7 +200,6 @@ def _union(
         "applied": applied,
         "with_machines": machines,
         "join": JoinKind.NEW.value,
-        "held": len(differ),
     }
     checked = round_plaintext.check(d, tip, final)
     if checked.findings or checked.moved:

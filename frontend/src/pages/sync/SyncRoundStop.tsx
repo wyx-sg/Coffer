@@ -26,16 +26,8 @@ function PathList({ paths }: { paths: string[] }) {
 }
 
 function reason(t: ReturnType<typeof useTranslation>["t"], run: SyncRound): string {
-  if (run.status === "held") {
-    // A round recorded before the direction was kept says neither.
-    const key =
-      run.held_direction === "incoming"
-        ? "heldIncoming"
-        : run.held_direction === "outgoing"
-          ? "heldOutgoing"
-          : "held";
-    return t(`sync.drawer.stop.${key}`, { count: run.held });
-  }
+  // A round an earlier version held before it deleted files.
+  if (run.status === "held") return t("sync.drawer.stop.held");
   if (run.status === "stopped") return t("sync.drawer.stop.conflicts", { count: run.conflicts });
   return t("sync.drawer.stop.plaintext", { count: run.plaintext.length });
 }

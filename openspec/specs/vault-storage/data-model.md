@@ -71,8 +71,8 @@ rendezvous every surface reads (spec daemon).
 
 ## Inside the vault: areas
 
-Every vault path belongs to one **area** — the unit the deletion breaker counts
-in and the Sync page groups by (`area_of`): the first path segment, except that
+Every vault path belongs to one **area** — the unit the Sync page counts in
+(`area_of`): the first path segment, except that
 `resources/<kind>/` and `state/<area>/` are areas of their own. `machines/` and
 `manifest.json` are the registry and are never counted as vault content. The
 top-level directories are `resources`, `state`, `knowledge`, `skills`,

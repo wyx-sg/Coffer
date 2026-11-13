@@ -45,122 +45,6 @@ paths:
       summary: Continue Round
       tags:
       - sync
-  /api/v1/sync/hold/confirm:
-    post:
-      description: Apply the held deletions, and continue the round.
-      operationId: confirm_hold_api_v1_sync_hold_confirm_post
-      parameters:
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RoundOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Confirm Hold
-      tags:
-      - sync
-  /api/v1/sync/hold/diff:
-    get:
-      description: |-
-        One file a held round would delete, its whole text as removed lines.
-        404 ``SYNC_ROUND_FILE_NOT_LISTED`` when no round is held or the hold does
-        not list the path.
-      operationId: get_held_file_diff_api_v1_sync_hold_diff_get
-      parameters:
-      - description: A file the held round would delete; else 404.
-        in: query
-        name: path
-        required: true
-        schema:
-          description: A file the held round would delete; else 404.
-          title: Path
-          type: string
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RoundFileDiffOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Get Held File Diff
-      tags:
-      - sync
-  /api/v1/sync/hold/restore:
-    post:
-      description: Keep the held files, and continue the round (it pushes them back).
-      operationId: restore_hold_api_v1_sync_hold_restore_post
-      parameters:
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RoundOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Restore Hold
-      tags:
-      - sync
   /api/v1/sync/join:
     post:
       description: 'Join as the preview said: nothing is deleted on either side.'
@@ -1616,23 +1500,6 @@ components:
       - secrets_synced
       title: AreaCountsOut
       type: object
-    BreachOut:
-      properties:
-        area:
-          title: Area
-          type: string
-        lost:
-          title: Lost
-          type: integer
-        total:
-          title: Total
-          type: integer
-      required:
-      - area
-      - lost
-      - total
-      title: BreachOut
-      type: object
     ConflictFileOut:
       properties:
         agent_conversation_id:
@@ -1872,66 +1739,6 @@ components:
       required:
       - prompt
       title: HandoffOut
-      type: object
-    HoldGroupOut:
-      description: The held files under one folder, and how many files it held.
-      properties:
-        folder:
-          title: Folder
-          type: string
-        paths:
-          items:
-            type: string
-          title: Paths
-          type: array
-        total:
-          title: Total
-          type: integer
-      required:
-      - folder
-      - paths
-      - total
-      title: HoldGroupOut
-      type: object
-    HoldOut:
-      properties:
-        breaches:
-          items:
-            $ref: '#/components/schemas/BreachOut'
-          title: Breaches
-          type: array
-        confirmed:
-          title: Confirmed
-          type: boolean
-        direction:
-          enum:
-          - incoming
-          - outgoing
-          title: Direction
-          type: string
-        groups:
-          items:
-            $ref: '#/components/schemas/HoldGroupOut'
-          title: Groups
-          type: array
-        machines:
-          items:
-            type: string
-          title: Machines
-          type: array
-        paths:
-          items:
-            type: string
-          title: Paths
-          type: array
-      required:
-      - direction
-      - breaches
-      - paths
-      - groups
-      - machines
-      - confirmed
-      title: HoldOut
       type: object
     JoinChoiceIn:
       properties:
@@ -2466,8 +2273,8 @@ components:
       type: object
     RoundFileDiffOut:
       description: |-
-        One file a round applied or pushed, one waiting to push (``pending``)
-        or one a held round would delete (``held``). ``text`` carries the unified
+        One file a round applied or pushed, or one waiting to push
+        (``pending``). ``text`` carries the unified
         ``diff`` and its line counts; ``secret``, ``binary`` and ``too_large``
         carry no content at all (never ciphertext).
       properties:
@@ -2500,7 +2307,6 @@ components:
           - applied
           - pushed
           - pending
-          - held
           title: Side
           type: string
       required:
@@ -2542,17 +2348,6 @@ components:
           - type: string
           - type: 'null'
           title: From Commit
-        held:
-          title: Held
-          type: integer
-        held_direction:
-          anyOf:
-          - enum:
-            - incoming
-            - outgoing
-            type: string
-          - type: 'null'
-          title: Held Direction
         id:
           anyOf:
           - type: integer
@@ -2633,9 +2428,7 @@ components:
       - pushed
       - with_machines
       - conflicts
-      - held
       - stopped_on
-      - held_direction
       - detail
       - path
       - join
@@ -2689,21 +2482,11 @@ components:
             $ref: '#/components/schemas/ConflictFileOut'
           title: Files
           type: array
-        hold:
-          anyOf:
-          - $ref: '#/components/schemas/HoldOut'
-          - type: 'null'
         join:
           anyOf:
           - type: string
           - type: 'null'
           title: Join
-        kind:
-          enum:
-          - conflicts
-          - hold
-          title: Kind
-          type: string
         local:
           title: Local
           type: string
@@ -2717,14 +2500,12 @@ components:
           title: Unanswered
           type: integer
       required:
-      - kind
       - raised_at
       - local
       - remote
       - join
       - files
       - unanswered
-      - hold
       title: StoppedRoundOut
       type: object
     SyncChangeOut:
@@ -2912,9 +2693,6 @@ components:
           - type: string
           - type: 'null'
           title: Default Vault Path
-        held:
-          title: Held
-          type: integer
         join_choices:
           title: Join Choices
           type: integer
@@ -2986,7 +2764,6 @@ components:
       - synchroniser
       - problem
       - conflicts
-      - held
       - join_choices
       - ahead
       - behind

@@ -74,7 +74,7 @@ Pros: stops the churn at its cause; each machine's output is correct for that
 machine; the rule is a storage fact, not a branch a translator must remember,
 so sync carries no list of names, no flag, and nothing to keep in step with a
 renderer's spelling; no round can publish, overwrite or delete derived output,
-so there is nothing for the deletion breaker to count.
+so a derived file never shows up in a round's changes.
 
 Cons: a kind or row must say where it is filed, and a new generated artifact
 has to be put in `derived/` when it is added or it will churn; a row-level
@@ -115,8 +115,7 @@ Pros: no code in sync; a visible list.
 Cons: a name list is edited whenever something new is generated and can speak
 only in patterns; an excluded file is still beside authored content, so a
 checkout, a restore or a person's `git add -f` treats it as vault content, and
-the vault validator and the deletion breaker's area counts must learn to
-ignore it.
+the vault validator must learn to ignore it.
 
 Lost: the exclusion lives in the wrong place; a directory outside the
 repository needs no list.
@@ -171,7 +170,7 @@ Leave it converging and live with the commits.
 Pros: no code.
 
 Cons: an audit event and a commit per tick on every machine, a remote history
-dominated by noise, and the breaker's area counts disturbed by a document that
+dominated by noise, and every round's changes cluttered by a document that
 never settles.
 
 Lost: it makes the history useless for the restore it exists to serve.
@@ -191,5 +190,5 @@ re-rendered locally after every checkout from reconciler hints.
   same time; otherwise it lives in the vault and churns.
 - `coffer-guide` can differ between machines, and that is correct.
 - Derived output can be deleted at any time; it is rebuilt.
-- The breaker never sees derived paths, so a fleet mid-upgrade is not held over
+- A round never sees derived paths, so a fleet mid-upgrade never stops over
   them.

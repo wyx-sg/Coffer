@@ -1,5 +1,5 @@
 """A thin sync round: pull, merge outside the tree, stop on any conflict,
-guard, check out, push (coffer.application.sync.round_*)."""
+check out, push (coffer.application.sync.round_*)."""
 
 from __future__ import annotations
 
@@ -155,7 +155,6 @@ def test_the_same_name_with_a_different_uid_is_a_conflict(pair: tuple[Machine, M
     assert ConflictReason.SAME_NAME_DIFFERENT_UID in reasons
 
 
-@pytest.mark.acceptance(spec="vault-sync", scenario="moving resource files is not a loss")
 def test_moving_a_resource_file_is_not_a_loss(pair: tuple[Machine, Machine]) -> None:
     mac, mini = pair
     with mac.writer.begin(mac_meta()) as txn:
@@ -180,3 +179,19 @@ def mac_meta():  # type: ignore[no-untyped-def]
     from .machines import USER
 
     return USER
+
+
+@pytest.mark.acceptance(spec="vault-sync", scenario="the registry and manifest are never applied")
+def test_the_registry_and_manifest_are_never_applied(pair: tuple[Machine, Machine]) -> None:
+    mac, mini = pair
+    manifest = mac.disk("manifest.json")
+    assert manifest is not None
+    mac.put("manifest.json", manifest.replace(b"{", b'{\n  "note": "changed",', 1))
+    mac.put("knowledge/team/a.md", "from the mac\n")
+    assert mac.round().status is RoundStatus.PUSHED
+    got = mini.round()
+    assert got.status is RoundStatus.PULLED
+    # The mac's round rewrote its descriptor and the manifest changed too; only
+    # the document is applied here, so only it reaches the reconciler.
+    assert [a.path for a in got.applied] == ["knowledge/team/a.md"]
+    assert mini.disk("manifest.json") == mac.disk("manifest.json")

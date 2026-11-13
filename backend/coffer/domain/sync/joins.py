@@ -13,7 +13,7 @@ A machine joins a remote it has never converged with in one of four ways:
 - **returning** — the remote carries this machine's descriptor with the last
   commit it converged at: that commit is the merge base, and the join is an
   ordinary three-way merge (so this machine's own deletions since then are
-  real deletions, guarded by the breaker).
+  real deletions).
 """
 
 from __future__ import annotations

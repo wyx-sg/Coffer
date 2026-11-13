@@ -64,8 +64,7 @@ export function useResolveSource(mode: ResolveMode): ResolveSource {
   const handoff = useHandoffRequest({ join });
   const [staged, setStaged] = useState<Record<string, Side>>({});
 
-  const round =
-    !join && stop.data?.stopped && stop.data.round?.kind === "conflicts" ? stop.data.round : null;
+  const round = !join && stop.data?.stopped ? stop.data.round : null;
   const raw: ConflictFile[] = join ? (choices.data?.files ?? []) : (round?.files ?? []);
   const files = join ? raw.map((f) => ({ ...f, answer: staged[f.path] ?? f.answer })) : raw;
   const chosen = files.filter((f) => f.answer !== null).length;

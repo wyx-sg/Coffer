@@ -74,7 +74,7 @@ def test_a_stop_is_answered_and_continued(pair: tuple[Box, Box]) -> None:
     with client_for(mini) as c:
         assert c.post("/sync/run").json()["status"] == "stopped"
         state = c.get("/sync/stop").json()
-        assert state["stopped"] and state["round"]["kind"] == "conflicts"
+        assert state["stopped"] and state["round"]["unanswered"] == 1
         (f,) = state["round"]["files"]
         assert (f["path"], f["reason"], f["theirs_machine"]) == (DOC, "both_changed", "Mac")
         versions = c.get("/sync/stop/files/versions", params={"path": DOC}).json()
@@ -92,24 +92,6 @@ def test_a_stop_is_answered_and_continued(pair: tuple[Box, Box]) -> None:
         unknown = c.post("/sync/stop/files/answer", json={"path": DOC, "answer": "mine"})
         assert unknown.status_code == 409
     assert mini.disk(DOC) == b"Mini rotates on Fridays.\n"
-
-
-@pytest.mark.acceptance(
-    spec="vault-sync", scenario="an oversized deletion is held for confirmation"
-)
-def test_a_hold_is_confirmed_through_the_route(pair: tuple[Box, Box]) -> None:
-    mac, _mini = pair
-    paths = [f"knowledge/bulk/n{i:02}.md" for i in range(22)]
-    for p in paths:
-        mac.put(p, p)
-    mac.round()
-    mac.remove(*paths)
-    with client_for(mac) as c:
-        assert c.post("/sync/run").json()["status"] == "held"
-        hold = c.get("/sync/stop").json()["round"]["hold"]
-        assert hold["direction"] == "outgoing"
-        assert hold["groups"] == [{"folder": "knowledge/bulk", "paths": sorted(paths), "total": 22}]
-        assert c.post("/sync/hold/confirm").json()["status"] == "pushed"
 
 
 @pytest.mark.acceptance(

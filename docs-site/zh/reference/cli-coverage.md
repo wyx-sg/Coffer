@@ -362,9 +362,6 @@ description: 每一个网页界面和桌面应用操作、它调用的接口、�
 | Sync · a conflicting file · keep one | `POST /sync/stop/files/answer` | `coffer sync file-answer` | `test_cli_parity.py` |
 | Sync · a conflicting file · discard mine | `POST /sync/stop/files/discard` | `coffer sync file-discard` | `test_cli_parity.py` |
 | Sync · a conflicting file's versions | `GET /sync/stop/files/versions` | `coffer sync file-versions` | `test_cli_parity.py` |
-| Sync · held · Apply | `POST /sync/hold/confirm` | `coffer sync hold-confirm` | `test_cli_parity.py` |
-| Sync · a held change · diff | `GET /sync/hold/diff` | `coffer sync hold-diff` | `test_cli_parity.py` |
-| Sync · held · Restore | `POST /sync/hold/restore` | `coffer sync hold-restore` | `test_cli_parity.py` |
 | Sync · Join | `POST /sync/join` | `coffer sync join` | `test_cli_parity.py` |
 | Sync · Join · choices | `GET /sync/join-choices` | `coffer sync join-choices` | `test_cli_parity.py` |
 | Sync · Join · choose | `POST /sync/join-choices` | `coffer sync join-choose` | `test_cli_parity.py` |

@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-14
 **Deciders**: Yuxing Wu
-**Related**: [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [A Sync Round That Would Lose Too Much Is Held, in Both Directions, Counting Losses Not Moves](sync-deletion-breaker.md), [Secrets Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](secrets-cross-machines-only-as-ciphertext.md), spec vault-sync, PRs #66, #381
+**Related**: [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [Sync Applies a Mass Deletion Like Any Other Change; Snapshots and History Undo One Nobody Meant](sync-applies-mass-deletions-like-any-change.md), [Secrets Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](secrets-cross-machines-only-as-ciphertext.md), spec vault-sync, PRs #66, #381
 
 ## Context
 
@@ -140,10 +140,11 @@ spec vault-sync "Tell a new machine from a returning one"):
   nothing resurrects
   (spec vault-sync "Recover a returning machine's base from its descriptor").
 - **Returning with an empty vault** — the recovered base makes the empty vault
-  read as "deleted everything", and the outgoing
-  [breaker](sync-deletion-breaker.md) holds it for the person to confirm or
-  restore
-  (spec vault-sync "Hold a returning machine's empty vault instead of publishing the loss").
+  read as "deleted everything", and the join preview lists that deletion
+  before anything is applied; once joined it syncs like any other deletion and
+  is undone from a snapshot
+  ([Sync Applies a Mass Deletion Like Any Other Change](sync-applies-mass-deletions-like-any-change.md);
+  spec vault-sync "Report a join before applying it").
 - **Returning whose base is gone from the history** — the recovered commit is
   no longer an ancestor of the remote, so the machine joins as new, by union:
   nothing is lost either way.

@@ -318,21 +318,6 @@ describe("SyncStatusTab — a stopped round", () => {
     ).toBeTruthy();
   });
 
-  test("held deletions: who deleted how many, and Review deletions", () => {
-    vi.mocked(useSyncStop).mockReturnValue({
-      data: {
-        stopped: true,
-        round: { kind: "hold", files: [], hold: { direction: "incoming", machines: ["Mac mini"] } },
-      },
-    } as unknown as ReturnType<typeof useSyncStop>);
-    renderTab(makeStatus({ held: 14 }));
-    expect(banner()).toHaveTextContent("Mac mini deleted 14 files, more than one round may delete");
-    expect(within(banner()).getByRole("link", { name: "Review deletions" })).toHaveAttribute(
-      "href",
-      "/sync/deletions",
-    );
-  });
-
   test("a join's differing files are shown when the status says there are some", () => {
     renderTab(makeStatus({ join_choices: 2 }));
     expect(screen.getByText("join choices")).toBeInTheDocument();

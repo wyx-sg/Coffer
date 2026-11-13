@@ -1,7 +1,6 @@
-"""A person's answers: to a stopped round's files, to a hold, to a join's
-differing files (spec vault-sync "Answer each conflicting file and continue
-the round", "Hold a round that would lose too much", "Join a new machine by
-taking the union").
+"""A person's answers: to a stopped round's files and to a join's differing
+files (spec vault-sync "Answer each conflicting file and continue the round",
+"Join a new machine by taking the union").
 
 Answers are recorded, never applied one by one: nothing is written into the
 vault until the round continues with every file answered. The editor answer
@@ -36,7 +35,6 @@ from coffer.domain.sync.stops import (
     Answer,
     ConflictFile,
     Stop,
-    StopKind,
     with_handoff,
     without_handoff,
 )
@@ -82,7 +80,7 @@ def answer(engine: RoundEngine, path: str, choice: Answer) -> Stop:
     the person's saved copy is read and checked for markers now."""
     d = engine.d
     stop = d.state.stop()
-    if stop is None or stop.kind is not StopKind.CONFLICTS:
+    if stop is None:
         raise SyncNothingStopped("no round is stopped on conflicts")
     edited: str | None = None
     if choice is Answer.EDITED:
@@ -186,7 +184,7 @@ def _open_files(engine: RoundEngine, join: bool) -> tuple[ConflictFile, ...]:
     if join:
         return state.join_choices()
     stop = state.stop()
-    return stop.conflicts if stop is not None and stop.kind is StopKind.CONFLICTS else ()
+    return stop.conflicts if stop is not None else ()
 
 
 def _store(
@@ -200,66 +198,6 @@ def _store(
     assert stop is not None  # _open_files found files only because a stop exists
     state.set_stop(dataclasses.replace(stop, conflicts=files))
     return files
-
-
-def confirm_hold(engine: RoundEngine) -> Stop:
-    """ "Apply the deletions": the next continue checks the held round out."""
-    d = engine.d
-    stop = d.state.stop()
-    if stop is None or stop.kind is not StopKind.HOLD:
-        raise SyncNothingStopped("no round is held")
-    d.state.set_confirmed((stop.local, stop.remote))
-    if stop.hold is not None:
-        # Remembered by file, so a later stop in the same round (a plaintext
-        # secret, then its fix) does not ask about these deletions again.
-        d.state.approve_losses(stop.hold.paths)
-    return stop
-
-
-def restore_held(engine: RoundEngine, *, actor: str) -> str | None:
-    """ "Restore them": keep the files the held round would remove. Incoming,
-    the round's tree takes this machine's versions of them; outgoing, the
-    deleted files are written back from the base as a person's commit, so the
-    next round pushes them."""
-    d = engine.d
-    stop = d.state.stop()
-    if stop is None or stop.kind is not StopKind.HOLD or stop.hold is None:
-        raise SyncNothingStopped("no round is held")
-    source = stop.local if stop.hold.direction.value == "incoming" else (stop.base or stop.remote)
-    if stop.hold.direction.value == "incoming":
-        keep = {p: d.git.files(source, p).get(p) for p in stop.hold.paths}
-        tree = d.git.build_tree(stop.tree or d.git.tree_of(stop.remote), keep)
-        d.state.set_stop(
-            Stop(
-                stop.kind,
-                stop.local,
-                stop.remote,
-                stop.base,
-                stop.raised_at,
-                hold=stop.hold,
-                tree=tree,
-                join=stop.join,
-            )
-        )
-        d.state.set_confirmed((stop.local, stop.remote))
-        return None
-    meta = CommitMeta(
-        writer=WRITER_USER,
-        operation="restore",
-        summary=f"Restored {len(stop.hold.paths)} held files",
-        actor=actor,
-    )
-    with d.writer.begin(meta) as txn:
-        for path in stop.hold.paths:
-            data = d.git.read(source, path)
-            if data is not None:
-                # A held file's bytes on disk are deliberately not HEAD's, so
-                # the expectation is the held bytes themselves: restoring
-                # replaces exactly what the person was shown, nothing newer.
-                held = d.writer.read_disk(path)
-                txn.write(path, data, fingerprint(held) if held is not None else Expect.ABSENT)
-    d.state.set_stop(None)
-    return txn.version
 
 
 def choose_join(
@@ -332,9 +270,7 @@ __all__ = [
     "SyncSecretNotEditable",
     "answer",
     "choose_join",
-    "confirm_hold",
     "discard_copy",
     "editor_copy",
     "hand_off",
-    "restore_held",
 ]

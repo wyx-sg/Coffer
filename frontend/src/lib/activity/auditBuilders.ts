@@ -137,7 +137,6 @@ export const syncRun: Builder = (f) => {
   const pushed = f.num("pushed") ?? 0;
   if (status === "stopped" && f.num("conflicts"))
     return { v: "conflicts", p: { count: f.num("conflicts") } };
-  if (status === "held" && f.num("held")) return { v: "heldCount", p: { count: f.num("held") } };
   if (status === "push_failed" && pulled) return { v: "pushFailedPulled", p: { count: pulled } };
   if (SYNC_FAILURES[status]) return { v: SYNC_FAILURES[status] };
   if (!status && !f.has("pulled") && !f.has("pushed")) return null;

@@ -5,11 +5,11 @@ a round walks through, over plain dictionaries: a tree is ``{path: blob}``, a
 commit is a tree and its parents, and a merge is git's three-way rule path by
 path (one side's change wins over an unchanged side; two different changes
 conflict). It records every call that would change the vault or the remote —
-snapshot, checkout, push — so a test can assert that a stopped or held round
+snapshot, checkout, push — so a test can assert that a stopped round
 made none of them.
 
-It is a model of git, not git: no rename detection (``renames`` pairs nothing),
-no content merge inside a file, no history walk beyond the parent graph.
+It is a model of git, not git: no content merge inside a file, no history walk
+beyond the parent graph.
 """
 
 from __future__ import annotations
@@ -156,9 +156,6 @@ class FakeGit:
             out.append(TreeChange(path, status, was, now))
         return out
 
-    def renames(self, a: str, b: str) -> list[tuple[str, str]]:
-        return []
-
     def files(self, commit_or_tree: str, prefix: str = "") -> dict[str, str]:
         prefix = prefix.rstrip("/")
         return {
@@ -219,9 +216,7 @@ class FakeState:
 
     current: Stop | None = None
     choices: tuple[ConflictFile, ...] = ()
-    pair: tuple[str, str] | None = None
     is_joined: bool = True
-    approved: frozenset[str] = frozenset()
 
     def stop(self) -> Stop | None:
         return self.current
@@ -234,20 +229,6 @@ class FakeState:
 
     def set_join_choices(self, choices: Sequence[ConflictFile]) -> None:
         self.choices = tuple(choices)
-
-    def confirmed(self) -> tuple[str, str] | None:
-        return self.pair
-
-    def set_confirmed(self, pair: tuple[str, str] | None) -> None:
-        self.pair = pair
-        if pair is None:
-            self.approved = frozenset()
-
-    def approved_losses(self) -> frozenset[str]:
-        return self.approved
-
-    def approve_losses(self, paths: Sequence[str]) -> None:
-        self.approved = self.approved | frozenset(paths)
 
     def joined(self) -> bool:
         return self.is_joined

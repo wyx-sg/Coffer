@@ -79,10 +79,6 @@ Coffer 自带并自行维护的技能。它是 Coffer 给智能体的说明书�
 
 运行时发现文件 `~/.coffer/daemon.json`：正在运行的守护进程的端口、进程 id 和 API 令牌，权限 `0600`，启动时写入、退出时删除。与它配套的 `daemon-config.json` 保存守护进程绑定端口之前读取的设置：固定端口、机器名称和实验功能开关。见[文件与目录](/zh/reference/filesystem#daemon-files)。
 
-### 删除断路器（Deletion breaker） {#deletion-breaker}
-
-[保险库同步](#vault-sync)的保护机制：一轮[同步](#sync-round)如果会丢失 20 个或更多文件，或者在某个区域丢失 5 个以上且超过一半，无论方向如何，都会被挂起，直到你在**同步**页面答复：**删除 N 个文件**，或**保留文件**。移动和重命名不算丢失。见[保险库同步](/zh/architecture/vault-sync#the-deletion-breaker)。
-
 ### 投递（Delivery） {#delivery}
 
 把 Coffer 保存的东西送进智能体：[技能](#skill)通过[绑定](#binding)送达。记忆不投递进会话：[记忆同步](#memory-sync)把它写进智能体自己的[原生记忆](#native-memory)，由智能体自己加载。见[技能](/zh/guides/skills)。
@@ -235,7 +231,7 @@ Coffer 保存的五类状态之一，每类在 `~/.coffer` 下有自己的位置
 
 ### 同步轮次（Sync round） {#sync-round}
 
-[保险库同步](#vault-sync)的一轮：拉取远端，在工作树之外把它与本机保险库合并，遇到任何冲突就停下，运行[删除断路器](#deletion-breaker)，打一个[应用前快照](#pre-apply-snapshot)，检出合并结果并推送。停下的一轮会在**同步**页面逐个文件等待答复。见[保险库同步](/zh/architecture/vault-sync#the-round)。
+[保险库同步](#vault-sync)的一轮：拉取远端，在工作树之外把它与本机保险库合并，遇到任何冲突就停下，打一个[应用前快照](#pre-apply-snapshot)，检出合并结果并推送。停下的一轮会在**同步**页面逐个文件等待答复。见[保险库同步](/zh/architecture/vault-sync#the-round)。
 
 ## T {#t}
 

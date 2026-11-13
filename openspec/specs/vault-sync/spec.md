@@ -410,7 +410,7 @@ ways to disagree.
 - **THEN** `null` matches every agent, the list matches exactly its agents, and the unknown uid matches nothing without being refused
 - **AND** a scope that carries a machine axis is refused, and so is an empty list
 
-### Requirement: Run a round as pull, merge, guard, check out, push
+### Requirement: Run a round as pull, merge, check out, push
 A round MUST be these steps **in this order**:
 
 ```
@@ -418,14 +418,16 @@ A round MUST be these steps **in this order**:
 2  Merge     — git merge-tree --write-tree L R, outside the working tree,
                from their merge base
 3  Stop?     — any conflict or a merged file validation refuses: stop, whole
-4  Guard     — the deletion breaker, incoming (L -> merged) and outgoing
-               (base -> L)
-5  Snapshot  — tag L as refs/tags/coffer/pre-apply/<time>
-6  Check out — move the vault to the merged tree in one compare-and-swap step
-7  Push      — push the merged commit; this machine's descriptor rides along
+4  Snapshot  — tag L as refs/tags/coffer/pre-apply/<time>
+5  Check out — move the vault to the merged tree in one compare-and-swap step
+6  Push      — push the merged commit; this machine's descriptor rides along
 ```
 
-Nothing is written to the vault before step 6, so a round that stops, holds or
+A deletion is a change like any other: however many files a round deletes, in
+either direction, it is applied and pushed without asking (see "Sync a mass
+deletion like any other change").
+
+Nothing is written to the vault before step 5, so a round that stops or
 fails leaves the vault exactly as it was. Most concurrent edits are not
 conflicts: git merges different hunks of one file without help. A round with
 nothing to pull and nothing to push makes no commit.
@@ -490,23 +492,25 @@ with a different uid as a conflict").
 A **returning machine** MUST recover its base from its own descriptor's
 `last_converged_commit` and join with an ordinary three-way merge from it: the
 remote's deletions are taken, this machine's own edits and deletions since are
-kept and guarded by the breaker, and nothing resurrects.
+kept, and nothing resurrects.
 
 #### Scenario: a returning machine does not resurrect what was deleted while it was away
 - **GIVEN** a machine that converged before, lost its vault's history to a reinstall while its files survived, and deleted one file while offline
 - **WHEN** it joins the remote again
 - **THEN** the preview says it is returning with its base and lists the deletion, and after the join the file is gone from the other machine too while its kept files are unchanged
 
-### Requirement: Hold a returning machine's empty vault instead of publishing the loss
-A vault that lost its files — a reinstall that took them, a failed restore, a
-stray `rm -rf` — MUST NOT publish the loss. Coffer cannot tell a wiped disk from
-a deliberate purge, so the outgoing deletion breaker (see "Guard both
-directions") MUST hold the round before anything is pushed and ask.
+### Requirement: Sync a mass deletion like any other change
+A round MUST apply and push a deletion however many files it removes, in either
+direction, with no threshold and nothing held for confirmation. Every round
+snapshots the vault before it checks anything out, so a deletion a person did
+not mean is undone by rolling the round back (see "Snapshot before checking out
+and roll a round back from it"), and the vault's history keeps every deleted
+file.
 
-#### Scenario: a returning machine with an empty vault does not publish the loss
-- **GIVEN** a machine that converged 25 documents and then lost all of them
-- **WHEN** a round runs
-- **THEN** nothing is pushed, the round is `held` on the outgoing side naming the 25 files, and the remote is unchanged until the person confirms
+#### Scenario: a mass deletion syncs like any other change
+- **GIVEN** two joined machines sharing 25 documents in one folder
+- **WHEN** the first removes all 25 and runs a round, and then the second runs one
+- **THEN** the first pushes the deletion, the second pulls it and no longer holds the files, and neither round waits for the person
 
 ### Requirement: Report a join before applying it
 Joining MUST be explicit and previewed: before anything is applied the surfaces
@@ -538,12 +542,12 @@ another URL or branch since — MUST apply and push nothing and end
 ### Requirement: Never apply the registry or the manifest
 `machines/*.json` and `manifest.json` MUST NOT be projected into anything local —
 the registry is read from the vault, and the manifest is metadata about the
-layout — and MUST NOT count towards the deletion breaker.
+layout.
 
 #### Scenario: the registry and manifest are never applied
-- **GIVEN** a diff that deletes thirty descriptors and the manifest
-- **WHEN** the breaker counts its losses
-- **THEN** it counts none
+- **GIVEN** a round that pulls changed descriptors and a changed manifest
+- **WHEN** it applies what it pulled
+- **THEN** nothing local is written from them
 
 ### Requirement: Re-run post-import hooks after applying
 After a round applied files here, each kind's machine-local side effects MUST be
@@ -567,129 +571,8 @@ to `secret/**.enc` and to nothing else.
 - **WHEN** the two meet in a round
 - **THEN** both machines hold the fresher ciphertext, the round pulls it, and there is nothing to ask
 
-### Requirement: Hold a round that would lose too much
-A round that would **lose** **20 or more** documents in one area, or **5 or
-more** documents that are more than **half** of an area, MUST NOT proceed. The
-share only counts from five documents up, so tidying a small area — removing
-three of five demo servers — goes through while wiping most of one does not.
-The thresholds are fixed and MUST NOT be configurable, and nothing — no
-caller, no migration, no relocation of the layout — may skip the guard rather
-than satisfy it. What counts as a loss is "Count losses, not deletions".
-
-#### Scenario: the guard trips at five documents over half an area or at twenty documents
-- **GIVEN** the deletion guard at its fixed thresholds
-- **WHEN** it scores a diff losing three of an area's five documents, all five, exactly half of a ten-document area, six of those ten, and 20 documents from a large area
-- **THEN** the first and third do not breach and the other three do
-- **AND** the thresholds the guard runs with are the published constants of half, 5 and 20
-
-### Requirement: Ask the user to confirm a tripped breaker
-A tripped breaker MUST hold the round before anything is checked out or pushed
-and record which direction it is — **outgoing** (this machine's own commits
-would remove the files from the remote) or **incoming** (the remote's would
-remove them here) — and which files, grouped by folder with the share of each
-folder they are. The person answers: **delete** them (the round continues and
-applies or pushes the deletions) or **restore** them (the round continues and
-the files are kept, pushed back if the remote had lost them). Both answers are
-on REST (`POST /api/v1/sync/hold/confirm`, `POST /api/v1/sync/hold/restore`) and the Sync page,
-whose Review held deletions view lists every held file, folder by folder, shows the chosen one's text
-as the lines a delete removes (see "Review a file's change before acting on it"), and offers the two
-answers as two buttons — **Keep the files** and **Delete N files** — each acting at once: the view
-itself shows what a delete removes, so no second dialog repeats it.
-A **delete** answer MUST be remembered by file while the remote stays where it
-was when the person answered: a later hold of the same round that loses only
-files they agreed to delete, after this machine's own edits moved the vault
-(the round stopped next on a plaintext secret, and the fix is a new commit),
-MUST NOT be asked again. A moved remote voids the answer. Applying or pushing
-the round forgets it.
-
-#### Scenario: an oversized deletion is held for confirmation
-- **GIVEN** a machine that removed 22 documents of one folder, and the machine that receives that deletion
-- **WHEN** each runs a round
-- **THEN** the first is held outgoing and the second incoming, each listing the files by folder, with nothing applied or pushed
-- **AND** confirming pushes the deletion, while restoring keeps the files here and pushes them back
-
-#### Scenario: a confirmed hold is not asked again after a later edit
-- **GIVEN** a round held on an outgoing deletion of 25 files, which the person confirmed
-- **WHEN** this machine commits another edit before the round continues, and the next round runs against the same remote tip
-- **THEN** the round is not held again and pushes the deletion with the edit
-
-#### Scenario: the held deletions view answers with one press
-- **GIVEN** a round held on an outgoing deletion of 22 files in one folder
-- **WHEN** the person opens Review held deletions and presses Delete 22 files
-- **THEN** the view listed every file before the press, no second dialog opened, and the hold was confirmed
-- **AND** pressing Keep the files instead restores them at once
-
-### Requirement: Guard both directions
-The breaker MUST run in **both directions** — over what the round would remove
-from this vault, and equally over what this machine's own commits since the
-shared base would remove from the remote. The second is what stops a vault that
-lost its files to a reinstall, a failed restore or a stray `rm -rf` from
-publishing that loss and taking the other machines down with it. A join as a
-new machine deletes nothing in either direction and is unaffected.
-
-#### Scenario: a wiped area is held although rename pairings are consulted
-- **GIVEN** a vault that lost every document in an area with nothing added in their place
-- **WHEN** a round runs
-- **THEN** there is nothing for a pairing to match, the round is held on the outgoing side, and the loss is not pushed
-
-### Requirement: Count losses, not deletions
-The breaker MUST count what a round **loses**, not what it deletes. A resource
-file is lost only when its **uid** is gone from the other side: a file that
-disappears while its uid reappears under another name is a move by
-construction. Any other file is a move when its exact bytes land elsewhere in
-the same area, or git's own rename detection pairs it with a file in the same
-area. A move MUST NOT count towards either threshold or appear in the list a
-hold shows. A pairing that crosses an area MUST be discarded, since the
-breaker's unit is the area, and the empty file never pairs on content.
-
-#### Scenario: a re-layout publishes without asking
-- **GIVEN** a diff that moves thirty documents into a subfolder of their area with their bytes unchanged, and deletes one more
-- **WHEN** the breaker counts its losses
-- **THEN** only the one deletion is a loss, while the same bytes landing in another area, or two empty files, are not paired
-
-#### Scenario: moving resource files is not a loss
-- **GIVEN** 25 resource files renamed, each keeping its uid
-- **WHEN** the machine that renamed them and the other machine run rounds
-- **THEN** neither round is held
-
-### Requirement: Set aside deletions Coffer can explain
-The breaker MUST read who made each loss: the writer and operation of the
-newest commit that deleted the file in the range the round's deletions come
-from (this machine's commits since the shared base outgoing, the remote's
-incoming). A loss MUST be set aside, and not counted or listed, when that
-commit is the **memory sync's** (the memory hub follows the agents' own
-memories, which stay on the machine that published the removal) or an
-**agent's Tidy** (started by the person, whose report lists what it removed).
-Every other deletion still counts: a hand edit, a shell's `rm -rf`, a person's
-deletions through Coffer, a sync merge, the daemon, a curation pass, an
-agent's other tool calls. A deletion only a merge commit made is never set
-aside. An area that would be left with no files keeps all of its losses
-counted, whoever made them. This is the guard reading the vault's history, not
-a way around it: no caller can ask for it.
-
-#### Scenario: a deletion Coffer can explain is not asked about
-- **GIVEN** a machine whose memory sync removed 25 of 30 hub memories and whose Tidy removed 25 knowledge documents
-- **WHEN** it runs a round, and then the other machine does
-- **THEN** neither round is held, and both machines no longer hold those files
-- **AND** a memory sync that removed every memory in the hub is still held
-
-#### Scenario: a hand deletion beside Coffer's own is still held
-- **GIVEN** a machine whose memory sync removed 25 memories and whose person removed 25 documents through Coffer
-- **WHEN** it runs a round
-- **THEN** the round is held on the 25 documents alone
-
-### Requirement: Ask git about renames separately from the applied diff
-The breaker MUST ask git's rename detection as a question of its own, only to
-tell a move from a loss; it MUST NOT change what the merge produces or what is
-checked out.
-
-#### Scenario: a re-layout that rewrites its documents publishes without asking
-- **GIVEN** a document moved to a new folder of its area **and edited on the way**, so no content id pairs the two sides
-- **WHEN** git's rename detection pairs them
-- **THEN** it is a move, while a pairing git finds across areas is still a loss
-
 ### Requirement: Say a vault needs a human where the user already is
-A vault whose round needs a human — stopped on conflicts, held by the breaker,
+A vault whose round needs a human — stopped on conflicts,
 waiting on an edit, waiting for a join or for a join's differing files, unable
 to sign in, paused in a synchronised folder, or refused for its layout — MUST
 say so where the user already is, not only on the page built for it.
@@ -712,7 +595,7 @@ asks again only when the answer would be different.
 
 The attention list's sync items MUST be named by their situation, so ignoring one — on the Overview
 or from the Sync page, which share the key — hides that situation and no other: the conflicts item
-by the commits and files in conflict, a hold's by its commits and files, a join's by its files, a
+by the commits and files in conflict, a join's by its files, a
 plaintext secret's by what was found, and a remote's failure by the remote. A situation that
 changes is a new item. The list MUST also carry an item while the remote is unreachable
 (`sync_unreachable`), with its hand-off, so that problem the Sync page shows can be ignored. A
@@ -728,8 +611,8 @@ The status MUST also say how far this vault and the remote (as last fetched) hav
 - **WHEN** the status is read
 - **THEN** it reports `ahead` 2 and `behind` 1, and both 0 once the vault and the remote agree
 
-#### Scenario: a held vault says so where the user already is
-- **GIVEN** a round held at the deletion guard, so nothing converges and nothing is backed up until someone answers it,
+#### Scenario: a stopped vault says so where the user already is
+- **GIVEN** a round stopped on conflicts, so nothing converges and nothing is backed up until someone answers it,
 - **WHEN** the user is anywhere other than the sync page — on another page of the web UI, or with only the desktop shell in front of them,
 - **THEN** the sync status reports the problem, the attention list carries an item for it, and the shell has marked its icon and raised one notification — once for that condition, not once per poll,
 - **AND** the notification does not return while the same thing is wrong, however many rounds re-raise it.
@@ -749,18 +632,6 @@ The status MUST also say how far this vault and the remote (as last fetched) hav
 - **WHEN** the attention list is read again, and then the round is stopped on another set of files
 - **THEN** the item keeps the same key while the situation is the same, and has a different key for the other set of files
 - **AND** a machine without `git`, and a remote that cannot be reached, each have their own item
-
-### Requirement: Release a hold whose diff no longer breaches
-A hold is a question about one pair of commits. It MUST stand while neither this
-vault nor the remote moves, and a round in that time answers the same hold
-again; once either side has a new commit the round MUST re-derive its merge and
-breaker, and a hold whose diff no longer breaches MUST be released without
-anyone answering it.
-
-#### Scenario: a hold is released once its diff no longer breaches
-- **GIVEN** a vault held on the outgoing side after 22 documents were removed
-- **WHEN** the documents are written back and a round runs
-- **THEN** the round is not held and nothing is left waiting on the person
 
 ### Requirement: Serialize deterministically
 Every vault document MUST be written with one deterministic encoding ([vault-storage](../vault-storage/spec.md)
@@ -871,7 +742,6 @@ The HTTP API MUST cover the same operations under `/api/v1/sync`:
   `/join-choices/handoff` and `/join-choices/discard`;
 - `GET /stop`, `POST /stop/files/answer`, `POST /stop/files/editor`, `GET /stop/files/versions`,
   `POST /stop/handoff`, `POST /stop/files/discard` and `POST /continue`;
-- `POST /hold/confirm` and `POST /hold/restore`;
 - `POST /plaintext/push-anyway`;
 - `GET /machines`, `PATCH /machines/self`, `DELETE /machines/{id}` and `POST /machines/{id}/restore`.
 
@@ -902,8 +772,7 @@ when the set of conflicts changes. The Resolve conflicts view MUST offer, for ea
 There is no merge or text editor in the page.
 
 The view says how many files are answered, lets the person leave the round for later, and offers
-Continue round once every file has an answer. A hold is shown the same way, on its own card, leading
-to the Review held deletions view with its two answers (see "Ask the user to confirm a tripped breaker"). So are a join preview and a join's
+Continue round once every file has an answer. A join preview and a join's
 differing files, each on its own card; a join's differing files are counted on the card and listed
 and opened in the same Resolve view as conflicts, titled for the join and ending in **Apply choices**.
 
@@ -922,14 +791,13 @@ do. A round that failed once is noise; a round that has failed every hour since
 Tuesday is the answer.
 
 Repeats that are not quiet MUST fold the same way, by outcome: consecutive
-rounds that **failed**, and consecutive rounds **held** for confirmation, each
-fold into one counted row, because an expired secret is ten identical
-failures by morning and a held round is re-raised every hour until it is
-answered — neither is more true for being printed ten times. A round that
+rounds that **failed** fold into one counted row, because an expired secret is
+ten identical failures by morning, and it is no more true for being printed ten
+times. A round that
 applied or published documents MUST NOT fold, however many like it came before,
 and rounds of different outcomes MUST NOT fold together. A lone round MUST stay
 a row of its own. The **newest** round MUST never be folded: it is the state the
-vault is in now and the only round that may carry Undo or a hold's answers.
+vault is in now and the only round that may carry Undo.
 
 #### Scenario: consecutive quiet rounds fold into one counted row
 - **GIVEN** a runs history holding a stretch of consecutive rounds that changed nothing
@@ -941,7 +809,6 @@ vault is in now and the only round that may carry Undo or a hold's answers.
 - **GIVEN** a runs history whose newest three rounds failed the same way, preceded by a round that published a document
 - **WHEN** the rounds table's rows are built
 - **THEN** the newest failure is a row of its own, the two failures before it are one row counting two, and the round that published is a row of its own
-- **AND** a stretch of consecutive rounds held for confirmation folds the same way beneath a newer round
 
 ### Requirement: Pause a configured remote without forgetting it
 A configured remote MUST carry an `enabled` switch, and switching it off MUST
@@ -994,12 +861,12 @@ refusal until then.
 
 ### Requirement: Record every round
 Every round — timer, `POST /api/v1/sync/run` (Sync now), a join, a
-continue, an answered hold, a rollback — SHALL be recorded in `runs.db` with its
+continue, a rollback — SHALL be recorded in `runs.db` with its
 status, its trigger, when it started and finished, the commit range it moved the
 vault across, the snapshot it took, the commits it pulled (with the machine that
 wrote each), the files it applied here and pushed, the machines it met and, when
 it stopped or failed, why in words a person can act on. A round that stopped for
-a person — held, stopped on conflicts, or refused for a plaintext secret — MUST
+a person — stopped on conflicts, or refused for a plaintext secret — MUST
 record the files it stopped on, and its drawer MUST lead with why it stopped and
 those files, so the round still explains itself after the stop is answered and
 a later round has done the work. A round that ends in a
@@ -1015,9 +882,9 @@ has to catch. The history SHALL be readable newest first, paged, on REST
 - **AND** `GET /api/v1/sync/runs/{id}` returns that round, and an unknown id is `SYNC_ROUND_NOT_FOUND`
 
 #### Scenario: a stopped round keeps why it stopped
-- **GIVEN** a round held because this machine deleted three files
-- **WHEN** its drawer is opened, before or after the hold is answered
-- **THEN** it says this machine's changes would delete 3 files and lists them
+- **GIVEN** a round stopped on three files both machines changed
+- **WHEN** its drawer is opened, before or after the stop is answered
+- **THEN** it says 3 files changed on both sides and could not be merged, and lists them
 - **AND** the four empty steps fold into one line saying nothing was checked out, pulled or pushed
 
 ### Requirement: Stop the round on any conflict
@@ -1136,8 +1003,7 @@ the machine that pushed last, with this vault and the remote untouched, so that
 machine upgrades and syncs first and the two then merge at the new layout. The push is a fast-forward of one commit
 whose tree is exactly this machine's content, with this machine's commit and
 the old tip as parents, so the old history stays reachable in git. The files
-only the old remote had go away on purpose, so the outgoing deletion breaker
-does not apply; the plaintext check still does, and a plaintext finding refuses
+only the old remote had go away on purpose; the plaintext check still applies, and a plaintext finding refuses
 with the remote keeping its old tip. The machine is marked joined and the round
 records `join: "replace"`. The join preview of such a remote (kind `REPLACE`)
 SHALL list what goes up by area, the files that go away (the first 100, with the
@@ -1300,8 +1166,7 @@ the same hand-off in `details.handoff`.
 
 ### Requirement: Present a Sync page with Status, Machines and Remote tabs
 The web UI MUST present a top-level **Sync** page. The header says in one status whether this machine
-is in sync: In sync, N changes to push, N changes pulled, Syncing, Stopped (conflicts or deletions
-held), Push failed, Not pushed: plaintext secret, Remote unreachable, Sign-in failed, Paused or Not
+is in sync: In sync, N changes to push, N changes pulled, Syncing, Stopped (conflicts), Push failed, Not pushed: plaintext secret, Remote unreachable, Sign-in failed, Paused or Not
 set up. Beside the status is the page's one round action, **Sync now** (Syncing… and disabled while a
 round runs), which never changes with the state; under the title is the remote's URL with a copy
 button, the branch and when rounds run. The title carries the Experimental mark. The page has **three** tabs:
@@ -1310,7 +1175,7 @@ button, the branch and when rounds run. The title carries the Experimental mark.
   - a banner saying what the status means now, with one grey line under it of what the vault holds
     that syncs: knowledge documents, skills, MCP server and tool definitions, and whether secrets
     are synced; with changes to push it carries **Review changes**;
-  - a card for a round stopped on conflicts or held deletions, and for a join's differing files;
+  - a card for a round stopped on conflicts, and for a join's differing files;
   - the problem a failed round met, as a card with its own action and an × that ignores it like
     Ignore on Overview. A card has no Retry; the vault inside a cloud-synced folder is moved with
     "Move the vault…";
@@ -1326,8 +1191,8 @@ button, the branch and when rounds run. The title carries the Experimental mark.
   - the vault's folder, with a warning when it sits in a synchronised folder;
   - Stop syncing, which runs at once and offers Undo.
 
-Reviewing changes to push, resolving conflicts and reviewing held deletions each have their own
-view, `/sync/pending`, `/sync/conflicts` and `/sync/deletions`, reached from the Status banner or
+Reviewing changes to push and resolving conflicts each have their own
+view, `/sync/pending` and `/sync/conflicts`, reached from the Status banner or
 card and returning to it; the Status tab lists no files itself (see "Review a file's change before
 acting on it"). Until this machine has joined
 a remote, the page shows setting one up and joining in place of the tabs. The master key is
@@ -1513,8 +1378,8 @@ each non-text kind. Pulled commits MUST NOT carry a diff.
 - **THEN** its diff rows and its added and removed counts appear
 
 ### Requirement: Review a file's change before acting on it
-Every list of files the Sync page asks a person to act on — changes waiting to push, a held round's
-deletions, a stopped round's conflicts, a join's differing files — MUST be read on its own view of one
+Every list of files the Sync page asks a person to act on — changes waiting to push, a stopped
+round's conflicts, a join's differing files — MUST be read on its own view of one
 shape, never listed on the Status tab: the files down the left, each with its mark and one line of
 state; the chosen file on the right with what it changes; the view's actions in a footer under both.
 Which file is open lives in the URL (`?path=`). The person reads any file before pressing an action.
@@ -1524,26 +1389,18 @@ Which file is open lives in the URL (`?path=`). The person reads any file before
   /api/v1/sync/pending/diff?path=<file>` MUST compute the file's change from the remote's tip to this
   machine's `HEAD` as one diff. Its footer offers **Push now**, which runs a round at once (it still
   pulls first); without it the changes go out in the next round as before.
-- **Review held deletions** (`/sync/deletions`): `GET /api/v1/sync/hold/diff?path=<file>` MUST show
-  the file's whole text as the lines a delete removes — read from this machine's side for an incoming
-  hold and from the remote's for an outgoing one.
 - **Resolve conflicts** (`/sync/conflicts`, and `?mode=join`) keeps its own right-hand pane: the two
   choices, the editor, an agent's merge (see "Show a conflict as a banner").
 
-Both diff endpoints answer in the shape of a round's file diff (`side` is `pending` or `held`), carry
-no content for a secret, a binary file or one over the size cap, and MUST refuse a path their list
-does not name (`SYNC_ROUND_FILE_NOT_LISTED`, 404) — the held one also when no round is held.
+The diff endpoint answers in the shape of a round's file diff (`side` is `pending`), carries no
+content for a secret, a binary file or one over the size cap, and MUST refuse a path its list does
+not name (`SYNC_ROUND_FILE_NOT_LISTED`, 404).
 
 #### Scenario: a waiting file shows its change since the last push
 - **GIVEN** a joined machine that saved one knowledge document twice since its last push
 - **WHEN** Review changes to push opens that file
 - **THEN** the file is listed once and its diff goes from the remote's text straight to the newest save
 - **AND** a path nothing waiting touches is refused
-
-#### Scenario: a held file shows the text a delete removes
-- **GIVEN** a round held on 25 deleted documents, outgoing on the machine that deleted them and incoming on the other
-- **WHEN** either opens one of them on Review held deletions
-- **THEN** its whole text is shown as removed lines, and a path the hold does not list is refused
 
 ### Requirement: Show a plaintext finding in its file
 The Sync page MUST let a person read each place a `plaintext_found` round

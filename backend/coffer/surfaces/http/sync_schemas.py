@@ -1,7 +1,7 @@
 """Wire shapes for /api/v1/sync: status, rounds, the remote, machines
 (spec vault-sync; ADR sync-applies-clean-merges-and-stops-on-any-conflict).
 
-The shapes of a stopped round, a hold and a join live in
+The shapes of a stopped round and a join live in
 ``sync_stop_schemas``. Remote shapes carry ``secret_ref`` and never the
 push token, so a remote can be rendered, logged or pasted into a bug report
 with nothing to redact.
@@ -73,12 +73,9 @@ class RoundOut(BaseModel):
     pushed: list[SyncChangeOut]
     with_machines: list[str]
     conflicts: int
-    held: int
     #: For a round that stopped for a person: the files it stopped on (the
-    #: unanswered conflicts, or what a hold would delete); empty otherwise.
+    #: unanswered conflicts); empty otherwise.
     stopped_on: list[str] = []
-    #: For a held round: ``incoming`` or ``outgoing``.
-    held_direction: Literal["incoming", "outgoing"] | None = None
     detail: str | None
     path: str | None
     join: str | None
@@ -92,13 +89,13 @@ class RoundOut(BaseModel):
 
 
 class RoundFileDiffOut(BaseModel):
-    """One file a round applied or pushed, one waiting to push (``pending``)
-    or one a held round would delete (``held``). ``text`` carries the unified
+    """One file a round applied or pushed, or one waiting to push
+    (``pending``). ``text`` carries the unified
     ``diff`` and its line counts; ``secret``, ``binary`` and ``too_large``
     carry no content at all (never ciphertext)."""
 
     path: str
-    side: Literal["applied", "pushed", "pending", "held"]
+    side: Literal["applied", "pushed", "pending"]
     kind: Literal["text", "secret", "binary", "too_large"]
     diff: str | None = None
     added: int = 0
@@ -258,7 +255,6 @@ class SyncStatusOut(BaseModel):
     synchroniser: str | None
     problem: ProblemOut | None
     conflicts: int
-    held: int
     join_choices: int
     #: Commits this vault has that the remote (as last fetched) lacks, and the
     #: other way round — the Overview's "1 behind · 0 ahead".

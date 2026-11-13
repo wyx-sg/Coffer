@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-29
 **Deciders**: Yuxing Wu
-**Related**: [History Is One SQLite File, `runs.db`, Written Only by the Daemon and Migrated Forward at Startup Through One Alembic Lineage](history-is-one-sqlite-file-written-only-by-the-daemon.md), [A Sync Round That Would Lose Too Much Is Held, in Both Directions, Counting Losses Not Moves](sync-deletion-breaker.md), [Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), spec vault-storage "Carry a format version on every vault document", spec vault-storage "Keep every vault document a JSON object that preserves what it does not know", spec vault-sync "Refuse a newer-layout remote and replace an older one", spec daemon "Deploy frozen sibling binaries and back up the history database before migrating", spec vault-sync "Hold a round that would lose too much", PR #452
+**Related**: [History Is One SQLite File, `runs.db`, Written Only by the Daemon and Migrated Forward at Startup Through One Alembic Lineage](history-is-one-sqlite-file-written-only-by-the-daemon.md), [Sync Applies a Mass Deletion Like Any Other Change; Snapshots and History Undo One Nobody Meant](sync-applies-mass-deletions-like-any-change.md), [Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), spec vault-storage "Carry a format version on every vault document", spec vault-storage "Keep every vault document a JSON object that preserves what it does not know", spec vault-sync "Refuse a newer-layout remote and replace an older one", spec daemon "Deploy frozen sibling binaries and back up the history database before migrating", spec vault-sync "Sync a mass deletion like any other change", PR #452
 
 ## Context
 
@@ -87,14 +87,9 @@ untouched.
   directory move the new layout needs — in **one commit** with a
   `Coffer-Layout: <from> -> <to>` trailer. The upgrade functions are pure and
   deterministic, so the commit is reproducible from its parent.
-- **The layout commit is exempt from the loss count because it passes a
-  stricter check.** The deletion breaker counts losses; a layout commit may
-  have none at all. The round verifies it mechanically: the set of resource
-  uids per area is identical before and after, and every tree file that
-  disappears reappears in the same area with the same blob. A layout commit
-  that fails the check is held like any other round. This is not a bypass —
-  [the breaker's ADR](sync-deletion-breaker.md) rejects one — but the same
-  guard answered by a proof instead of a threshold.
+- **The layout commit is an ordinary commit to sync.** A move is a deletion
+  plus an addition in one commit, and a round applies it like any other change
+  ([Sync Applies a Mass Deletion Like Any Other Change](sync-applies-mass-deletions-like-any-change.md)).
 - **Mixed-version fleets.**
 
   | Situation | Newer build | Older build |
@@ -117,8 +112,7 @@ untouched.
 
 Pros: an upgrade on one machine no longer stops convergence on the others; a
 field added by one build survives a round trip through another; the rewrite
-of synced files happens exactly once, in a commit anyone can inspect; the
-breaker never has to be told to look away.
+of synced files happens exactly once, in a commit anyone can inspect.
 
 Cons: every kind maintains an upgrade chain and an additive/breaking flag;
 until the owner upgrades, the machines already upgraded cannot edit
@@ -163,7 +157,7 @@ Refuse unknown fields; a new field means every reader must upgrade first.
 - **Cons.** The vault stays at mixed versions indefinitely; an older machine
   meets newer files one at a time, each one breaking where it lands; every
   ordinary edit doubles as a format change, so a round's diff mixes content and
-  format, and the breaker sees rewrites it cannot tell from edits. Two machines
+  format, and a round's changes show rewrites a person cannot tell from edits. Two machines
   on different builds editing one file each rewrite it in their own version.
 - **Why it loses.** It spreads the upgrade across every write on every
   machine, which is the opposite of doing it once where it can be checked.
@@ -200,8 +194,7 @@ the build is read through a pure in-memory upgrade chain and is not rewritten
 by an ordinary write; a file newer than the build is read-only there, or kept at
 the last valid version when the build cannot read it. Upgrading the vault's
 files is one **layout commit** made by one named owner machine,
-verified to lose no uid and no tree file, and on that proof not counted by the
-deletion breaker. Machines on different builds keep converging per file. A data
+which syncs like any other commit. Machines on different builds keep converging per file. A data
 migration backs up first, leaves the old data untouched, and is undone by
 restoring the copy and moving the new vault aside, never a downgrade.
 
@@ -239,8 +232,7 @@ preview for a joined machine. When the machine still on the old build had
 pushed after the upgraded one last pulled, the replacement dropped those
 commits from the remote's tip (they stayed only in the history), and the old
 machine, once upgraded, merged against its last base and applied the drop as
-deletions. Small drops pass the deletion breaker, so this could lose files
-silently. O-10 (PR #652) was exactly such an all-Macs-must-upgrade change.
+deletions, so this could lose files silently. O-10 (PR #652) was exactly such an all-Macs-must-upgrade change.
 
 ### Options considered
 

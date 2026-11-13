@@ -2,7 +2,7 @@
 //
 // The Sync page's status, rounds, remote, and rollback queries and
 // mutations (spec vault-sync). What a stopped round asks of a person — the
-// conflict answers, the held deletions, the join — lives in `useSyncStop.ts`;
+// conflict answers, the join — lives in `useSyncStop.ts`;
 // the machine registry in `useMachines.ts`.
 //
 // One query carries most of the page: `GET /sync/status` holds the remote, the
@@ -82,7 +82,7 @@ function useRoundInvalidation() {
 
 /**
  * A mutation that ends in a round: invalidates what the round moved and
- * toasts its outcome, so a click is never answered by silence. Stopped, held
+ * toasts its outcome, so a click is never answered by silence. Stopped
  * and join-required rounds come back as a 200 carrying their story, so the
  * toast reads the round's status, not the HTTP status.
  *
@@ -219,17 +219,6 @@ export function usePendingFileDiff(path: string, enabled: boolean) {
     queryKey: [...syncStatusKey, "pending-diff", path],
     queryFn: () => syncApi.pendingDiff(path),
     enabled,
-    retry: false,
-  });
-}
-
-/** One file a held round would delete, its whole text as removed. */
-export function useHeldFileDiff(path: string, enabled: boolean) {
-  return useQuery({
-    queryKey: [...syncStatusKey, "held-diff", path],
-    queryFn: () => syncApi.heldDiff(path),
-    enabled,
-    staleTime: Infinity,
     retry: false,
   });
 }

@@ -123,7 +123,7 @@ The menu, its tooltip and the sync notification use the interface language you p
 
 Closing the window hides the app to the menu bar instead of quitting it. Clicking Coffer in the Dock brings the window back.
 
-When a sync round needs a human — held for confirmation, a conflict, a failed push, a failed run, or a machine that has not joined yet — the app counts it beside its menu bar icon, badges the Dock icon and posts one macOS notification titled **Coffer sync needs you**.
+When a sync round needs a human — a conflict, a failed push, a failed run, or a machine that has not joined yet — the app counts it beside its menu bar icon, badges the Dock icon and posts one macOS notification titled **Coffer sync needs you**.
 
 ## Restart the daemon
 

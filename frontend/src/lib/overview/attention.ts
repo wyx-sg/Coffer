@@ -102,7 +102,6 @@ const ORPHAN_SKILL = "orphan_master";
 const SYNC_PAGES: Record<string, string> = {
   sync_conflicts: "/sync/conflicts",
   sync_join_choices: "/sync/conflicts?mode=join",
-  sync_deletions_held: "/sync/deletions",
 };
 
 /** The page an item's name opens, with the item itself selected there: its
@@ -154,11 +153,11 @@ export function actionLabelKey(verb: string): string {
 
 /** One item's label key. The label names what the button does for that kind
  *  and reason, not the daemon's bare verb: a channel's check "Reconnect channel",
- *  sync's review "Review held changes"; every other item goes by its verb. */
+ *  sync's review "Review sync"; every other item goes by its verb. */
 export function itemActionLabelKey(item: AttentionItem): string {
   const verb = item.action.verb;
   if (item.kind === "channel" && verb === "check") return "overview.actions.reconnectChannel";
-  if (item.kind === "sync" && verb === "review") return "overview.actions.reviewHeld";
+  if (item.kind === "sync" && verb === "review") return "overview.actions.reviewSync";
   if (item.kind === "secret" && item.reason_code === "secret_missing_here")
     return "overview.actions.openSecrets";
   return actionLabelKey(verb);

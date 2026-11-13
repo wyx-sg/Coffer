@@ -243,7 +243,7 @@ give the status each code is actually sent with.
 | `SYNC_PLAINTEXT_NOT_LISTED` | 404 | A plaintext finding's lines were asked for at a place the last round did not find. | Open a place from the Sync page's own list. |
 | `SYNC_REMOTE_INVALID` | 422 | The URL or branch would be read by git as an option, or is not a name git accepts. | Correct the URL or branch. |
 | `SYNC_REMOTE_FAILED` | 502 | A git operation against the remote failed. The message is redacted. | Check network access, the remote URL and the token's permissions. |
-| `SYNC_NOTHING_STOPPED` | 409 | You answered a conflict, a hold or a join choice, but no round is waiting for that answer. | Nothing to do. |
+| `SYNC_NOTHING_STOPPED` | 409 | You answered a conflict or a join choice, but no round is waiting for that answer. | Nothing to do. |
 | `SYNC_CONFLICT_MARKERS_LEFT` | 422 | The hand-merged copy still has conflict markers; the message names the line. | Remove them, save, then mark the file resolved. |
 | `SYNC_SECRET_NOT_EDITABLE` | 422 | An encrypted secret in a stopped round or a join was opened in the editor, handed to an agent or answered as edited. | Keep this Mac's version or take the other's. |
 | `SYNC_ROUND_NOT_FOUND` | 404 | No round with that id. | Pick one from the **Sync** page's history. |

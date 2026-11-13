@@ -103,7 +103,7 @@ pub fn run() {
     // registered, and `Cargo.toml` says why that is the same test rather than
     // an exception to it: no daemon route can raise a macOS notification as
     // Coffer, and nothing in the frontend calls this one — it is Rust-side
-    // only, for a vault held where nobody is looking (spec vault-sync "Say a
+    // only, for a vault stopped where nobody is looking (spec vault-sync "Say a
     // vault needs a human where the user already is").
     //
     // No binary deployment either. The daemon's own frozen-start path

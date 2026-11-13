@@ -12,10 +12,6 @@ remote tips it was raised against; if either moves before the person answers,
 the round is re-derived and asked again. Local writes keep being committed
 meanwhile — only convergence waits.
 
-A **hold** is the deletion breaker's stop: the round would lose more than it
-may unattended, in one direction. The answers are "apply the deletions" or
-"restore the files" (which keeps them here and pushes them back).
-
 A **join choice** is different in kind: when a machine joins a remote it has
 never converged with, a file both sides hold with different content has no
 common base to merge from. Such files are left exactly as they are on this
@@ -29,8 +25,6 @@ import dataclasses
 from collections.abc import Sequence
 from enum import StrEnum
 from typing import Any
-
-from coffer.domain.sync.breaker import Breach
 
 
 class Answer(StrEnum):
@@ -52,18 +46,6 @@ class ConflictReason(StrEnum):
     INVALID_MERGE = "invalid_merge"
     #: Joining: both sides hold the file, with no common base.
     JOIN_DIFFERS = "join_differs"
-
-
-class StopKind(StrEnum):
-    CONFLICTS = "conflicts"
-    HOLD = "hold"
-
-
-class HoldDirection(StrEnum):
-    #: What the other machine's changes would delete here.
-    INCOMING = "incoming"
-    #: What this machine's own commits would delete on the remote.
-    OUTGOING = "outgoing"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -110,22 +92,12 @@ class ConflictFile:
 
 
 @dataclasses.dataclass(frozen=True)
-class Hold:
-    direction: HoldDirection
-    breaches: tuple[Breach, ...]
-    #: Every path the round would lose, for the review list.
-    paths: tuple[str, ...]
-
-
-@dataclasses.dataclass(frozen=True)
 class Stop:
-    kind: StopKind
     local: str
     remote: str
     base: str | None
     raised_at: str
     conflicts: tuple[ConflictFile, ...] = ()
-    hold: Hold | None = None
     #: The merged tree git produced (with conflict markers where it could
     #: not merge); answers are applied on top of it.
     tree: str | None = None
@@ -150,21 +122,8 @@ class Stop:
         return dataclasses.replace(self, conflicts=tuple(out))
 
 
-def held_fields(hold: Hold | None) -> dict[str, Any]:
-    """What a held round's record says about its hold."""
-    if hold is None:
-        return {"held": 0}
-    return {
-        "held": len(hold.paths),
-        "stopped_on": hold.paths,
-        "held_direction": hold.direction.value,
-    }
-
-
 def stop_fields(stop: Stop) -> dict[str, Any]:
-    """What a stopped or held round's record says about its stop."""
-    if stop.kind is StopKind.HOLD:
-        return held_fields(stop.hold)
+    """What a stopped round's record says about its stop."""
     unanswered = stop.unanswered
     return {"conflicts": len(unanswered), "stopped_on": tuple(c.path for c in unanswered)}
 
@@ -244,21 +203,12 @@ def conflict_from_json(raw: dict[str, Any]) -> ConflictFile:
 
 
 def stop_from_json(raw: dict[str, Any]) -> Stop:
-    hold = raw.get("hold")
     return Stop(
-        kind=StopKind(raw["kind"]),
         local=raw["local"],
         remote=raw["remote"],
         base=raw.get("base"),
         raised_at=raw["raised_at"],
         conflicts=tuple(conflict_from_json(c) for c in raw.get("conflicts") or ()),
-        hold=Hold(
-            direction=HoldDirection(hold["direction"]),
-            breaches=tuple(Breach(**b) for b in hold["breaches"]),
-            paths=tuple(hold["paths"]),
-        )
-        if hold
-        else None,
         tree=raw.get("tree"),
         join=raw.get("join"),
     )
@@ -266,15 +216,10 @@ def stop_from_json(raw: dict[str, Any]) -> Stop:
 
 __all__ = [
     "Answer",
-    "Breach",
     "ConflictFile",
     "ConflictReason",
-    "Hold",
-    "HoldDirection",
     "Stop",
-    "StopKind",
     "conflict_from_json",
-    "held_fields",
     "stop_fields",
     "stop_from_json",
     "to_json",

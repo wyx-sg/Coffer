@@ -27,7 +27,6 @@ export function AllGoodCard({ checkedAt }: { checkedAt: number }) {
       sync.data !== undefined &&
       sync.data.configured &&
       !sync.data.problem &&
-      sync.data.held === 0 &&
       sync.data.conflicts === 0,
   });
   return (

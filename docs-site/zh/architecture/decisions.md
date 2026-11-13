@@ -140,7 +140,7 @@ Coffer 保留三类设计文本，各司其职：
 | 决定 | 记录 |
 | --- | --- |
 | 同步只拉取和推送保险库仓库；干净的合并直接应用，任何冲突都停下来交给人 | [`sync-applies-clean-merges-and-stops-on-any-conflict`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-applies-clean-merges-and-stops-on-any-conflict.md) |
-| 会丢失过多内容的一轮同步会被保留，双向都是如此，统计的是丢失而不是移动 | [`sync-deletion-breaker`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-deletion-breaker.md) |
+| 同步像对待其他改动一样应用大量删除；误删靠快照和历史撤销 | [`sync-applies-mass-deletions-like-any-change`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-applies-mass-deletions-like-any-change.md) |
 | 机器由其主机自身 ID 的哈希标识，并在目录树中拥有一个描述文件 | [`sync-machine-identity`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-machine-identity.md) |
 | 同步不携带派生输出；每台机器自己渲染 | [`sync-withholds-derived-output`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-withholds-derived-output.md) |
 | 主密钥存放在只有 Coffer 签名二进制能读取的钥匙串访问组中；密钥在保险库里仍以信封加密保存 | [`master-key-lives-in-the-macos-keychain`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md) |

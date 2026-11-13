@@ -2382,11 +2382,11 @@ itself, never on a list the person has to search: its detail page with its row
 selected in the list (and scrolled into view), a skill-store folder no skill
 claims open under the Skills page's **Not in your library**, a missing secret
 open on Secrets, a stopped sync round on its own review page (conflicts,
-held deletions, a first join's differing files). Only an item that names no
+a first join's differing files). Only an item that names no
 single thing (all missing secrets on this Mac, a check that failed) opens its
 area's page. The action reads what it does for that kind and
 reason, not the bare verb — a channel's check is **Reconnect channel**, sync's
-review **Review held changes** — behind a
+review **Review sync** — behind a
 small icon for its verb (a key for a secret, an eye for a review, a plug for connecting,
 a wrench for repairing, a refresh for checking or testing again), and the reason
 may wrap to two lines before it is cut, its whole text on hover. An action that is a non-GET call into Coffer's
@@ -2474,7 +2474,7 @@ for what agents share follows.
 #### Scenario: a needs-you row's action reads what it does for its kind
 - **GIVEN** an attention item on a channel whose verb is check, and one on sync whose verb is review
 - **WHEN** the user opens Overview
-- **THEN** the channel's action reads Reconnect channel and carries an icon, and sync's reads Review held changes
+- **THEN** the channel's action reads Reconnect channel and carries an icon, and sync's reads Review sync
 
 #### Scenario: overview welcomes a first run with the agents to connect
 - **GIVEN** a vault with no agent registered

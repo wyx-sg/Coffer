@@ -270,7 +270,7 @@ describe("describeActivity", () => {
     expect(round({ status: "nothing_to_do", pulled: 0, pushed: 0 })).toBe(
       "Synced: nothing to pull or push",
     );
-    expect(round({ status: "held", held: 12 })).toBe("Sync held: it would delete 12 files");
+    expect(round({ status: "held", held: 12 })).toBe("Sync held before deleting files");
     expect(round({ status: "stopped", conflicts: 2 })).toBe("Sync stopped: 2 files in conflict");
   });
 

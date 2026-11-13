@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-29
 **Deciders**: Yuxing Wu
-**Related**: [Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [Every Vault File Carries Its Own Format Version; One Owner Machine Commits Layout Upgrades](every-vault-file-carries-its-format-version.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [A Sync Round That Would Lose Too Much Is Held, in Both Directions, Counting Losses Not Moves](sync-deletion-breaker.md), [One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database, Comparing Parameters](one-level-triggered-reconciler-compares-parameters.md), spec resource-framework "Address every resource by an immutable uid through one kind-agnostic surface", spec resource-framework "Treat a resource's name as a mutable label", spec vault-storage "Identify a resource by the uid inside its file", spec knowledge "Use the file path as a document's identity", PR #406, PR #409
+**Related**: [Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [Every Vault File Carries Its Own Format Version; One Owner Machine Commits Layout Upgrades](every-vault-file-carries-its-format-version.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [Sync Applies a Mass Deletion Like Any Other Change; Snapshots and History Undo One Nobody Meant](sync-applies-mass-deletions-like-any-change.md), [One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database, Comparing Parameters](one-level-triggered-reconciler-compares-parameters.md), spec resource-framework "Address every resource by an immutable uid through one kind-agnostic surface", spec resource-framework "Treat a resource's name as a mutable label", spec vault-storage "Identify a resource by the uid inside its file", spec knowledge "Use the file path as a document's identity", PR #406, PR #409
 
 ## Context
 
@@ -133,9 +133,7 @@ unique index used to enforce have to be stated.
   and a prefix would make identity depend on where a file lives.
 
 Pros: identity survives every move a person, git or a later root can make; the
-deletion breaker counts lost uids instead of paths, so a relocation is visibly
-not a loss ([A Sync Round That Would Lose Too Much Is Held](sync-deletion-breaker.md));
-the reconciler hint carries the uid
+reconciler hint carries the uid
 ([One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database](one-level-triggered-reconciler-compares-parameters.md));
 a rename is a modification of one file and nothing else holds the name; the
 vault is readable by name; the multi-root rules need no new identity scheme.
@@ -294,9 +292,6 @@ conflict.
 
 - Resource files are `<name>.json` (with a `-<uid[:8]>` fallback), not named by
   uid; a rename moves the file in the same commit.
-- The deletion breaker counts **lost uids** for resource files: a path that
-  disappears while its uid reappears elsewhere in the same diff is a move by
-  construction, with no similarity judgement.
 - The reconciler's `Changed` hint carries the kind, the uid and the operation;
   a pass compares content, so no revision counter exists.
 - Validation refuses a duplicate uid and mints a missing one; the identity

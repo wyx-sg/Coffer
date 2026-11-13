@@ -1,5 +1,5 @@
 """The sync service over real rounds: recorded rounds and the status, a stop
-answered file by file, the editor copy, a hold confirmed and restored, a
+answered file by file, the editor copy, a
 join's differing files, and rolling a round back
 (ADR sync-applies-clean-merges-and-stops-on-any-conflict)."""
 
@@ -11,7 +11,7 @@ import pytest
 
 from coffer.application.sync.round_answers import SyncConflictMarkersLeft
 from coffer.domain.sync.rounds import RoundStatus
-from coffer.domain.sync.stops import Answer, HoldDirection
+from coffer.domain.sync.stops import Answer
 
 from .harness import fleet, joined
 
@@ -98,48 +98,6 @@ def test_a_hand_merge_is_refused_while_markers_are_left(tmp_path: Path) -> None:
     assert mini.disk(DOC) == b"Both rotate: Mondays and Fridays.\n"
     assert mac.round().status is RoundStatus.PULLED
     assert mac.disk(DOC) == b"Both rotate: Mondays and Fridays.\n"
-
-
-def _bulk(n: int) -> list[str]:
-    return [f"knowledge/bulk/note-{i:02}.md" for i in range(n)]
-
-
-@pytest.mark.acceptance(
-    spec="vault-sync", scenario="an oversized deletion is held for confirmation"
-)
-def test_a_mass_deletion_is_held_both_ways_and_answered(tmp_path: Path) -> None:
-    mac, mini = joined(tmp_path, "Mac", "Mini")
-    for path in _bulk(25):
-        mac.put(path, f"{path}\n")
-    mac.round()
-    mini.round()
-    mac.remove(*_bulk(25))
-
-    held = mac.round()
-    assert held.status is RoundStatus.HELD
-    shown = mac.run(mac.service.stopped())
-    assert shown is not None and shown.stop.hold is not None
-    assert shown.stop.hold.direction is HoldDirection.OUTGOING
-    (group,) = shown.groups
-    assert (group.folder, len(group.paths), group.total) == ("knowledge/bulk", 25, 25)
-    assert shown.machines == ("Mac",)
-    mac.run(mac.service.confirm_hold())
-    assert mac.run(mac.service.continue_round()).status is RoundStatus.PUSHED
-
-    incoming = mini.round()
-    assert incoming.status is RoundStatus.HELD
-    shown = mini.run(mini.service.stopped())
-    assert shown.stop.hold.direction is HoldDirection.INCOMING  # type: ignore[union-attr]
-    assert shown.machines == ("Mac",)  # type: ignore[union-attr]
-    mini.run(mini.service.restore_hold(actor="user"))
-    kept = mini.run(mini.service.continue_round())
-    # Nothing new arrives here — the files are this machine's again — and
-    # they go back to the remote.
-    assert kept.status is RoundStatus.PUSHED
-    assert len(kept.pushed) == 25
-    assert all(mini.disk(p) is not None for p in _bulk(25))
-    mac.round()
-    assert all(mac.disk(p) is not None for p in _bulk(25))
 
 
 @pytest.mark.acceptance(

@@ -20,15 +20,11 @@ pub fn notification_title(lang: Lang) -> &'static str {
 }
 
 /// What went wrong, in the terms the user has to act in. Each says what has
-/// stopped as well as what happened — "held" means nothing else will converge,
-/// and that is the part that cost four days.
+/// stopped as well as what happened — a stop means nothing else will converge.
 pub fn notification_body(status: &str, lang: Lang) -> &'static str {
     match lang {
         Lang::En => english_body(status),
         Lang::Zh => match status {
-            "awaiting_confirmation" => {
-                "有一轮同步已暂停，等待你确认。在你答复之前，金库不会再收敛。"
-            }
             "conflict" => {
                 "有一轮同步遇到了无法自动解决的冲突。金库未被改动，同步已停止，直到你解决它。"
             }
@@ -44,10 +40,6 @@ pub fn notification_body(status: &str, lang: Lang) -> &'static str {
 
 fn english_body(status: &str) -> &'static str {
     match status {
-        "awaiting_confirmation" => {
-            "A round is held for your confirmation. The vault will not converge \
-             again until you answer it."
-        }
         "conflict" => {
             "A round hit a conflict nothing could resolve. The vault is \
              untouched and sync is stopped until you resolve it."
@@ -61,7 +53,7 @@ fn english_body(status: &str) -> &'static str {
             "This machine has not joined the sync remote yet. Nothing converges \
              until you review the join and adopt it."
         }
-        // Unreachable through `next_action`, which only raises on the five
+        // Unreachable through `next_action`, which only raises on the four
         // above; a default keeps a daemon that grew a sixth status from being
         // reported as nothing at all.
         _ => "The last round needs your attention before sync can continue.",

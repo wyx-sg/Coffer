@@ -107,23 +107,6 @@ def diff_trees(repo: VaultRepository, a: str | None, b: str) -> list[TreeChange]
     return out
 
 
-def renames(repo: VaultRepository, a: str, b: str) -> list[tuple[str, str]]:
-    """git's own rename pairs from ``a`` to ``b`` (for the breaker only)."""
-    done = git.run(
-        repo.root, "diff-tree", "-r", "-z", "-M", "--diff-filter=R", "--raw", a, b, check=False
-    )
-    parts = done.stdout.decode("utf-8", "replace").split("\0")
-    out: list[tuple[str, str]] = []
-    i = 0
-    while i < len(parts) - 2:
-        if parts[i].startswith(":") and parts[i].split()[-1].startswith("R"):
-            out.append((parts[i + 1], parts[i + 2]))
-            i += 3
-        else:
-            i += 1
-    return out
-
-
 def hash_blob(repo: VaultRepository, data: bytes) -> str:
     """Write ``data`` as a blob into the object store; answer its id."""
     return git.text(git.run(repo.root, "hash-object", "-w", "--stdin", stdin=data)).strip()
@@ -246,7 +229,6 @@ __all__ = [
     "is_ancestor",
     "merge_base",
     "merge_trees",
-    "renames",
     "tag",
     "tags",
     "tree_of",

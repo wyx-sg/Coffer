@@ -267,7 +267,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | ADR | Decision |
 | --- | --- |
 | [`sync-applies-clean-merges-and-stops-on-any-conflict`](sync-applies-clean-merges-and-stops-on-any-conflict.md) | Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person |
-| [`sync-deletion-breaker`](sync-deletion-breaker.md) | A Sync Round That Would Lose Too Much Is Held, in Both Directions, Counting Losses Not Moves |
+| [`sync-applies-mass-deletions-like-any-change`](sync-applies-mass-deletions-like-any-change.md) | Sync Applies a Mass Deletion Like Any Other Change; Snapshots and History Undo One Nobody Meant |
 | [`sync-machine-identity`](sync-machine-identity.md) | A Machine Is Identified by a Hash of Its Host's Own ID, and Owns One Descriptor in the Tree |
 | [`sync-withholds-derived-output`](sync-withholds-derived-output.md) | Sync Withholds Derived Output; Each Machine Renders Its Own |
 | [`timeouts-and-intervals-count-time-the-computer-slept`](timeouts-and-intervals-count-time-the-computer-slept.md) | Timeouts and Intervals Count Time the Computer Slept |

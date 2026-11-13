@@ -1,7 +1,7 @@
 // frontend/src/lib/hooks/useSyncStop.ts
 //
 // What a round asks of a person (spec vault-sync): the files a stopped round
-// could not merge, the deletions the breaker held, and the join a machine
+// could not merge, and the join a machine
 // makes the first time it meets the remote.
 //
 // Each route answers the ONE situation the daemon is holding — none of them
@@ -108,16 +108,6 @@ export function useFileVersions(path: string, enabled: boolean) {
 /** Finish the stopped round once every file is answered. */
 export function useContinueRound() {
   return useRoundMutation<void>(() => syncApi.continueRound());
-}
-
-/** Apply the held deletions, and continue. The view shows a refusal in place. */
-export function useConfirmHold() {
-  return useRoundMutation<void>(() => syncApi.confirmHold(), { toastErrors: false });
-}
-
-/** Keep the files the round would have deleted, and continue. */
-export function useRestoreHold() {
-  return useRoundMutation<void>(() => syncApi.restoreHold(), { toastErrors: false });
 }
 
 /** What joining would do, applying nothing — asked while this machine has not joined. */

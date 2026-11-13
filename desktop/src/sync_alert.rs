@@ -1,12 +1,10 @@
 //! Whether the vault's last sync round needs a human — and, if it does,
 //! whether the user has already been told.
 //!
-//! Spec vault-sync "Say a vault needs a human where the user already is": a round that ended held
-//! for confirmation, conflicted, or unable to push or run must say so where the user already is.
-//! A held vault converges no further and backs nothing up, so a hold nobody
-//! sees is an outage that looks like silence; the first one in the field stood
-//! for four days because the only surface that mentioned it was the `/sync`
-//! page, which nobody had open.
+//! Spec vault-sync "Say a vault needs a human where the user already is": a round that ended
+//! conflicted, or unable to push or run must say so where the user already is.
+//! A stopped vault converges no further and backs nothing up, so a stop nobody
+//! sees is an outage that looks like silence.
 //!
 //! Everything here is pure — no Tauri, no socket, no clock. `sync_watch.rs`
 //! owns the poll that feeds it and the tray/dock/notification effects it
@@ -23,14 +21,8 @@
 /// arrangement `daemon.json`'s fields are already in (spec desktop-app "Read the
 /// daemon's credentials from its discovery file"):
 /// a change on either side is made on both — and on the CLI's
-/// `_NEEDS_ATTENTION` and the attention list, which list the same five.
-pub const ATTENTION_STATUSES: [&str; 5] = [
-    "conflict",
-    "awaiting_confirmation",
-    "push_failed",
-    "failed",
-    "awaiting_join",
-];
+/// `_NEEDS_ATTENTION` and the attention list, which list the same four.
+pub const ATTENTION_STATUSES: [&str; 4] = ["conflict", "push_failed", "failed", "awaiting_join"];
 
 /// The part of `GET /api/v1/sync/status` this shell reads: is a remote
 /// configured at all, and how did the last round end.
@@ -40,7 +32,7 @@ pub struct SyncSnapshot {
     /// Whether that remote is switched ON. Read separately from `configured`
     /// because a disabled remote makes the daemon return a `disabled` round
     /// WITHOUT recording it, so `last_run` keeps whatever it last was. Without
-    /// this a user who answers a held round by switching sync off instead of
+    /// this a user who answers a stopped round by switching sync off instead of
     /// answering it would keep a marked icon and a badged Dock for ever.
     pub enabled: bool,
     /// `None` when no round has run yet — a configured remote that has not had
@@ -78,11 +70,11 @@ pub fn parse_sync_status(raw: &str) -> Option<SyncSnapshot> {
 /// An unconfigured vault is never one: sync being off is the ordinary state of
 /// a fresh install, and the shell does nothing at all on those machines. It is
 /// also the reason removing a remote *clears* an alert rather than freezing it
-/// — the question the hold asked no longer has anyone to answer it.
+/// — the question the stop asked no longer has anyone to answer it.
 ///
 /// A remote that is configured but **switched off** is the same answer for a
 /// sharper reason. The daemon returns a `disabled` round without recording it,
-/// so `last_run` keeps reporting whatever it last was; a user who meets a held
+/// so `last_run` keeps reporting whatever it last was; a user who meets a stopped
 /// round by turning sync off rather than by answering it would otherwise carry
 /// a marked tray icon and a badged Dock until they turned it back on.
 pub fn attention_status(snapshot: &SyncSnapshot) -> Option<&str> {
@@ -110,7 +102,7 @@ pub enum AlertAction {
 /// if the shell is not currently marking anything. Keying on the *status* and
 /// not on a bare "alerting" flag is deliberate: a vault that goes from
 /// `push_failed` to `conflict` has a different problem and deserves to be told
-/// again, while a vault that is still `awaiting_confirmation` an hour later has
+/// again, while a vault that is still `conflict` an hour later has
 /// the same one and must not be nagged for it. A user who has been told and has
 /// not acted is not told again until the condition clears and returns.
 pub fn next_action(notified: Option<&str>, snapshot: &SyncSnapshot) -> AlertAction {
@@ -152,12 +144,9 @@ mod tests {
     fn a_remote_switched_off_parses_as_not_enabled() {
         let raw = r#"{"configured": true,
                       "remote": {"url": "git@example:v.git", "enabled": false},
-                      "last_run": {"status": "awaiting_confirmation", "applied": {}},
+                      "last_run": {"status": "conflict", "applied": {}},
                       "machine_id": "m1", "machine_id_is_derived": false}"#;
-        assert_eq!(
-            parse_sync_status(raw),
-            Some(switched_off(Some("awaiting_confirmation")))
-        );
+        assert_eq!(parse_sync_status(raw), Some(switched_off(Some("conflict"))));
     }
 
     #[test]
@@ -174,11 +163,11 @@ mod tests {
     fn parse_sync_status_reads_configured_and_last_status() {
         let raw = r#"{"configured": true,
                       "remote": {"url": "git@example:v.git", "enabled": true},
-                      "last_run": {"status": "awaiting_confirmation", "applied": {}},
+                      "last_run": {"status": "conflict", "applied": {}},
                       "machine_id": "m1", "machine_id_is_derived": false}"#;
         assert_eq!(
             parse_sync_status(raw),
-            Some(snapshot(true, Some("awaiting_confirmation")))
+            Some(snapshot(true, Some("conflict")))
         );
     }
 
@@ -252,7 +241,7 @@ mod tests {
     fn a_remote_switched_off_is_never_an_attention_state() {
         // The bug this closes: a disabled remote makes the daemon return a
         // `disabled` round WITHOUT recording it, so `last_run` keeps whatever
-        // it last was. A user who met a held round by switching sync off
+        // it last was. A user who met a stopped round by switching sync off
         // rather than by answering it kept a marked tray icon and a badged
         // Dock until they switched it back on.
         for status in ATTENTION_STATUSES {
@@ -260,10 +249,7 @@ mod tests {
         }
         // And an alert already raised is CLEARED rather than frozen.
         assert_eq!(
-            next_action(
-                Some("awaiting_confirmation"),
-                &switched_off(Some("awaiting_confirmation"))
-            ),
+            next_action(Some("conflict"), &switched_off(Some("conflict"))),
             AlertAction::Clear
         );
     }
@@ -281,13 +267,13 @@ mod tests {
     /// The load-bearing one. A user who has been told and has not acted must
     /// not be told again on the next tick — however many ticks later — or the
     /// poll becomes an hourly nag and the notification stops meaning anything.
-    // acceptance(spec = "vault-sync", scenario = "a held vault says so where the user already is")
+    // acceptance(spec = "vault-sync", scenario = "a stopped vault says so where the user already is")
     #[test]
     fn the_same_condition_on_the_next_poll_does_nothing() {
-        let held = snapshot(true, Some("awaiting_confirmation"));
+        let stopped = snapshot(true, Some("conflict"));
         for _ in 0..100 {
             assert_eq!(
-                next_action(Some("awaiting_confirmation"), &held),
+                next_action(Some("conflict"), &stopped),
                 AlertAction::Nothing
             );
         }
@@ -352,10 +338,7 @@ mod tests {
     #[test]
     fn removing_the_remote_clears_an_outstanding_mark() {
         assert_eq!(
-            next_action(
-                Some("awaiting_confirmation"),
-                &snapshot(false, Some("awaiting_confirmation"))
-            ),
+            next_action(Some("conflict"), &snapshot(false, Some("conflict"))),
             AlertAction::Clear
         );
     }

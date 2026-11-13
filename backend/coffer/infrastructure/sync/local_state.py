@@ -61,6 +61,10 @@ class JsonRoundState:
 
     def stop(self) -> Stop | None:
         raw = self._get("stop")
+        if raw and raw.get("kind") == "hold":
+            # A hold an earlier build raised: nothing asks about it any more.
+            self._set("stop", None)
+            return None
         return stop_from_json(raw) if raw else None
 
     def set_stop(self, stop: Stop | None) -> None:
@@ -71,22 +75,6 @@ class JsonRoundState:
 
     def set_join_choices(self, choices: Sequence[ConflictFile]) -> None:
         self._set("join_choices", [to_json(c) for c in choices] or None)
-
-    def confirmed(self) -> tuple[str, str] | None:
-        pair = self._get("confirmed")
-        return (pair[0], pair[1]) if isinstance(pair, list) and len(pair) == 2 else None
-
-    def set_confirmed(self, pair: tuple[str, str] | None) -> None:
-        self._set("confirmed", list(pair) if pair else None)
-        if pair is None:
-            self._set("approved_losses", None)
-
-    def approved_losses(self) -> frozenset[str]:
-        return frozenset(self._get("approved_losses") or ())
-
-    def approve_losses(self, paths: Sequence[str]) -> None:
-        merged = sorted(self.approved_losses() | set(paths))
-        self._set("approved_losses", merged or None)
 
     def joined(self) -> bool:
         return bool(self._get("joined"))

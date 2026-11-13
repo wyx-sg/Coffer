@@ -187,10 +187,6 @@ describe("SyncPage — header", () => {
     expect(pill()).toHaveTextContent("Stopped: 2 conflicts");
     expect(screen.getByRole("button", { name: "Sync now" })).toBeDisabled();
     view.unmount();
-
-    seed(makeStatus({ held: 14 }));
-    renderAt();
-    expect(pill()).toHaveTextContent("Stopped: 14 deletions held");
   });
 
   test("changes to push and changes pulled are counted in the pill", () => {
