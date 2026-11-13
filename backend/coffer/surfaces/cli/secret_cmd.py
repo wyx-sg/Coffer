@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json as _json
 import sys
+from collections.abc import Mapping
 from typing import Any
 
 import typer
@@ -168,7 +169,7 @@ def list_refs(
         return
     # A plain table, never a box-drawn one: Rich shrinks a narrow terminal's
     # columns and cuts the ref (secret/fc5bf…), which must be copied whole.
-    rows: list[dict[str, Any]] = []
+    rows: list[Mapping[str, Any]] = []
     for entry in refs:
         cited_by = entry.get("cited_by", [])
         used = [f"{citer['kind']} {citer['name']}" for citer in cited_by]
