@@ -104,6 +104,10 @@ class ResourceCreate(BaseModel):
 
 
 class ResourceUpdate(BaseModel):
+    #: An unknown key is refused, not ignored: ``{"cwd": null}`` (a config
+    #: field sent at the top level) used to answer 200 and change nothing.
+    model_config = ConfigDict(extra="forbid")
+
     #: Renaming is a field. Absent leaves the label alone; a name taken within
     #: the kind is a 409, as is any change to a fixed name (NAME_IMMUTABLE).
     name: str | None = Field(default=None, min_length=1, max_length=FREE_NAME_MAX_LEN)

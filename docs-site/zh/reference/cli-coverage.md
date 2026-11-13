@@ -393,6 +393,22 @@ description: 每一个网页界面和桌面应用操作、它调用的接口、�
 | Sync · Move the vault | `POST /sync/vault/move` | `coffer sync vault-move` | `test_cli_parity.py` |
 | Sync · a round in progress | `GET /sync/status` | `coffer sync wait` | `test_cli_parity.py` |
 
+## `coffer task` {#task}
+
+| 界面操作 | 接口 | 命令 | 验收 |
+| --- | --- | --- | --- |
+| Scheduled tasks · New task | `POST /scheduled-tasks` | `coffer task add` | `test_cli_parity.py` |
+| Scheduled tasks · Delete | `DELETE /resources/{uid}` | `coffer task delete` | `test_cli_parity.py` |
+| Scheduled tasks · switch off | `POST /resources/{uid}/disable` | `coffer task disable` | `test_cli_parity.py` |
+| Scheduled tasks · switch on | `POST /resources/{uid}/enable` | `coffer task enable` | `test_cli_parity.py` |
+| Scheduled tasks · Files tab | `GET /scheduled-tasks/{uid}/files` | `coffer task files` | `test_cli_parity.py` |
+| Scheduled tasks · list | `GET /scheduled-tasks` | `coffer task list` | `test_cli_parity.py` |
+| Scheduled tasks · Prompt · Edit | `PUT /scheduled-tasks/{uid}/prompt` | `coffer task prompt` | `test_cli_parity.py` |
+| Scheduled tasks · Run now | `POST /scheduled-tasks/{uid}/run` | `coffer task run` | `test_cli_parity.py` |
+| Scheduled tasks · a task's run history | `GET /scheduled-tasks/{uid}/runs` | `coffer task runs` | `test_cli_parity.py` |
+| Scheduled tasks · open a task | `GET /scheduled-tasks/{uid}` | `coffer task show` | `test_cli_parity.py` |
+| Scheduled tasks · edit a task | `PATCH /resources/{uid}` | `coffer task update` | `test_cli_parity.py` |
+
 ## `coffer uninstall` {#uninstall}
 
 | 界面操作 | 接口 | 命令 | 验收 |
@@ -439,6 +455,7 @@ description: 每一个网页界面和桌面应用操作、它调用的接口、�
 | `GET /knowledge/asset` | 普通文件: a knowledge picture is a plain file |
 | `DELETE /knowledge/file` | 普通文件: a knowledge document is a plain file |
 | `GET /knowledge/file` | 普通文件: a knowledge document is a plain file |
+| `GET /scheduled-tasks/{uid}/files/content` | 普通文件: a task's folder holds plain files |
 | `GET /secrets/approvals` | 窗口操作: a secret's approval is answered on the app's own page |
 | `POST /secrets/approvals/reject` | 窗口操作: a secret's approval is answered on the app's own page |
 | `POST /secrets/approvals/{approval_id}/ask-again` | 窗口操作: a secret's approval is answered on the app's own page |

@@ -1835,6 +1835,7 @@ components:
       title: ResourceScopeUpdate
       type: object
     ResourceUpdate:
+      additionalProperties: false
       properties:
         config:
           anyOf:

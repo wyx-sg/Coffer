@@ -272,21 +272,15 @@ describe("Conversations list", () => {
     expect(row("Yesterday one")).toHaveTextContent("/work/web");
   });
 
-  acceptance(
-    "chat",
-    "running rows are marked from the daemon's turn state",
-    async () => {
-      listed({ ...today, running: true }, yesterday, { ...earlier, running: false });
-      renderPage();
-      await screen.findByText("Today one");
-      expect(row("Today one")).toHaveTextContent("Running");
-      expect(
-        within(row("Today one")).getByRole("button", { name: "Stop Today one" }),
-      ).toBeVisible();
-      expect(row("Earlier one")).not.toHaveTextContent("Running");
-      expect(within(row("Earlier one")).queryByRole("button", { name: /^Stop/ })).toBeNull();
-    },
-  );
+  acceptance("chat", "running rows are marked from the daemon's turn state", async () => {
+    listed({ ...today, running: true }, yesterday, { ...earlier, running: false });
+    renderPage();
+    await screen.findByText("Today one");
+    expect(row("Today one")).toHaveTextContent("Running");
+    expect(within(row("Today one")).getByRole("button", { name: "Stop Today one" })).toBeVisible();
+    expect(row("Earlier one")).not.toHaveTextContent("Running");
+    expect(within(row("Earlier one")).queryByRole("button", { name: /^Stop/ })).toBeNull();
+  });
 
   acceptance("chat", "the page stops a turn another surface started", async () => {
     chat.interruptTurn.mockResolvedValue(undefined);
@@ -294,6 +288,37 @@ describe("Conversations list", () => {
     await screen.findByText("Today one");
     fireEvent.click(within(row("Today one")).getByRole("button", { name: "Stop Today one" }));
     await waitFor(() => expect(chat.interruptTurn.mock.calls[0][0]).toBe("t"));
+  });
+
+  acceptance("chat", "a link lands on its conversation without opening it", async () => {
+    const target = makeSessionRow({
+      session_id: "s-9",
+      conversation_id: "c-9",
+      title: "Morning summary",
+      cwd: "/work/ops",
+      last_activity_at: at(3, 9),
+    });
+    sessions.listAll.mockImplementation(async (opts: { cursor?: string | null }) =>
+      opts.cursor
+        ? { sessions: [target], next_cursor: null, unavailable: [] }
+        : { sessions: [today, yesterday], next_cursor: "c1", unavailable: [] },
+    );
+    renderPage("/conversations?open=c-9");
+    // The full list, paged on until the row shows; nothing is filtered out.
+    expect(await screen.findByText("Morning summary")).toBeInTheDocument();
+    expect(screen.getByText("Today one")).toBeInTheDocument();
+    await waitFor(() => expect(rowOf("s-9")).toHaveAttribute("aria-current", "true"));
+    // The parameter is dropped, and no terminal opens: the row's button does that.
+    await waitFor(() => expect(loc()).toBe("/conversations"));
+    expect(openTerminal).not.toHaveBeenCalled();
+  });
+
+  test("a link to a conversation that is gone says so", async () => {
+    renderPage("/conversations?open=gone");
+    expect(
+      await screen.findByText("The conversation you followed a link to is no longer in this list."),
+    ).toBeInTheDocument();
+    expect(openTerminal).not.toHaveBeenCalled();
   });
 
   test("the list pages by cursor", async () => {

@@ -302,6 +302,14 @@ flowchart TD
 - **按会话串的历史。** 会话串开启的每个对话都记录在该会话串名下。`/resume` 只读这份历史，所以一个会话可以回到它自己之前的对话，但永远到达不了来自 Web 或另一个会话的对话，即使伪造了按钮值也不行。
 - **卡片只带用得上的操作。** `/status` 是带 Model 和 Dir 按钮的卡片，轮次运行时还有 Stop，停止后有排队消息被暂停时还有 Continue 和 Discard；`/help` 是不带按钮的文字。命令按钮带着命令的名字，点一下执行的和手动输入完全一样，并经过和消息相同的所有者关卡。Continue 和 Discard 带着被停止对话的 id，作用于它暂停的队列（`TurnOrchestrator.resume_held` / `drop_held`），只对这个聊天线程自己的对话生效。
 
+### 定时轮次 {#scheduled-turns}
+
+[定时任务](/zh/guides/scheduled-tasks)是 Coffer 按时间发给智能体的一段提示词，每次运行都是一个新会话（ADR [automation-is-a-scheduled-prompt](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/automation-is-a-scheduled-prompt.md)）。任务是一个只在本机的 `scheduled_task` 资源：计划（一次、每小时、每天、每周、cron、手动，都可以带一个 IANA 时区）、智能体，以及可选的模型和目录。提示词不在资源里，而是任务自己文件夹 `content/workspace/scheduled-tasks/<uid>/` 里的 `PROMPT.md`（ADR [a-scheduled-task-s-prompt-is-a-file-in-its-own-folder](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/a-scheduled-task-s-prompt-is-a-file-in-its-own-folder.md)）；资源里带提示词会被拒绝，2026-11-11 之前写的任务在启动时把提示词移进这个文件。机制就这么多：它不绑聊天，也没有模板；一次运行要怎么用聊天、写报告或走流程，写在提示词里，或者交给提示词点名的 skill。
+
+- **调度器**是一个可唤醒循环 `scheduled-tasks`，睡到最早的到期时间；任何任务被写入都会唤醒它。在宽限期内到期的时间点交给执行器；超过宽限期的记为已跳过。一次性任务的宽限期是它等待时长的一半（15 分钟到 2 小时）；重复任务的到当天结束。任务上一次运行还没结束时到期的那一次会被跳过。一次性任务运行后被关闭，连续失败三次的重复任务会被暂停。
+- **执行器**先读 `PROMPT.md`（文件缺失或为空，这次运行就失败），再用任务的智能体、模型和目录（默认是任务文件夹，产出也留在那里）开一个不属于任何渠道的对话，经编排器发出提示词，和在对话页新开一样。迟到的运行会在提示词后面加一行，说明原定时间和实际运行时间。这次运行随轮次结束记为 `done`、`failed` 或 `stopped`，什么都不发出；需要通知所有者时，由智能体自己用 `coffer__channel_notify`。
+- **运行记录。** 每次运行是 `runs.db` 里 `scheduled_task_runs` 的一行（原定、开始、结束、结果、原因、对话），由保留期清理。
+
 ### 聊天之后对话去哪里 {#where-a-conversation-goes-after-the-chat}
 
 消息渠道打开的对话会和每个智能体的会话一起列在对话页面上，但页面从不向聊天发送：没有 Web 回复，也没有镜像端口。人在那里做的是打开会话（见[在终端中打开会话](#opening-a-session-in-a-terminal)），或者停止、重命名、删除它。重命名或删除先作用于智能体自己的会话，再作用于索引行；删除之后，消息渠道的下一条消息会打开一个新的对话。

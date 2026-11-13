@@ -1,8 +1,8 @@
 // frontend/src/components/channel/ChannelOverviewTab.tsx
 // A channel's Overview, one column: who can use it (the paired owners: add,
 // remove), which agents it drives — the default agent a new conversation
-// starts on and the shared reach control for the agents it may drive — and one
-// link to the conversations it started. It lists no messages and no
+// starts on and the shared reach control for the agents it may drive — and
+// one link to the conversations it started. It lists no messages and no
 // conversations: Conversations, filtered by this channel, is where those are read.
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";

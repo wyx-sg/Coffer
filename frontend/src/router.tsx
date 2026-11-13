@@ -103,6 +103,19 @@ const pageRoutes: RouteObject[] = gateRoutes([
     path: "custom-tools/:group/:tab",
     element: lazyPage(() => import("./pages/CustomToolsPage"), "CustomToolsPage"),
   },
+  // The owner's scheduled tasks, beside the selected one.
+  {
+    path: "scheduled-tasks",
+    element: lazyPage(() => import("./pages/ScheduledTasksPage"), "ScheduledTasksPage"),
+  },
+  {
+    path: "scheduled-tasks/:uid",
+    element: lazyPage(() => import("./pages/ScheduledTasksPage"), "ScheduledTasksPage"),
+  },
+  {
+    path: "scheduled-tasks/:uid/:tab",
+    element: lazyPage(() => import("./pages/ScheduledTasksPage"), "ScheduledTasksPage"),
+  },
   { path: "clis", element: lazyPage(() => import("./pages/ClisPage"), "ClisPage") },
   // One command-line tool, by the command itself, open beside the list; its
   // tab (Overview bare, Commands) is the path.

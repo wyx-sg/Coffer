@@ -376,3 +376,13 @@ class Kind:
         ]
         | None
     ) = None
+    # Optional pre-write check for switching a resource ON: it may raise
+    # ``ConfigValidationError`` to refuse, before anything is written. Only
+    # ``scheduled_task`` supplies one: a task cannot resume with no prompt.
+    before_enable: (
+        Callable[
+            [Resource],
+            Awaitable[None] | None,
+        ]
+        | None
+    ) = None

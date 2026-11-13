@@ -7,6 +7,7 @@ ChannelRuntime and message flow to InboundProcessor.
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import TYPE_CHECKING
@@ -20,6 +21,7 @@ from coffer.application.channel.store_ports import (
     ChannelPeerRepoPort,
     ChannelThreadConversationRepoPort,
 )
+from coffer.application.channel.turn_media import local_files, send_media_files
 from coffer.domain.audit import AuditEventType
 from coffer.domain.channel.config import (
     SeaTalkChannelConfig,
@@ -31,6 +33,7 @@ from coffer.domain.channel.errors import (
     ChannelNotRunning,
     ChannelPersonNotFound,
 )
+from coffer.domain.errors import ConfigValidationError
 from coffer.domain.resource import Resource
 
 if TYPE_CHECKING:
@@ -297,9 +300,17 @@ class ChannelService:
         await adapter.handle_event(dict(envelope))
 
     async def notify(
-        self, channel_uid: str, text: str, *, actor: str, chat_id: str | None = None
-    ) -> None:
-        """Push text to one of the channel's paired chats, outside any conversation.
+        self,
+        channel_uid: str,
+        text: str,
+        *,
+        actor: str,
+        chat_id: str | None = None,
+        files: Sequence[str] = (),
+    ) -> list[str]:
+        """Push text, then any ``files`` (absolute paths), to one of the
+        channel's paired chats, outside any conversation. Returns the files
+        that failed to upload.
 
         ``chat_id`` names the chat. Omitted, it is the channel's owner chat —
         its earliest pairing, which is the owner's DM (see
@@ -309,6 +320,10 @@ class ChannelService:
         private notifications into group chats. A chat that is not paired to
         this channel is refused rather than messaged.
         """
+        try:
+            media = local_files(files)
+        except ValueError as e:
+            raise ConfigValidationError(str(e)) from e
         resource = await self._channel(channel_uid)
         # The two refusals below name the channel the way its owner does: they
         # are read by a person, and a uid in an error message is a dead end.
@@ -322,7 +337,13 @@ class ChannelService:
         adapter = self._runtime.adapter(resource.uid)
         if adapter is None:
             raise ChannelNotRunning(name)
+        if media and not adapter.capabilities.supports_media:
+            raise ConfigValidationError(f"The {name} channel cannot send files.")
         await adapter.send_text(peer.chat_id, text)
+        if not media:
+            return []
+        failed = await send_media_files(adapter, peer.chat_id, media)
+        return [f.path for f in failed]
 
     async def restart(self, channel_uid: str) -> bool:
         """Stop the channel's adapter and bring it up again from its stored

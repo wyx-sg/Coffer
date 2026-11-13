@@ -230,6 +230,8 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`a-reply-names-its-files-and-they-follow-it`](a-reply-names-its-files-and-they-follow-it.md) | A Channel Reply Names Its Files, and the Files Follow It |
 | [`chat-attachment-uploads`](chat-attachment-uploads.md) | The Chat Page Uploads a File First and Sends Its Id, Into a Sibling Media Directory |
 | [`seatalk-websocket-inbound`](seatalk-websocket-inbound.md) | SeaTalk Inbound Is One Outbound WebSocket, Through an Operator-Supplied SDK |
+| [`automation-is-a-scheduled-prompt`](automation-is-a-scheduled-prompt.md) | A Scheduled Task Is a Prompt on a Schedule, Each Run a Conversation of Its Own |
+| [`a-scheduled-task-s-prompt-is-a-file-in-its-own-folder`](a-scheduled-task-s-prompt-is-a-file-in-its-own-folder.md) | A Scheduled Task's Prompt Is a File in the Task's Own Folder |
 | [`telegram-long-polling`](telegram-long-polling.md) | Telegram Inbound Is a Long Poll That Commits the Offset After Dispatch |
 
 ### Skills, knowledge & memory

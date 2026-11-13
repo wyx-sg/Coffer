@@ -15,12 +15,13 @@ import { SidebarNav } from "./SidebarNav";
 import { forgetKnowledgeLocation, rememberKnowledgeLocation } from "@/lib/knowledge/lastLocation";
 import { appRoutes } from "@/router";
 
-// The two experimental features (knowledge, memory) own two of the fourteen
+// The two experimental features (knowledge, memory) own two of the fifteen
 // entries. Both are on unless a test says otherwise, so every other assertion
-// here is about the full fourteen.
+// here is about the full fifteen.
 const ALL_ON: Record<string, boolean> = {
   knowledge: true,
   memory: true,
+  scheduled_tasks: true,
 };
 const features = vi.fn((): Record<string, boolean> | null => ALL_ON);
 vi.mock("@/lib/hooks/useFeatures", async (importOriginal) => ({
@@ -142,7 +143,7 @@ describe("SidebarNav", () => {
       expect(groupLabels()).toEqual(["智能体", "运行", "能力", "上下文", "系统"]);
       expect(ungrouped()).toEqual(["总览"]);
       expect(group("智能体").map(([name]) => name)).toEqual(["智能体", "模型提供商"]);
-      expect(group("运行").map(([name]) => name)).toEqual(["对话", "消息渠道"]);
+      expect(group("运行").map(([name]) => name)).toEqual(["对话", "消息渠道", "定时任务"]);
       expect(group("能力").map(([name]) => name)).toEqual([
         "MCP 服务器",
         "自定义工具",
@@ -181,7 +182,11 @@ acceptance("web-ui", "the sidebar groups entries by what the user comes to do", 
   expect(ungrouped()).toEqual(["Overview"]);
   expect(groupLabels()).toEqual(["Agents", "Run", "Capabilities", "Context", "System"]);
   expect(group("Agents").map(([name]) => name)).toEqual(["Agents", "Model providers"]);
-  expect(group("Run").map(([name]) => name)).toEqual(["Conversations", "Channels"]);
+  expect(group("Run").map(([name]) => name)).toEqual([
+    "Conversations",
+    "Channels",
+    "Scheduled tasks",
+  ]);
   expect(group("Capabilities").map(([name]) => name)).toEqual([
     "MCP servers",
     "Custom tools",
@@ -196,7 +201,7 @@ acceptance("web-ui", "every resource entry opens a list page of its own", () => 
   renderNav();
 
   const hrefs = Array.from(document.querySelectorAll("nav a")).map((a) => a.getAttribute("href")!);
-  expect(hrefs).toHaveLength(14);
+  expect(hrefs).toHaveLength(15);
   const resolved = hrefs.map((href) => leafRoute(href));
   // Each entry is its own route — the path itself, never the catch-all.
   resolved.forEach((route, i) => {
@@ -212,7 +217,7 @@ acceptance("web-ui", "the sidebar carries no placeholder entries", () => {
   renderNav();
 
   const links = Array.from(document.querySelectorAll("nav a"));
-  expect(links.length).toBe(14);
+  expect(links.length).toBe(15);
   for (const link of links) {
     const href = link.getAttribute("href");
     expect(href).toBeTruthy();
@@ -236,6 +241,7 @@ const hrefs = () =>
 const OWNED: Record<string, string[]> = {
   knowledge: ["/knowledge"],
   memory: ["/memory"],
+  scheduled_tasks: ["/scheduled-tasks"],
 };
 
 describe("a switched-off experimental feature", () => {
@@ -253,14 +259,14 @@ describe("a switched-off experimental feature", () => {
         for (const [other, entries] of Object.entries(OWNED)) {
           if (other !== feature) for (const to of entries) expect(shown).toContain(to);
         }
-        expect(shown).toHaveLength(14 - owned.length);
+        expect(shown).toHaveLength(15 - owned.length);
         view.unmount();
       }
     },
   );
 
   acceptance("web-ui", "a switched-off feature leaves the sidebar", () => {
-    features.mockReturnValue({ knowledge: false, memory: false });
+    features.mockReturnValue({ knowledge: false, memory: false, scheduled_tasks: false });
     renderNav();
 
     expect(hrefs()).toEqual([

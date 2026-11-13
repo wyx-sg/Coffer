@@ -12,14 +12,13 @@ Coffer's turns. Application layer only; the composition root registers it.
 
 from __future__ import annotations
 
-import pathlib
 from collections.abc import Awaitable, Callable
 from typing import Any
 
 from coffer.application.builtin_tools import BuiltinTool
 from coffer.application.channel.ports import ChannelBinding
 from coffer.application.channel.store_ports import ChannelPeerRepoPort
-from coffer.application.channel.turn_media import MediaFile, send_media_files
+from coffer.application.channel.turn_media import MediaFile, local_files, send_media_files
 
 __all__ = ["MAX_FILES", "MAX_TEXT", "OwnerNotifier", "channel_notify_tool"]
 
@@ -74,13 +73,7 @@ def _files(args: dict[str, Any]) -> tuple[MediaFile, ...]:
         raise ValueError("`files` must be a list of absolute paths.")
     if len(raw) > MAX_FILES:
         raise ValueError(f"Send at most {MAX_FILES} files at once.")
-    out = []
-    for path in raw:
-        file = pathlib.Path(path)
-        if not file.is_absolute() or not file.is_file():
-            raise ValueError(f"{path!r} is not an absolute path to an existing file.")
-        out.append(MediaFile(path=str(file)))
-    return tuple(out)
+    return local_files(raw)
 
 
 class OwnerNotifier:

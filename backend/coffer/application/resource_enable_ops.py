@@ -35,6 +35,10 @@ async def set_enabled(service: ResourceService, uid: str, enabled: bool, *, acto
         raise ResourceNotToggleable(before.kind, uid)
     if before.enabled == enabled:
         return before  # idempotent — no audit, no hook
+    if enabled and kind_def.before_enable is not None:
+        check = kind_def.before_enable(before)
+        if inspect.isawaitable(check):
+            await check
     updated = await service._repo.set_enabled(uid, enabled)
     event = AuditEventType.RESOURCE_ENABLED if enabled else AuditEventType.RESOURCE_DISABLED
     await service._audit.record(

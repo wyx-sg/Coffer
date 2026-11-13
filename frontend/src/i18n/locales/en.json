@@ -234,6 +234,7 @@
     "forward": "Forward",
     "agents": "Agents",
     "channels": "Channels",
+    "scheduledTasks": "Scheduled tasks",
     "activity": "Activity",
     "modelProviders": "Model providers",
     "sync": "Sync",
@@ -1367,11 +1368,13 @@
       "saveFailed": "Couldn’t save the change: {{reason}}",
       "names": {
         "knowledge": "Knowledge",
-        "memory": "Memory"
+        "memory": "Memory",
+        "scheduled_tasks": "Scheduled tasks"
       },
       "descriptions": {
         "knowledge": "Notes and documents that agents can look up, kept as plain files you can edit.",
-        "memory": "What each agent remembers, synced into your other agents' own memory."
+        "memory": "What each agent remembers, synced into your other agents' own memory.",
+        "scheduled_tasks": "Prompts Coffer sends an agent on a schedule, each run in a new conversation of its own."
       },
       "source": {
         "pin": "Pinned by COFFER_FEATURES — change it where the daemon is started",
@@ -1908,6 +1911,14 @@
         "notFoundTitle": "This secret no longer exists",
         "notFoundBody": "No secret is stored as <mono>{{id}}</mono>. It was deleted.",
         "back": "Back to secrets"
+      },
+      "scheduledTasks": {
+        "plural": "scheduled tasks",
+        "singular": "task",
+        "filterHelp": "Filters names, prompts and channels.",
+        "notFoundTitle": "This task no longer exists",
+        "notFoundBody": "No scheduled task has the id <mono>{{id}}</mono>. It was deleted or ran its last time.",
+        "back": "Back to Scheduled tasks"
       }
     }
   },
@@ -3691,6 +3702,7 @@
       "emptyTitle": "No conversations yet",
       "emptyBody": "Sessions appear here once an agent has one: started in a terminal, by a channel, or with New conversation.",
       "noMatches": "No conversations match",
+      "openMissing": "The conversation you followed a link to is no longer in this list.",
       "clearFilters": "Clear filters",
       "unavailable_one": "Couldn’t read {{agents}}’s sessions",
       "unavailable_other": "Couldn’t read the sessions of {{agents}}"
@@ -6630,5 +6642,128 @@
     "added": "Added a value for {{name}}",
     "replace": "Replace",
     "keep": "Keep current key"
+  },
+  "scheduledTasks": {
+    "title": "Scheduled tasks",
+    "subtitle": "Prompts Coffer sends an agent on a schedule, each run in a new conversation of its own.",
+    "newTask": "New task",
+    "search": "Filter tasks",
+    "on": "On",
+    "off": "Off",
+    "pause": "Pause",
+    "resume": "Resume",
+    "menu": "More for {{name}}",
+    "empty": {
+      "title": "No scheduled tasks yet",
+      "body": "A task sends an agent a prompt at the time you choose, in a new conversation each time: a morning summary, a nightly check. What it does with the answer is up to the prompt."
+    },
+    "list": {
+      "none": "None yet.",
+      "noMatch": "No task matches.",
+      "pausedLine": "Paused",
+      "failedLine": "Last run failed · {{reason}}",
+      "nextLine": "{{when}} · next {{next}}"
+    },
+    "state": {
+      "running": "Running now",
+      "ready": "Scheduled",
+      "paused": "Paused",
+      "failed": "Failing",
+      "done": "Done"
+    },
+    "schedule": {
+      "onceAt": "Once, {{when}}",
+      "hourlyAt": "Every hour at :{{minute}}",
+      "dailyAt": "Every day at {{time}}",
+      "weeklyAt": "Every {{day}} at {{time}}",
+      "cron": "Cron {{expr}}",
+      "manual": "Only when run by hand"
+    },
+    "outcome": {
+      "running": "Running",
+      "skipped": "Skipped",
+      "failed": "Failed",
+      "stopped": "Stopped",
+      "done": "Done"
+    },
+    "runNow": {
+      "action": "Run now",
+      "started": "Started in a new conversation."
+    },
+    "delete": {
+      "action": "Delete",
+      "title": "Delete {{name}}?",
+      "body": "It will not run again. Its run history stays until the retention period ends.",
+      "pending": "Deleting…",
+      "failed": "Couldn’t delete {{name}}"
+    },
+    "detail": {
+      "next": "next {{next}}",
+      "what": "What it does",
+      "nextRun": "Next run",
+      "folder": "Folder"
+    },
+    "runs": {
+      "none": "It hasn't run yet.",
+      "conversation": "Conversation:",
+      "conversationGone": "Its conversation has been removed.",
+      "started": "Started",
+      "outcome": "Outcome",
+      "trigger": "Started by",
+      "duration": "Took",
+      "conversationColumn": "Conversation",
+      "search": "Search reasons and conversations",
+      "by": {
+        "schedule": "On schedule",
+        "late": "Late (catch up)",
+        "manual": "By hand"
+      }
+    },
+    "dialog": {
+      "title": "New scheduled task",
+      "editTitle": "Edit {{name}}",
+      "body": "At the time you pick, Coffer opens a new conversation with the agent below in the task's own folder and sends it the task's PROMPT.md. Once the task is created, write the prompt in its Files tab, then press Resume to start it: notifying you, writing a report, using a skill or working in another directory all go there.",
+      "name": "Name",
+      "when": "When",
+      "weekday": "Day",
+      "time": "Time",
+      "minute": "Minute",
+      "at": "Date and time",
+      "cron": "Cron expression",
+      "kind": {
+        "daily": "Every day",
+        "weekly": "Every week",
+        "hourly": "Every hour",
+        "once": "Once",
+        "cron": "Cron",
+        "manual": "Only by hand"
+      },
+      "localTime": "In this Mac's local time.",
+      "cronHint": "Five fields: minute hour day month weekday, in the timezone you name or this Mac's local time.",
+      "manualHint": "Runs only when you press Run now.",
+      "agent": "Agent",
+      "model": "Model",
+      "catchUp": "Catch up",
+      "catchUpHint": "A run missed while the Mac slept or Coffer was off runs once, late.",
+      "submit": "Create task",
+      "addFailed": "Couldn’t create the task",
+      "editFailed": "Couldn’t save the task",
+      "agentDefault": "Agent default",
+      "timezone": "Timezone",
+      "timezonePlaceholder": "This Mac's time",
+      "timezoneHint": "In the timezone you name (an IANA name such as Asia/Singapore), or this Mac's local time.",
+      "agentDefaultNamed": "Agent default ({{model}})"
+    },
+    "tabs": {
+      "overview": "Overview",
+      "runs": "History",
+      "files": "Files"
+    },
+    "prompt": {
+      "unsaved": "Unsaved changes",
+      "revert": "Revert",
+      "edit": "Edit prompt"
+    },
+    "needsPrompt": "Write PROMPT.md in the Files tab first"
   }
 }

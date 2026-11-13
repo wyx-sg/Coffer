@@ -104,6 +104,36 @@ Validation rules:
 - Channel turns run in the Coffer-managed default workspace
   `~/.coffer/content/workspace` (created on first use).
 
+## Resource kind: `scheduled_task`
+
+A prompt Coffer sends an agent at a time, each run in a new conversation of its
+own (spec channels "Keep scheduled tasks as machine-local resources"; ADR
+automation-is-a-scheduled-prompt). Stored under
+`local/resources/scheduled_task/<uid>.json`, never synced: its agent and
+directory are this machine's. `name` is the task's label (free text);
+`enabled: false` is a paused task, or a one-off that has run.
+
+| config key | type | notes |
+| --- | --- | --- |
+| `schedule` | object | one of `{kind: once, at}`, `{kind: hourly, minute}`, `{kind: daily, time: "HH:MM"}`, `{kind: weekly, weekday: 0-6 (Monday 0), time}`, `{kind: cron, expr}`, `{kind: manual}`; a repeating one may add `timezone` (IANA), this machine's local time otherwise; at most every 15 min |
+| `agent` | `claude_code` \| `codex` | required |
+| `model`, `cwd` | string \| null | null is the agent's default model and the task's own folder |
+| `catch_up` | bool | default `true` |
+
+What the agent is asked is not in the config: it is `PROMPT.md` (non-empty, at
+most 8000 characters) in the task's own folder,
+`~/.coffer/content/workspace/scheduled-tasks/<uid>/` (`content`: the user's only
+copy, not synced). A task that names no `cwd` runs in that folder, so what its
+runs write stays beside its prompt; the folder is not removed with the task.
+
+A file written before 2026-11-11 may carry `prompt`: it is moved into
+`PROMPT.md` when the daemon starts (kept when the file already exists) and
+dropped from the config; a config that carries one is otherwise refused.
+
+A file an older Coffer wrote may carry `chat`, `session`, `mention`,
+`material`, `template`, `origin` and `chain_*`: they are dropped on read, and a
+follow-up (`origin: agent`) is removed when the daemon starts.
+
 ## Pairings — `local/channel-peers.json`
 
 **The pairings, and nothing else.** One entry per `(channel, chat)`: the paired
@@ -288,6 +318,29 @@ its channel.
 | `sent_at`      | DATETIME (UTC)   | what the platform's withdraw window is measured from      |
 
 Index on `(resource_uid, chat_id, sent_at)`.
+
+### `scheduled_task_runs`
+
+Every run of a scheduled task (spec channels "Keep every scheduled run in the
+task's history"). Ids, times and outcomes only. Pruned by retention
+(`started_at`, 90 days by default).
+
+| column | type | notes |
+| --- | --- | --- |
+| `run_id` | VARCHAR PK | |
+| `task_uid` | VARCHAR NOT NULL | |
+| `task_name` | VARCHAR NOT NULL | the name at run time, kept after the task is gone |
+| `due_at` | TIMESTAMP (UTC) | the slot it ran for |
+| `catch_up` | BOOLEAN | ran late, within its grace |
+| `trigger` | VARCHAR | `schedule` / `manual` |
+| `started_at` | TIMESTAMP (UTC) | |
+| `finished_at` | TIMESTAMP (UTC) NULL | null while running |
+| `outcome` | VARCHAR | `running` / `done` / `skipped` / `failed` / `stopped` (an older `replied` or `silent` reads as `done`) |
+| `reason` | TEXT | why it was skipped, failed or stopped; `""` otherwise |
+| `conversation_id` | VARCHAR | `""` when it never started |
+
+Indexes on `(task_uid, started_at)` and `(started_at)`. A row still `running`
+at boot is closed as `failed` ("Coffer stopped while it was running").
 
 ## In-memory state (never persisted)
 

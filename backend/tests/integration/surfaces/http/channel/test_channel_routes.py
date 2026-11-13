@@ -12,6 +12,7 @@ import asyncio
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -24,7 +25,7 @@ from coffer.application.channel.pairing import PairingManager
 from coffer.application.channel.service import ChannelService
 from coffer.application.channel.store_ports import ChannelPeer
 from coffer.application.resource_service import ResourceService
-from coffer.domain.channel.envelopes import SentMessage
+from coffer.domain.channel.envelopes import ChannelCapabilities, SentMessage
 from coffer.domain.channel.errors import ChannelNotRunning
 from coffer.infrastructure.channel.persistence import (
     ChannelPeerRepo,
@@ -420,8 +421,44 @@ async def test_notify_delivers_to_paired_peer(ctx: _Ctx) -> None:
     async with _client(ctx.app) as c:
         r = await c.post(f"/api/v1/channels/{ctx.tg_uid}/notify", json={"text": "build green"})
     assert r.status_code == 200
-    assert r.json() == {"sent": True}
+    assert r.json() == {"sent": True, "files_failed": []}
     assert adapter.sent == [("555", "build green")]
+
+
+class _FileAdapter(_StubAdapter):
+    capabilities = ChannelCapabilities(
+        supports_typing=False, max_message_chars=4096, supports_media=True
+    )
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.files: list[tuple[str, str]] = []
+
+    async def send_media(self, chat_id: str, path: str, **_: Any) -> SentMessage:
+        self.files.append((chat_id, path))
+        return SentMessage(message_id="f1")
+
+
+@pytest.mark.acceptance(spec="channels", scenario="a notification carries files after its text")
+async def test_notify_sends_files_after_the_text(ctx: _Ctx, tmp_path: Path) -> None:
+    adapter = _FileAdapter()
+    ctx.runtime.adapters[ctx.tg_uid] = adapter  # type: ignore[assignment]
+    await _pair(ctx, ctx.tg_uid, chat_id="555")
+    report = tmp_path / "report.md"
+    report.write_text("# Today")
+    async with _client(ctx.app) as c:
+        r = await c.post(
+            f"/api/v1/channels/{ctx.tg_uid}/notify",
+            json={"text": "Daily report", "files": [str(report)]},
+        )
+        missing = await c.post(
+            f"/api/v1/channels/{ctx.tg_uid}/notify",
+            json={"text": "x", "files": ["relative.md"]},
+        )
+    assert r.status_code == 200 and r.json() == {"sent": True, "files_failed": []}
+    assert adapter.sent[0] == ("555", "Daily report")
+    assert adapter.files == [("555", str(report))]
+    assert missing.status_code == 422
 
 
 async def test_notify_unpaired_channel_is_409(ctx: _Ctx) -> None:

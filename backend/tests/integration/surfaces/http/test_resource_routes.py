@@ -305,6 +305,23 @@ async def test_patch_renames_any_kind(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_patch_refuses_a_config_field_sent_at_the_top_level(tmp_path):
+    """``{"cwd": null}`` beside ``config`` instead of inside it used to answer
+    200 and change nothing, so the caller believed the field was cleared."""
+    c, engine = await _client(tmp_path)
+    async with c:
+        created = await c.post(
+            "/api/v1/resources",
+            json={"kind": "fake_kind", "name": "t", "config": {"foo": 1}},
+        )
+        uid = created.json()["uid"]
+        r = await c.patch(f"/api/v1/resources/{uid}", json={"foo": 2})
+        assert r.status_code == 422, r.text
+        assert (await c.get(f"/api/v1/resources/{uid}")).json()["config"]["foo"] == 1
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_patch_rename_onto_a_taken_label_returns_409(tmp_path):
     c, engine = await _client(tmp_path)
     async with c:

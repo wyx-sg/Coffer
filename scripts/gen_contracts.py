@@ -54,6 +54,7 @@ OWNERS: tuple[tuple[str, str], ...] = (
     ("/api/v1/attention", "resource-framework"),
     ("/api/v1/audit", "resource-framework"),
     ("/api/v1/channels", "channels"),
+    ("/api/v1/scheduled-tasks", "channels"),
     ("/api/v1/chat", "chat"),
     ("/api/v1/clis", "skill-manager"),
     ("/api/v1/secrets", "secret"),

@@ -36,6 +36,7 @@ from coffer.application.audit_service import AuditService
 from coffer.application.binary_deploy import deploy_frozen_sidecars
 from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.channel.kind import make_channel_kind
+from coffer.application.channel.schedule.kind import make_scheduled_task_kind
 from coffer.application.memory.legacy_removal import remove_memory_hooks
 from coffer.application.provider.reach_retirement import migrate_saved_connections
 from coffer.application.reconcile.hints import HintingResourceRepo
@@ -93,6 +94,7 @@ from coffer.surfaces.http.reconcile_wiring import (
 )
 from coffer.surfaces.http.release_check_wiring import wire_release_check
 from coffer.surfaces.http.routing import include_all_routers
+from coffer.surfaces.http.schedule_wiring import wire_scheduled_tasks
 from coffer.surfaces.http.secret_boundary_wiring import remember_destination_sources
 from coffer.surfaces.http.secret_composition import init_secret_store
 from coffer.surfaces.http.secret_index_wiring import wire_secret_index
@@ -242,6 +244,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     channel_runtime = wire_channel_kind(
         app, resource_svc, audit, sm, vault, secret_store, chat, builtin_tools, events
     )
+    # Scheduled tasks start turns on the chat platform too.
+    await wire_scheduled_tasks(app, resource_svc=resource_svc, sm=sm, chat=chat, events=events)
 
     # Every kind has registered its secret destinations; the approval refresh reads them.
     remember_destination_sources(resource_svc, audit)
@@ -377,6 +381,7 @@ def create_app(kinds: dict[str, Kind] | None = None) -> FastAPI:
     # Same eager registration for the channel kind (the lifespan's
     # wire_channel_kind overwrites it with the runtime-evicting on_delete).
     app.state.kinds.setdefault("channel", make_channel_kind())
+    app.state.kinds.setdefault("scheduled_task", make_scheduled_task_kind())
     # Built here, not in the lifespan: /daemon/status reports the features and
     # must answer before the lifespan has run (spec experimental-features).
     # The lifespan hands ``app.state.feature_service`` to what gates on it.

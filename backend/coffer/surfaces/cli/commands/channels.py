@@ -37,7 +37,7 @@ SPECS = [
         "POST",
         "/channels/{uid}/notify",
         _UI + "Send a test message",
-        "Send a message through the channel. Body: text, chat_id.",
+        "Send a message, and files, through the channel. Body: text, chat_id, files.",
         names=C,
         body=True,
         wait=_waits.NETWORK_S,

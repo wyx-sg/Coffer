@@ -83,6 +83,19 @@ class MediaFile:
         return pathlib.Path(self.path).name
 
 
+def local_files(paths: Sequence[str]) -> tuple[MediaFile, ...]:
+    """The files a caller names to send, by absolute path (``coffer channel
+    notify``, ``coffer__channel_notify``). Raises ``ValueError`` naming the
+    first path that is not an absolute path to an existing file."""
+    out = []
+    for path in paths:
+        file = pathlib.Path(path)
+        if not file.is_absolute() or not file.is_file():
+            raise ValueError(f"{path!r} is not an absolute path to an existing file.")
+        out.append(MediaFile(path=str(file)))
+    return tuple(out)
+
+
 def take_media(adapter: ChannelAdapter, text: str) -> tuple[str, tuple[MediaFile, ...]]:
     """Take each ``MEDIA:`` sentinel line whose file exists out of ``text``;
     return the text without those lines and the files to upload after the reply.
