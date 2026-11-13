@@ -143,6 +143,14 @@ class TidyFinishOut(BaseModel):
     change: ChangeOut | None = Field(
         default=None, description="The tidy's one change; null when it changed nothing."
     )
+    tidy_was_open: bool = Field(
+        description="Whether a tidy was open when this call ran (started with tidy-start)."
+    )
+    reason: str | None = Field(
+        default=None,
+        description="Why there is no change: 'no tidy open' or 'nothing to commit'; null when "
+        "there is a change.",
+    )
 
 
 class UndoIn(BaseModel):

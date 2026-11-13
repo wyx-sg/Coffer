@@ -154,6 +154,10 @@ class MCPGatewaySession:
         """Called by the session runner once the downstream wire is open."""
         self._downstream_sink = sink
 
+    async def announce_tools_changed(self) -> None:
+        """Tell the client its ``tools/list`` changed (reach, scope, enable)."""
+        await self._send_downstream({"method": "notifications/tools/list_changed", "params": {}})
+
     # --- Initialize ---
 
     async def handle_initialize(
@@ -312,6 +316,7 @@ class MCPGatewaySession:
                 params,
                 exposure=exposure,
                 about=about,
+                resources=self._resources,
                 discovery=self._discovery,
                 ensure_subscribed=self._ensure_subscribed,
                 servers=servers,

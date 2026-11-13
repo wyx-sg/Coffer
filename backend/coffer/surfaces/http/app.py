@@ -171,6 +171,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         # Probed before persisting (spec mcp-gateway "Manage MCP servers as resources").
         secrets=secret_store,
     )
+    resource_svc.after_switch_change.append(_announce_mcp_tools_changed)
 
     retention_svc = build_retention_service(sm, audit=audit)
     await retention_svc.initialize_defaults()
@@ -389,3 +390,11 @@ def create_app(kinds: dict[str, Kind] | None = None) -> FastAPI:
     # registered or it would swallow them.
     webui.install(app)
     return app
+
+
+async def _announce_mcp_tools_changed(resource: object) -> None:
+    """A server's reach, scope or enabled switch changed: live MCP sessions re-list."""
+    from coffer.surfaces.http.mcp.session_registry import announce_tools_changed
+
+    if getattr(resource, "kind", None) == "mcp_server":
+        await announce_tools_changed()

@@ -291,3 +291,4 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | ADR | Decision |
 | --- | --- |
 | [`docs-screenshots-are-generated-from-a-seeded-daemon`](docs-screenshots-are-generated-from-a-seeded-daemon.md) | Docs Screenshots Are Generated From a Seeded Daemon, Not Captured by Hand |
+| [`a-search-that-finds-nothing-names-the-unreached-server`](a-search-that-finds-nothing-names-the-unreached-server.md) | A Search That Finds Nothing Names the Server the Agent Is Not Reached By |

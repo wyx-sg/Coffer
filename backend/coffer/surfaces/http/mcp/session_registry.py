@@ -152,6 +152,15 @@ async def _drop_session(session_id: str) -> None:
     _SESSION_DISPOSE_LOCKS.pop(session_id, None)
 
 
+async def announce_tools_changed() -> None:
+    """Send ``notifications/tools/list_changed`` to every live session, so an
+    agent re-lists after its reach, scope or enabled switch changed (spec
+    mcp-gateway "Tell live sessions when their tool list changes")."""
+    for session in list(_ACTIVE_SESSIONS.values()):
+        with contextlib.suppress(Exception):
+            await session.announce_tools_changed()
+
+
 async def shutdown_all_sessions() -> None:
     """Called by app lifespan on shutdown."""
     for sid in list(_ACTIVE_SESSIONS.keys()):

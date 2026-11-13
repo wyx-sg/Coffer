@@ -201,7 +201,8 @@ async def enable_resource(
     actor: str = Depends(_actor),
 ) -> ResourceOut:
     await _reachable(svc, uid)
-    return _to_out(await svc.set_enabled(uid, enabled=True, actor=actor), svc)
+    updated = await svc.set_enabled(uid, enabled=True, actor=actor)
+    return _to_out(updated, svc)
 
 
 @router.post("/{uid}/disable", response_model=ResourceOut)
@@ -211,7 +212,8 @@ async def disable_resource(
     actor: str = Depends(_actor),
 ) -> ResourceOut:
     await _reachable(svc, uid)
-    return _to_out(await svc.set_enabled(uid, enabled=False, actor=actor), svc)
+    updated = await svc.set_enabled(uid, enabled=False, actor=actor)
+    return _to_out(updated, svc)
 
 
 @router.get("/{uid}/scope", response_model=ResourceScopeOut)
@@ -235,4 +237,5 @@ async def update_resource_scope(
     # (ResourceService.update_scope, ADR: per-agent-resource-scope).
     await _reachable(svc, uid)
     scope = body.scope.to_domain() if body.scope is not None else None
-    return _to_out(await svc.update_scope(uid, scope, actor=actor), svc)
+    updated = await svc.update_scope(uid, scope, actor=actor)
+    return _to_out(updated, svc)

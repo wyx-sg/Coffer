@@ -194,10 +194,12 @@ def test_list_shows_every_cited_ref_with_its_presence(monkeypatch):
 
     result = runner.invoke(app, ["secret", "list"])
     assert result.exit_code == 0, result.output
-    lines = {line.split("│")[2].strip(): line for line in result.output.splitlines() if "│" in line}
-    assert "yes" in lines["gh_pat"]
-    assert "no" in lines["openai_key"].split("│")[3]
-    assert "provider" in lines["openai_key"]
+    # The table is plain text (agents read it), one row per ref; the ref is whole.
+    gh_row = next(line for line in result.output.splitlines() if "gh_pat" in line)
+    openai_row = next(line for line in result.output.splitlines() if "openai_key" in line)
+    assert "yes" in gh_row
+    assert "no" in openai_row
+    assert "provider" in openai_row
     assert "ghp_test" not in result.output
 
 

@@ -110,8 +110,16 @@ async def finish_tidy(
 ) -> TidyFinishOut:
     """Close the collection's tidy and commit what it changed as one change
     carrying the report; ``change`` is ``null`` when it changed nothing."""
+    was_open = await tidy.was_open(uid)
     change = await tidy.finish(uid, body.summary, actor=actor)
-    return TidyFinishOut(change=change_out(change) if change else None)
+    reason = None
+    if change is None:
+        reason = "nothing to commit" if was_open else "no tidy open"
+    return TidyFinishOut(
+        change=change_out(change) if change else None,
+        tidy_was_open=was_open,
+        reason=reason,
+    )
 
 
 @router.put("/collections/{uid}/description", response_model=CollectionOut)

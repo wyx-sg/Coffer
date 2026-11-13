@@ -74,6 +74,11 @@ class TidyService:
         self._clock = clock
         self._wall = wall
 
+    async def was_open(self, uid: str) -> bool:
+        """Whether the collection has a tidy open right now (read before finishing)."""
+        row = await self._knowledge.owned_collection(uid)
+        return self._runs.get(row.name) is not None
+
     def status(self, collection: str) -> TidyStatus:
         run = self._runs.get(collection)
         return TidyStatus(
