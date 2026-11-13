@@ -163,6 +163,12 @@ reaction, so delivery and reclaim stay in step with the edit. *Enforcing* reach 
 kind's own seam at its own choke point; this spec owns the value, its validation and its
 write path.
 
+The command line sets a reach by naming agents: `coffer mcp|skill|channel reach <name>` and `coffer resource reach set <uid>` take `--agent <name or uid>` (repeatable; the agents named are the whole reach) or `--all` (every agent), as well as a body. Giving both, or nothing, MUST be refused as invalid input before any request is sent.
+
+#### Scenario: a reach is set by naming agents on the command line
+- **WHEN** the developer runs `coffer mcp reach grafana --agent claude-code`, then `coffer skill reach x --all`
+- **THEN** the first sends the scope holding that agent's uid and the second sends a null scope, and a reach command given neither or both exits 6 with `CLI_INVALID_INPUT`
+
 #### Scenario: set a resource's reach from the kind-agnostic surface
 - **GIVEN** a resource of a kind that supports reach,
 - **WHEN** the user sets its scope to one agent, then clears it back to unscoped,

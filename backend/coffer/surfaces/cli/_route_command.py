@@ -75,6 +75,9 @@ class RouteCommand:
     #: network or runs git (``_waits.NETWORK_S``, ``_waits.GIT_S``); ``None``
     #: is the quick wait every other command has.
     wait: float | None = None
+    #: The body is a reach: ``--agent`` (repeatable, a name or uid) or ``--all``
+    #: write it, as well as ``--data``/``--set``.
+    reach: bool = False
 
 
 def _py(name: str) -> str:
@@ -107,6 +110,23 @@ def _human(spec: RouteCommand) -> Callable[[Any], None] | None:
             _io.emit(value, as_json=False)
 
     return show
+
+
+def _reach(body: dict[str, Any], agents: list[str] | None, every: bool, as_json: bool) -> Any:
+    """The reach to send: every agent named (the whole list, not an addition),
+    ``--all`` for no limit, or the body ``--data``/``--set`` gave."""
+    if (every and agents) or not (every or agents or body):
+        _io.fail(
+            "CLI_INVALID_INPUT",
+            "give --agent (repeatable) or --all",
+            ExitCode.INVALID_INPUT,
+            as_json=as_json,
+        )
+    if every:
+        return {"scope": None}
+    if agents:
+        return {"scope": {"agents": [_uid("agent", a, as_json=as_json) for a in agents]}}
+    return body
 
 
 def build(spec: RouteCommand) -> Callable[..., None]:
@@ -147,6 +167,13 @@ def build(spec: RouteCommand) -> Callable[..., None]:
         )
         annotations["data"] = str | None
         annotations["sets"] = list[str] | None
+    if spec.reach:
+        agent = typer.Option(None, "--agent", help="An agent (name or uid); repeat")
+        every = typer.Option(False, "--all", help="Reach every agent")
+        params.append(inspect.Parameter("agent", inspect.Parameter.KEYWORD_ONLY, default=agent))
+        params.append(inspect.Parameter("every", inspect.Parameter.KEYWORD_ONLY, default=every))
+        annotations["agent"] = list[str] | None
+        annotations["every"] = bool
     params.append(
         inspect.Parameter("as_json", inspect.Parameter.KEYWORD_ONLY, default=_io.json_option())
     )
@@ -167,6 +194,10 @@ def build(spec: RouteCommand) -> Callable[..., None]:
                 kwargs.pop("sets", None),
                 as_json=as_json,
                 base=spec.fixed_body,
+            )
+        if spec.reach:
+            body = _reach(
+                body or {}, kwargs.pop("agent", None), kwargs.pop("every", False), as_json
             )
         params_out: dict[str, Any] = {}
         for q in spec.query:

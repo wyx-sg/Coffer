@@ -35,19 +35,20 @@ def emit(value: Any, *, as_json: bool, human: Callable[[Any], None] | None = Non
         typer.echo(str(value))
 
 
-def table(rows: list[Mapping[str, Any]], columns: list[str]) -> None:
-    """A plain aligned table of ``columns`` (no colours: agents read it)."""
+def table(rows: list[Mapping[str, Any]], columns: list[str], *, whole: bool = False) -> None:
+    """A plain aligned table of ``columns`` (no colours: agents read it).
+    ``whole`` prints every cell in full, for a table whose cells are acted on."""
     if not rows:
         typer.echo("(none)")
         return
-    cells = [[_cell(r.get(c)) for c in columns] for r in rows]
+    cells = [[_cell(r.get(c), whole) for c in columns] for r in rows]
     widths = [max(len(c), *(len(row[i]) for row in cells)) for i, c in enumerate(columns)]
     typer.echo("  ".join(c.upper().ljust(widths[i]) for i, c in enumerate(columns)).rstrip())
     for row in cells:
         typer.echo("  ".join(v.ljust(widths[i]) for i, v in enumerate(row)).rstrip())
 
 
-def _cell(value: Any) -> str:
+def _cell(value: Any, whole: bool = False) -> str:
     if value is None:
         return "-"
     if isinstance(value, bool):
@@ -56,7 +57,7 @@ def _cell(value: Any) -> str:
         text = json.dumps(value, ensure_ascii=False, default=str)
     else:
         text = str(value)
-    return text if len(text) <= 60 else text[:57] + "..."
+    return text if whole or len(text) <= 60 else text[:57] + "..."
 
 
 def pending_approvals(value: Any) -> list[str]:

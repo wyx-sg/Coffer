@@ -1,31 +1,55 @@
-# A Search That Finds Nothing Names the Server the Agent Is Not Reached By
+# A Search Names the Server the Agent Is Not Reached By
 
 **Status**: Accepted
 **Date**: 2026-11-13
 **Deciders**: Yuxing Wu
-**Related**: [Per-Agent Resource Scope](per-agent-resource-scope.md), [Tool Overload: Tier the List, Search the Rest](tool-overload-tier-the-list-search-the-rest.md), spec mcp-gateway "Gate server exposure by scope per session", "Tell live sessions when their tool list changes" (this change)
+**Related**: [Per-Agent Resource Scope](per-agent-resource-scope.md), [Tool Overload: Tier the List, Search the Rest](tool-overload-tier-the-list-search-the-rest.md), spec mcp-gateway "Name the unreached server when a search asks for it", "Gate server exposure by scope per session"
 
 ## Context
 
-An agent searches Coffer's catalogue with `coffer__search_tools`. The search covers only the servers the agent is reached by. A Grafana server reached only by Codex gave Claude Code an empty result (`{"tools": [], "total_searched": 10}`), so the agent concluded Coffer had no Grafana capability. The coffer-guide says a call refused for scope "comes back with the reason", but the search path gave no reason at all.
+An agent searches Coffer's catalogue with `coffer__search_tools`. The search covers only the servers the agent is reached by. A Grafana server reached only by Codex gave Claude Code an empty result (`{"tools": [], "total_searched": 10}`), so the agent concluded Coffer had no Grafana capability and told the developer so. The developer owns every server and every agent on the machine; the reach is their own setting, not a boundary between tenants.
 
-The question: when a search finds nothing, what does Coffer say about servers the agent cannot see?
+The question: what does a search say about an enabled server the asking agent is not reached by?
 
-## Options
+## How comparable gateways answer
 
-1. **Say nothing (the old behaviour).** The agent cannot tell "no such tool" from "not reached", and guesses wrong. Cost: silent failure, which is the bug.
-2. **A generic note: "a server matches but is not in reach for you."** It leaks no names, so nothing about another agent's setup is revealed. But the agent cannot act on it, because it cannot name what to ask the developer for.
-3. **Name the matching servers and give the command that reaches them** (`coffer mcp reach <server> --agent <agent>`). The agent can report exactly what to ask for, and the developer runs one command. Cost: an agent learns that a server exists when it was not reached by it. The matching is by name only, and only when the search has no results, so a server nobody asked about is never listed.
-4. **List every unreached server on every search.** Noisy, reveals names on every query, and most results are not relevant.
+- **Zuplo MCP Gateway** (capability filtering): items off the allow-list are "silently dropped" from the list, a call gets JSON-RPC `-32601 Method not found`, and "the client never learns they exist". This is the multi-tenant answer: the hidden thing may belong to someone else.
+- **LiteLLM MCP permissions**: `tools/list` returns "only the tools the entity has permissions to access". A refused call does name what was refused and whom to ask: "Tool 'delete_repo' is not allowed for your key/team on server 'issue_tracker'. Contact proxy admin for access." Listing is silent, refusal is explained.
+- **Docker MCP Gateway** (Dynamic MCP): the agent gets `mcp-find` to search the whole catalogue, servers it does not have included, and `mcp-add` to add one to its session itself. Discovery is open and the agent widens its own access.
 
-Research: this change did not survey other MCP clients or gateways. The comparison rests on Coffer's own code and the agents' needs, and a survey of comparable products should be added before the option is reused elsewhere.
+Sources: zuplo.com/docs/mcp-gateway/capability-filtering, docs.litellm.ai/docs/mcp_control, docs.docker.com/ai/mcp-catalog-and-toolkit/dynamic-mcp (read 2026-11-13).
+
+## Options Considered
+
+### Option A — Name the server, leave the change to the developer (chosen)
+
+When a search finds nothing, the result carries a `note` naming the unreached servers whose names share a word with the query. When a search does find tools, the note appears only for a server a query word spells exactly (searching `grafana` while `grafana` is unreached and other tools merely mention it). The note says only the developer can change the reach and where: the Reach control or `coffer mcp reach`.
+
+Pros: the agent reports the true state ("Grafana is in Coffer but not reached by me") instead of a false one. Only names leak, only for what was asked about, and to an agent on the developer's own machine. Cons: an agent learns that a server it was not given exists.
+
+### Option B — Say nothing (Zuplo, and Coffer before this)
+
+Right when the hidden server may be another tenant's. Coffer has one developer, and the cost was the incident above: a silent wrong answer.
+
+### Option C — A note without names
+
+"A server matches but is not in your reach." Leaks nothing, but the agent cannot say what to ask for, and the developer has to guess which server.
+
+### Option D — Let the agent reach the server itself (Docker)
+
+Fits a catalogue of servers nobody has chosen yet. In Coffer the reach is the developer's deliberate gate; an agent that can lift it has no gate.
+
+### Option E — Search every server, mark the unreached results
+
+Would also find an unreached server by its tools' descriptions. Costs a listing of servers this session never started, and shows tool definitions the developer withheld, not only a name.
 
 ## Decision
 
-Option 3. When a search returns no tools, the result carries a `note` that names the unreached servers whose names share a word with the query, and gives the reach command. Searches with results are unchanged. Names are never listed otherwise.
+Option A. A search names an unreached server only when the query asks for it by name, and never returns its tools. Only the developer changes a reach.
 
 ## Consequences
 
-- An agent stops guessing "Coffer has no Grafana".
-- The developer's reach is the only gate, unchanged. Coffer grants nothing new: the note only names servers, never their tools.
-- Matching is by server name, so a server found only by its description is not hinted. Accepted: the common case is a server named after the thing the agent wants.
+- An agent stops answering "Coffer has no Grafana" when the server is one switch away.
+- A server found only through its tools' descriptions is not hinted (Option E's cost was judged higher).
+- `coffer mcp|skill|channel reach` and `coffer resource reach set` take `--agent` (repeatable, by name) and `--all`, like `coffer custom-tool group reach`, so the command the note points at can be typed without looking up uids. `--agent` writes the whole list, as the route does.
+- Enforced in `application/mcp/gateway_tool_search.py`.

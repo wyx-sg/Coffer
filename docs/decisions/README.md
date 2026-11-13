@@ -173,6 +173,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`tool-search-cuts-cjk-text-into-bigrams`](tool-search-cuts-cjk-text-into-bigrams.md) | Tool Search Cuts CJK Text Into Bigrams |
 | [`tool-search-indexes-parameter-text`](tool-search-indexes-parameter-text.md) | Tool Search Indexes Parameter Text |
 | [`tool-search-puts-an-exact-name-first`](tool-search-puts-an-exact-name-first.md) | Tool Search Puts an Exact Name First |
+| [`a-search-that-finds-nothing-names-the-unreached-server`](a-search-that-finds-nothing-names-the-unreached-server.md) | A Search Names the Server the Agent Is Not Reached By |
 | [`one-hand-off-per-server-or-group`](one-hand-off-per-server-or-group.md) | One Hand-Off per MCP Server or Custom Tool Group, Carrying the Real Error |
 | [`eval-capture-and-regression-gate`](eval-capture-and-regression-gate.md) | Evals: Opt-In Capture, Hand Curation, and a Deterministic Regression Gate |
 | [`record-tool-call-content-redacted-and-bounded`](record-tool-call-content-redacted-and-bounded.md) | Record Tool Call Content, Masked Where the Secrets Are Known and Cut at 16 KB |
@@ -291,4 +292,3 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | ADR | Decision |
 | --- | --- |
 | [`docs-screenshots-are-generated-from-a-seeded-daemon`](docs-screenshots-are-generated-from-a-seeded-daemon.md) | Docs Screenshots Are Generated From a Seeded Daemon, Not Captured by Hand |
-| [`a-search-that-finds-nothing-names-the-unreached-server`](a-search-that-finds-nothing-names-the-unreached-server.md) | A Search That Finds Nothing Names the Server the Agent Is Not Reached By |

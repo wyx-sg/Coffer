@@ -1668,18 +1668,27 @@ add|update --response-rules`, and on the Custom tools page.
 - **THEN** the first result is an in-band error naming `101` and `ERROR_SP_NEED_AUTH`, recorded `error`, and the second a success carrying the body
 - **AND** the same group with no rules judges both answers a success
 
-### Requirement: Name the unreached server when a search finds nothing
+### Requirement: Name the unreached server when a search asks for it
 
-When `coffer__search_tools` finds no tool in the agent's reach and a server that is enabled but not in reach for this agent shares a word with the query, the result MUST carry a `note` that names that server and gives the command that reaches it (`coffer mcp reach <server> --agent <agent>`). Server names MUST NOT appear in a search that finds a tool, nor in a search whose query matches no unreached server. The note never grants access: the tools stay unreachable until the developer changes the server's reach.
+`coffer__search_tools` MUST tell an agent when the server it asked for is enabled but not in its reach, in a `note` on the result ([A Search Names the Server the Agent Is Not Reached By](../../../docs/decisions/a-search-that-finds-nothing-names-the-unreached-server.md)). When the search finds no tool, the note names every enabled server outside the agent's reach whose name contains a word of the query (words of three characters or more). When the search finds tools, the note names only a server whose whole name is a word of the query. No other search carries a note, and a note never carries a tool of the unreached server. The note MUST say that only the developer can change the reach and where (the Reach control, `coffer mcp reach`); it grants nothing.
 
 #### Scenario: An empty search names the server the agent is not reached by
 - **WHEN** an agent searches for a term that matches no tool in its reach, and an enabled server it is not reached by has that term in its name
 - **THEN** the result has no tools and a `note` naming that server with the `coffer mcp reach` command
 
+#### Scenario: A search that finds other tools still names the server asked for
+- **GIVEN** enabled servers `Grafana` and `grafana-staging`, neither reaching the agent, and reached tools that match the query's other words
+- **WHEN** the agent searches `grafana create issue`
+- **THEN** the result has tools and a `note` naming `Grafana` and not `grafana-staging`
+
 ### Requirement: Tell live sessions when their tool list changes
 
-When a server's reach, scope or enabled switch changes, every live MCP session MUST receive `notifications/tools/list_changed`, so the agent lists tools again without restarting. `tools/list` itself is recomputed on each request, so the notification is what makes the change visible to a client that cached its list.
+After any write to an `mcp_server` resource (its reach, its switch, a tool's switch or exposure, its config, its deletion; made through the API, by a hand edit or by a sync), every live MCP session MUST receive `notifications/tools/list_changed`, so a client that cached its list asks again without restarting; `tools/list` itself is computed on each request. Writes that arrive together MUST be announced once. Whether the agent then refreshes is the client's behaviour, not Coffer's.
 
 #### Scenario: A reach change reaches a running session
 - **WHEN** the developer changes a server's reach while an agent's session is connected
-- **THEN** that session receives `notifications/tools/list_changed` and the agent lists its tools again
+- **THEN** that session receives `notifications/tools/list_changed`
+
+#### Scenario: A burst of server writes is announced once
+- **WHEN** a server is written three times in quick succession while sessions are connected
+- **THEN** each session receives one `notifications/tools/list_changed`

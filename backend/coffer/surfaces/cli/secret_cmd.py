@@ -186,4 +186,4 @@ def list_refs(
                 "readable": "yes" if entry.get("readable_by_local_processes") else "no",
             }
         )
-    _output.table(rows, ["label", "ref", "present", "used_by", "readable"])
+    _output.table(rows, ["label", "ref", "present", "used_by", "readable"], whole=True)

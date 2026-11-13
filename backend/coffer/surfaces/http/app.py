@@ -81,6 +81,7 @@ from coffer.surfaces.http.feature_dependencies import build_feature_service, set
 from coffer.surfaces.http.guide_wiring import follow_guide_features, run_builtin_guide_refresh
 from coffer.surfaces.http.kind_wiring import wire_resource_kinds
 from coffer.surfaces.http.mcp.protocol_routes import start_session_reaper
+from coffer.surfaces.http.mcp.session_registry import tools_changed_sink
 from coffer.surfaces.http.openapi_route import include_openapi_route
 from coffer.surfaces.http.provider_health_wiring import wire_provider_health
 from coffer.surfaces.http.reconcile_wiring import (
@@ -171,7 +172,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         # Probed before persisting (spec mcp-gateway "Manage MCP servers as resources").
         secrets=secret_store,
     )
-    resource_svc.after_switch_change.append(_announce_mcp_tools_changed)
+    events.late_sinks.append(tools_changed_sink(asyncio.get_running_loop()))
 
     retention_svc = build_retention_service(sm, audit=audit)
     await retention_svc.initialize_defaults()
@@ -390,11 +391,3 @@ def create_app(kinds: dict[str, Kind] | None = None) -> FastAPI:
     # registered or it would swallow them.
     webui.install(app)
     return app
-
-
-async def _announce_mcp_tools_changed(resource: object) -> None:
-    """A server's reach, scope or enabled switch changed: live MCP sessions re-list."""
-    from coffer.surfaces.http.mcp.session_registry import announce_tools_changed
-
-    if getattr(resource, "kind", None) == "mcp_server":
-        await announce_tools_changed()

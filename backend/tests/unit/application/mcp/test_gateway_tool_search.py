@@ -200,12 +200,23 @@ async def test_empty_search_without_a_match_has_no_note():
     assert "note" not in out
 
 
-async def test_a_search_with_results_has_no_note():
+async def test_a_search_with_results_does_not_name_a_look_alike():
     out = await execute_tool_search(
-        {"query": "create github issue"}, _agg(), out_of_reach=["grafana"]
+        {"query": "create github issue"}, _agg(), out_of_reach=["grafana", "github-enterprise"]
     )
     assert out["tools"]
     assert "note" not in out
+
+
+@pytest.mark.acceptance(
+    spec="mcp-gateway", scenario="A search that finds other tools still names the server asked for"
+)
+async def test_scenario_search_with_results_names_the_server_asked_for():
+    out = await execute_tool_search(
+        {"query": "grafana create issue"}, _agg(), out_of_reach=["Grafana", "grafana-staging"]
+    )
+    assert out["tools"]
+    assert "Grafana" in out["note"] and "grafana-staging" not in out["note"]
 
 
 @pytest.mark.acceptance(
