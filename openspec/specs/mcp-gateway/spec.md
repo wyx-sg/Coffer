@@ -1672,6 +1672,14 @@ add|update --response-rules`, and on the Custom tools page.
 
 When `coffer__search_tools` finds no tool in the agent's reach and a server that is enabled but not in reach for this agent shares a word with the query, the result MUST carry a `note` that names that server and gives the command that reaches it (`coffer mcp reach <server> --agent <agent>`). Server names MUST NOT appear in a search that finds a tool, nor in a search whose query matches no unreached server. The note never grants access: the tools stay unreachable until the developer changes the server's reach.
 
+#### Scenario: An empty search names the server the agent is not reached by
+- **WHEN** an agent searches for a term that matches no tool in its reach, and an enabled server it is not reached by has that term in its name
+- **THEN** the result has no tools and a `note` naming that server with the `coffer mcp reach` command
+
 ### Requirement: Tell live sessions when their tool list changes
 
 When a server's reach, scope or enabled switch changes, every live MCP session MUST receive `notifications/tools/list_changed`, so the agent lists tools again without restarting. `tools/list` itself is recomputed on each request, so the notification is what makes the change visible to a client that cached its list.
+
+#### Scenario: A reach change reaches a running session
+- **WHEN** the developer changes a server's reach while an agent's session is connected
+- **THEN** that session receives `notifications/tools/list_changed` and the agent lists its tools again
