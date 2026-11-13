@@ -16,7 +16,6 @@ from coffer.domain.resource import Resource
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor, get_resource_service
 from coffer.surfaces.http.feature_dependencies import kind_enabled, require_kind_enabled
-from coffer.surfaces.http.mcp.session_registry import announce_tools_changed
 from coffer.surfaces.http.schemas import (
     ResourceCreate,
     ResourceListOut,
@@ -203,7 +202,6 @@ async def enable_resource(
 ) -> ResourceOut:
     await _reachable(svc, uid)
     updated = await svc.set_enabled(uid, enabled=True, actor=actor)
-    await announce_tools_changed()
     return _to_out(updated, svc)
 
 
@@ -215,7 +213,6 @@ async def disable_resource(
 ) -> ResourceOut:
     await _reachable(svc, uid)
     updated = await svc.set_enabled(uid, enabled=False, actor=actor)
-    await announce_tools_changed()
     return _to_out(updated, svc)
 
 
@@ -241,5 +238,4 @@ async def update_resource_scope(
     await _reachable(svc, uid)
     scope = body.scope.to_domain() if body.scope is not None else None
     updated = await svc.update_scope(uid, scope, actor=actor)
-    await announce_tools_changed()
     return _to_out(updated, svc)
