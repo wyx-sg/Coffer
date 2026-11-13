@@ -2,7 +2,7 @@
 
 Every run of a scheduled task — a follow-up an agent booked, the daily report,
 a task the owner set up — with when it was due, when it ran and how it ended
-(spec channels "Keep every scheduled run in the task's history"; change
+(spec scheduled-tasks "Keep every scheduled run in the task's history"; change
 add-scheduled-tasks). Ids, times and outcomes only.
 
 Revision ID: 0155

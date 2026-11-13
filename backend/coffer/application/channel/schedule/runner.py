@@ -1,9 +1,9 @@
 """One run of a scheduled task: from the history row to a turn in a fresh
-conversation of its own (spec channels "Run a scheduled task in a fresh
+conversation of its own (spec scheduled-tasks "Run a scheduled task in a fresh
 conversation of its own").
 
-A run opens a new conversation on the task's agent, model and directory (the
-task's own folder when it names none) and hands it the task's ``PROMPT.md``,
+A run opens a new conversation on the task's agent and model, in the folder
+the task names (its own when it names none), and hands it the task's ``PROMPT.md``,
 the way the owner would on the Conversations page; the answer stays in that
 conversation, and the history row is how the owner finds it (ADR
 automation-is-a-scheduled-prompt). What a run adds is its row, opened
@@ -99,11 +99,13 @@ class TaskRunner:
             late=request.late,
             manual=request.trigger == "manual",
         )
+        if config.cwd is not None and not self._folders.exists(config.cwd):
+            return await self._fail(task, run, f"its folder {config.cwd} does not exist")
         try:
             conversation_id = await self._fresh.start(
                 agent=config.agent,
                 model=config.model,
-                cwd=self._folders.path(task.uid),
+                cwd=config.cwd or self._folders.path(task.uid),
                 title=task.name,
                 text=text,
                 on_end=on_end,
@@ -135,9 +137,15 @@ class TaskRunner:
         self, task: Resource, run: ScheduledRun, outcome: RunOutcome, reason: str
     ) -> ScheduledRun:
         finished = self._clock()
-        await self._runs.finish(run.run_id, outcome=outcome, reason=reason, finished_at=finished)
         ended = replace(run, outcome=outcome, reason=reason, finished_at=finished)
-        await self._settled(task, ended)
+        try:
+            await self._runs.finish(
+                run.run_id, outcome=outcome, reason=reason, finished_at=finished
+            )
+        finally:
+            # Told even when the row could not be closed: the task is no longer
+            # running, and the next start closes a row left open.
+            await self._settled(task, ended)
         return ended
 
     async def _settled(self, task: Resource, run: ScheduledRun) -> None:

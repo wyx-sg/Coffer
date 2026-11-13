@@ -1,6 +1,6 @@
 // src/lib/scheduledTasks/format.ts — what the Scheduled tasks page prints: a schedule in words, a run's tone, the list's groups, and the form ↔ config mapping.
 //
-// Spec channels "Manage scheduled tasks from the Scheduled tasks page".
+// Spec scheduled-tasks "Manage scheduled tasks from the Scheduled tasks page".
 import type { TFunction } from "i18next";
 
 import type {
@@ -20,10 +20,10 @@ export function scheduleText(t: TFunction, schedule: Schedule, lang: string): st
   return zone ? `${words} (${zone})` : words;
 }
 
-/** The agents a task may run on, by key, as the page names them. */
-/** The longest prompt a task may carry (the daemon refuses more). */
-export const PROMPT_MAX_LENGTH = 8000;
+/** How many of a task's latest runs its History shows (the route's own ceiling). */
+export const RUNS_SHOWN = 200;
 
+/** The agents a task may run on, by key, as the page names them. */
 export const AGENTS = [
   { key: "claude_code", label: "Claude Code" },
   { key: "codex", label: "Codex" },
@@ -118,6 +118,8 @@ export const SCHEDULE_KINDS: readonly ScheduleKind[] = [
 
 export interface TaskForm {
   name: string;
+  /** A new task's prompt; an existing task's is edited on its Overview tab, not in the dialog. */
+  prompt: string;
   kind: ScheduleKind;
   time: string;
   minute: string;
@@ -129,6 +131,8 @@ export interface TaskForm {
   at: string;
   agent: string;
   model: string;
+  /** The folder its runs work in; null is the task's own folder. */
+  cwd: string | null;
   catchUp: boolean;
 }
 
@@ -143,6 +147,7 @@ export function formFrom(task?: ScheduledTask): TaskForm {
   const s = c?.schedule;
   return {
     name: task?.name ?? "",
+    prompt: "",
     kind: s?.kind ?? "daily",
     time: s && "time" in s ? s.time : "09:00",
     minute: String(s?.kind === "hourly" ? (s.minute ?? 0) : 0),
@@ -152,6 +157,7 @@ export function formFrom(task?: ScheduledTask): TaskForm {
     at: s?.kind === "once" ? localInput(s.at) : "",
     agent: c?.agent ?? "claude_code",
     model: c?.model ?? "",
+    cwd: c?.cwd ?? null,
     catchUp: c?.catch_up ?? true,
   };
 }
@@ -181,13 +187,15 @@ export function configFrom(form: TaskForm): ScheduledTaskConfig {
     schedule: scheduleFrom(form),
     agent: form.agent,
     model: form.model.trim() || null,
+    cwd: form.cwd?.trim() || null,
     catch_up: form.catchUp,
   };
 }
 
-/** Whether the form can be saved: a name and an agent (the prompt is written in the Files tab). */
-export function formValid(form: TaskForm): boolean {
+/** Whether the form can be saved: a name and an agent, and for a new task its prompt. */
+export function formValid(form: TaskForm, creating: boolean): boolean {
   if (!form.name.trim() || !form.agent) return false;
+  if (creating && !form.prompt.trim()) return false;
   if (form.kind === "once") return form.at !== "" && !Number.isNaN(new Date(form.at).getTime());
   if (form.kind === "cron") return form.expr.trim().split(/\s+/).length === 5;
   return true;

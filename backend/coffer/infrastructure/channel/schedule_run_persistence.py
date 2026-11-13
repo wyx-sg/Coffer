@@ -1,5 +1,5 @@
 """ORM model + repo for ``scheduled_task_runs``: every run of every scheduled
-task (spec channels "Keep every scheduled run in the task's history").
+task (spec scheduled-tasks "Keep every scheduled run in the task's history").
 
 ``runs.db`` holds it, beside the other run history, and the retention worker
 prunes it by ``started_at``. A run outlives its task, so rows carry the task's
@@ -123,27 +123,6 @@ class ScheduledRunRepo:
             )
             await session.commit()
 
-    async def get(self, run_id: str) -> ScheduledRun | None:
-        async with self._sm() as session:
-            row = await session.get(ScheduledRunModel, run_id)
-            return _to_domain(row) if row is not None else None
-
-    async def latest_slot(self, task_uid: str) -> datetime | None:
-        """The newest slot a scheduled (not manual) run was recorded for."""
-        async with self._sm() as session:
-            value = (
-                await session.execute(
-                    select(ScheduledRunModel.due_at)
-                    .where(
-                        ScheduledRunModel.task_uid == task_uid,
-                        ScheduledRunModel.trigger == "schedule",
-                    )
-                    .order_by(ScheduledRunModel.due_at.desc())
-                    .limit(1)
-                )
-            ).scalar_one_or_none()
-            return _aware(value)
-
     async def for_task(self, task_uid: str, *, limit: int = 50) -> list[ScheduledRun]:
         async with self._sm() as session:
             rows = (
@@ -173,24 +152,14 @@ class ScheduledRunRepo:
                 out.setdefault(row.task_uid, _to_domain(row))
         return out
 
-    async def since(self, when: datetime) -> list[ScheduledRun]:
-        async with self._sm() as session:
-            rows = (
-                await session.execute(
-                    select(ScheduledRunModel)
-                    .where(ScheduledRunModel.started_at >= when)
-                    .order_by(ScheduledRunModel.started_at)
-                )
-            ).scalars()
-            return [_to_domain(r) for r in rows]
-
     async def close_interrupted(self, *, reason: str, finished_at: datetime) -> int:
-        """Rows a stopped daemon left ``running``: none of them is any more."""
+        """Rows a stopped daemon left ``running``: none of them is any more.
+        They are ``stopped``, not ``failed``: the task did nothing wrong."""
         async with self._sm() as session:
             result = await session.execute(
                 update(ScheduledRunModel)
                 .where(ScheduledRunModel.outcome == "running")
-                .values(outcome="failed", reason=reason, finished_at=finished_at)
+                .values(outcome="stopped", reason=reason, finished_at=finished_at)
             )
             await session.commit()
             return int(result.rowcount or 0)

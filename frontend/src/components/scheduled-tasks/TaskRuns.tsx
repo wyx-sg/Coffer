@@ -5,7 +5,7 @@
 // and the conversation it used. The table searches the reasons and the
 // conversations' titles and filters by outcome and by how a run started. A
 // conversation's title links to the Conversations page, which selects it in
-// its list and opens it there, to read the run or carry it on (spec channels
+// its list without opening it, to read the run or carry it on (spec scheduled-tasks
 // "Keep every scheduled run in the task's history").
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -15,7 +15,7 @@ import { StatusPill } from "@/components/status/StatusPill";
 import type { RunOutcome, ScheduledRun } from "@/lib/api/scheduledTasks";
 import { formatDuration } from "@/lib/format/duration";
 import { useScheduledTaskRuns } from "@/lib/hooks/useScheduledTasks";
-import { OUTCOME_TONE } from "@/lib/scheduledTasks/format";
+import { OUTCOME_TONE, RUNS_SHOWN } from "@/lib/scheduledTasks/format";
 import { formatExact, formatMoment } from "@/lib/time";
 
 const OUTCOMES: readonly RunOutcome[] = ["running", "done", "skipped", "failed", "stopped"];
@@ -128,23 +128,30 @@ export function TaskRuns({ uid }: { uid: string }) {
   ];
 
   return (
-    <DataTable
-      rows={runs}
-      columns={columns}
-      rowKey={(r) => r.run_id}
-      fixed
-      isLoading={isPending}
-      search={{
-        placeholder: t("scheduledTasks.runs.search"),
-        accessor: (r) => `${r.reason} ${r.conversation?.title ?? ""}`,
-      }}
-      filters={filters}
-      rowFooter={(r) =>
-        r.reason && r.conversation_id ? (
-          <span className="text-xs text-text-muted">{r.reason}</span>
-        ) : null
-      }
-      emptyMessage={t("scheduledTasks.runs.none")}
-    />
+    <div className="flex flex-col gap-2">
+      <DataTable
+        rows={runs}
+        columns={columns}
+        rowKey={(r) => r.run_id}
+        fixed
+        isLoading={isPending}
+        search={{
+          placeholder: t("scheduledTasks.runs.search"),
+          accessor: (r) => `${r.reason} ${r.conversation?.title ?? ""}`,
+        }}
+        filters={filters}
+        rowFooter={(r) =>
+          r.reason && r.conversation_id ? (
+            <span className="text-xs text-text-muted">{r.reason}</span>
+          ) : null
+        }
+        emptyMessage={t("scheduledTasks.runs.none")}
+      />
+      {runs.length >= RUNS_SHOWN ? (
+        <p className="text-xs text-text-subtle">
+          {t("scheduledTasks.runs.latestOnly", { count: RUNS_SHOWN })}
+        </p>
+      ) : null}
+    </div>
   );
 }

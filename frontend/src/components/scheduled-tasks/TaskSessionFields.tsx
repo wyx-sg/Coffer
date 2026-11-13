@@ -1,10 +1,11 @@
-// src/components/scheduled-tasks/TaskSessionFields.tsx — the agent, model and directory every run of a task opens its new conversation with.
+// src/components/scheduled-tasks/TaskSessionFields.tsx — the agent, model and folder every run of a task opens its new conversation with.
 //
 // The agent is required; the model lists the agent's catalogue, with the
-// agent's own default first. There is no directory: every run works in the
-// task's own folder, and a prompt that needs another one names it.
+// agent's own default first. The folder is optional: left empty, every run
+// works in the task's own folder, where its PROMPT.md is either way.
 import { useTranslation } from "react-i18next";
 
+import { FolderPickerField } from "@/components/FolderPickerField";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -43,47 +44,61 @@ export function TaskSessionFields({ form, set }: Props) {
       ? [...models, { id: model, label: model, description: "" }]
       : models;
   return (
-    <div className="grid grid-cols-[140px_minmax(0,1fr)] gap-2.5">
-      <div className="space-y-1.5">
-        <Label htmlFor="task-agent" required>
-          {t("scheduledTasks.dialog.agent")}
-        </Label>
-        <Select value={form.agent} onValueChange={(agent) => set({ agent, model: "" })}>
-          <SelectTrigger id="task-agent">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {AGENTS.map((a) => (
-              <SelectItem key={a.key} value={a.key}>
-                {a.label}
+    <>
+      <div className="grid grid-cols-[140px_minmax(0,1fr)] gap-2.5">
+        <div className="space-y-1.5">
+          <Label htmlFor="task-agent" required>
+            {t("scheduledTasks.dialog.agent")}
+          </Label>
+          <Select value={form.agent} onValueChange={(agent) => set({ agent, model: "" })}>
+            <SelectTrigger id="task-agent">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {AGENTS.map((a) => (
+                <SelectItem key={a.key} value={a.key}>
+                  {a.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="task-model">{t("scheduledTasks.dialog.model")}</Label>
+          <Select
+            value={model || AGENT_DEFAULT}
+            onValueChange={(v) => set({ model: v === AGENT_DEFAULT ? "" : v })}
+          >
+            <SelectTrigger id="task-model">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={AGENT_DEFAULT}>
+                {resolved
+                  ? t("scheduledTasks.dialog.agentDefaultNamed", { model: resolved })
+                  : t("scheduledTasks.dialog.agentDefault")}
               </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+              {options.map((m) => (
+                <SelectItem key={m.id} value={m.id}>
+                  {m.label || m.id}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="task-model">{t("scheduledTasks.dialog.model")}</Label>
-        <Select
-          value={model || AGENT_DEFAULT}
-          onValueChange={(v) => set({ model: v === AGENT_DEFAULT ? "" : v })}
-        >
-          <SelectTrigger id="task-model">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={AGENT_DEFAULT}>
-              {resolved
-                ? t("scheduledTasks.dialog.agentDefaultNamed", { model: resolved })
-                : t("scheduledTasks.dialog.agentDefault")}
-            </SelectItem>
-            {options.map((m) => (
-              <SelectItem key={m.id} value={m.id}>
-                {m.label || m.id}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Label htmlFor="task-cwd">{t("scheduledTasks.dialog.folder")}</Label>
+        <FolderPickerField
+          inputId="task-cwd"
+          value={form.cwd}
+          onChange={(cwd) => set({ cwd })}
+          placeholder={t("scheduledTasks.dialog.folderPlaceholder")}
+          typeable
+          clearable
+        />
+        <p className="text-xs text-text-muted">{t("scheduledTasks.dialog.folderHint")}</p>
       </div>
-    </div>
+    </>
   );
 }

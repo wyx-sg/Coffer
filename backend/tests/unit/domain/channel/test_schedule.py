@@ -1,5 +1,5 @@
 """Schedules: their slots on the local wall clock, the cron parser, the limits
-a task's config keeps, and each task's grace (spec channels "Keep scheduled
+a task's config keeps, and each task's grace (spec scheduled-tasks "Keep scheduled
 tasks as machine-local resources", "Run a scheduled task at the times it names",
 "Catch up a missed run once, within its grace")."""
 
@@ -29,7 +29,6 @@ from coffer.domain.channel.schedule import (
 from coffer.domain.channel.scheduled_task import (
     ScheduledTaskConfig,
     clean_prompt,
-    grace_for,
     min_repeat_ok,
 )
 
@@ -170,11 +169,15 @@ def _config(**changes: object) -> dict[str, object]:
     return {**base, **changes}
 
 
-def test_a_task_names_its_agent_and_model_but_no_directory() -> None:
+def test_a_task_names_its_agent_and_model_and_may_name_a_folder() -> None:
     config = ScheduledTaskConfig.model_validate(_config(agent="codex", model="gpt-5"))
-    assert config.agent == "codex" and config.model == "gpt-5"
-    with pytest.raises(ValueError, match="own folder"):
-        ScheduledTaskConfig.model_validate(_config(cwd="/tmp/work"))
+    assert config.agent == "codex" and config.model == "gpt-5" and config.cwd is None
+    assert ScheduledTaskConfig.model_validate(_config(cwd=" /tmp/work ")).cwd == "/tmp/work"
+    assert ScheduledTaskConfig.model_validate(_config(cwd="  ")).cwd is None
+    with pytest.raises(ValidationError, match="absolute path"):
+        ScheduledTaskConfig.model_validate(_config(cwd="work"))
+    with pytest.raises(ValidationError, match=r"PROMPT\.md"):
+        ScheduledTaskConfig.model_validate(_config(prompt="Check the deploy"))
 
 
 @pytest.mark.parametrize(
@@ -191,57 +194,11 @@ def test_a_config_breaking_a_rule_is_refused(changes: dict[str, object]) -> None
         ScheduledTaskConfig.model_validate(_config(**changes))
 
 
-def test_an_older_file_is_read_without_its_chat() -> None:
-    # Its prompt has already been moved into PROMPT.md (TaskService).
-    config = ScheduledTaskConfig.model_validate(
-        {
-            "schedule": {"kind": "weekdays", "time": "08:05", "timezone": "Asia/Singapore"},
-            "chat": {"channel": "ch-1", "chat_id": "owner"},
-            "session": "continue",
-            "mention": {"name": "Sam"},
-            "material": "channel_day",
-            "template": "daily_report",
-            "origin": "owner",
-            "chain_index": 1,
-        }
-    )
-    assert config.agent == "claude_code"
-    assert config.schedule == CronSchedule(expr="5 8 * * 1-5", timezone="Asia/Singapore")
-
-
-# --- grace -------------------------------------------------------------------
-
-
-def _once(at: datetime) -> ScheduledTaskConfig:
-    return ScheduledTaskConfig.model_validate(
-        _config(schedule={"kind": "once", "at": at.isoformat()})
-    )
-
-
-@pytest.mark.parametrize(
-    ("waited", "grace"),
-    [
-        (timedelta(minutes=10), timedelta(minutes=15)),  # floor
-        (timedelta(hours=1), timedelta(minutes=30)),  # half
-        (timedelta(days=1), timedelta(hours=2)),  # ceiling
-    ],
-)
-def test_a_one_off_grace_is_half_its_wait_clamped(waited: timedelta, grace: timedelta) -> None:
-    slot = datetime(2026, 10, 29, 12, 0, tzinfo=UTC)
-    assert grace_for(_once(slot), slot=slot, created_at=slot - waited) == grace
-
-
-def test_a_repeating_slot_lasts_until_the_end_of_its_day(local_tz: None) -> None:
-    slot = _local(2026, 10, 29, 9, 0)
-    config = ScheduledTaskConfig.model_validate(_config())
-    assert grace_for(config, slot=slot, created_at=slot - timedelta(days=3)) == timedelta(hours=15)
-
-
 # --- a schedule's own timezone ------------------------------------------------
 
 
 @pytest.mark.acceptance(
-    spec="channels", scenario="a task in another timezone runs at that zone's time"
+    spec="scheduled-tasks", scenario="a task in another timezone runs at that zone's time"
 )
 def test_a_schedule_reads_its_times_in_its_own_timezone() -> None:
     old = os.environ.get("TZ")
@@ -251,11 +208,6 @@ def test_a_schedule_reads_its_times_in_its_own_timezone() -> None:
         schedule = DailySchedule(time="11:00", timezone="Asia/Singapore")
         monday = datetime(2026, 11, 2, 0, 0, tzinfo=UTC)
         assert next_slot(schedule, monday) == datetime(2026, 11, 2, 3, 0, tzinfo=UTC)
-        # A repeating slot's grace lasts to the end of that day in its zone:
-        # 11:00 Singapore is 13 hours from Singapore's midnight.
-        config = ScheduledTaskConfig(schedule=schedule, agent="claude_code")
-        slot = datetime(2026, 11, 2, 3, 0, tzinfo=UTC)
-        assert grace_for(config, slot=slot, created_at=monday) == timedelta(hours=13)
     finally:
         if old is None:
             os.environ.pop("TZ", None)
@@ -265,7 +217,8 @@ def test_a_schedule_reads_its_times_in_its_own_timezone() -> None:
 
 
 @pytest.mark.acceptance(
-    spec="channels", scenario="a time skipped by daylight saving runs once at the next valid time"
+    spec="scheduled-tasks",
+    scenario="a time skipped by daylight saving runs once at the next valid time",
 )
 def test_a_time_skipped_by_daylight_saving_runs_at_the_next_valid_time() -> None:
     schedule = DailySchedule(time="02:30", timezone="America/New_York")
@@ -282,14 +235,22 @@ def test_an_unknown_timezone_is_not_a_schedule() -> None:
         DailySchedule(time="09:00", timezone="Mars/Olympus")
 
 
+def test_only_a_repeating_schedule_names_a_timezone() -> None:
+    with pytest.raises(ValidationError):
+        ScheduledTaskConfig.model_validate(
+            _config(schedule={"kind": "manual", "timezone": "Asia/Singapore"})
+        )
+
+
 def test_a_task_dumps_without_empty_fields() -> None:
     base = {"schedule": {"kind": "daily", "time": "09:00"}, "agent": "codex"}
     dumped = ScheduledTaskConfig.model_validate(base).model_dump(exclude_none=True)
     assert "chat" not in dumped and "timezone" not in dumped["schedule"]
 
 
-def test_a_prompt_is_kept_trimmed_and_bounded() -> None:
+def test_a_prompt_is_kept_trimmed_and_not_empty() -> None:
     assert clean_prompt("  # Daily\n\nSay hi.\n\n") == "# Daily\n\nSay hi."
-    for bad in ("", "   ", "x" * 8001):
+    assert len(clean_prompt("x" * 20000)) == 20000  # the file is the owner's: no cap
+    for bad in ("", "   "):
         with pytest.raises(ValueError):
             clean_prompt(bad)

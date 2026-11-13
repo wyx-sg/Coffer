@@ -1,4 +1,4 @@
-"""When a scheduled task runs (spec channels "Run a scheduled task at the
+"""When a scheduled task runs (spec scheduled-tasks "Run a scheduled task at the
 times it names").
 
 A schedule is one of a few shapes a person picks from — once, every hour, every
@@ -48,7 +48,7 @@ __all__ = [
     "zone_of",
 ]
 
-#: The shortest gap a repeating schedule may have (spec channels "Run a
+#: The shortest gap a repeating schedule may have (spec scheduled-tasks "Run a
 #: scheduled task at the times it names"). Every run is a whole agent turn;
 #: anything that has to happen more often wants an event, not a timer.
 MIN_REPEAT = timedelta(minutes=15)
@@ -74,6 +74,8 @@ def zone_of(name: str) -> ZoneInfo:
 class _Shape(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
+
+class _Repeating(_Shape):
     #: The IANA zone whose wall clock the times are read on; ``None`` is this
     #: machine's.
     timezone: str | None = Field(default=None, exclude_if=lambda value: value is None)
@@ -101,14 +103,14 @@ class OnceSchedule(_Shape):
         return value
 
 
-class HourlySchedule(_Shape):
+class HourlySchedule(_Repeating):
     """Every hour, at ``minute`` past."""
 
     kind: Literal["hourly"] = "hourly"
     minute: int = Field(default=0, ge=0, le=59)
 
 
-class DailySchedule(_Shape):
+class DailySchedule(_Repeating):
     """Every day at ``time`` (local)."""
 
     kind: Literal["daily"] = "daily"
@@ -128,7 +130,7 @@ class WeeklySchedule(DailySchedule):
     weekday: int = Field(ge=0, le=6)
 
 
-class CronSchedule(_Shape):
+class CronSchedule(_Repeating):
     """A five-field cron expression, in local time."""
 
     kind: Literal["cron"] = "cron"
@@ -184,7 +186,7 @@ def _zone_instant(zone: ZoneInfo) -> ToInstant:
 def conversions(schedule: Schedule) -> tuple[ToLocal, ToInstant]:
     """The wall-clock conversions ``schedule`` is read with: its own zone's,
     or this machine's."""
-    if schedule.timezone:
+    if isinstance(schedule, _Repeating) and schedule.timezone:
         zone = zone_of(schedule.timezone)
         return _zone_local(zone), _zone_instant(zone)
     return _os_local, _os_instant

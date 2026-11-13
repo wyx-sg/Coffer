@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-11-06
 **Deciders**: Yuxing (owner)
-**Related**: [A Scheduled Task's Prompt Is a File in Its Own Folder](a-scheduled-task-s-prompt-is-a-file-in-its-own-folder.md) (where the prompt and a run's files live), [An Agent Notifies the Owner Through a Built-in Tool](an-agent-notifies-the-owner-through-a-built-in-tool.md), [Background Workers Wake on Events](background-workers-wake-on-events.md), [Chat Is a Single-Owner Live Mirror](chat-single-owner-live-mirror.md), spec channels, spec daemon, research note [Scheduled agent tasks](../research/scheduled-agent-tasks.md)
+**Related**: [A Scheduled Task's Prompt Is a File in Its Own Folder](a-scheduled-task-s-prompt-is-a-file-in-its-own-folder.md) (where the prompt and a run's files live), [An Agent Notifies the Owner Through a Built-in Tool](an-agent-notifies-the-owner-through-a-built-in-tool.md), [Background Workers Wake on Events](background-workers-wake-on-events.md), [Chat Is a Single-Owner Live Mirror](chat-single-owner-live-mirror.md), spec scheduled-tasks, spec daemon, research note [Scheduled agent tasks](../research/scheduled-agent-tasks.md)
 
 ## Context
 
@@ -51,8 +51,8 @@ template as part of the scheduler.
 ### A — One mechanism: a prompt on a schedule, each run a new conversation (chosen)
 
 A task is a schedule (with an optional IANA timezone), a prompt, an agent, an
-optional model and directory, and catch-up. Every run opens a new
-conversation on that agent, model and directory; nothing is posted anywhere.
+optional model and folder, and catch-up. Every run opens a new
+conversation on that agent and model, in that folder or else the task's own; nothing is posted anywhere.
 The history row opens the run's conversation. Whatever a run should do with
 a chat, a report or a skill, the prompt says; an agent reaches the owner with
 `coffer__channel_notify` and can create a task with `coffer task add`.
@@ -108,17 +108,18 @@ Rules a change must keep:
   IANA timezone, otherwise the computer's local time. A repeating task runs at
   most every 15 minutes (Claude Code refuses under an hour, Codex allows
   minutes; 15 keeps a runaway cron from spending a turn a minute).
-- **Missed runs.** The most recent missed slot runs once, late, within a grace,
-  and the run's prompt says it is late; the rest are skipped and recorded. A
-  one-off's grace is half the time it waited (at least 15 minutes, at most 2
-  hours); a repeating slot may run until the end of its local day. Catch-up
-  can be switched off per task. Running every missed slot would fire a week
+- **Missed runs.** The most recent missed slot runs once, late, if it was due
+  within seven days, and the run's prompt says it is late; the rest are
+  skipped and recorded
+  ([A Missed Run Is Caught Up Within Seven Days](a-missed-run-is-caught-up-within-seven-days.md)).
+  Catch-up can be switched off per task. Running every missed slot would fire a week
   of runs at once; never catching up would starve a Mac that sleeps through
   the slot every day.
 - **Overlap and failure.** A slot due while the previous run is still going is
   skipped and recorded. A failed run is not retried (a turn has side effects);
-  a repeating task that fails three runs in a row is paused. A one-off is
-  switched off after it runs. No cap on tasks running at once.
+  a repeating task that fails three runs in a row is paused and listed in the
+  Overview page's "Needs you". A run the daemon's stop interrupted is
+  `stopped`, not a failure. A one-off is switched off after it runs. No cap on tasks running at once.
 - **History.** Every run is a row in `scheduled_task_runs` (runs.db): when it
   was due, started and ended, how it ended (`done`, `skipped`, `failed`,
   `stopped`) and why, and the conversation it used; pruned by retention. The
@@ -136,12 +137,10 @@ Rules a change must keep:
 
 ## Consequences
 
-- A task file an older Coffer wrote is read without its chat, session mode,
-  mention or template: it keeps its schedule and prompt, a weekdays schedule
-  becomes the cron `M H * * 1-5` in the same timezone, and a task without an
-  agent runs on Claude Code. Follow-ups an agent booked are deleted at
-  startup. Migration 0156 drops the runs' chat columns and maps the old
-  `replied` and `silent` outcomes to `done`.
+- Migration 0156 drops the runs' chat columns and maps the old `replied` and
+  `silent` outcomes to `done`. A task file written for Option B is no longer
+  read: the upgrade code was deleted on 2026-11-13, once the only machine that
+  had such files had been upgraded.
 - The turn-scoped scheduling tools, `/status`'s task list, the Daily report
   card and the `coffer task chats` and `coffer task daily-report` commands are
   gone.

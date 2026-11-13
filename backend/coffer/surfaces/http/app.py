@@ -245,7 +245,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         app, resource_svc, audit, sm, vault, secret_store, chat, builtin_tools, events
     )
     # Scheduled tasks start turns on the chat platform too.
-    await wire_scheduled_tasks(app, resource_svc=resource_svc, sm=sm, chat=chat, events=events)
+    task_attention = await wire_scheduled_tasks(app, resource_svc, sm, chat, events)
 
     # Every kind has registered its secret destinations; the approval refresh reads them.
     remember_destination_sources(resource_svc, audit)
@@ -320,6 +320,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
                 sync_service=workers.sync.service,
             ),
             vault_scanning.attention,
+            task_attention,
         ],
         ignores=SqlAlchemyAttentionIgnoreRepo(sm),
         audit=audit,

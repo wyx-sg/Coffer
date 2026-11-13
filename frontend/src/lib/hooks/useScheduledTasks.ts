@@ -1,7 +1,7 @@
 // src/lib/hooks/useScheduledTasks.ts — TanStack Query bindings for the Scheduled tasks page (/scheduled-tasks).
 //
 // Reads: the task list (with each task's next and last run) and one task's run
-// history, and the files in its folder. Writes: create, edit (the generic
+// history. Writes: create, edit (the generic
 // resource PATCH), the prompt (its PROMPT.md) and Run now.
 // Pause, resume and
 // delete are the generic resource mutations with kind `scheduled_task`, which
@@ -13,8 +13,6 @@ import { useToast } from "@/components/ui/toast";
 import { translateApiError } from "@/lib/api/errors";
 import {
   resourcesKey,
-  scheduledTaskFileKey,
-  scheduledTaskFilesKey,
   scheduledTaskRunsKey,
   scheduledTasksKey,
 } from "@/lib/api/queryKeys";
@@ -42,24 +40,6 @@ export function useScheduledTaskRuns(uid: string) {
     queryFn: () => scheduledTasksApi.runs(uid),
     enabled: !!uid,
     refetchInterval: 30_000,
-  });
-}
-
-export function useScheduledTaskFiles(uid: string) {
-  return useQuery({
-    queryKey: scheduledTaskFilesKey(uid),
-    queryFn: async () => (await scheduledTasksApi.filesTree(uid)).root,
-    enabled: !!uid,
-    // A run writes into the folder while the tab is open.
-    refetchInterval: 30_000,
-  });
-}
-
-export function useScheduledTaskFileContent(uid: string, path: string) {
-  return useQuery({
-    queryKey: scheduledTaskFileKey(uid, path),
-    queryFn: () => scheduledTasksApi.fileContent(uid, path),
-    enabled: !!uid && !!path,
   });
 }
 

@@ -1,8 +1,8 @@
 """Each scheduled task's own folder: ``~/.coffer/content/workspace/scheduled-tasks/<uid>/``
 (ADR automation-is-a-scheduled-prompt).
 
-It holds the task's ``PROMPT.md`` and, for a task that names no directory, is
-where its runs work, so what they write is there to read. It sits in Coffer's
+It holds the task's ``PROMPT.md`` and is where its runs work unless the task
+names another folder, so what they write is there to read. It sits in Coffer's
 workspace, which is ``content``: the user's only copy, not synced. The path is
 resolved from ``HOME`` on every call, so a test's throwaway home moves it.
 """
@@ -27,6 +27,9 @@ class TaskFolders:
         folder = self._dir(task_uid)
         folder.mkdir(parents=True, exist_ok=True)
         return str(folder)
+
+    def exists(self, path: str) -> bool:
+        return Path(path).is_dir()
 
     def read_prompt(self, task_uid: str) -> str | None:
         try:

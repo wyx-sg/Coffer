@@ -150,46 +150,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/scheduled-tasks/{uid}/files": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Task Files
-         * @description The task's folder as a read-only file tree.
-         */
-        get: operations["list_task_files_api_v1_scheduled_tasks__uid__files_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/scheduled-tasks/{uid}/files/content": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Read Task File
-         * @description One file of the task's folder; a path resolving outside it is refused.
-         */
-        get: operations["read_task_file_api_v1_scheduled_tasks__uid__files_content_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/scheduled-tasks/{uid}/prompt": {
         parameters: {
             query?: never;
@@ -474,8 +434,6 @@ export interface components {
              * @enum {string}
              */
             kind: "manual";
-            /** Timezone */
-            timezone?: string | null;
         };
         /** NotifyIn */
         NotifyIn: {
@@ -508,8 +466,6 @@ export interface components {
              * @enum {string}
              */
             kind: "once";
-            /** Timezone */
-            timezone?: string | null;
         };
         /** PairingCodeIn */
         PairingCodeIn: {
@@ -610,6 +566,8 @@ export interface components {
              * @default true
              */
             catch_up?: boolean;
+            /** Cwd */
+            cwd?: string | null;
             /** Model */
             model?: string | null;
             /** Schedule */
@@ -626,7 +584,7 @@ export interface components {
             /** Name */
             name?: string | null;
             /** Prompt */
-            prompt?: string | null;
+            prompt: string;
         };
         /** ScheduledTaskListOut */
         ScheduledTaskListOut: {
@@ -750,52 +708,6 @@ export interface components {
              * @enum {string}
              */
             state: "pending" | "refused";
-        };
-        /** SkillFileContentOut */
-        SkillFileContentOut: {
-            /** Abs Path */
-            abs_path: string;
-            /** Binary */
-            binary: boolean;
-            /** Content */
-            content: string;
-            /** Folder Abs Path */
-            folder_abs_path: string;
-            /** Path */
-            path: string;
-            /** Size */
-            size: number;
-            /** Truncated */
-            truncated: boolean;
-        };
-        /** SkillFileNodeOut */
-        SkillFileNodeOut: {
-            /** Abs Path */
-            abs_path: string;
-            /** Children */
-            children: components["schemas"]["SkillFileNodeOut"][];
-            /** Folder Abs Path */
-            folder_abs_path: string;
-            /** Name */
-            name: string;
-            /** Path */
-            path: string;
-            /** Size */
-            size: number | null;
-            /**
-             * Truncated
-             * @default false
-             */
-            truncated: boolean;
-            /**
-             * Type
-             * @enum {string}
-             */
-            type: "file" | "dir";
-        };
-        /** SkillFileTreeOut */
-        SkillFileTreeOut: {
-            root: components["schemas"]["SkillFileNodeOut"];
         };
         /** TelegramChannelConfig */
         TelegramChannelConfig: {
@@ -1314,92 +1226,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScheduledTaskOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    list_task_files_api_v1_scheduled_tasks__uid__files_get: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-            };
-            path: {
-                uid: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SkillFileTreeOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    read_task_file_api_v1_scheduled_tasks__uid__files_content_get: {
-        parameters: {
-            query: {
-                path: string;
-            };
-            header?: {
-                "x-coffer-token"?: string | null;
-            };
-            path: {
-                uid: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SkillFileContentOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

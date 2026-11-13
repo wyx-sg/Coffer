@@ -6,18 +6,40 @@ Application layer only: no infrastructure import here.
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
 from coffer.domain.channel.scheduled_run import RunOutcome, ScheduledRun
 
-__all__ = ["FreshTurnPort", "ScheduledRunRepoPort", "TaskFolderPort"]
+__all__ = ["Anchor", "FreshTurnPort", "ScheduledRunRepoPort", "TaskAnchorPort", "TaskFolderPort"]
+
+
+@dataclass(frozen=True)
+class Anchor:
+    """Where a switched-on task's slots are counted from."""
+
+    #: The schedule the anchor was taken for, as JSON: another one counts afresh.
+    schedule: str
+    #: The last slot the scheduler settled, or the moment the task was switched
+    #: on or given this schedule.
+    at: datetime
+
+
+class TaskAnchorPort(Protocol):
+    """Each switched-on task's :class:`Anchor`, kept on this machine. A task
+    has one only while it is on, so one resumed after a pause counts from its
+    resume, not from the slots it was paused through."""
+
+    def all(self) -> dict[str, Anchor]: ...
+
+    def replace(self, anchors: dict[str, Anchor]) -> None: ...
 
 
 class FreshTurnPort(Protocol):
-    """Starts a run's turn (spec channels "Run a scheduled task in a fresh
+    """Starts a run's turn (spec scheduled-tasks "Run a scheduled task in a fresh
     conversation of its own"): a new conversation
-    on ``agent``, in ``cwd`` (the task's own folder), on ``model`` (the
+    on ``agent``, in ``cwd`` (the folder the task names, else its own), on ``model`` (the
     agent's default when ``None``), titled ``title``, whose one turn is given
     ``text``. Returns the conversation's id once the turn is under way;
     ``on_end`` is told how it ended. Raises ``CofferError`` when the
@@ -52,15 +74,9 @@ class ScheduledRunRepoPort(Protocol):
 
     async def note_conversation(self, run_id: str, conversation_id: str) -> None: ...
 
-    async def get(self, run_id: str) -> ScheduledRun | None: ...
-
-    async def latest_slot(self, task_uid: str) -> datetime | None: ...
-
     async def for_task(self, task_uid: str, *, limit: int = 50) -> list[ScheduledRun]: ...
 
     async def latest_for(self, task_uids: Sequence[str]) -> dict[str, ScheduledRun]: ...
-
-    async def since(self, when: datetime) -> list[ScheduledRun]: ...
 
     async def close_interrupted(self, *, reason: str, finished_at: datetime) -> int: ...
 
@@ -68,10 +84,14 @@ class ScheduledRunRepoPort(Protocol):
 class TaskFolderPort(Protocol):
     """Each task's own folder under Coffer's workspace
     (``scheduled-tasks/<uid>/``): its ``PROMPT.md``, and whatever its runs
-    leave there when the task names no directory of its own."""
+    leave there."""
 
     def path(self, task_uid: str) -> str:
         """The folder's absolute path, created when absent."""
+        ...
+
+    def exists(self, path: str) -> bool:
+        """Whether ``path``, a folder a task names for its runs, is there."""
         ...
 
     def read_prompt(self, task_uid: str) -> str | None:

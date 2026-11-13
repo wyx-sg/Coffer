@@ -1,4 +1,4 @@
-"""Creating and reading scheduled tasks (spec channels "Keep scheduled tasks as
+"""Creating and reading scheduled tasks (spec scheduled-tasks "Keep scheduled tasks as
 machine-local resources").
 
 The owner's page and CLI create a task here; editing, pausing and removing are
@@ -20,19 +20,11 @@ from coffer.application.channel.schedule.kind import KIND
 from coffer.application.channel.schedule.ports import ScheduledRunRepoPort, TaskFolderPort
 from coffer.application.resource_service import ResourceService
 from coffer.domain.channel.scheduled_run import ScheduledRun
-from coffer.domain.channel.scheduled_task import (
-    OLD_CONFIG_KEYS,
-    ScheduledTaskConfig,
-    clean_prompt,
-    is_retired_follow_up,
-)
+from coffer.domain.channel.scheduled_task import ScheduledTaskConfig, clean_prompt
 from coffer.domain.errors import ConfigValidationError, ResourceNotFound
 from coffer.domain.resource import FREE_NAME_MAX_LEN, Resource, same_free_name
 
 __all__ = ["TaskService", "TaskView"]
-
-#: Who the audit log names for removing what an older Coffer left behind.
-_UPGRADE_ACTOR = "coffer:upgrade"
 
 
 @dataclass(frozen=True)
@@ -106,35 +98,24 @@ class TaskService:
         config: dict[str, Any],
         *,
         actor: str,
+        prompt: str,
         description: str = "",
-        prompt: str | None = None,
     ) -> Resource:
-        """Register the task and write its ``PROMPT.md``. The prompt comes as
-        ``prompt`` or, as older callers send it, inside ``config``. It may be
-        left out: the file is then created empty, to be written in the task's
-        Files tab, the task must be named, as there is nothing to name it
-        after, and it is created paused: it resumes once the prompt is there."""
-        rest = {k: v for k, v in config.items() if k != "prompt"}
-        if prompt is None:
-            prompt = config.get("prompt")
+        """Register the task and write its ``PROMPT.md``. A task with no name
+        is named after its prompt's first words."""
         try:
-            parsed = ScheduledTaskConfig.model_validate(rest)
-            given = prompt if isinstance(prompt, str) else ""
-            text = clean_prompt(given) if given.strip() else ""
-            if not text and not (name or "").strip():
-                raise ValueError("a task created without a prompt needs a name")
+            parsed = ScheduledTaskConfig.model_validate(config)
+            text = clean_prompt(prompt)
         except (ValidationError, ValueError) as e:
             raise ConfigValidationError(str(e)) from e
         task = await self._resources.register(
             KIND,
-            await self._free_name(name or _name_from(text)),
+            await self._free_name((name or "").strip() or _name_from(text)),
             parsed.model_dump(mode="json", exclude_none=True),
             actor,
             description or None,
         )
         self._folders.write_prompt(task.uid, text)
-        if not text:
-            task = await self._resources.set_enabled(task.uid, False, actor)
         return task
 
     async def set_prompt(self, uid: str, prompt: str) -> TaskView:
@@ -146,36 +127,6 @@ class TaskService:
             raise ConfigValidationError(str(e)) from e
         self._folders.write_prompt(uid, text)
         return await self._view(view.task, view.last_run)
-
-    async def move_prompts_to_files(self) -> int:
-        """Take what a task file written before 2026-11-11 carries out of it:
-        its prompt goes into the task's ``PROMPT.md`` (kept when one is already
-        there), its directory is dropped (every run works in the folder)."""
-        moved = 0
-        for task in await self._resources.list(kind=KIND):
-            if not any(k in task.config for k in OLD_CONFIG_KEYS):
-                continue
-            prompt = task.config.get("prompt")
-            text = str(prompt).strip() if prompt is not None else ""
-            if text and self._folders.read_prompt(task.uid) is None:
-                self._folders.write_prompt(task.uid, text)
-            rest = {k: v for k, v in task.config.items() if k not in OLD_CONFIG_KEYS}
-            config = ScheduledTaskConfig.model_validate(rest)
-            await self._resources.update_config(
-                task.uid, config.model_dump(mode="json", exclude_none=True), _UPGRADE_ACTOR
-            )
-            moved += 1
-        return moved
-
-    async def drop_retired_follow_ups(self) -> int:
-        """Remove the follow-ups an older Coffer let agents book in a chat
-        (2026-11-06): without their chat they mean nothing. Their runs stay."""
-        dropped = 0
-        for task in await self._resources.list(kind=KIND):
-            if is_retired_follow_up(task.config):
-                await self._resources.delete(task.uid, _UPGRADE_ACTOR)
-                dropped += 1
-        return dropped
 
     async def _free_name(self, wanted: str) -> str:
         """``wanted``, or ``wanted (2)`` … when another task has that name."""

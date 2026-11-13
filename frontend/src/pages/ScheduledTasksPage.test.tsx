@@ -19,8 +19,6 @@ vi.mock("@/lib/api/scheduledTasks", () => ({
     runs: vi.fn(),
     runNow: vi.fn(),
     setPrompt: vi.fn(),
-    filesTree: vi.fn(),
-    fileContent: vi.fn(),
   },
 }));
 vi.mock("@/lib/api/agentModels", () => ({
@@ -120,13 +118,53 @@ describe("ScheduledTasksPage", () => {
     expect(await screen.findByRole("heading", { name: "Nightly build" })).toBeInTheDocument();
     expect(screen.getByText("gpt-5")).toBeInTheDocument();
     expect(screen.getByText(NIGHTLY.folder)).toBeInTheDocument();
+    expect(screen.getByText("the task’s own folder")).toBeInTheDocument();
   });
 
-  test("a task without its prompt can neither run nor resume", async () => {
-    api.list.mockResolvedValue([task({ uid: "t-3", name: "Draft", prompt: "", enabled: false })]);
+  test("an open task that names a folder shows it", async () => {
+    api.list.mockResolvedValue([
+      task({
+        uid: "t-3",
+        name: "Repo check",
+        config: { ...MORNING.config, cwd: "/Users/me/code/app" },
+      }),
+    ]);
     renderPage("/scheduled-tasks/t-3");
-    expect(await screen.findByRole("button", { name: "Run now" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Resume" })).toBeDisabled();
+    expect(await screen.findByText("/Users/me/code/app")).toBeInTheDocument();
+    expect(screen.queryByText("the task’s own folder")).toBeNull();
+  });
+
+  test("a task has two tabs, and an old Files address lands on its Overview", async () => {
+    renderPage("/scheduled-tasks/t-1/files");
+    expect(await screen.findByRole("tab", { name: "Overview" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
+      "Overview",
+      "History",
+    ]);
+  });
+
+  test("the history says when it shows only the latest runs", async () => {
+    const run = {
+      task_uid: "t-1",
+      task_name: "Morning summary",
+      due_at: "2026-10-29T09:00:00Z",
+      started_at: "2026-10-29T09:00:00Z",
+      finished_at: "2026-10-29T09:02:00Z",
+      outcome: "done" as const,
+      reason: "",
+      catch_up: false,
+      trigger: "schedule" as const,
+      conversation_id: "",
+      conversation: null,
+    };
+    api.runs.mockResolvedValue(
+      Array.from({ length: 200 }, (_, i) => ({ ...run, run_id: `r-${i}` })),
+    );
+    renderPage("/scheduled-tasks/t-1/runs");
+    expect(await screen.findByText("Showing the latest 200 runs.")).toBeInTheDocument();
   });
 
   test("Run now starts the open task", async () => {
@@ -143,7 +181,7 @@ describe("ScheduledTasksPage", () => {
     await waitFor(() => expect(resourcesApi.disable).toHaveBeenCalledWith("t-1"));
   });
 
-  acceptance("channels", "a run's conversation opens from its history", async () => {
+  acceptance("scheduled-tasks", "a run's conversation opens from its history", async () => {
     const run = (id: string, over: Partial<ScheduledRun>): ScheduledRun => ({
       run_id: id,
       task_uid: "t-1",
@@ -181,80 +219,55 @@ describe("ScheduledTasksPage", () => {
   });
 
   acceptance(
-    "channels",
-    "the owner reads and edits a task's prompt and files on its page",
+    "scheduled-tasks",
+    "the owner reads and edits a task's prompt on its page",
     async () => {
-      api.setPrompt.mockResolvedValue(MORNING);
-      renderPage("/scheduled-tasks/t-1/files");
-      expect(screen.queryByRole("tab", { name: "Prompt" })).toBeNull();
-      expect(await screen.findByText(`${MORNING.name}/PROMPT.md`)).toBeInTheDocument();
+      renderPage("/scheduled-tasks/t-1");
+      expect(await screen.findByText("Summarise the open pull requests")).toBeInTheDocument();
       fireEvent.click(screen.getByRole("button", { name: "Edit prompt" }));
-      const editor = await screen.findByRole("textbox", { name: "PROMPT.md" });
-      expect(editor).toBeInTheDocument();
+      expect(await screen.findByRole("textbox", { name: "PROMPT.md" })).toBeInTheDocument();
+      // Nothing to save until the text changes.
       expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
     },
   );
 
-  test("the files tab shows the task's folder and opens a file in it", async () => {
-    const node = (name: string) => ({
-      name,
-      path: name,
-      abs_path: `${MORNING.folder}/${name}`,
-      folder_abs_path: MORNING.folder,
-      type: "file" as const,
-      size: 8,
-      truncated: false,
-      children: [],
-    });
-    api.filesTree.mockResolvedValue({
-      root: { ...node(""), type: "dir", children: [node("PROMPT.md"), node("report.md")] },
-    });
-    api.fileContent.mockImplementation(async (_uid, path) => ({
-      path,
-      abs_path: `${MORNING.folder}/${path}`,
-      folder_abs_path: MORNING.folder,
-      content: path === "report.md" ? "# Today" : "Summarise",
-      truncated: false,
-      binary: false,
-      size: 8,
-    }));
-    renderPage("/scheduled-tasks/t-1/files");
-    fireEvent.click(await screen.findByText("report.md"));
-    await waitFor(() => expect(api.fileContent).toHaveBeenCalledWith("t-1", "report.md"));
-  });
-
-  acceptance("channels", "the page creates a task", async () => {
+  acceptance("scheduled-tasks", "the page creates a task", async () => {
     api.list.mockResolvedValue([]);
     api.create.mockResolvedValue(task({ uid: "t-new", name: "Nightly build" }));
     renderPage();
     expect(await screen.findByText("No scheduled tasks yet")).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole("button", { name: "New task" })[0]);
     const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).queryByRole("combobox", { name: /Runs in/ })).toBeNull();
+    const create = within(dialog).getByRole("button", { name: "Create task" });
     fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "Nightly build" } });
+    // A task is given its prompt when it is created.
+    expect(create).toBeDisabled();
+    fireEvent.change(within(dialog).getByLabelText(/Prompt/), {
+      target: { value: "Check the nightly build" },
+    });
+    // The folder is optional: left empty, runs work in the task's own.
+    expect(within(dialog).getByPlaceholderText("The task's own folder")).toBeInTheDocument();
     const model = within(dialog).getByRole("combobox", { name: "Model" });
     await waitFor(() => {
       fireEvent.keyDown(model, { key: "ArrowDown" });
       expect(screen.getByRole("option", { name: "Sonnet" })).toBeInTheDocument();
     });
     fireEvent.click(screen.getByRole("option", { name: "Sonnet" }));
-    // No directory and no prompt: every run works in the task's folder, and
-    // PROMPT.md is written in the Files tab, opened once the task is created.
-    expect(within(dialog).queryByLabelText(/Directory/)).toBeNull();
-    expect(within(dialog).queryByLabelText(/Prompt/)).toBeNull();
-    fireEvent.click(within(dialog).getByRole("button", { name: "Create task" }));
+    fireEvent.click(create);
     await waitFor(() => expect(api.create).toHaveBeenCalledTimes(1));
     expect(api.create.mock.calls[0][0]).toEqual({
       name: "Nightly build",
+      prompt: "Check the nightly build",
       config: {
         schedule: { kind: "daily", time: "09:00" },
         agent: "claude_code",
         model: "claude-sonnet",
+        cwd: null,
         catch_up: true,
       },
     });
     await waitFor(() =>
-      expect(screen.getByTestId("where")).toHaveTextContent("/scheduled-tasks/t-new/files"),
+      expect(screen.getByTestId("where")).toHaveTextContent("/scheduled-tasks/t-new"),
     );
   });
 });

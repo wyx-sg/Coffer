@@ -5,6 +5,7 @@
 // MCP server's and a skill's name is fixed once registered, so it is shown in
 // mono as an identifier; every other kind's name is prose.
 import {
+  CalendarClock,
   Book,
   Bot,
   Brain,
@@ -35,6 +36,11 @@ const KINDS: Record<string, KindMeta> = {
   mcp_server: { labelKey: "overview.kinds.mcp_server", icon: Server, identifier: true },
   skill: { labelKey: "overview.kinds.skill", icon: Sparkle, identifier: true },
   channel: { labelKey: "overview.kinds.channel", icon: Radio, identifier: false },
+  scheduled_task: {
+    labelKey: "overview.kinds.scheduled_task",
+    icon: CalendarClock,
+    identifier: false,
+  },
   knowledge: { labelKey: "overview.kinds.knowledge", icon: Book, identifier: false },
   memory: { labelKey: "overview.kinds.memory", icon: Brain, identifier: false },
   sync: { labelKey: "overview.kinds.sync", icon: RefreshCw, identifier: false },

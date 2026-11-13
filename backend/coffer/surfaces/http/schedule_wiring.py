@@ -1,4 +1,4 @@
-"""Scheduled-task composition (spec channels "Keep scheduled tasks as
+"""Scheduled-task composition (spec scheduled-tasks "Keep scheduled tasks as
 machine-local resources") — called from ``create_app`` after the chat platform.
 
 A run is a turn in a new conversation, so what this root adds is the chat
@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 
 from fastapi import FastAPI
 
+from coffer.application.channel.schedule.attention import ScheduledTaskAttentionSource
 from coffer.application.channel.schedule.kind import KIND, make_scheduled_task_kind
 from coffer.application.channel.schedule.runner import TaskRunner
 from coffer.application.channel.schedule.scheduler import TaskScheduler
@@ -28,6 +29,7 @@ from coffer.domain.chat.errors import ConversationNotFound
 from coffer.domain.chat.events import AgentEvent, TurnDone, TurnError
 from coffer.domain.features import SCHEDULED_TASKS
 from coffer.infrastructure.channel.persistence import ScheduledRunRepo
+from coffer.infrastructure.channel.task_anchors import TaskAnchors
 from coffer.infrastructure.channel.task_folders import TaskFolders
 from coffer.surfaces.http.chat_wiring import ChatWiring
 from coffer.surfaces.http.event_wiring import EventStream
@@ -119,12 +121,12 @@ class _Reads:
 
 async def wire_scheduled_tasks(
     app: FastAPI,
-    *,
     resource_svc: ResourceService,
     sm: async_sessionmaker[AsyncSession],
     chat: ChatWiring,
     events: EventStream,
-) -> None:
+) -> ScheduledTaskAttentionSource:
+    """Wire the tasks; returns what they report to the Overview's list."""
     runs = ScheduledRunRepo(sm)
     folders = TaskFolders()
     runner = TaskRunner(
@@ -137,7 +139,9 @@ async def wire_scheduled_tasks(
         # there the tasks run, as every gate there lets everything through.
         return features is None or features.is_enabled(SCHEDULED_TASKS)
 
-    scheduler = TaskScheduler(resources=resource_svc, runs=runs, runner=runner, enabled=enabled)
+    scheduler = TaskScheduler(
+        resources=resource_svc, runs=runs, runner=runner, anchors=TaskAnchors(), enabled=enabled
+    )
     tasks = TaskService(
         resources=resource_svc,
         runs=runs,
@@ -145,11 +149,7 @@ async def wire_scheduled_tasks(
         is_running=scheduler.is_running,
         folders=folders,
     )
-    app.state.kinds[KIND] = make_scheduled_task_kind(prompt_of=folders.read_prompt)
-    # Follow-ups an older Coffer let agents book have no chat to run in now.
-    await tasks.drop_retired_follow_ups()
-    # A task written before 2026-11-11 carries its prompt in its file.
-    await tasks.move_prompts_to_files()
+    app.state.kinds[KIND] = make_scheduled_task_kind()
     set_schedule_services(tasks=tasks, scheduler=scheduler, reads=_Reads(runs, chat.chat_service))
     # A task created, edited, paused or removed (here, on the page, by sync or
     # by hand) brings the next pass forward.
@@ -158,3 +158,4 @@ async def wire_scheduled_tasks(
     if features is not None:
         features.subscribe(lambda key, _on: scheduler.poke() if key == SCHEDULED_TASKS else None)
     spawn_restarting(scheduler.serve, name="scheduled-tasks")
+    return ScheduledTaskAttentionSource(resources=resource_svc, runs=runs)

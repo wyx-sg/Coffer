@@ -680,7 +680,7 @@ Copy command. An open the daemon refuses shows its
 reason in a toast beside Copy command as the way out. Agent › Sessions rows use the same row and
 the same behaviour. Pressing the row itself MUST NOT open a terminal or do anything else: only the split button opens a session ([agent-registry](../agent-registry/spec.md) "Open an agent's sessions from its Sessions tab").
 
-A link elsewhere in the web UI that points at one conversation (a scheduled run's History, [channels](../channels/spec.md) "Keep every scheduled run in the task's history") MUST go to `/conversations?open=<conversation id>`. The page MUST then show its full, unfiltered list, load later pages until that conversation's row is listed, select the row (marked as current and scrolled into view), then drop `open` from the address. It MUST NOT open the conversation: opening is the row's split button, pressed by the user. A conversation that is no longer listed is reported in one quiet line, and nothing opens.
+A link elsewhere in the web UI that points at one conversation (a scheduled run's History, [scheduled-tasks](../scheduled-tasks/spec.md) "Keep every scheduled run in the task's history") MUST go to `/conversations?open=<conversation id>`. The page MUST then show its full, unfiltered list, load later pages until that conversation's row is listed, select the row (marked as current and scrolled into view), then drop `open` from the address. It MUST NOT open the conversation: opening is the row's split button, pressed by the user. A conversation that is no longer listed is reported in one quiet line, and nothing opens.
 
 #### Scenario: a row opens its session in the preferred terminal
 - **GIVEN** a Claude Code session `abc-123` in `/work/api` and a preferred terminal

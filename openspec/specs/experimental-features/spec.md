@@ -341,8 +341,8 @@ included; and the web UI MUST hide the Scheduled tasks entry and page.
 Switching it off MUST keep every task and its history;
 switching it on again MUST bring the scheduler's next pass forward with no
 daemon restart, and a slot that passed while it was off is caught up once or
-skipped and recorded, as any missed slot is ([channels](../channels/spec.md)
-"Catch up a missed run once, within its grace").
+skipped and recorded, as any missed slot is ([scheduled-tasks](../scheduled-tasks/spec.md)
+"Catch up a missed run once, within seven days").
 
 #### Scenario: scheduled tasks off closes their routes
 - **GIVEN** `scheduled_tasks` off

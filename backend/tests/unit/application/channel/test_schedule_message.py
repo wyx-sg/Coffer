@@ -1,4 +1,4 @@
-"""What a scheduled run is told (spec channels "Run a scheduled task in a fresh
+"""What a scheduled run is told (spec scheduled-tasks "Run a scheduled task in a fresh
 conversation of its own", "Catch up a missed run once, within its grace")."""
 
 from __future__ import annotations

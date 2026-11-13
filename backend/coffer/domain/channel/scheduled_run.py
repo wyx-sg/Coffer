@@ -1,4 +1,4 @@
-"""One run of a scheduled task, as its history keeps it (spec channels "Keep
+"""One run of a scheduled task, as its history keeps it (spec scheduled-tasks "Keep
 every scheduled run in the task's history").
 
 A run is history, so it lives in ``runs.db`` beside the other run history,

@@ -1,34 +1,24 @@
-"""Scheduled-task routes (spec channels "Manage scheduled tasks from the
+"""Scheduled-task routes (spec scheduled-tasks "Manage scheduled tasks from the
 Scheduled tasks page").
 
 What is particular to a task lives here: creating one (named after its prompt
-when no name is given), its ``PROMPT.md``, the files in its folder (read-only,
-as a skill's are), its run history and Run now. Editing, pausing,
+when no name is given), its ``PROMPT.md``, its run history and Run now. Editing, pausing,
 renaming and removing a task are the kind-agnostic ``/api/v1/resources``
 routes; the kind checks the schedule on every one of them.
 """
 
 from __future__ import annotations
 
-import pathlib
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
-from coffer.application.skill import file_ops
 from coffer.domain.channel.scheduled_run import ScheduledRun
 from coffer.domain.channel.scheduled_task import ScheduledTaskConfig
-from coffer.domain.errors import ConfigValidationError
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor
-from coffer.surfaces.http.skill_file_routes import (
-    SkillFileContentOut,
-    SkillFileTreeOut,
-    _content_out,
-    _node_to_out,
-)
 
 if TYPE_CHECKING:
     from coffer.application.channel.schedule.scheduler import TaskScheduler
@@ -103,8 +93,8 @@ class ScheduledTaskOut(BaseModel):
     running: bool
     #: The task's ``PROMPT.md``.
     prompt: str
-    #: The task's own folder: its ``PROMPT.md``, and where its runs work when
-    #: it names no directory.
+    #: The task's own folder: its ``PROMPT.md``, and where its runs work unless
+    #: its config names another (``cwd``).
     folder: str
 
 
@@ -117,12 +107,11 @@ class ScheduledRunListOut(BaseModel):
 
 
 class ScheduledTaskIn(BaseModel):
-    #: Omitted: named after the prompt's first words (required without a prompt).
+    #: Omitted: named after the prompt's first words.
     name: str | None = None
     description: str = ""
-    #: Written to the task's ``PROMPT.md``. Older callers send it in ``config``.
-    #: Omitted or blank: the file is created empty, written later in Files.
-    prompt: str | None = None
+    #: Written to the task's ``PROMPT.md``; edited there afterwards.
+    prompt: str = Field(min_length=1)
     config: ScheduledTaskConfig
 
 
@@ -193,31 +182,6 @@ async def set_task_prompt(uid: str, body: ScheduledTaskPromptIn) -> ScheduledTas
     return await _out(await _tasks().set_prompt(uid, body.prompt))
 
 
-@router.get("/{uid}/files", response_model=SkillFileTreeOut)
-async def list_task_files(uid: str) -> SkillFileTreeOut:
-    """The task's folder as a read-only file tree."""
-    folder = pathlib.Path((await _tasks().view(uid)).folder).resolve()
-    return SkillFileTreeOut(root=_node_to_out(file_ops.build_file_tree(folder), folder))
-
-
-@router.get("/{uid}/files/content", response_model=SkillFileContentOut)
-async def read_task_file(uid: str, path: str = Query(min_length=1)) -> SkillFileContentOut:
-    """One file of the task's folder; a path resolving outside it is refused."""
-    folder = pathlib.Path((await _tasks().view(uid)).folder).resolve()
-    try:
-        result = file_ops.read_skill_file(folder, path)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="requested path is outside the task's folder",
-        ) from exc
-    except (FileNotFoundError, IsADirectoryError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=f"no such file in the task: {path}"
-        ) from exc
-    return _content_out(result, folder)
-
-
 @router.get("/{uid}/runs", response_model=ScheduledRunListOut)
 async def list_task_runs(
     uid: str, limit: int = Query(default=50, ge=1, le=200)
@@ -243,8 +207,6 @@ async def list_task_runs(
 async def run_task_now(uid: str) -> ScheduledRunOut:
     """Run the task once, now, whatever its schedule."""
     view = await _tasks().view(uid)
-    if not view.prompt.strip():
-        raise ConfigValidationError("write the task's PROMPT.md before running it")
     try:
         return run_out(await _WIRED.scheduler.run_now(view.task))
     except ValueError as e:  # it is already running

@@ -1,10 +1,9 @@
-// src/components/scheduled-tasks/TaskPane.tsx — the open task: its header and actions over three tabs.
+// src/components/scheduled-tasks/TaskPane.tsx — the open task: its header and actions over two tabs.
 //
 // The header is the name with its state pill and one meta line (the agent ·
 // the schedule in words · next run). The tabs, each at its own path segment:
-// Overview (when it runs and what every run opens with), History (every run,
-// as a table) and Files (the task's folder: PROMPT.md, editable, and whatever
-// else the task keeps there — scripts, intermediate files, reports).
+// Overview (when it runs, what every run opens with, and the prompt, editable
+// there) and History (every run, as a table).
 import { CalendarClock } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -16,7 +15,6 @@ import { STATE_TONE, agentText, scheduleText, taskState } from "@/lib/scheduledT
 import { DEFAULT_TASK_TAB, TASK_TABS, taskBasePath } from "@/lib/scheduledTasks/tabs";
 import { formatMoment } from "@/lib/time";
 import { TaskActions } from "./TaskActions";
-import { TaskFiles } from "./TaskFiles";
 import { TaskOverview } from "./TaskOverview";
 import { TaskRuns } from "./TaskRuns";
 
@@ -72,9 +70,6 @@ export function TaskPane({ task, onDeleted }: Props) {
         </TabsContent>
         <TabsContent value="runs">
           <TaskRuns uid={task.uid} />
-        </TabsContent>
-        <TabsContent value="files">
-          <TaskFiles task={task} />
         </TabsContent>
       </Tabs>
     </div>
