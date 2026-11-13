@@ -19,28 +19,27 @@ A task holds:
 - **Prompt**: what the agent is asked. To use a skill, name it in the prompt. The prompt is a Markdown file, `PROMPT.md`, in the task's own folder (see [The task's folder](#the-task-s-folder)).
 - **Agent**: Claude Code or Codex.
 - **Model**: one from the agent's list, or the agent's default.
+- **Folder**: where every run works. Pick any folder on this Mac, such as a repository; leave it empty and runs work in the task's own folder.
 - **Catch up**: on by default. See [When the Mac was asleep](#when-the-mac-was-asleep).
-
-Every run works in the task's own folder. If the work belongs in another directory, such as a repository, say so in the prompt (`cd ~/work/site first`).
 
 Tasks are kept on this Mac only and never synced: a task names an agent and a folder on this machine, and two Macs must not both run it.
 
 ## Create a task
 
-On the Scheduled tasks page, press **New task**. Name it, choose when, and pick the agent and model. **Create task** saves it, paused, and opens its **Files** tab with `PROMPT.md` in the editor: write the prompt, save, then press **Resume**. A task cannot run or resume while its `PROMPT.md` is empty.
+On the Scheduled tasks page, press **New task**. Name it, write the prompt, choose when, and pick the agent and model; pick a folder if the runs should work somewhere other than the task's own folder. **Create task** saves it and it runs at its next time.
 
 You can also ask an agent to set one up: it can run `coffer task add` like any other command.
 
 ```bash
-coffer task add --data '{"prompt": "In ~/work/site, check last night'"'"'s build",
+coffer task add --data '{"prompt": "Check last night'"'"'s build",
   "config": {"schedule": {"kind": "daily", "time": "02:00", "timezone": "Asia/Singapore"},
-  "agent": "codex"}}'
+  "agent": "codex", "cwd": "/Users/me/work/site"}}'
 coffer task list
 ```
 
 ## The task's folder {#the-task-s-folder}
 
-Every task has a folder of its own, `~/.coffer/content/workspace/scheduled-tasks/<uid>/` (`coffer task show` prints it as `folder`), and everything in it shows on the task's **Files** tab. Every run works in it, so the prompt names its files by relative path.
+Every task has a folder of its own, `~/.coffer/content/workspace/scheduled-tasks/<uid>/` (`coffer task show` prints it as `folder`). Its `PROMPT.md` is always there. A task that names no other folder also runs there, so the prompt names its files by relative path; **Reveal in Finder** beside the prompt opens the folder.
 
 Only `PROMPT.md` is required. The rest is a suggested layout, which Coffer does not create or check:
 
@@ -52,7 +51,7 @@ output/       what each run produces, e.g. output/2026-11-11.md
 scripts/      a script only this task uses
 ```
 
-- **`PROMPT.md`**: edit it on the task's **Files** tab, in any editor, or ask an agent to; the next run reads the file as it is then. `coffer task prompt <task> --data '{"prompt": "…"}'` replaces it.
+- **`PROMPT.md`**: edit it on the task's **Overview** tab, in any editor, or ask an agent to; the next run reads the file as it is then. `coffer task prompt <task> --data '{"prompt": "…"}'` replaces it.
 - **Simple or complex**: a simple task is its prompt. For a complex one, put the *how* (steps and scripts) in a [skill](/guides/skills), which is synced, reusable and callable from any chat, and keep the prompt to one line naming it, such as `Use the release-check skill with config/release.json`. The task's folder then holds only that task's own data: `config/`, `state/`, `output/`.
 
 Naming the files, or keeping one file up to date instead of one per day, is the prompt's job. The folder is yours: it is not synced, and deleting the task leaves it in place.
@@ -67,18 +66,20 @@ Files are absolute paths on this Mac, up to ten, sent after the text. An agent c
 
 ## What a run looks like
 
-At its time, the agent gets the prompt in a new conversation. A run that is late, or was started by hand, gets a short note saying so, so the agent can judge whether the work still makes sense. Nothing is posted anywhere by Coffer: open the run from the history to read the reply. If the agent should tell you something, say so in the prompt; it can send you a message, and files, through your channel with `coffer__channel_notify` or `coffer channel notify`.
+At its time, the agent gets the prompt in a new conversation. A run that is late gets a short note saying when it was due, so the agent can judge whether the work still makes sense. A run whose folder no longer exists fails without starting. Nothing is posted anywhere by Coffer: open the run from the history to read the reply. If the agent should tell you something, say so in the prompt; it can send you a message, and files, through your channel with `coffer__channel_notify` or `coffer channel notify`.
 
-A run due while the previous one is still going is skipped and recorded. A failed run is not retried, since a turn may have done things; a repeating task that fails three runs in a row is paused. A one-off task is switched off after it runs.
+A run due while the previous one is still going is skipped and recorded. A failed run is not retried, since a turn may have done things; a repeating task that fails three runs in a row is paused, and the Overview page lists it under **Needs you** until you resume it. A one-off task is switched off after it runs. A run that was going when Coffer stopped is recorded **Stopped**, and does not count as a failure.
+
+Resuming a paused task, or changing when a task runs, never starts a run by itself: the task waits for its next time. A paused one-off whose time has passed is given a new time before it can resume.
 
 ## When the Mac was asleep
 
 Nothing runs while the Mac sleeps or Coffer is not running; Coffer does not wake the Mac. When it is back:
 
-- the most recent missed run runs once, late, and says when it was due;
-- a one-off task may run late by up to half the time it waited (at least 15 minutes, at most 2 hours);
-- a repeating task's missed run may still run until the end of that day;
+- the most recent missed run runs once, late, if it was due within the last seven days, and says when it was due;
 - anything older is skipped and recorded in the history.
+
+So a task set for 23:00 that the Mac slept through runs the next morning. Whether the work still makes sense that late is for the agent to judge; say in the prompt what it should do when it is late.
 
 Turn **Catch up** off on a task to skip every missed run instead.
 
@@ -86,11 +87,10 @@ Turn **Catch up** off on a task to skip every missed run instead.
 
 The list shows every task, soonest first; each row says when it runs next, or that it is paused or failing.
 
-Open a task for its header (**Run now**, **Pause** or **Resume**, **Edit**, and **⋯ › Delete**) and three tabs:
+Open a task for its header (**Run now**, **Pause** or **Resume**, **Edit**, and **⋯ › Delete**) and two tabs:
 
-- **Overview**: when it runs, its next run, agent, model, folder and catch-up.
-- **Files**: the task's folder, reaching the bottom of the window, with the open file beside the tree. `PROMPT.md` opens first, rendered, with **Source** to see the Markdown; **Edit** opens it in an editor and **Save** writes the file. Every other file is read-only here; change it on disk. **Edit** in the header changes everything but the prompt.
-- **History**: every run as a table — when it started (date and time), how it ended (**Done**, **Skipped**, **Failed**, **Stopped**), whether the schedule, a catch-up or you started it, and how long it took — with the reason under a skipped or failed run. Search it, filter by result and by what started it, and sort by start or duration.
+- **Overview**: when it runs, its next run, agent, model, folder and catch-up, and under them the prompt, rendered, with **Source** to see the Markdown; **Edit** opens it in an editor and **Save** writes `PROMPT.md`. **Edit** in the header changes everything but the prompt.
+- **History**: the latest 200 runs as a table — when it started (date and time), how it ended (**Done**, **Skipped**, **Failed**, **Stopped**), whether the schedule, a catch-up or you started it, and how long it took — with the reason under a skipped or failed run. Search it, filter by result and by what started it, and sort by start or duration.
 
 Each run in the history names its conversation as a link: it takes you to that conversation on the **Conversations** page, selected in the list; open it in your terminal from its row to read what the run did and carry the conversation on. Runs are kept for 90 days by default; change it in Settings › Data.
 

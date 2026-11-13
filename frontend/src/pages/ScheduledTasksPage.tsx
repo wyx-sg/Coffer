@@ -1,8 +1,7 @@
 // src/pages/ScheduledTasksPage.tsx — the Scheduled tasks page (/scheduled-tasks, /scheduled-tasks/:uid).
 //
-// Spec channels "Manage scheduled tasks from the Scheduled tasks page". The
-// list pane holds the owner's tasks (theirs, then the follow-ups agents
-// booked); the detail pane
+// Spec scheduled-tasks "Manage scheduled tasks from the Scheduled tasks page". The
+// list pane holds the owner's tasks; the detail pane
 // shows the one in the address, or the first task when there is none. The
 // header holds New task.
 import { useState } from "react";
@@ -77,15 +76,12 @@ export function ScheduledTasksPage() {
             onOpen={(id) => navigate(`/scheduled-tasks/${encodeURIComponent(id)}`)}
           />
         }
-        // No h-full: the Files card measures what sits under it (filePane.ts), and a
-        // full-height wrapper would count the empty space as something below it.
         detail={<div className={cn("px-7 py-5", !task && "h-full")}>{detail}</div>}
       />
       <TaskDialog
         open={adding}
         onOpenChange={setAdding}
-        // A new task's prompt is written next, in its Files tab.
-        onSaved={(id) => navigate(`/scheduled-tasks/${encodeURIComponent(id)}/files`)}
+        onSaved={(id) => navigate(`/scheduled-tasks/${encodeURIComponent(id)}`)}
       />
     </div>
   );

@@ -4891,7 +4891,8 @@
       "reconcile": "智能体配置",
       "cli": "命令行工具",
       "custom_tool": "自定义工具",
-      "other": "其他"
+      "other": "其他",
+      "scheduled_task": "定时任务"
     },
     "sources": {
       "agent": "智能体",
@@ -6659,7 +6660,9 @@
       "next": "下次 {{next}}",
       "what": "任务内容",
       "nextRun": "下次运行",
-      "folder": "文件夹"
+      "folder": "文件夹",
+      "prompt": "提示词",
+      "ownFolder": "任务自己的文件夹"
     },
     "runs": {
       "none": "还没有运行过。",
@@ -6675,12 +6678,13 @@
         "schedule": "按时",
         "late": "补跑",
         "manual": "手动"
-      }
+      },
+      "latestOnly": "只显示最近 {{count}} 次运行。"
     },
     "dialog": {
       "title": "新建定时任务",
       "editTitle": "编辑 {{name}}",
-      "body": "到了你选的时间，Coffer 用下面的智能体在任务自己的文件夹里开一个新会话，把任务的 PROMPT.md 发过去。建好后在任务的「文件」里写提示词，写好后点恢复才会开始运行：要通知你、写报告、用某个 skill、去别的目录干活，都写在里面。",
+      "body": "到了你选的时间，Coffer 用下面的智能体在任务自己的文件夹里开一个新会话，把提示词发过去。",
       "name": "名称",
       "when": "时间",
       "weekday": "星期",
@@ -6702,7 +6706,7 @@
       "agent": "智能体",
       "model": "模型",
       "catchUp": "补跑",
-      "catchUpHint": "Mac 休眠或 Coffer 未运行时错过的一次，会迟到补跑一次。",
+      "catchUpHint": "Mac 休眠或 Coffer 未运行时错过的运行，只要应运行时间在 7 天内，会补跑一次。",
       "submit": "创建任务",
       "addFailed": "无法创建任务",
       "editFailed": "无法保存任务",
@@ -6710,18 +6714,23 @@
       "timezone": "时区",
       "timezonePlaceholder": "这台 Mac 的时间",
       "timezoneHint": "按你填的时区（IANA 名称，例如 Asia/Singapore），不填就按这台 Mac 的本地时间。",
-      "agentDefaultNamed": "智能体默认（{{model}}）"
+      "agentDefaultNamed": "智能体默认（{{model}}）",
+      "editBody": "提示词是任务的 PROMPT.md，在「概览」里修改。",
+      "prompt": "提示词",
+      "promptPlaceholder": "每次运行要智能体做什么",
+      "promptHint": "保存为任务的 PROMPT.md，之后在任务的「概览」里修改。要通知你、写报告、用某个 skill、去别的目录干活，都写在这里。",
+      "folder": "文件夹",
+      "folderPlaceholder": "任务自己的文件夹",
+      "folderHint": "每次运行的工作目录。不选就用任务自己的文件夹；提示词文件始终放在任务自己的文件夹里。"
     },
     "tabs": {
       "overview": "概览",
-      "runs": "运行记录",
-      "files": "文件"
+      "runs": "运行记录"
     },
     "prompt": {
       "unsaved": "有未保存的修改",
       "revert": "撤销修改",
       "edit": "编辑提示词"
-    },
-    "needsPrompt": "先在「文件」里写好 PROMPT.md"
+    }
   }
 }

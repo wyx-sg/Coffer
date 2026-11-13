@@ -1,8 +1,8 @@
-// src/components/scheduled-tasks/TaskPromptFile.tsx — PROMPT.md open in a task's Files tab: the one file the page edits.
+// src/components/scheduled-tasks/TaskPromptFile.tsx — a task's PROMPT.md on its Overview tab: the one file the page edits.
 //
 // It reads like any file Coffer shows (Foundations 0.6.03): the 40px toolbar
 // with the file's path and Preview / Source, Open in editor and Reveal, over
-// the rendered prompt, filling the Files card's right pane. Edit turns the body
+// the rendered prompt. Edit turns the body
 // into the Markdown editor; the toolbar then says the draft is unsaved and
 // offers Revert and Save. The file is in the task's folder, so it can as well
 // be edited in any editor; Save writes it and returns to the preview; a refused
@@ -19,9 +19,8 @@ import { useToast } from "@/components/ui/toast";
 import { translateApiError } from "@/lib/api/errors";
 import type { ScheduledTask } from "@/lib/api/scheduledTasks";
 import { useSetTaskPrompt } from "@/lib/hooks/useScheduledTasks";
-import { PROMPT_MAX_LENGTH } from "@/lib/scheduledTasks/format";
 
-export const PROMPT_FILE = "PROMPT.md";
+const PROMPT_FILE = "PROMPT.md";
 
 export function TaskPromptFile({ task }: { task: ScheduledTask }) {
   const { t } = useTranslation();
@@ -29,11 +28,11 @@ export function TaskPromptFile({ task }: { task: ScheduledTask }) {
   const edit = useSetTaskPrompt();
   const [view, setView] = useState<FileView>("preview");
   const prompt = task.prompt;
-  // A task not yet given its prompt opens straight in the editor.
+  // A file emptied by hand opens straight in the editor.
   const [draft, setDraft] = useState<string | null>(() => (prompt.trim() ? null : ""));
   const editing = draft !== null;
   const dirty = editing && draft !== prompt;
-  const invalid = editing && (draft.trim() === "" || draft.length > PROMPT_MAX_LENGTH);
+  const invalid = editing && draft.trim() === "";
 
   const save = () => {
     if (!editing || invalid || edit.isPending) return;

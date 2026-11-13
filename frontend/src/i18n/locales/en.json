@@ -4891,7 +4891,8 @@
       "reconcile": "Agent config",
       "cli": "CLI",
       "custom_tool": "Custom tool",
-      "other": "Other"
+      "other": "Other",
+      "scheduled_task": "Scheduled task"
     },
     "sources": {
       "agent": "Agents",
@@ -6659,7 +6660,9 @@
       "next": "next {{next}}",
       "what": "What it does",
       "nextRun": "Next run",
-      "folder": "Folder"
+      "folder": "Folder",
+      "prompt": "Prompt",
+      "ownFolder": "the task’s own folder"
     },
     "runs": {
       "none": "It hasn't run yet.",
@@ -6675,12 +6678,13 @@
         "schedule": "On schedule",
         "late": "Late (catch up)",
         "manual": "By hand"
-      }
+      },
+      "latestOnly": "Showing the latest {{count}} runs."
     },
     "dialog": {
       "title": "New scheduled task",
       "editTitle": "Edit {{name}}",
-      "body": "At the time you pick, Coffer opens a new conversation with the agent below in the task's own folder and sends it the task's PROMPT.md. Once the task is created, write the prompt in its Files tab, then press Resume to start it: notifying you, writing a report, using a skill or working in another directory all go there.",
+      "body": "At the time you pick, Coffer opens a new conversation with the agent below in the task's own folder and sends it the prompt.",
       "name": "Name",
       "when": "When",
       "weekday": "Day",
@@ -6702,7 +6706,7 @@
       "agent": "Agent",
       "model": "Model",
       "catchUp": "Catch up",
-      "catchUpHint": "A run missed while the Mac slept or Coffer was off runs once, late.",
+      "catchUpHint": "A run missed while this Mac slept or Coffer was not running runs once, late, if it was due within the last seven days.",
       "submit": "Create task",
       "addFailed": "Couldn’t create the task",
       "editFailed": "Couldn’t save the task",
@@ -6710,18 +6714,23 @@
       "timezone": "Timezone",
       "timezonePlaceholder": "This Mac's time",
       "timezoneHint": "In the timezone you name (an IANA name such as Asia/Singapore), or this Mac's local time.",
-      "agentDefaultNamed": "Agent default ({{model}})"
+      "agentDefaultNamed": "Agent default ({{model}})",
+      "editBody": "The prompt is the task's PROMPT.md: edit it on the Overview tab.",
+      "prompt": "Prompt",
+      "promptPlaceholder": "What the agent should do on every run",
+      "promptHint": "Saved as the task's PROMPT.md; edit it later on the task's Overview tab. Notifying you, writing a report, using a skill or working in another directory all go here.",
+      "folder": "Folder",
+      "folderPlaceholder": "The task's own folder",
+      "folderHint": "Where every run works. Leave empty to use the task's own folder; the prompt file stays there either way."
     },
     "tabs": {
       "overview": "Overview",
-      "runs": "History",
-      "files": "Files"
+      "runs": "History"
     },
     "prompt": {
       "unsaved": "Unsaved changes",
       "revert": "Revert",
       "edit": "Edit prompt"
-    },
-    "needsPrompt": "Write PROMPT.md in the Files tab first"
+    }
   }
 }

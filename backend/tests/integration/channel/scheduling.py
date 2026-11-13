@@ -16,6 +16,7 @@ from coffer.application.channel.schedule.scheduler import TaskScheduler
 from coffer.application.channel.schedule.tasks import TaskService
 from coffer.domain.channel.scheduled_run import ScheduledRun
 from coffer.infrastructure.channel.persistence import ScheduledRunRepo
+from coffer.infrastructure.channel.task_anchors import TaskAnchors
 from coffer.infrastructure.channel.task_folders import TaskFolders
 from coffer.infrastructure.persistence.engine import session_maker
 from coffer.surfaces.http.schedule_wiring import FreshTurns
@@ -24,6 +25,10 @@ from .conftest import ChannelEnv, wait_until
 
 #: Thursday 2026-10-29, 10:00 UTC: every test starts here.
 START = datetime(2026, 10, 29, 10, 0, tzinfo=UTC)
+
+
+#: The prompt a test's task carries unless it says otherwise.
+PROMPT = "Summarise the open pull requests"
 
 
 class Clock:
@@ -59,6 +64,15 @@ class Scheduling:
     scheduler: TaskScheduler
     tasks: TaskService
 
+    async def create(
+        self, config: dict[str, Any], name: str | None = None, *, prompt: str = PROMPT
+    ) -> Any:
+        """Create a task from ``task_config`` and let the scheduler see it, as
+        the daemon's pass on every resource write does: its slots count from now."""
+        task = await self.tasks.create(name, config, actor="t", prompt=prompt)
+        await self.tick()
+        return task
+
     async def tick(self) -> None:
         """One scheduler pass, as the loop would run it now."""
         await self.scheduler._pass(False)
@@ -88,7 +102,9 @@ def build_scheduling(
     runner = TaskRunner(
         runs=runs, fresh=FreshTurns(env.chat, env.orchestrator), folders=folders, clock=clock
     )
-    scheduler = TaskScheduler(resources=env.resources, runs=runs, runner=runner, clock=clock)
+    scheduler = TaskScheduler(
+        resources=env.resources, runs=runs, runner=runner, anchors=TaskAnchors(), clock=clock
+    )
     tasks = TaskService(
         resources=env.resources,
         runs=runs,
@@ -96,7 +112,7 @@ def build_scheduling(
         is_running=scheduler.is_running,
         folders=folders,
     )
-    env.kinds[KIND] = make_scheduled_task_kind(clock=clock, prompt_of=folders.read_prompt)
+    env.kinds[KIND] = make_scheduled_task_kind(clock=clock)
     return Scheduling(
         env=env, clock=clock, runs=runs, runner=runner, scheduler=scheduler, tasks=tasks
     )
@@ -111,7 +127,6 @@ def task_config(
 ) -> dict[str, Any]:
     return {
         "schedule": schedule or daily(),
-        "prompt": "Summarise the open pull requests",
         "agent": agent,
         **extra,
     }

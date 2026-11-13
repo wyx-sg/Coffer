@@ -232,6 +232,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`seatalk-websocket-inbound`](seatalk-websocket-inbound.md) | SeaTalk Inbound Is One Outbound WebSocket, Through an Operator-Supplied SDK |
 | [`automation-is-a-scheduled-prompt`](automation-is-a-scheduled-prompt.md) | A Scheduled Task Is a Prompt on a Schedule, Each Run a Conversation of Its Own |
 | [`a-scheduled-task-s-prompt-is-a-file-in-its-own-folder`](a-scheduled-task-s-prompt-is-a-file-in-its-own-folder.md) | A Scheduled Task's Prompt Is a File in the Task's Own Folder |
+| [`a-missed-run-is-caught-up-within-seven-days`](a-missed-run-is-caught-up-within-seven-days.md) | A Scheduled Task's Slots Are Counted From an Anchor, and a Missed Run Is Caught Up Within Seven Days |
 | [`telegram-long-polling`](telegram-long-polling.md) | Telegram Inbound Is a Long Poll That Commits the Offset After Dispatch |
 
 ### Skills, knowledge & memory

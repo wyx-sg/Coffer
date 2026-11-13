@@ -1,10 +1,10 @@
-"""The message a scheduled run hands the agent (spec channels "Run a scheduled
+"""The message a scheduled run hands the agent (spec scheduled-tasks "Run a scheduled
 task in a fresh conversation of its own").
 
 The task's prompt, as the owner wrote it — what Claude Code's and Codex's own
-automations send. A run that is late (the Mac slept, Coffer was stopped) or
-started by hand says so in one line after it, so the agent can judge whether
-the work still makes sense.
+automations send. A run that is late (the Mac slept, Coffer was stopped) says
+so in one line after it, so the agent can judge whether the work still makes
+sense; a run started by hand is the prompt alone.
 """
 
 from __future__ import annotations

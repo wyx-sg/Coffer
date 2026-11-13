@@ -1,10 +1,10 @@
 // src/components/scheduled-tasks/TaskDialog.tsx — New task, or edit one: its name, when, and the agent and model every run opens with.
 //
-// The prompt is not asked for here: a new task's PROMPT.md is created empty and
-// written in its Files tab, which the page opens once the task is created; the
-// task stays paused until it is. Every run works in the task's own folder.
+// A new task is given its prompt here and starts on its schedule at once; the
+// prompt is then the task's PROMPT.md, edited on its Overview tab, so the edit
+// dialog does not show it. Every run works in the task's own folder.
 //
-// Spec channels "Manage scheduled tasks from the Scheduled tasks page". Every
+// Spec scheduled-tasks "Manage scheduled tasks from the Scheduled tasks page". Every
 // run is a new conversation of its own; what it does with a chat or a report
 // is the prompt's. Catch up runs a slot missed while the Mac slept once, late.
 // The body scrolls between a fixed header and footer, so the buttons stay at
@@ -27,6 +27,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { translateApiError } from "@/lib/api/errors";
 import type { ScheduledTask } from "@/lib/api/scheduledTasks";
 import { useCreateScheduledTask, useEditScheduledTask } from "@/lib/hooks/useScheduledTasks";
@@ -54,7 +55,7 @@ function Form({ onOpenChange, existing, onSaved }: Omit<Props, "open">) {
     setForm((f) => ({ ...f, ...patch }));
     if (save.error) save.reset();
   };
-  const valid = formValid(form);
+  const valid = formValid(form, !editing);
 
   const submit = () => {
     if (!valid || save.isPending) return;
@@ -69,7 +70,10 @@ function Form({ onOpenChange, existing, onSaved }: Omit<Props, "open">) {
         { onSuccess: () => done(existing.uid) },
       );
     } else {
-      create.mutate({ name: form.name.trim(), config }, { onSuccess: (task) => done(task.uid) });
+      create.mutate(
+        { name: form.name.trim(), prompt: form.prompt, config },
+        { onSuccess: (task) => done(task.uid) },
+      );
     }
   };
 
@@ -87,7 +91,9 @@ function Form({ onOpenChange, existing, onSaved }: Omit<Props, "open">) {
             ? t("scheduledTasks.dialog.editTitle", { name: existing.name })
             : t("scheduledTasks.dialog.title")}
         </DialogTitle>
-        <DialogDescription>{t("scheduledTasks.dialog.body")}</DialogDescription>
+        <DialogDescription>
+          {t(editing ? "scheduledTasks.dialog.editBody" : "scheduledTasks.dialog.body")}
+        </DialogDescription>
       </DialogHeader>
       <div className="-mx-5 min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-1">
         <div className="space-y-1.5">
@@ -102,6 +108,22 @@ function Form({ onOpenChange, existing, onSaved }: Omit<Props, "open">) {
             onChange={(e) => set({ name: e.target.value })}
           />
         </div>
+        {editing ? null : (
+          <div className="space-y-1.5">
+            <Label htmlFor="task-prompt" required>
+              {t("scheduledTasks.dialog.prompt")}
+            </Label>
+            <Textarea
+              id="task-prompt"
+              rows={5}
+              className="font-mono text-xs"
+              value={form.prompt}
+              placeholder={t("scheduledTasks.dialog.promptPlaceholder")}
+              onChange={(e) => set({ prompt: e.target.value })}
+            />
+            <p className="text-xs text-text-muted">{t("scheduledTasks.dialog.promptHint")}</p>
+          </div>
+        )}
         <TaskScheduleFields form={form} set={set} />
         <TaskSessionFields form={form} set={set} />
         <label className="flex items-start justify-between gap-3">

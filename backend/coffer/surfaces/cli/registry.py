@@ -61,10 +61,6 @@ EXEMPT: dict[tuple[str, str], tuple[Category, str]] = {
     ("DELETE", "/knowledge/file"): ("file-content", "a knowledge document is a plain file"),
     ("GET", "/knowledge/asset"): ("file-content", "a knowledge picture is a plain file"),
     ("GET", "/skills/{uid}/files/content"): ("file-content", "a skill's files are plain files"),
-    ("GET", "/scheduled-tasks/{uid}/files/content"): (
-        "file-content",
-        "a task's folder holds plain files",
-    ),
     ("GET", "/agents/{uid}/config-files/{key}/content"): (
         "file-content",
         "an agent's config file is its own plain file",

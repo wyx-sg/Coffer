@@ -137,8 +137,8 @@ upload named instead of dropped).
 
 A task's prompt is `PROMPT.md` in its own folder,
 `~/.coffer/content/workspace/scheduled-tasks/<uid>/`, never in its config;
-every run works in that folder (a task names no directory, see History); a run's files are plain files
-there, named by the prompt; notify can send files.
+a run works in that folder unless the task names another (see History); a run's files are plain files
+wherever it works, named by the prompt; notify can send files.
 
 Rules a change must keep:
 
@@ -147,26 +147,23 @@ Rules a change must keep:
 - **The file is the truth.** A run reads `PROMPT.md` as it is when the run
   starts; a missing or empty file fails the run with that reason. The page
   writes it through `PUT /scheduled-tasks/{uid}/prompt`; creating a task
-  writes it.
+  writes it, and a task is not created without one.
 - **No prompt in the config.** A config carrying one is refused on every path;
-  only `POST /scheduled-tasks` accepts a prompt (top-level, or inside `config`
-  for older callers) and moves it into the file.
+  only `POST /scheduled-tasks` accepts a prompt, top-level, and writes it to
+  the file.
 - **Content, not synced.** The folder is under `content/`, the user's only copy,
   like the workspace. Deleting a task leaves its folder: what it wrote is the
   owner's.
-- **One place on the page.** The Files tab shows the whole folder as a
-  skill's folder is shown: the prompt, scripts it runs, intermediate files and
-  reports. `PROMPT.md` opens first and is the one file editable there; others
-  are changed on disk. There is no separate Prompt tab (see History).
+- **One place on the page.** The prompt is shown and edited on the task's
+  Overview tab, under its facts; Reveal in Finder opens the folder for
+  everything else. There is no Prompt tab and no Files tab (see History).
 
 ## Consequences
 
-- Tasks written before 2026-11-11 have their prompt moved into `PROMPT.md`
-  when the daemon starts (an existing file wins), then dropped from the config.
-- The Edit dialog no longer shows the prompt; New task still asks for it, and
-  the Files tab edits it afterwards.
-- `coffer task prompt` replaces the file and `coffer task files` lists the
-  folder; `coffer task show` returns `prompt` and `folder`.
+- The Edit dialog does not show the prompt; New task asks for it, and the
+  Overview tab edits it afterwards.
+- `coffer task prompt` replaces the file; `coffer task show` returns `prompt`
+  and `folder`.
 - A deleted task's folder stays until the owner removes it.
 
 ## History
@@ -193,3 +190,33 @@ Rules a change must keep:
   created paused; at the owner's word ("必须有提示词才能开始运行") Resume and
   Run now are refused while the file is empty. A file emptied by hand later
   still fails the run that finds it so.
+- 2026-11-13: after a review of the feature, four of these choices changed, each
+  put to the owner with its alternatives.
+  - **A task is given its prompt when it is created.** Creating it empty and
+    paused meant three extra rules (must be named, created paused, Resume and
+    Run now refused while empty) and three more steps for the owner. Claude
+    Code Desktop, Codex and Hermes all ask for the prompt in the create form.
+    Options: keep create-then-write; ask in the dialog and refuse a task
+    without one (chosen: "按你推荐做吧"). The rules above are gone; a file
+    emptied by hand still fails its run.
+  - **The Files tab is removed and the prompt moves to Overview.** The owner:
+    "文件tab要不还是不要了，保持简洁". The tab duplicated Finder for
+    everything but `PROMPT.md`, and listing a folder a run fills without bound
+    needed a cap. No comparable product has a file browser per task. Options
+    for the prompt: on Overview under the facts (chosen by the owner on a
+    card), a Prompt tab of its own (the tab removed on 2026-11-11), or in the
+    Edit dialog (a form field is a poor place for a long Markdown file). The
+    file-tree routes and `coffer task files` are deleted.
+  - **A task may name the folder its runs work in.** The owner: "定时任务要支持
+    可以自己选文件夹，如果不选才是默认文件夹", reversing the 2026-11-11
+    choice: a run that starts in a repository loads its `AGENTS.md` and
+    settings by itself, which a `cd` in the prompt does not, and Claude Code
+    Desktop and Codex both let a task pick its folder. The config's optional
+    `cwd` is an absolute path; `PROMPT.md` stays in the task's own folder
+    either way, so choosing a folder writes nothing into it. Options for a
+    named folder that is gone at run time: fall back to the task's own folder
+    (the run would do its work in the wrong place, silently) or fail the run
+    saying so (chosen).
+  - **The prompt has no length limit of Coffer's own.** The 8,000-character cap
+    guarded nothing: the file can be edited to any length on disk, and the
+    agent has its own limit.

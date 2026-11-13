@@ -64,6 +64,10 @@ const PAGES: Record<string, { list: string; detail?: (a: Address) => string | nu
   mcp_server: { list: "/mcp-servers", detail: (a) => `/mcp-servers/${encode(a.title)}` },
   skill: { list: "/skills", detail: (a) => `/skills/${encode(a.title)}` },
   channel: { list: "/channels", detail: (a) => `/channels/${encode(a.uid)}` },
+  scheduled_task: {
+    list: "/scheduled-tasks",
+    detail: (a) => `/scheduled-tasks/${encode(a.uid)}`,
+  },
   provider: { list: "/model-providers", detail: (a) => `/model-providers/${encode(a.uid)}` },
   knowledge: { list: "/knowledge", detail: (a) => `/knowledge/${encode(a.uid)}` },
   sync: { list: "/sync" },

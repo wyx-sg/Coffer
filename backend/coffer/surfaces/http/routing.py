@@ -172,7 +172,7 @@ def include_all_routers(app: FastAPI) -> None:
         chat_conversation_router,  # the Conversations page's REST surface
         chat_turn_router,  # … and stopping a turn
         channel_router,  # spec channels
-        schedule_router,  # spec channels (scheduled tasks)
+        schedule_router,  # spec scheduled-tasks
         price_list_router,  # spec provider-switching (before /providers/{uid})
         model_switch_router,  # spec provider-switching: review + apply a model change
         provider_health_router,  # spec provider-switching (before /providers/{uid})

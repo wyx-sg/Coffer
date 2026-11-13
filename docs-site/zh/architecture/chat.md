@@ -304,11 +304,12 @@ flowchart TD
 
 ### 定时轮次 {#scheduled-turns}
 
-[定时任务](/zh/guides/scheduled-tasks)是 Coffer 按时间发给智能体的一段提示词，每次运行都是一个新会话（ADR [automation-is-a-scheduled-prompt](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/automation-is-a-scheduled-prompt.md)）。任务是一个只在本机的 `scheduled_task` 资源：计划（一次、每小时、每天、每周、cron、手动，都可以带一个 IANA 时区）、智能体，以及可选的模型和目录。提示词不在资源里，而是任务自己文件夹 `content/workspace/scheduled-tasks/<uid>/` 里的 `PROMPT.md`（ADR [a-scheduled-task-s-prompt-is-a-file-in-its-own-folder](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/a-scheduled-task-s-prompt-is-a-file-in-its-own-folder.md)）；资源里带提示词会被拒绝，2026-11-11 之前写的任务在启动时把提示词移进这个文件。机制就这么多：它不绑聊天，也没有模板；一次运行要怎么用聊天、写报告或走流程，写在提示词里，或者交给提示词点名的 skill。
+[定时任务](/zh/guides/scheduled-tasks)是 Coffer 按时间发给智能体的一段提示词，每次运行都是一个新会话（ADR [automation-is-a-scheduled-prompt](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/automation-is-a-scheduled-prompt.md)）。任务是一个只在本机的 `scheduled_task` 资源：计划（一次、每小时、每天、每周、cron、手动，都可以带一个 IANA 时区）、智能体，以及可选的模型和运行所在的文件夹。提示词不在资源里，而是任务自己文件夹 `content/workspace/scheduled-tasks/<uid>/` 里的 `PROMPT.md`（ADR [a-scheduled-task-s-prompt-is-a-file-in-its-own-folder](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/a-scheduled-task-s-prompt-is-a-file-in-its-own-folder.md)）；资源里带提示词会被拒绝。机制就这么多：它不绑聊天，也没有模板；一次运行要怎么用聊天、写报告或走流程，写在提示词里，或者交给提示词点名的 skill。
 
-- **调度器**是一个可唤醒循环 `scheduled-tasks`，睡到最早的到期时间；任何任务被写入都会唤醒它。在宽限期内到期的时间点交给执行器；超过宽限期的记为已跳过。一次性任务的宽限期是它等待时长的一半（15 分钟到 2 小时）；重复任务的到当天结束。任务上一次运行还没结束时到期的那一次会被跳过。一次性任务运行后被关闭，连续失败三次的重复任务会被暂停。
-- **执行器**先读 `PROMPT.md`（文件缺失或为空，这次运行就失败），再用任务的智能体、模型和目录（默认是任务文件夹，产出也留在那里）开一个不属于任何渠道的对话，经编排器发出提示词，和在对话页新开一样。迟到的运行会在提示词后面加一行，说明原定时间和实际运行时间。这次运行随轮次结束记为 `done`、`failed` 或 `stopped`，什么都不发出；需要通知所有者时，由智能体自己用 `coffer__channel_notify`。
-- **运行记录。** 每次运行是 `runs.db` 里 `scheduled_task_runs` 的一行（原定、开始、结束、结果、原因、对话），由保留期清理。
+- **调度器**是一个可唤醒循环 `scheduled-tasks`，睡到最早的到期时间；任何任务被写入都会唤醒它。时间点从每个任务的锚点算起，锚点存在 `local/scheduled-task-anchors.json`：调度器上一次处理完的时间点，或者它第一次看到任务以当前计划启用的时刻，所以恢复任务或修改计划都不会触发运行（ADR [a-missed-run-is-caught-up-within-seven-days](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/a-missed-run-is-caught-up-within-seven-days.md)）。到期的时间点交给执行器；迟到的时间点只有在任务开着补跑、且原定时间在 7 天内时才运行，否则记为已跳过。只补跑最近错过的那一次。任务上一次运行还没结束时到期的那一次会被跳过。一次性任务运行后被关闭，连续失败三次的重复任务会被暂停。
+- **执行器**先读 `PROMPT.md`（文件缺失或为空，这次运行就失败），再用任务的智能体和模型，在任务指定的文件夹里（没指定就是任务自己的文件夹；指定的文件夹不存在，这次运行就失败）开一个不属于任何渠道的对话，经编排器发出提示词，和在对话页新开一样。迟到的运行会在提示词后面加一行，说明原定时间和实际运行时间。这次运行随轮次结束记为 `done`、`failed` 或 `stopped`，什么都不发出；需要通知所有者时，由智能体自己用 `coffer__channel_notify`。
+- **运行记录。** 每次运行是 `runs.db` 里 `scheduled_task_runs` 的一行（原定、开始、结束、结果、原因、对话），由保留期清理。守护进程停止时还在运行的那一行，下次启动时记为 `stopped`。
+- **需要处理。** 连续失败三次被暂停的重复任务，是概览页「需要你处理」列表里的一项（`ScheduledTaskAttentionSource`）；除此之外 Coffer 不为任何运行发通知。
 
 ### 聊天之后对话去哪里 {#where-a-conversation-goes-after-the-chat}
 

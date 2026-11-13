@@ -75,7 +75,9 @@ acceptance(
 
 test("the open skill repeats a missing command as a banner", async () => {
   renderSkillsPage("/skills/hello");
-  const banner = await screen.findByTestId("skill-banner-requires");
+  // The first test to open a skill: the detail pane's modules load here, which can
+  // take longer than the default second on a busy runner.
+  const banner = await screen.findByTestId("skill-banner-requires", {}, { timeout: 5000 });
   expect(banner).toHaveTextContent("jq isn’t installed");
   expect(banner).toHaveTextContent("hello is still delivered");
 });
@@ -191,7 +193,9 @@ test("a failing MCP server without a reason says failing, not off, in the body",
 
 test("the commands banner carries one hand-off for every command that needs the person", async () => {
   renderSkillsPage("/skills/hello");
-  const banner = await screen.findByTestId("skill-banner-requires");
+  // The first test to open a skill: the detail pane's modules load here, which can
+  // take longer than the default second on a busy runner.
+  const banner = await screen.findByTestId("skill-banner-requires", {}, { timeout: 5000 });
   expect(
     within(banner).getAllByRole("button", { name: /Hand off to|Copy prompt/ }).length,
   ).toBeGreaterThan(0);

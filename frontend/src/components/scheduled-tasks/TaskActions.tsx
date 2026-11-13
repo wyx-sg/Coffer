@@ -34,16 +34,12 @@ export function TaskActions({ task, onDeleted }: Props) {
   const disable = useDisableResource();
   const remove = useDeleteResource();
   const write = { kind: SCHEDULED_TASK_KIND, uid: task.uid };
-  // A task cannot run or resume before its PROMPT.md is written (the daemon refuses too).
-  const noPrompt = task.prompt.trim() === "";
-  const needsPrompt = noPrompt ? t("scheduledTasks.needsPrompt") : undefined;
   return (
     <>
       <Button
         size="sm"
         variant="outline"
-        disabled={noPrompt || task.running || run.isPending}
-        title={needsPrompt}
+        disabled={task.running || run.isPending}
         onClick={() => run.mutate(task.uid)}
       >
         <Zap aria-hidden />
@@ -63,8 +59,7 @@ export function TaskActions({ task, onDeleted }: Props) {
         <Button
           size="sm"
           variant="outline"
-          disabled={noPrompt || enable.isPending}
-          title={needsPrompt}
+          disabled={enable.isPending}
           onClick={() => enable.mutate(write)}
         >
           <Play aria-hidden />

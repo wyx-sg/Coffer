@@ -1,10 +1,10 @@
-"""The ``scheduled_task`` Kind, wired by the composition root (spec channels
+"""The ``scheduled_task`` Kind, wired by the composition root (spec scheduled-tasks
 "Keep scheduled tasks as machine-local resources").
 
 A scheduled task is a resource like every other user-managed thing: one file
 with an immutable uid, a free-text name, an enabled switch (paused or active)
 and the audit trail every kind gets. It is filed under ``local/``: the agent
-and directory it names are this machine's, and a task that travelled would run
+and folder it uses are this machine's, and a task that travelled would run
 on every machine at once.
 
 Both write paths — the task routes and the kind-agnostic resource routes —
@@ -19,11 +19,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from coffer.domain.channel.schedule import MIN_REPEAT, OnceSchedule, shortest_gap
-from coffer.domain.channel.scheduled_task import (
-    OLD_CONFIG_KEYS,
-    ScheduledTaskConfig,
-    min_repeat_ok,
-)
+from coffer.domain.channel.scheduled_task import ScheduledTaskConfig, min_repeat_ok
 from coffer.domain.errors import ConfigValidationError
 from coffer.domain.resource import Kind, Resource
 from coffer.domain.vault.layout import StorageClass
@@ -46,7 +42,6 @@ def check_schedule(config: ScheduledTaskConfig, *, now: datetime, new: bool) -> 
 
 def make_scheduled_task_kind(
     *,
-    prompt_of: Callable[[str], str | None] | None = None,
     clock: Callable[[], datetime] = lambda: datetime.now(tz=UTC),
 ) -> Kind:
     """Construct the ``scheduled_task`` Kind."""
@@ -54,16 +49,16 @@ def make_scheduled_task_kind(
     async def _validate_create(config: dict[str, Any]) -> None:
         check_schedule(ScheduledTaskConfig.model_validate(config), now=clock(), new=True)
 
-    def _has_prompt(resource: Resource) -> None:
-        # A task is created paused until its PROMPT.md is written, and stays so.
-        if prompt_of is not None and not (prompt_of(resource.uid) or "").strip():
-            raise ConfigValidationError("write the task's PROMPT.md before resuming it")
+    def _can_resume(resource: Resource) -> None:
+        # A one-off whose time has passed has nothing left to run.
+        schedule = ScheduledTaskConfig.model_validate(resource.config).schedule
+        if isinstance(schedule, OnceSchedule) and schedule.at <= clock():
+            raise ConfigValidationError(
+                f"{schedule.at.isoformat()} is already in the past; give the task a new time"
+            )
 
     async def _validate_update(resource: Resource, after: dict[str, Any]) -> None:
-        # A file from before 2026-11-11 still carries its prompt or directory
-        # while they are being taken out of it.
-        old = {k: v for k, v in resource.config.items() if k not in OLD_CONFIG_KEYS}
-        before = ScheduledTaskConfig.model_validate(old).schedule
+        before = ScheduledTaskConfig.model_validate(resource.config).schedule
         parsed = ScheduledTaskConfig.model_validate(after)
         try:
             # A one-off whose time is not being changed may already be behind.
@@ -79,5 +74,5 @@ def make_scheduled_task_kind(
         storage=StorageClass.LOCAL,
         validate_config=_validate_create,
         on_update_config=_validate_update,
-        before_enable=_has_prompt if prompt_of is not None else None,
+        before_enable=_can_resume,
     )

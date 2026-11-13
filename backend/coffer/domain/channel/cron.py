@@ -1,4 +1,4 @@
-"""Five-field cron expressions, read on a wall clock (spec channels "Run a
+"""Five-field cron expressions, read on a wall clock (spec scheduled-tasks "Run a
 scheduled task at the times it names"): the parser and the one question asked
 of a parsed expression, its next minute after a wall time."""
 

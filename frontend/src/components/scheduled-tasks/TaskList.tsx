@@ -1,6 +1,6 @@
 // src/components/scheduled-tasks/TaskList.tsx — the Scheduled tasks list pane: a filter ("/" focuses it), then every task, soonest first.
 //
-// Spec channels "Manage scheduled tasks from the Scheduled tasks page".
+// Spec scheduled-tasks "Manage scheduled tasks from the Scheduled tasks page".
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
