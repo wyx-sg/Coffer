@@ -1,8 +1,7 @@
 """Startup wiring for the knowledge sweep, the one background worker knowledge has.
 
-Every run is :func:`coffer.application.knowledge.sweep.sweep_once`: it promotes
-what waits in a collection's ``.inbox/``, commits edits found on disk, and
-re-renders the guide skill. All three are mechanical, so the sweep runs on every
+Every run is :func:`coffer.application.knowledge.sweep.sweep_once`: it commits edits found on
+disk and re-renders the guide skill. Both are mechanical, so the sweep runs on every
 machine whenever the ``knowledge`` feature is on (spec experimental-features
 "Close every surface of a switched-off feature"): a collection's files are the
 same wherever it is read, and what the sweep writes goes through ``VaultWriter``
@@ -31,7 +30,7 @@ from coffer.surfaces.http.knowledge.dependencies import get_tidy_service
 _log = logging.getLogger(__name__)
 
 #: Seconds without a file event after which the sweep runs anyway, to catch an
-#: event the watch lost. A file dropped into an inbox or edited on disk wakes the
+#: event the watch lost. A file written or edited on disk wakes the
 #: sweep at once, so this is only the safety net.
 SWEEP_FALLBACK_S = 600.0
 #: Seconds a burst of file events settles before the sweep runs: a copy of many

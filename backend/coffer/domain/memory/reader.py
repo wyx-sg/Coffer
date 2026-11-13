@@ -1,32 +1,19 @@
 """The port every native-memory reader implements (spec memory "Read Claude
-Code and Codex memory with their search terms").
+Code and Codex memory").
 
-Two agents, two undocumented private formats, one shape: list the source
-files under an agent's own ``config_dir`` without opening them (``sources``),
-then parse one of those files into the entries it holds (``read``). Splitting
-the two lets the caller hash a file cheaply to decide whether it changed
-("Skip unchanged sources") before paying to parse it.
+Two agents, two private formats, one shape: list the source files under an
+agent's own ``config_dir`` without parsing them (``sources``), then parse one
+of those files into the memories it holds (``read``). Splitting the two lets
+the caller hash a file to decide whether it changed ("Skip unchanged
+sources") before paying to parse it.
 
-A reader's output is a :class:`RawEntry` — **the input layer, not the
-product**. It is written verbatim under the partition's ``.raw/`` ("Keep raw
-entries verbatim and hidden") and the distil pass turns entries into Coffer's
-own notes ("Distil each raw entry into a note mechanically"). That
-split is why a reader may stay dumb: it is not trying to write anything a
-person will read, only to hand the pass everything the source said,
-including the source's own search terms where it supplies them.
-
-Everything here is a plain value or a ``Protocol`` — no filesystem access, no
-YAML, no agent-specific knowledge. The two adapters that actually walk a disk
-live in :mod:`coffer.infrastructure.memory.readers`; this module is what they
-both promise to satisfy, and what the aggregation pass composes against
-instead of a concrete reader class (so a third agent, when one earns the
-abstraction per "Reintroduce no retired mechanism", is one more adapter, not
-a change here).
+Everything here is a plain value or a ``Protocol``. The two adapters that walk
+a disk live in :mod:`coffer.infrastructure.memory.readers`.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Protocol
 
 
@@ -34,97 +21,59 @@ from typing import Protocol
 class SourceFile:
     """One native memory file, cheap to compare across syncs.
 
-    ``digest`` is a content hash, not a size or an mtime, because a native
-    tool may rewrite a file with the same bytes at a new mtime (or vice versa
-    on a filesystem with coarse mtime resolution) — the skip-unchanged check
-    of "Skip unchanged sources" needs to survive either.
+    ``digest`` is a content hash, not a size or an mtime: a native tool may
+    rewrite a file with the same bytes at a new mtime, or the reverse on a
+    filesystem with coarse mtime resolution.
     """
 
     #: Absolute path of the native file.
     path: str
-    #: Content hash, so aggregation can skip a file whose content is unchanged
-    #: since the last pass without re-parsing it.
+    #: Content hash.
     digest: str
 
 
 @dataclass(frozen=True)
 class RawEntry:
-    """One entry as a reader first sees it, before Coffer writes anything.
+    """One memory as a reader sees it, before publishing files it under a
+    project and makes its paths portable."""
 
-    Deliberately thinner than a hub entry: it
-    carries no provenance beyond its anchor and no partition, because those
-    are the aggregator's job once it knows which repository the entry belongs
-    to. A reader only ever answers "what does this one source file say".
-    """
-
-    #: Short human title. From the source's own words when it has one (Claude
-    #: Code's frontmatter ``name``); otherwise derived defensibly by the
-    #: reader, which documents the choice where it makes it. It is a handle
-    #: for the distil pass, not a title a person will read — the note's title
-    #: is Coffer's to write ("Distil each raw entry into a note mechanically").
+    #: Short title: the source's own (Claude Code's frontmatter ``name``), or
+    #: one the reader derives from the text.
     title: str
-    #: Longer human description, same provenance rule as ``title``.
+    #: One-line description, with the same provenance as ``title``.
     description: str
     #: One of :data:`coffer.domain.memory.hub.HUB_TYPES`.
     type: str
-    #: The source's own words, verbatim. This is the layer where verbatim
-    #: still holds ("Keep raw entries verbatim and hidden"): it is what lands
-    #: under ``.raw/`` and what a
-    #: note's claim is checked against.
+    #: The source's own words.
     body: str
-    #: Where inside the source file this entry lives — a heading, a bullet's
-    #: content hash, or empty when the whole file is the entry. Half of the
-    #: stable identity "Let only aggregation write raw entries" needs; the
-    #: reader is responsible for it being
-    #: the same string on a second, unchanged read.
+    #: Where inside the source file this memory lives; the same string on a
+    #: second, unchanged read. Half of the memory's identity.
     anchor: str
-    #: Absolute working directory this entry was learned in, or "" when it is
-    #: about the person rather than any one project. Aggregation resolves it
-    #: to a repository ("Identify a partition by its repository"); an entry
-    #: whose directory is not inside one creates no partition and is judged on
-    #: its merits by distil ("Create no partition for a non-repository
-    #: directory").
+    #: Absolute working directory this memory was learned in, or "" when the
+    #: source records none. Publishing resolves it to a repository; a memory
+    #: whose directory is inside none is not published.
     project_root: str
-    #: Further directories the entry was learned for, when its source routes it
-    #: to more than one (a Codex task group's ``applies_to`` can name a scratch
-    #: directory and the repository worked on). The first inside a repository
-    #: files the entry.
-    other_roots: tuple[str, ...] = ()
-    #: The source's own timestamp for this entry, when it records one at all.
-    source_written_at: str = ""
-    #: Search terms the source itself states for this material. Codex writes
-    #: them per task group in its summary; Claude Code states none. Carried
-    #: rather than discarded because the source has already answered "what
-    #: would you look this up by" better than a later guess can, and the index
-    #: line repeats them ("Write each index line to stand on its own").
-    search_terms: tuple[str, ...] = field(default_factory=tuple)
 
 
 class MemoryReader(Protocol):
     """What one agent's native-memory adapter must provide."""
 
-    #: ``"claude_code"`` or ``"codex"`` — matches the registered agent's type,
-    #: so the aggregator knows which reader to hand which ``config_dir``.
+    #: ``"claude_code"`` or ``"codex"``: the registered agent's type.
     agent_type: str
 
     def sources(self, config_dir: str) -> tuple[SourceFile, ...]:
         """List this agent's native memory files under ``config_dir``.
 
-        Must not raise for one unreadable file — skip it and keep listing the
-        rest (a directory-listing failure is a filesystem problem, not a
-        format problem, and the isolation of "Fail a broken reader loudly and in
-        isolation" still applies: one bad path
-        must not blank the whole list).
+        Must not raise for one unreadable file: skip it and keep listing.
         """
         ...
 
     def read(self, source: SourceFile) -> tuple[RawEntry, ...]:
-        """Parse one source file into the entries it holds.
+        """Parse one source file into the memories it holds.
 
-        Raises :class:`coffer.domain.memory.errors.UnreadableMemory` — never
-        returns a partial tuple — when the file cannot be parsed:
-        the caller is expected to catch it per file, record the reason, and
-        carry on with everything else.
+        Raises :class:`coffer.domain.memory.errors.UnreadableMemory`, never
+        returns a partial tuple, when the file cannot be parsed: the caller
+        catches it per file, records the reason and carries on.
         """
         ...
 

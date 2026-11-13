@@ -14,46 +14,18 @@ first:
 
     <body>
 
-`name` and `description` are the source's own title and description — no
-derivation needed, unlike Codex's untitled bullets. `metadata.type` picks the
-entry's type; `metadata.type: reference` is carried as `reference`, which the
-memory sync publishes like any other memory (spec memory "Keep every agent's
-memories in a hub in the vault") and the older aggregation leaves out.
+`name` and `description` are the source's own title and description;
+`metadata.type` picks the entry's type (an unknown or empty type is read as
+`project`). `MEMORY.md` in the same directory is Claude Code's own index, and
+holds Coffer's block, so it is never read as a memory (spec memory "Never
+republish Coffer's own copies").
 
-A copy Coffer wrote into this directory — a `coffer_` file whose frontmatter
-names a hub entry — is read as nothing: it is the hub's own memory coming
-back, and publishing it would loop (spec memory "Never republish Coffer's own
-copies"). `MEMORY.md`
-in the same directory is Claude Code's own regenerated index and is ignored for
-the same reason knowledge ignores `README.md`: Coffer regenerates that role
-itself (see "Read Claude Code and Codex memory with their search terms").
-
-What comes back is a `RawEntry`, and a raw entry is **the input layer, not the
-product** (see "Keep raw entries verbatim and hidden"): it is written verbatim
-under the partition's `.raw/`, and the distil pass is what turns entries into
-Coffer's own notes (see "Distil each raw entry into a note mechanically"). So this reader is
-not trying to produce anything a person will read, even though Claude Code hands
-it a perfectly good title — it carries the source's words across intact and
-leaves the writing to the pass. The verbatim rule that used to govern what
-Coffer *stored* now governs only this layer, which is what keeps a note's claim
-checkable back against the agent's own file.
-
-Claude Code states no search terms anywhere in this format — it relies on its
-own always-loaded index instead — so `RawEntry.search_terms` stays empty here.
-"Read Claude Code and Codex memory with their search terms" asks a reader to
-carry terms **where the source states them**; synthesising them from the body
-would be precisely the guess that requirement exists to replace. Codex is the
-source that states them, and `readers.codex` is where they are carried.
-
-An entry's `project_root` is recovered the same way the agent page's
-native-memory listing recovers it (`infrastructure.agent.native_memory_store`):
-preferring a sibling session transcript's own recorded `cwd`
-(`infrastructure.agent_files.claude_code_transcripts.cwd_from_transcripts`) —
-authoritative, no decoding involved — and falling back to
-`domain.agent.native_memory.resolve_project_slug`'s filesystem-aware slug
-decode only when no transcript recorded one (e.g. every transcript for this
-project has since been pruned). One parser, one slug-decoder, shared by both
-callers.
+An entry's `project_root` is recovered the way the agent page's native-memory
+listing recovers it (`infrastructure.agent.native_memory_store`): a sibling
+session transcript's own recorded `cwd`
+(`infrastructure.agent_files.claude_code_transcripts.cwd_from_transcripts`)
+first, and `domain.agent.native_memory.resolve_project_slug`'s slug decode
+only when no transcript recorded one.
 """
 
 from __future__ import annotations
@@ -69,18 +41,13 @@ from coffer.domain.memory.errors import UnreadableMemory
 from coffer.domain.memory.hub import TYPE_FEEDBACK, TYPE_PROJECT, TYPE_USER
 from coffer.domain.memory.reader import RawEntry, SourceFile
 from coffer.infrastructure.agent_files.claude_code_transcripts import cwd_from_transcripts
-from coffer.infrastructure.memory.writers.claude_code import is_coffer_copy
 
 _INDEX_NAME = "MEMORY.md"
 _FENCE = "---"
 
-# Claude Code's own `metadata.type` values, mapped onto NOTE_TYPES. Anything
-# else recognised as *not* `reference` (an empty type, or a future value this
-# reader has not seen) falls to TYPE_PROJECT: note.py describes TYPE_PROJECT
-# as "a decision, a trap, a piece of history" for one project, which is the
-# closest general bucket for a note this reader cannot otherwise place —
-# TYPE_USER/TYPE_FEEDBACK are narrower claims (about the person specifically)
-# that an unrecognised type has not earned.
+# Claude Code's own `metadata.type` values. An empty type, or a value this
+# reader has not seen, falls to TYPE_PROJECT: the user and feedback types are
+# narrower claims about the person that an unrecognised type has not earned.
 _TYPE_MAP = {
     "feedback": TYPE_FEEDBACK,
     "project": TYPE_PROJECT,
@@ -137,9 +104,6 @@ class ClaudeCodeMemoryReader:
         if not isinstance(metadata, dict):
             raise UnreadableMemory(source.path, "frontmatter 'metadata' is not a mapping")
         raw_type = str(metadata.get("type", "") or "").strip().lower()
-        if is_coffer_copy(path.name, frontmatter):
-            return ()
-
         name = frontmatter.get("name")
         if not name or not isinstance(name, str):
             raise UnreadableMemory(source.path, "frontmatter is missing a string 'name'")

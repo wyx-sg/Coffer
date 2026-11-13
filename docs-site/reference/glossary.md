@@ -159,17 +159,11 @@ A capability that ships switched off and can be switched on per machine. Two are
 ### Hub
 
 The folder `memory/` in the [vault](#vault) that holds every memory your agents wrote for
-themselves, on any of your machines: one Markdown file per memory, under `global/` or one
+themselves, on any of your machines: one Markdown file per memory, under its
 project (named by its repository's remote). [Vault sync](#vault-sync) carries it between
 machines; only the machine a memory came from changes its file. See [Memory](/guides/memory#the-hub).
 
 ## I
-
-### Inbox
-
-A collection's hidden `.inbox/` directory, a drop zone: a file an agent or another machine
-leaves there is moved into the collection's [uploads folder](#uploads-folder) by the next [sweep](#upkeep-pass). See
-[Knowledge](/architecture/knowledge).
 
 ### Invocation log
 
@@ -218,8 +212,7 @@ machine from **Settings › Security › Import a master key**. See [Secret stor
 
 ### Material
 
-New knowledge submitted to a collection: an upload, or a file left in the
-[inbox](#inbox). It is kept, converted to Markdown, in the collection's
+New knowledge submitted to a collection: an upload or an import. It is kept, converted to Markdown, in the collection's
 [uploads folder](#uploads-folder). See
 [Knowledge](/guides/knowledge).
 
@@ -428,8 +421,7 @@ agent's page lists them so you can [adopt](#adopt) or discard them. See [Skills]
 ### Upkeep pass
 
 Mechanical work Coffer does on a timer, without being asked: the [memory sync](#memory-sync),
-and the sweep for knowledge (re-render the guide, adopt files left in the
-[inbox](#inbox), commit edits made on disk). None of them calls a model. The memory sync can be switched
+and the sweep for knowledge (re-render the guide, commit edits made on disk). None of them calls a model. The memory sync can be switched
 off or retimed from the **▾** on **Sync now** on the Memory page.
 See [Memory](/architecture/memory#the-sync-pass) and [Knowledge](/architecture/knowledge#the-sweep).
 

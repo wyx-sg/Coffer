@@ -37,15 +37,14 @@ A **collection** is a top-level folder under the knowledge root. What is in it i
     │   └── gateway-design/          ←   an upload with pictures: one folder
     │       ├── gateway-design.md
     │       └── image-1.png
-    └── .inbox/                      ← hidden: a drop zone, moved to the uploads folder at the next sweep
 ```
 
 - **`README.md`** at the collection root says what the collection is. Its first paragraph, before its first `##` section, is the collection's description everywhere Coffer shows one, and it is what the `coffer-guide` skill tells agents the collection is about. Its frontmatter may declare three things to Coffer, all optional (see [What a README declares](#what-a-readme-declares)). It is never counted among the collection's files.
 - **The rules file** says how the collection is written and kept: its layout, the frontmatter its files carry, what to read first, what a tidy checks. Agents read it before they write anything, and it wins over anything they would do by default. It is an ordinary file of the collection: change it to change how the collection is kept.
 - **The start page**, such as an `index.md`, is where an agent begins reading, when the collection names one.
-- **The uploads folder**, `sources/` unless the README names another, is where Coffer writes an upload and a file dropped into the inbox, converted to Markdown (see [Upload a document](#upload-a-source)). An upload with pictures or attachments is a folder of its own there, the file and its pictures side by side; they sync with the collection and have history, like the Markdown. The file you uploaded is not put in the collection: Coffer keeps it on the Mac you uploaded it from (see [Pictures and the original file](#pictures-and-the-original-file)).
+- **The uploads folder**, `sources/` unless the README names another, is where Coffer writes an upload, converted to Markdown (see [Upload a document](#upload-a-source)). An upload with pictures or attachments is a folder of its own there, the file and its pictures side by side; they sync with the collection and have history, like the Markdown. The file you uploaded is not put in the collection: Coffer keeps it on the Mac you uploaded it from (see [Pictures and the original file](#pictures-and-the-original-file)).
 - **Every other file and folder** is the collection's own. Coffer lists it in the tree, checks its links and never moves it.
-- **Hidden entries** (names starting with `.`) are left out of every count, the catalogue and the check, and the Knowledge page lists none of them. The one Coffer reads is `.inbox/`: a Markdown file left there is moved into the uploads folder at the next sweep (see [A file in the inbox](#a-file-in-the-inbox)).
+- **Hidden entries** (names starting with `.`) are left out of every count, the catalogue and the check, and the Knowledge page lists none of them. They are not synced and have no history.
 
 A file's path is where it is; its **slug** — the file name without `.md` — is the name a `[[slug]]` link uses. A file name may hold any character but `/`, `\` and control characters, and may not start with `.`.
 
@@ -71,7 +70,7 @@ How payments are taken, settled and refunded.
 | --- | --- | --- |
 | `rules` | The file agents follow when they write or tidy here. It may be a file in another collection, `../shared/rules.md`, so several collections follow one set of rules. | The first of `AGENTS.md`, `CLAUDE.md` and `README.md` at the collection's root. |
 | `entry` | The page an agent starts reading at. | None: the `coffer-guide` catalogue lists the collection's files by folder instead. |
-| `uploads` | The folder an upload or an inbox file lands in, inside the collection. | `sources/`. |
+| `uploads` | The folder an upload lands in, inside the collection. | `sources/`. |
 
 A key that names a file that is not there, or a path that climbs out of the knowledge root, is read as not given. Every other key in the README, and every key in any other file, is the collection's own: Coffer reads no `type`, `sources`, `verified` or any other key, and asks no file for one.
 
@@ -182,25 +181,6 @@ The pictures sync to your other Macs with the collection and have history like a
 
 **The original file.** The file you uploaded is kept on the Mac you uploaded it from, outside the vault, and never synced: originals such as decks and PDFs are large, and the Markdown and pictures are what agents read. The converted file names it, so when you open it on that Mac the line under its title reads **Original** and the file's name; click the name to open the file in its default app, to see the layout as it was. On your other Macs the line says **Original `<name>` is on the Mac it was uploaded from**. A Markdown or text upload is kept as it is, so there is no original to keep, unless converting it rewrote it (a Confluence export's storage markers made readable); then the file you uploaded is kept like any other.
 
-### A file in the inbox {#a-file-in-the-inbox}
-
-A Markdown file can also arrive at a collection's hidden `.inbox/` folder: from an agent outside Coffer, from another machine, or from an older guide.
-
-```text
-~/.coffer/vault/knowledge/payments/.inbox/session-ttl.md
-```
-
-The file name does not matter, and frontmatter is optional. The next sweep moves the file into the collection's uploads folder (`sources/` unless the README names another), filling in whatever it lacks:
-
-| Frontmatter | Filled from |
-| --- | --- |
-| `title` | The first `# ` heading, else the file name. |
-| `description` | The first paragraph, else the title. |
-| `actor` | `agent`, unless the file says otherwise. |
-| `created_at`, `updated_at` | The time the sweep saw the file. |
-
-Anything the writer did set is kept, other keys included, and each file is recorded in the audit log. Like an upload, what happens to it next is the collection's rules. Only a collection's own `.inbox/` counts. A Markdown file written into a top-level folder that is not a collection is left alone and never catalogued, because only a person creates a collection. A file in an inbox that is not Markdown stays where it is.
-
 ### From a chat: ask your agent {#from-a-chat-ask-your-agent}
 
 If you have a [channel](/guides/channels) paired, there is no knowledge command. Send the document or the conversation to the agent in the chat, in a direct chat or a group, and ask it to put that into knowledge, for example "save this into payments". The agent writes it into the collection with its own file tools, by the collection's rules.
@@ -211,7 +191,7 @@ Writing, editing or deleting a file in a collection with any editor is a complet
 
 On the Knowledge page, choose a file and use **Open in editor**, or the **⋯** menu's **Reveal in Finder**, to jump to the file. The Knowledge page itself never edits a file: it shows it read-only, and the next read shows whatever your editor or an agent saved. There is no unsaved state, no stale-save refusal and no leave-without-saving question, because nothing on the page holds your text. Open in editor uses the editor chosen in **Settings › General**.
 
-To add a file, save it where the collection's rules say (**Reveal in Finder** on the collection). To add a document to convert, use **Add → Upload documents…**, or drop a Markdown file into the collection's `.inbox/`.
+To add a file, save it where the collection's rules say (**Reveal in Finder** on the collection). To add a document to convert, use **Add → Upload documents…**.
 
 Agents do the same thing with their own file tools, by the collection's rules file, which the `coffer-guide` skill points them to (see [From an agent](#from-an-agent-write-into-the-pages)).
 
@@ -295,11 +275,10 @@ Every Markdown file in the collection is checked, the README and the rules file 
 
 ## What runs on its own {#what-runs-on-its-own}
 
-A background **sweep** keeps the collections current. It runs about once a minute and calls no model. Each round it:
+A background **sweep** keeps the collections current. It runs when a file in a collection changes, and otherwise every 10 minutes, and calls no model. Each round it:
 
-- moves files dropped into a collection's `.inbox/` into its uploads folder (see [A file in the inbox](#a-file-in-the-inbox)),
 - commits to the history whatever changed in the tree since the last commit — your editor's saves and your agent's file edits — as an edit on disk, and
-- re-renders the `coffer-guide` skill's catalogue, so a file you or an agent added by hand is listed.
+- re-renders the `coffer-guide` skill's catalogue, so a file you or an agent added by hand is counted.
 
 It runs on every machine, takes no part in [vault sync](/guides/vault-sync)'s rounds and never waits for one, moves no file of yours and rewrites the text of none. It is skipped while the Knowledge feature is switched off (see [Experimental features](/guides/experimental-features)).
 
@@ -314,9 +293,9 @@ Coffer has **no tool for reading, listing or searching knowledge**. An agent rea
 What tells it where to look is Coffer's built-in [`coffer-guide` skill](/guides/skills#the-built-in-coffer-guide-skill), which Coffer links into every agent's skill folder:
 
 - Its **description**, which is in every session, names the subjects of your collections, taken from each `README.md`, and says the skill teaches writing in and tidying knowledge.
-- Its **body**, loaded when the agent opens the skill, gives the knowledge root's path and a catalogue of every collection: its description, its rules file and, when it names one, its start page with how many Markdown files it holds. A collection with no start page has its files listed by folder, each with its title and its `description` when it has one. The body also says what Coffer does with every collection, whatever its format, and the steps of a tidy.
+- Its **body**, loaded when the agent opens the skill, gives the knowledge root's path and a catalogue of every collection: its description, its rules file and, when it names one, its start page with how many Markdown files it holds. A collection with no start page gets that count for each of its top-level folders. The catalogue names no file: the agent finds one from the start page or by searching the folder. The body also says what Coffer does with every collection, whatever its format, and the steps of a tidy.
 
-The guide teaches no format: for that it sends the agent to each collection's rules file, which wins. When the start page does not lead an agent to what it is after, the guide tells it to grep the collection for the exact string. A large catalogue is shortened to fit: first the files' descriptions are left out, and if it is still too long each collection's files are only counted, and the skill says so.
+The guide teaches no format: for that it sends the agent to each collection's rules file, which wins. When the start page does not lead an agent to what it is after, the guide tells it to grep the collection for the exact string.
 
 Coffer rewrites the skill whenever the catalogue changes, so a new file appears in it within one sweep.
 
@@ -377,7 +356,7 @@ Knowledge → Add → Link an external folder… → Folder, Name → Link folde
 ### What Coffer does not do {#what-coffer-does-not-do-with-a-linked-folder}
 
 - **It copies nothing.** No file goes into `~/.coffer`. The folder stays the only copy.
-- **It writes nothing into the folder.** You cannot upload into it, its notes have no **Delete**, its description (the first paragraph of its own `README.md`) is not edited here, and it has no **Tidy**, no **Broken links** and no inbox.
+- **It writes nothing into the folder.** You cannot upload into it, its notes have no **Delete**, its description (the first paragraph of its own `README.md`) is not edited here, and it has no **Tidy** and no **Broken links**.
 - **It keeps no history.** Its notes have no **History**, its page has no **Change log**, and nothing can be undone through Coffer. Use the folder's own tools for that: Obsidian's file recovery, or git if the folder is a repository.
 - **It does not sync it.** Neither the folder's files nor the link reach your other Macs through [vault sync](/guides/vault-sync). The link is recorded only on this Mac, in `~/.coffer/local/resources/knowledge/`, because the folder's path is true of this Mac only. To use the same notes on another Mac, keep the folder in step with its own tool (Obsidian Sync, iCloud Drive, git) and link it on that Mac as well.
 
@@ -407,7 +386,7 @@ The skill hands agents the knowledge root, and an agent can read anything under 
 
 ## History and restore
 
-Every change to a collection is kept as a version: your uploads and deletes, a file dropped into the inbox and moved to the uploads folder, what vault sync brought in, and a tidy, recorded as one change by the agent carrying its report, and edits made outside Coffer in your own editor or with an agent's file tools. Each change names its **writer** — `user`, `agent`, `sync` or `disk` (and, on versions an earlier Coffer wrote, `daemon` for its filing of loose documents into `pages/`, and `curation`) — so you can always tell who changed what. A collection's page lists its changes in its **Change log**.
+Every change to a collection is kept as a version: your uploads and deletes, what vault sync brought in, and a tidy, recorded as one change by the agent carrying its report, and edits made outside Coffer in your own editor or with an agent's file tools. Each change names its **writer** — `user`, `agent`, `sync` or `disk` (and, on versions an earlier Coffer wrote, `daemon` for its filing of loose documents into `pages/`, and `curation`) — so you can always tell who changed what. A collection's page lists its changes in its **Change log**.
 
 The history is the vault repository's own: collections live under `knowledge/` in `~/.coffer/vault`, so `git -C ~/.coffer/vault log -- knowledge/<collection>/<path>` reads the same versions, and [vault sync](/guides/vault-sync) carries them to your other machines. Coffer needs `git` for the vault; without it the app shows [Coffer needs git](/guides/troubleshooting#coffer-needs-git) until it is installed. If git goes missing while the daemon runs, every write keeps working and the changes feed that a collection's Change log and a delete's **Undo** read is refused. The refusal carries a prompt for your agent to install git the way that fits your machine and confirm it with `git --version`.
 
@@ -469,7 +448,7 @@ A delete is reported in a toast, *Deleted `<name>`*, with **Undo**, which puts b
 
 **An agent ignores a collection's conventions.** Check that the collection's page names the rules file you expect under **Rules**. If not, add `rules: <file>` to the top of its `README.md`.
 
-**A file an agent wrote never shows up.** A file written into a collection shows up on the next read. A file left in `.inbox/` must be Markdown, directly in the `.inbox/` folder of an existing collection, and moves into the uploads folder at the next sweep, within about a minute; a file anywhere else is left alone, and a file that is not Markdown stays in the inbox.
+**A file an agent wrote never shows up.** A file written into a collection shows up on the next read, as long as it is inside an existing collection's folder and neither it nor a folder above it has a name starting with `.`.
 
 ## Related
 

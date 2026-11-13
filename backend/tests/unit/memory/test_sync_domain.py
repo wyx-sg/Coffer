@@ -36,7 +36,7 @@ from coffer.infrastructure.memory.writers import MEMORY_WRITERS
 def _entry(eid: str = "3f2a91c4de55b071", updated: str = "2026-10-09T06:00:00Z") -> HubEntry:
     return HubEntry(
         id=eid,
-        origin=Origin(machine="m", agent="codex", source="MEMORY.md::g::h::0"),
+        origin=Origin(machine="m", agent="codex", source="memories_v2/memory_summary.md::g::h::0"),
         project="github.com/acme/payments",
         type="project",
         title="Retry is idempotent",
@@ -44,7 +44,6 @@ def _entry(eid: str = "3f2a91c4de55b071", updated: str = "2026-10-09T06:00:00Z")
         body="See <repo>/ledger/retry.py",
         created_at="2026-10-09T06:00:00Z",
         updated_at=updated,
-        search_terms=("retry",),
     )
 
 

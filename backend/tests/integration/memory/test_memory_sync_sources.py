@@ -24,7 +24,7 @@ from tests.integration.memory._sync_harness import (
     cc_file,
     cc_project,
     codex_dir,
-    codex_memory,
+    codex_topics,
     hub_files,
 )
 from tests.integration.memory.conftest import init_repository
@@ -52,7 +52,7 @@ def test_no_transcript_or_rollout_is_listed_as_a_source(
     memory = cc_project(claude, payments, {"feedback_a.md": _fact("Fact A")})
     assert list(memory.parent.glob("*.jsonl"))
     codex = codex_dir(
-        tmp_path / "codex", codex_memory([("Payments", str(payments), ["Run make test"])])
+        tmp_path / "codex", codex_topics([("Payments", str(payments), ["Run make test"])])
     )
     rollouts = codex / "sessions" / "2026" / "10" / "09"
     rollouts.mkdir(parents=True)

@@ -296,7 +296,7 @@ Under **Model**, Coffer tests the provider with the chosen model by itself, the 
 The **Memory** tab lists the agent's own memory stores, read-only:
 
 - **Claude Code:** one store per project at `<config_dir>/projects/<slug>/memory/`, labelled with the real project directory.
-- **Codex:** the global `<config_dir>/memories/MEMORY.md`, split into one row per project it routes task groups to, and, for v2 memory, `<config_dir>/memories_v2/memory_summary.md`, one row per project its listed work was done in.
+- **Codex:** the global `<config_dir>/memories/MEMORY.md`, split into one row per project it routes task groups to (shown here, though memory sync does not read it), and, for v2 memory, `<config_dir>/memories_v2/memory_summary.md`, one row per project its listed work was done in.
 
 Opening a row shows the store's files in a file tree with a read-only preview. While [memory sync](/guides/memory) is on, the stores also hold what Coffer wrote from your other agents: a marked block in `MEMORY.md` for Claude Code, `extensions/coffer/` in each of Codex's memory folders. What Coffer syncs, and where each copy went, is on the **Memory** page.
 

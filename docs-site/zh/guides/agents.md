@@ -296,7 +296,7 @@ Coffer 从不写 Claude Code 自己的清单文件。当 `claude` CLI 不在 `PA
 **记忆** tab 以只读方式列出智能体自己的记忆库：
 
 - **Claude Code：** 每个项目一个库，位于 `<config_dir>/projects/<slug>/memory/`，标注真实的项目目录。
-- **Codex：** 全局的 `<config_dir>/memories/MEMORY.md`，按它把任务组路由到的项目拆成每项目一行；v2 记忆是 `<config_dir>/memories_v2/memory_summary.md`，按其中列出的工作所在的项目每项目一行。
+- **Codex：** 全局的 `<config_dir>/memories/MEMORY.md`，按它把任务组路由到的项目拆成每项目一行（这里会显示，但记忆同步不读它）；v2 记忆是 `<config_dir>/memories_v2/memory_summary.md`，按其中列出的工作所在的项目每项目一行。
 
 打开一行会在文件树里显示该库的文件，并带只读预览。开启[记忆同步](/zh/guides/memory)时，这些库里还有 Coffer 从你其他智能体写入的内容：Claude Code 是 `MEMORY.md` 里的一个标记区块，Codex 是它每个记忆文件夹里的 `extensions/coffer/`。Coffer 同步了什么、每份副本写到了哪里，在**记忆**页上查看。
 

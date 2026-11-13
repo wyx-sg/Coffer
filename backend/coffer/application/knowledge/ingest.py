@@ -5,7 +5,7 @@ button and a channel attachment (see "Keep every upload as a Markdown source"
 and "Ingest documents sent to a channel"). The document is converted to Markdown and
 **submitted as material**: it goes through :meth:`KnowledgeService.submit`, which keeps
 it as a source in the collection's uploads folder (``sources/`` by default) on
-the spot (see "Promote submitted material at once"). An upload that keeps
+the spot (see "Store an upload the moment it arrives"). An upload that keeps
 pictures or attachments becomes a folder of its own there, the source beside
 its files, in the same commit; the
 uploaded file itself is kept on this Mac only (ADR

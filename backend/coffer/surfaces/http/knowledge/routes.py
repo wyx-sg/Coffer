@@ -14,12 +14,11 @@ Three properties shape every handler below.
 keeps no index and exposes no retrieval anywhere, so the person reads through
 ``tree``/``file`` and an agent reads the files itself at the paths its
 delivered skill carries ("Expose no knowledge tool", invariant 4).
-A collection's hidden ``.inbox`` is not listed and not readable ("Hide
-dot-prefixed entries except the inbox").
+A hidden entry is not listed and not readable ("Hide every dot-prefixed entry").
 
 **New knowledge arrives as material; a person's edit is the editor's.**
 ``/upload`` submits material, which becomes a source under ``sources/``
-("Promote submitted material at once"). There is no route that creates or saves
+("Store an upload the moment it arrives"). There is no route that creates or saves
 a document at a path: a person edits in their own editor, from the page's
 open-in-editor action, live on the very next read ("Treat a direct file edit as
 a complete change").

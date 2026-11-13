@@ -4,7 +4,7 @@ project's memories only where it is checked out").
 Found from the working directories the registered agents recorded, never by
 crawling the disk: Claude Code's project directories (resolved the way its
 reader resolves them, from a session transcript's ``cwd`` or the slug) and the
-``cwd=`` of Codex's task groups. Each is resolved to its repository and keyed
+``cwd:`` of Codex's rollout summaries. Each is resolved to its repository and keyed
 by the hub's project key, so a worktree, the main checkout and a second clone
 of one upstream are one project. Of several checkouts of one project, the
 main checkout wins over a worktree (resolution already answers the main
@@ -18,12 +18,12 @@ import pathlib
 from collections.abc import Iterable
 from dataclasses import dataclass
 
-from coffer.domain.agent.codex_memory import parse_codex_memory
 from coffer.domain.agent.native_memory import encode_slug, resolve_project_slug
 from coffer.domain.memory.hub import CLAUDE_CODE, CODEX, hub_project_key
 from coffer.infrastructure.agent_files.claude_code_transcripts import cwd_from_transcripts
 from coffer.infrastructure.agent_files.codex_rollout_summaries import all_rollout_cwds
 from coffer.infrastructure.memory.repository import resolve_repository
+from coffer.infrastructure.vault.home import vault_root
 
 
 @dataclass(frozen=True)
@@ -52,16 +52,8 @@ def recorded_dirs(agent_type: str, config_dir: str) -> list[str]:
                 out.append(root)
         return out
     if agent_type == CODEX:
-        return _codex_v1_dirs(base) + codex_v2_dirs(base / "memories_v2")
+        return codex_v2_dirs(base / "memories_v2")
     return []
-
-
-def _codex_v1_dirs(base: pathlib.Path) -> list[str]:
-    try:
-        text = (base / "memories" / "MEMORY.md").read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
-        return []
-    return [cwd for group in parse_codex_memory(text) for cwd in group.cwds]
 
 
 def codex_v2_dirs(folder: pathlib.Path) -> list[str]:
@@ -75,7 +67,7 @@ def checkouts(directories: Iterable[str]) -> dict[str, str]:
     found: dict[str, list[str]] = {}
     for directory in dict.fromkeys(directories):
         repo = resolve_repository(directory)
-        if repo is None or not pathlib.Path(repo.root).is_dir():
+        if repo is None or not pathlib.Path(repo.root).is_dir() or _is_vault(repo.root):
             continue
         key = hub_project_key(remote_url=repo.remote_url, root_name=os.path.basename(repo.root))
         if key:
@@ -86,12 +78,22 @@ def checkouts(directories: Iterable[str]) -> dict[str, str]:
 
 
 def project_of(directory: str) -> Checkout | None:
-    """The project ``directory`` is inside, or ``None``."""
+    """The project ``directory`` is inside, or ``None``. Coffer's own vault is
+    a repository and is no project (spec memory "Sync only project
+    memories"): what an agent learns while working in it is about the vault's
+    content, which carries its own rules."""
     repo = resolve_repository(directory)
-    if repo is None:
+    if repo is None or _is_vault(repo.root):
         return None
     key = hub_project_key(remote_url=repo.remote_url, root_name=os.path.basename(repo.root))
     return Checkout(key=key, root=repo.root) if key else None
+
+
+def _is_vault(root: str) -> bool:
+    try:
+        return pathlib.Path(root).resolve() == vault_root().resolve()
+    except OSError:
+        return False
 
 
 def _last_used(root: str) -> float:

@@ -8,11 +8,10 @@ disk — there is no second copy to keep in sync.
 A walk sees every visible file under a collection, each with its title and
 description as its own frontmatter or first heading gives them; no folder and
 no key means anything to it (spec knowledge "Let each collection declare its
-own rules"). It never sees the hidden ``.inbox/`` — material there is not
-knowledge yet. A level lists the collection's ``README.md`` like any other root
-file, but no count or catalogue walk includes it, because it describes the
-collection rather than being content in it (see "Keep the collection README
-out of the corpus").
+own rules"). It never sees a hidden entry. A level lists the collection's
+``README.md`` like any other root file, but no count or catalogue walk
+includes it, because it describes the collection rather than being content
+in it (see "Keep the collection README out of the corpus").
 """
 
 from __future__ import annotations
@@ -37,7 +36,7 @@ MARKDOWN_SUFFIX = ".md"
 
 
 def visible(entry: pathlib.Path) -> bool:
-    """Excludes any dot-prefixed entry — the inbox included."""
+    """Excludes any dot-prefixed entry."""
     return not entry.name.startswith(".")
 
 

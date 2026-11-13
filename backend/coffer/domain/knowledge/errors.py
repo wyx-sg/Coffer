@@ -75,8 +75,8 @@ class UnsafeKnowledgePath(KnowledgeError):  # noqa: N818
     All three are refused rather than silently corrected. The document check
     is here rather than in each caller because "a document lives inside a
     collection, and is not its README" is a property of path construction: it
-    is what keeps every write, delete and stamp off the collection itself and
-    off the inbox (spec knowledge "Guard every path through one module").
+    is what keeps every write, delete and stamp off the collection itself (spec
+    knowledge "Guard every path through one module").
     """
 
     code = "KNOWLEDGE_PATH_UNSAFE"

@@ -2,9 +2,9 @@
 
 Real git over a real directory, because "found on disk" is decided by what the
 vault repository has committed. The registry and the audit log are in-memory
-stand-ins. Each tick promotes what waits in an inbox, commits edits found on
+stand-ins. Each tick commits edits found on
 disk, and re-renders the guide; it never moves a file (spec
-knowledge "Adopt a file dropped into the inbox", "Sweep the knowledge root on
+knowledge "Sweep the knowledge root on
 its mechanical duties", "Treat a direct file edit as a complete change").
 """
 
@@ -23,7 +23,7 @@ from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeServic
 from coffer.application.knowledge.sweep import sweep_once
 from coffer.domain.resource import Resource
 from coffer.domain.vault.writers import CommitMeta
-from coffer.infrastructure.knowledge import fs, inbox, paths
+from coffer.infrastructure.knowledge import fs, paths
 from coffer.infrastructure.knowledge.history import KnowledgeHistory
 from coffer.infrastructure.vault.instance import vault_writer
 
@@ -84,33 +84,17 @@ def _world() -> tuple[KnowledgeService, KnowledgeHistory, _Audit]:
     return service, history, audit
 
 
-def _drop_inbox(name: str, text: str) -> None:
-    directory = paths.inbox_dir("shopee")
+def _write_by_hand(name: str, text: str) -> None:
+    """A file an agent or a person wrote with their own tools."""
+    directory = paths.collection_dir("shopee") / "pages"
     directory.mkdir(parents=True, exist_ok=True)
     (directory / name).write_text(text, encoding="utf-8")
-
-
-@pytest.mark.acceptance(spec="knowledge", scenario="a sweep promotes a file dropped into the inbox")
-async def test_a_file_dropped_into_the_inbox_becomes_a_document_on_the_next_sweep() -> None:
-    service, _, audit = _world()
-    guide = _Guide()
-    _drop_inbox("gateway.md", f"# Gateway\n\n{_DROPPED}")
-
-    await sweep_once(service, guide.refresh)
-
-    assert inbox.inbox_items("shopee") == ()
-    document = fs.read_file("shopee/sources/gateway.md")
-    assert document.title == "Gateway"
-    assert document.description == _DROPPED.strip()
-    assert document.actor == "agent"
-    assert [t for t, _ in audit.events] == ["knowledge_written"]
-    assert guide.refreshes == 1
 
 
 async def test_a_second_sweep_finds_nothing_to_do() -> None:
     service, history, _ = _world()
     guide = _Guide()
-    _drop_inbox("gateway.md", f"# Gateway\n\n{_DROPPED}")
+    _write_by_hand("gateway.md", f"# Gateway\n\n{_DROPPED}")
 
     await sweep_once(service, guide.refresh)
     commits = len(history.log("shopee"))
@@ -137,15 +121,16 @@ async def test_a_document_dropped_in_by_hand_is_committed_as_a_disk_write() -> N
 
 
 async def test_a_failing_guide_refresh_does_not_stop_the_sweep() -> None:
-    service, _, _ = _world()
-    _drop_inbox("gateway.md", f"# Gateway\n\n{_DROPPED}")
+    service, history, _ = _world()
+    _write_by_hand("gateway.md", f"# Gateway\n\n{_DROPPED}")
 
     async def broken() -> bool:
         raise RuntimeError("render failed")
 
     await sweep_once(service, broken)
 
-    assert inbox.inbox_items("shopee") == ()
+    [change] = history.log("shopee", limit=1)
+    assert [d.path for d in change.documents] == ["shopee/pages/gateway.md"]
 
 
 @pytest.mark.acceptance(
@@ -210,8 +195,8 @@ async def test_sweeps_leave_root_files_and_custom_folders_in_place() -> None:
 
 @pytest.mark.acceptance(spec="knowledge", scenario="a sweep runs while a sync round waits")
 async def test_a_sweep_does_not_wait_for_a_long_operation_holding_other_paths() -> None:
-    service, _, _ = _world()
-    _drop_inbox("gateway.md", f"# Gateway\n\n{_DROPPED}")
+    service, history, _ = _world()
+    _write_by_hand("gateway.md", f"# Gateway\n\n{_DROPPED}")
     # A sync round that waits for a person holds its paths open without the lock.
     held = vault_writer().begin(
         CommitMeta(writer="sync", operation="sync", summary="waiting", actor="sync")
@@ -222,5 +207,6 @@ async def test_a_sweep_does_not_wait_for_a_long_operation_holding_other_paths() 
     finally:
         held.abort()
 
-    assert inbox.inbox_items("shopee") == ()
-    assert fs.read_file("shopee/sources/gateway.md").title == "Gateway"
+    [change] = history.log("shopee", limit=1)
+    assert change.meta.writer == "disk"
+    assert [d.path for d in change.documents] == ["shopee/pages/gateway.md"]

@@ -171,7 +171,6 @@ _STATUS: dict[str, int] = {
     "MEMORY_UNREADABLE": 422,
     "MEMORY_SYNC_RUNNING": 409,
     "MEMORY_SYNC_NO_PREVIEW": 409,
-    "MEMORY_DELIVERY_CONFIG_INVALID": 422,
     # agent turns (spec chat)
     "CONVERSATION_NOT_FOUND": 404,
     "UNKNOWN_AGENT": 400,

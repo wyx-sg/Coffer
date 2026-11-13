@@ -21,49 +21,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/memory/sync/curation/enable": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Enable Curation
-         * @description **Turn on** an agent's own curation (Claude Code's Auto Dream) in its
-         *     settings, backed up first.
-         */
-        post: operations["enable_curation_api_v1_memory_sync_curation_enable_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/memory/sync/curation/handoff": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Curation Handoff
-         * @description **Curate now**: the prompt that asks the agent to consolidate its memory
-         *     in a terminal the person watches. Claude Code only: Codex consolidates
-         *     whenever its memories are on.
-         */
-        post: operations["curation_handoff_api_v1_memory_sync_curation_handoff_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/memory/sync/entries": {
         parameters: {
             query?: never;
@@ -202,40 +159,6 @@ export interface components {
             /** Value */
             value?: boolean | null;
         };
-        /** CurateIn */
-        CurateIn: {
-            /** Agent Type */
-            agent_type: string;
-        };
-        /** CurationEnableOut */
-        CurationEnableOut: {
-            /** Changed */
-            changed: boolean;
-        };
-        /**
-         * CurationHandoffOut
-         * @description **Curate now**: the prompt the page starts the agent with in a terminal.
-         */
-        CurationHandoffOut: {
-            handoff: components["schemas"]["HandoffOut"];
-        };
-        /** CurationStateOut */
-        CurationStateOut: {
-            /** Curation */
-            curation: string;
-            /**
-             * Last Curated At
-             * @default
-             */
-            last_curated_at: string;
-            /** Memory */
-            memory: string;
-            /**
-             * Source
-             * @default
-             */
-            source: string;
-        };
         /** EntryCopyOut */
         EntryCopyOut: {
             /** Agent Type */
@@ -268,15 +191,6 @@ export interface components {
         /** ErrorResponse */
         ErrorResponse: {
             error: components["schemas"]["ErrorDetail"];
-        };
-        /**
-         * HandoffOut
-         * @description A chore for the person's agent. ``prompt`` is the whole text to copy or
-         *     to pre-fill a new conversation with; Coffer never sends it itself.
-         */
-        HandoffOut: {
-            /** Prompt */
-            prompt: string;
         };
         /**
          * HubEntryDetailOut
@@ -397,7 +311,6 @@ export interface components {
             copies: {
                 [key: string]: number;
             };
-            curation: components["schemas"]["CurationStateOut"];
             /** Locations */
             locations: components["schemas"]["SyncLocationOut"][];
             writer: components["schemas"]["WriterStatusOut"];
@@ -480,96 +393,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    enable_curation_api_v1_memory_sync_curation_enable_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-                "x-coffer-actor"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CurateIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CurationEnableOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    curation_handoff_api_v1_memory_sync_curation_handoff_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-                "x-coffer-actor"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CurateIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CurationHandoffOut"];
-                };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
             422: {

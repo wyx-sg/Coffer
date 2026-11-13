@@ -13,8 +13,8 @@ repository's, pathspec-limited to ``knowledge/`` with every path handed back
 knowledge-root-relative — which is what every caller and API response speaks.
 
 The vault's ``.git/info/exclude`` ignores every hidden entry under
-``knowledge/`` except ``.inbox/``: the inbox is tracked, so a submission is a
-commit and the text stays in history after the inbox file is promoted away.
+``knowledge/``. Older history still holds the ``.inbox/`` files an earlier
+build tracked; the feed and a restore leave them out.
 
 **Who wrote what.** A Coffer operation opens a :class:`Transaction`, touches
 the paths it writes, and commits exactly those. Anything else that changed

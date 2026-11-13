@@ -6,8 +6,9 @@
 // its memories wait in the hub) — and the list
 // below shows each memory: its title and one-line description, its type, the
 // agent and machine it came from, and when it last changed. A copy state shows
-// on a row only when it is worth a look (waiting for the next sync, edited or
-// removed by the agent's own curation); a written copy says nothing. Search
+// on a row only when it is worth a look (waiting for the next sync, left out of
+// Claude Code's full block, edited or removed by the agent); a written copy
+// says nothing. Search
 // and source filter the list (the table's own toolbar). A row opens the memory in the drawer.
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -43,7 +44,7 @@ function Notes({ copies }: { copies: Record<string, string> }) {
   return (
     <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-0.5">
       {notes.map(([agent, state]) => (
-        <StatusWord key={agent} tone={state === "pending" ? "off" : "warn"} className="text-2xs">
+        <StatusWord key={agent} tone={state === "pending" || state === "over_limit" ? "off" : "warn"} className="text-2xs">
           {t(`memory.note.${state}`, { agent: agentTypeLabel(agent) })}
         </StatusWord>
       ))}

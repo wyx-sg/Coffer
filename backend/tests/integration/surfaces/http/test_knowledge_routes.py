@@ -12,9 +12,9 @@ at something that is not a document.
 
 A collection is one tree of documents a person and the agents write together. New
 knowledge never arrives as a file write: ``/upload`` submits it, and it is promoted
-to a document on the spot ("Promote submitted material at once").
+to a document on the spot ("Store an upload the moment it arrives").
 ``DELETE`` reaches any document; ``GET`` reads any document;
-``PUT`` saves an edited body over an existing document. The README and the inbox are
+``PUT`` saves an edited body over an existing document. The README and hidden entries are
 not documents, and each of those refusals is one assertion below, driven through the
 route rather than the service, because the route is where a handler could forget the
 rule.
@@ -41,7 +41,7 @@ def _document(client: TestClient, collection: str, title: str, body: str = "b") 
     """A page written straight into the collection's ``pages/`` — what a
     person's editor or an agent leaves there. ``collection`` may name a folder
     inside it (``shopee/runbooks`` is ``shopee/pages/runbooks``). New knowledge
-    reaches a collection as material ("Promote submitted material at once");
+    reaches a collection as material ("Store an upload the moment it arrives");
     no route writes a page."""
     name, _, folder = collection.partition("/")
     directory = f"{name}/pages" + (f"/{folder}" if folder else "")
@@ -196,17 +196,17 @@ def test_the_listing_reads_the_description_off_disk_every_time(client, tmp_path)
 # ----- the tree ------------------------------------------------------------
 
 
-def test_the_tree_lists_documents_and_the_readme_but_not_the_inbox(client) -> None:  # type: ignore[no-untyped-def]
+def test_the_tree_lists_documents_and_the_readme_but_no_hidden_folder(client) -> None:  # type: ignore[no-untyped-def]
     """One tree per collection ("Show a collection as one tree of read-only
     documents in the web UI"). The README is listed as the plain file it is —
     readable, never a page or a source ("Keep the collection README out of
-    counts and curation") — and the hidden inbox is not listed ("Hide
-    dot-prefixed entries except the inbox")."""
+    counts and curation") — and a hidden folder is not listed ("Hide
+    dot-prefixed entries")."""
     _create_collection(client, "shopee")
     document = _submit(client, collection="shopee", title="Note", description="d", body="b")
-    inbox_dir = paths.inbox_dir("shopee")
-    inbox_dir.mkdir(parents=True, exist_ok=True)
-    (inbox_dir / "waiting.md").write_text("waiting\n", encoding="utf-8")
+    hidden = paths.collection_dir("shopee") / ".inbox"
+    hidden.mkdir(parents=True, exist_ok=True)
+    (hidden / "waiting.md").write_text("waiting\n", encoding="utf-8")
 
     level = client.get("/api/v1/knowledge/tree", params={"path": "shopee"})
     assert level.status_code == 200, level.text
@@ -241,11 +241,11 @@ def test_a_path_escaping_the_root_is_refused(client) -> None:  # type: ignore[no
     assert resp.status_code in (400, 404), resp.text
 
 
-def test_no_hidden_entry_is_reachable_and_the_inbox_is_one(  # type: ignore[no-untyped-def]
+def test_no_hidden_entry_is_reachable(  # type: ignore[no-untyped-def]
     client, tmp_path
 ) -> None:
-    """Nothing hidden is listed, read or deleted, the inbox included
-    ("Hide dot-prefixed entries except the inbox", "Guard every path through one
+    """Nothing hidden is listed, read or deleted, a folder named ``.inbox`` included
+    ("Hide every dot-prefixed entry", "Guard every path through one
     module")."""
     _create_collection(client, "shopee")
     root = tmp_path / ".coffer" / "vault" / "knowledge" / "shopee"
@@ -315,8 +315,7 @@ def test_material_becomes_a_document_on_arrival(client, tmp_path) -> None:  # ty
     # Nothing waits: the material is a document the moment it arrives ("Promote submitted
     # material at once").
     assert out.document.path == "shopee/sources/account-gateway.md"
-    inbox = tmp_path / ".coffer" / "vault" / "knowledge" / "shopee" / ".inbox"
-    assert list(inbox.iterdir()) == []
+    assert not (tmp_path / ".coffer" / "vault" / "knowledge" / "shopee" / ".inbox").exists()
 
 
 @pytest.mark.acceptance(

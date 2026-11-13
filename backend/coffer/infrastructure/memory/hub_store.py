@@ -1,7 +1,7 @@
 """The memory hub on disk: ``vault/memory/`` (spec memory "Keep every agent's
 memories in a hub in the vault").
 
-One Markdown file per memory, frontmatter first, under ``global/`` or
+One Markdown file per memory, frontmatter first, under
 ``projects/<folder>/``. The hub is vault content: every change a sync makes is
 one vault commit through the vault's single write path, naming the memory sync
 as its writer, and vault sync carries the hub to the person's other machines
@@ -23,7 +23,6 @@ from typing import Any
 
 from coffer.domain.memory.errors import UnsafeMemoryPath
 from coffer.domain.memory.hub import (
-    GLOBAL,
     HUB_TYPES,
     PROJECTS,
     TYPE_PROJECT,
@@ -55,19 +54,16 @@ def render_entry(entry: HubEntry) -> str:
             "source": entry.origin.source,
         },
     }
-    if entry.project:
-        fm["project"] = entry.project
     fm.update(
         {
+            "project": entry.project,
             "type": entry.type,
             "title": entry.title,
             "description": entry.description,
+            "created_at": entry.created_at,
+            "updated_at": entry.updated_at,
         }
     )
-    if entry.search_terms:
-        fm["search_terms"] = list(entry.search_terms)
-    fm["created_at"] = entry.created_at
-    fm["updated_at"] = entry.updated_at
     body = entry.body.strip("\n")
     return render_frontmatter(fm, f"\n{body}\n")
 
@@ -83,8 +79,10 @@ def parse_entry(text: str) -> HubEntry | None:
         entry_id = check_id(str(fm.get("id", "")))
     except UnsafeMemoryPath:
         return None
+    project = str(fm.get("project", "") or "")
+    if not project:
+        return None
     entry_type = str(fm.get("type", "") or "")
-    terms = fm.get("search_terms") or []
     return HubEntry(
         id=entry_id,
         origin=Origin(
@@ -92,14 +90,13 @@ def parse_entry(text: str) -> HubEntry | None:
             agent=str(origin.get("agent", "") or ""),
             source=str(origin.get("source", "") or ""),
         ),
-        project=str(fm.get("project", "") or ""),
+        project=project,
         type=entry_type if entry_type in HUB_TYPES else TYPE_PROJECT,
         title=str(fm.get("title", "") or ""),
         description=str(fm.get("description", "") or ""),
         body=body.strip("\n"),
         created_at=str(fm.get("created_at", "") or ""),
         updated_at=str(fm.get("updated_at", "") or ""),
-        search_terms=tuple(str(t) for t in terms) if isinstance(terms, list) else (),
     )
 
 
@@ -195,7 +192,7 @@ def _md_files(root: pathlib.Path) -> Iterable[pathlib.Path]:
     for folder, dirs, files in os.walk(root):
         dirs[:] = [d for d in dirs if not d.startswith(".")]
         rel = pathlib.Path(folder).relative_to(root).parts
-        if rel and rel[0] not in (GLOBAL, PROJECTS):
+        if rel and rel[0] != PROJECTS:
             continue
         for name in files:
             if name.endswith(".md") and not name.startswith("."):

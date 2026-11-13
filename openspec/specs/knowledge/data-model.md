@@ -2,8 +2,7 @@
 
 The layer's state is a directory. This document describes what is on disk —
 one folder per collection in a format of its own, what its README declares,
-the uploads folder Coffer writes into (an upload with pictures as a folder of its own), the hidden `.inbox/` drop
-zone, the keys Coffer writes, the naming rule — plus the one resource file a
+the uploads folder Coffer writes into (an upload with pictures as a folder of its own), the keys Coffer writes, the naming rule — plus the one resource file a
 collection has, the machine-local store of uploaded originals, and the
 in-memory value objects the surfaces answer with. Authority is [`spec.md`](spec.md),
 [Knowledge Is Plain Files](../../../docs/decisions/knowledge-is-plain-files.md) and
@@ -19,9 +18,8 @@ full-text index, no embeddings — therefore no content hash to compare, no
 reindex, and no reconciliation of any kind (see "Store each collection as one
 tree of Markdown files").
 
-The sweep needs no record either. What it adopts is a file in a collection's
-hidden `.inbox/`; what it commits is whatever differs on disk from the vault's
-`HEAD`. It moves no file. Judgement over a collection's files is the agent's,
+The sweep needs no record either. What it commits is whatever differs on disk
+from the vault's `HEAD`. It moves no file. Judgement over a collection's files is the agent's,
 by the collection's own rules file, done through its own file tools (see "Teach
 writing and tidying in the guide").
 
@@ -37,7 +35,7 @@ tree under the knowledge root at all. It is one resource file whose config is
 `local/resources/knowledge/<name>.json` with the home written as `${HOME}`, and
 never in the vault (ADR linked-knowledge-folders-are-read-only-and-machine-local).
 The folder it names is the person's: Coffer reads it in place and writes
-nothing into it, so it has no uploads, `.inbox/` or history of Coffer's (see "Leave a linked folder to its own tools").
+nothing into it, so it has no uploads or history of Coffer's (see "Leave a linked folder to its own tools").
 
 ## On-disk layout
 
@@ -60,8 +58,6 @@ nothing into it, so it has no uploads, `.inbox/` or history of Coffer's (see "Le
 │   │   ├── account/                # nesting chosen by whoever files a page
 │   │   │   └── login-sessions.md
 │   │   └── gateway-routing.md
-│   └── .inbox/                     # hidden drop zone: the next sweep adopts it into the uploads folder
-│       └── notes.md
 └── coffer/                         # a blank collection, laid out its own way
     ├── README.md
     └── release-process.md
@@ -73,7 +69,7 @@ nothing into it, so it has no uploads, `.inbox/` or history of Coffer's (see "Le
   outside the vault would be a tree its history cannot see. Path construction
   lives in exactly one module,
   `infrastructure/knowledge/paths.py` (see "Guard every path through one
-  module"), which also owns the inbox name the sweep reads.
+  module").
 - A **collection** is a top-level subdirectory *and* one `knowledge` Resource.
   It is created deliberately, as one directory, and nothing provisions one from
   a read, a write, or an agent's working directory (see "Create collections only
@@ -104,12 +100,10 @@ nothing into it, so it has no uploads, `.inbox/` or history of Coffer's (see "Le
   re-encoded as PNG).
 - **Dot-prefixed entries are invisible** (see "Hide every dot-prefixed entry").
   Coffer's own surfaces list none of them and the read route refuses every
-  hidden segment, through the path guard rather than by skipping. `.inbox/` is
-  one of them: an ordinary hidden entry, a drop zone where an agent, another
-  machine or an older guide may leave a Markdown file. The next sweep normalises
-  its frontmatter and keeps it as a source in the uploads folder (see
-  "Adopt a file dropped into the inbox"), and no surface shows or counts what
-  waits there.
+  hidden segment, through the path guard rather than by skipping. Coffer
+  keeps no hidden folder of its own in a collection: an upload is written
+  straight into the uploads folder, and an agent writes a file where the
+  collection's rules say.
 
 ### `README.md`
 
@@ -144,7 +138,7 @@ Its rules are in [AGENTS.md](AGENTS.md) and its pages are listed in
 | README key | Type | Notes |
 | --- | --- | --- |
 | `rules` | `str` | The file agents follow when they write in the collection, relative to it; it may climb into another collection (`../shared/rules.md`) but not out of the knowledge root. Missing, hidden or out of bounds → the first of `AGENTS.md`, `CLAUDE.md` and `README.md` at the collection's root. |
-| `entry` | `str` | The page an agent starts reading at. With one, the catalogue gives the collection's file count instead of listing its files. Missing or out of bounds → none. |
+| `entry` | `str` | The page an agent starts reading at. With one, the catalogue gives the collection's file count alone; without, the count by top-level folder. Missing or out of bounds → none. |
 | `uploads` | `str` | The folder, inside the collection, an upload or a dropped file lands in. Absent, absolute, hidden or climbing out → `sources`. |
 
 That paragraph does more work than it used to: it is also what the delivered
@@ -224,26 +218,23 @@ hand-edited file with a stray colon cannot break a whole collection walk.
 
 ### What the sweep does
 
-The knowledge sweep runs when a file under `knowledge/` changes (and every 10 minutes otherwise) and does three mechanical things, calling no
+The knowledge sweep runs when a file under `knowledge/` changes (and every 10 minutes otherwise) and does two mechanical things, calling no
 model (see "Sweep the knowledge root on its mechanical duties"):
 
-1. **Adopt and promote `.inbox/` files**: each Markdown file in a collection's
-   `.inbox/` is normalised and kept (`inbox.promote`) as a source under
-   `sources/`, recorded with one `KNOWLEDGE_WRITTEN` audit event.
-2. **Commit edits found on disk** as `disk` writes, so an edit in any editor is
+1. **Commit edits found on disk** as `disk` writes, so an edit in any editor is
    a version of its own and is never counted as Coffer's.
-3. **Re-render and re-seed the guide**, so a page added by hand is catalogued.
+2. **Re-render and re-seed the guide**, so a page added by hand is counted.
 
 It moves nothing: a file stays at the path its writer gave it, wherever in the
 collection that is (see "Sweep the knowledge root on its mechanical duties").
 The `layout` operation below names only the commits an earlier version made
 when it still filed loose documents into `pages/`.
 
-The sweep takes no lock against a sync round: what it promotes is written
+The sweep takes no lock against a sync round: what it commits goes
 through the vault's ordinary writer, and it keeps no machine-local record.
 
-`KnowledgeService.submit` promotes at once as well (see "Promote submitted
-material at once"): an upload becomes a source in the collection's uploads
+`KnowledgeService.submit` writes an upload where it stays (see "Store an upload
+the moment it arrives"): an upload becomes a source in the collection's uploads
 folder, with frontmatter filled from its opening prose, and an upload with
 pictures lands as a folder holding the source and its pictures, in one commit. The uploaded file itself is not stored in
 the collection; it is kept on this Mac only (below). What becomes of the source
@@ -271,7 +262,7 @@ Every segment that becomes a path component passes `paths.check_segment` (see
 "Guard every path through one module"): non-empty, not all dots, not
 dot-prefixed, and matching `[A-Za-z0-9._\- ]` or CJK. A path that must name a
 document additionally passes `paths.require_document`, which refuses the
-collection itself and its `README.md`; the inbox is out of reach for every
+collection itself and its `README.md`; a hidden path is out of reach for every
 surface, because it is dot-prefixed. A
 violation is `UnsafeKnowledgePath`
 (`KNOWLEDGE_PATH_UNSAFE`, HTTP 400). The resolved path is checked against the
@@ -527,12 +518,9 @@ nothing behind on failure").
 ## Audit and invocation records
 
 Unchanged in shape and still database-backed, because they are not knowledge —
-they are Coffer's own bookkeeping. Every submission — an inbox file dropped by an
-agent (recorded by the sweep when it adopts the file), an upload or a
-channel — records one `KNOWLEDGE_WRITTEN` `audit_log` event naming the caller
-(`actor_reported: true` when the actor came from the file's own frontmatter),
-with the document path it was promoted to (see "Adopt a file dropped into the
-inbox"); an Undo of a delete records
+they are Coffer's own bookkeeping. Every submission, an upload or an import, records one `KNOWLEDGE_WRITTEN`
+`audit_log` event naming the caller, with the path of the source it became
+(see "Store an upload the moment it arrives"); an Undo of a delete records
 `KNOWLEDGE_EDITED` with the path and `restored_from`; starting and finishing a
 tidy each record `KNOWLEDGE_EDITED` (`tidy: started`, or `tidy: finished` with
 the change's version and file count); an Undo of a tidy records

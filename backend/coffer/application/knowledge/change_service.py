@@ -43,11 +43,10 @@ from coffer.infrastructure.knowledge.history import KnowledgeHistory
 _FEED = "knowledge_changes"
 #: How many commits one read of git asks for while filling a page.
 _BATCH = 100
-_INBOX_SEGMENT = f"/{paths.INBOX_DIR_NAME}/"
 
 
 def _is_document(path: str) -> bool:
-    return _INBOX_SEGMENT not in path
+    return not paths.is_hidden(path)
 
 
 class KnowledgeChangeService:
@@ -142,8 +141,9 @@ class KnowledgeChangeService:
     ) -> list[Change]:
         """Up to ``limit + 1`` visible changes after ``after``, in log order.
 
-        A commit that touched only the inbox changed no document, so it is not
-        listed; inbox paths are dropped from every change's documents.
+        A commit that touched only hidden paths (the ``.inbox/`` an earlier
+        build tracked) changed no document, so it is not listed; hidden paths
+        are dropped from every change's documents.
         """
         start = f"{after}^" if after else None
         spec = (collection,) if collection else ()

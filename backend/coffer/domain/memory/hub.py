@@ -3,8 +3,8 @@
 
 The hub is a transport, not a curated store: every memory a registered agent
 on any of the person's machines wrote for itself is one Markdown file under
-``vault/memory/``, filed under ``global`` or under a project named by a key
-that does not depend on the machine ("Identify a project by a key that does
+``vault/memory/``, filed under a project named by a key that does not depend
+on the machine ("Identify a project by a key that does
 not depend on the machine"). Each machine writes the hub into the agents
 installed on it; the agents curate what they receive with their own built-in
 curation.
@@ -17,13 +17,11 @@ from __future__ import annotations
 
 import hashlib
 import re
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, replace
 
 from coffer.domain.memory.errors import UnsafeMemoryPath
 from coffer.domain.memory.repository import normalise_remote
 
-#: The folder of memories about the person, written into every machine.
-GLOBAL = "global"
 #: The folder holding one subfolder per project.
 PROJECTS = "projects"
 
@@ -72,7 +70,7 @@ class HubEntry:
 
     id: str
     origin: Origin
-    #: The project key (``github.com/acme/payments``), or ``""`` for global.
+    #: The project key (``github.com/acme/payments``).
     project: str
     type: str
     title: str
@@ -80,16 +78,11 @@ class HubEntry:
     body: str
     created_at: str
     updated_at: str
-    search_terms: tuple[str, ...] = field(default_factory=tuple)
-
-    @property
-    def is_global(self) -> bool:
-        return not self.project
 
     @property
     def folder(self) -> str:
         """The hub-relative folder this entry is filed under."""
-        return GLOBAL if self.is_global else f"{PROJECTS}/{project_folder(self.project)}"
+        return f"{PROJECTS}/{project_folder(self.project)}"
 
     @property
     def path(self) -> str:
@@ -158,7 +151,7 @@ def check_segment(segment: str) -> str:
 
 
 def title_slug(title: str) -> str:
-    """A short file-name slug from a title (``coffer_<slug>.md``)."""
+    """A short file-name slug from a title."""
     slug = _SLUG_CHARS.sub("-", title.lower()).strip("-")[:SLUG_MAX].strip("-")
     return slug or "memory"
 
@@ -173,7 +166,6 @@ __all__ = [
     "AGENT_LABELS",
     "CLAUDE_CODE",
     "CODEX",
-    "GLOBAL",
     "HUB_TYPES",
     "PROJECTS",
     "TYPE_FEEDBACK",

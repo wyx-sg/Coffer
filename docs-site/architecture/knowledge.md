@@ -29,7 +29,7 @@ Knowledge is also distinct from [memory](/architecture/memory). Knowledge is abo
 | No index of any kind: no table, no FTS, no vectors, no cache. Links and broken links are rebuilt from the files on every read. | Nothing derived can disagree with the files. There is nothing to rebuild or reconcile. |
 | A file's path is where it is; its slug, its file name, is what a `[[link]]` uses. File names may hold any character but `/`, `\`, control characters and a leading dot. | A readable name is what a person sees in a file manager and an agent in a grep result. A file an agent's own tools could write must be readable in the web UI. |
 | An upload is kept as its converted Markdown in the uploads folder, an upload with pictures as a folder holding the file and its pictures; the uploaded file itself stays on the Mac that uploaded it, outside the vault. | Diagrams and screenshots carry meaning agents and people need, and once decorations and repeats are dropped they are small; originals are large binaries git would carry forever, and agents read the Markdown no worse. See [Knowledge Sources Keep Their Images; Originals Stay on This Mac](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-sources-keep-their-images-and-originals-stay-on-this-mac.md). |
-| Material lands at once. An upload is kept as it arrives, and a file dropped into a hidden `.inbox/` is moved into the uploads folder by the next sweep. | Nothing waits for a model connection or a pass. What was submitted is readable by every agent within the minute. |
+| An upload lands at once, written straight into the uploads folder. Coffer keeps no staging folder. | Nothing waits for a model connection or a pass. What was uploaded is readable by every agent at once. |
 | Files link by `[[slug]]` or by relative path, and Coffer resolves every link on read, relative to the file that holds it; an ambiguous slug prefers the linking file's own folder. | A slug survives a move; a relative path is what every Markdown reader and agent already writes. Either way a link that breaks is reported at once instead of rotting silently. See [Knowledge Files Stay Where Their Writer Put Them](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-files-stay-where-their-writer-put-them.md). |
 | Coffer reports broken links — dead, ambiguous and outside — and nothing else, and fixes none of them. Files in the uploads folder are not checked. | A broken link depends on no format, so it is the one check worth having in every collection, and nearly every comparable tool reports it. Whether a page is complete, current or well-sourced is judgement, made by the agent by the collection's rules. Imported material keeps its exporter's text, so a `[[` in it is not a link. |
 | Coffer runs no model over knowledge. What a tidy checks and fixes, where a fact belongs and which statement is stale are judged by the agent, by the collection's rules file. | The agent a person already uses has file tools, a stronger model and the person watching. A second, unattended model of Coffer's own needed its own connection, and without one its work did not happen. |
@@ -60,8 +60,6 @@ Knowledge is also distinct from [memory](/architecture/memory). Knowledge is abo
 │   │   │   ├── q3-review.md         # the upload, named like its folder
 │   │   │   └── image-1.png          # linked from it as image-1.png
 │   │   └── account-core/            # an imported Confluence page and its attachments
-│   └── .inbox/                      # drop zone, moved into the uploads folder by the sweep (hidden)
-│       └── rate-limit-change.md
 └── personal/                        # started blank: a README and whatever its writers add
     └── ...
 ```
@@ -70,7 +68,7 @@ Knowledge is also distinct from [memory](/architecture/memory). Knowledge is abo
 - **The README** sits at the collection root. Its first paragraph before its first `##` section is the collection's description. It is read from disk on every listing and never copied into the resource file, because a copy would be wrong the first time a person edited the README. It is not counted among the collection's files. A collection has no title of its own: every surface shows it by its folder name, and the resource update refuses a title. Editing the description in the web UI rewrites exactly that first paragraph, or inserts it above the first section when there is none, and leaves the rest of the README alone, as one commit naming the user; the guide skill is re-rendered afterwards, because the description is how an agent recognises the collection.
 - **Everything else is the collection's own.** Coffer gives no folder a meaning except the uploads folder it writes uploads into, and no file a kind: every visible Markdown file is listed, counted, catalogued and link-checked alike, and none is asked for a key. Coffer never moves a file.
 - **An upload with pictures is a folder** in the uploads folder, holding the converted file and its pictures or attachments side by side (see [Pictures and originals](#pictures-and-originals) and [Confluence pages](#confluence-pages)), so it moves, renames and deletes as a whole. It is visible on purpose: the vault ignores hidden entries, and the pictures must be committed and synced with the file that links them.
-- **Hidden entries** (dot-prefixed) are excluded from every count, from the catalogue and from the check, and no surface lists or reads one. Inside a collection the one Coffer reads is `.inbox/`, a drop zone: a Markdown file left there is moved into the uploads folder by the next sweep. The vault repository's `.git/info/exclude` ignores every other hidden entry inside a collection, so it is neither committed nor synced. That includes `.obsidian/`, so a collection folder opened as an Obsidian vault keeps Obsidian's settings out of the history (see [Opening a collection in Obsidian](#opening-a-collection-in-obsidian)).
+- **Hidden entries** (dot-prefixed) are excluded from every count, from the catalogue and from the check, and no surface lists or reads one. Coffer keeps no hidden folder of its own in a collection. The vault repository's `.git/info/exclude` ignores every hidden entry inside a collection, so it is neither committed nor synced. That includes `.obsidian/`, so a collection folder opened as an Obsidian vault keeps Obsidian's settings out of the history (see [Opening a collection in Obsidian](#opening-a-collection-in-obsidian)).
 
 ### What a collection declares {#what-a-collection-declares}
 
@@ -79,7 +77,7 @@ Knowledge is also distinct from [memory](/architecture/memory). Knowledge is abo
 | Key | Resolves to | Fallback |
 | --- | --- | --- |
 | `rules` | A collection-relative path of a file that exists, not hidden. It may climb into another collection (`../shared/rules.md`): the bound is the knowledge root for a kept collection, the folder itself for a linked one. | The first of `AGENTS.md`, `CLAUDE.md` and `README.md` at the root; empty when none exists. |
-| `entry` | The same, for the page to start reading at. | Empty: the catalogue lists the collection's files instead. |
+| `entry` | The same, for the page to start reading at. | Empty: the catalogue gives the collection's file count by top-level folder instead. |
 | `uploads` | A plain folder inside the collection; not absolute, not hidden, not `..`. | `sources`. |
 
 A declaration that does not resolve is ignored rather than refused, so a typo in a README never breaks a read. The listing carries `rules_file`, `entry_file` and `uploads_dir`, the web UI shows the first two as links on the collection's page, and the guide names them in each collection's catalogue entry. No other key, in the README or anywhere else, means anything to Coffer: a collection made before collections set their own format keeps its `type`, `sources` and `verified` keys as its own. See [Knowledge Collections Own Their Format; Coffer Checks Only Links](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-collections-own-their-format.md).
@@ -142,7 +140,7 @@ Frontmatter parsing degrades rather than raising: a file with no fence, or with 
 
 ### One module owns every path
 
-One module in the knowledge infrastructure (`infrastructure/knowledge/paths.py`) builds every path and names the uploads folder; nothing else constructs one. Every segment passes a guard that refuses empty, all-dot and dot-prefixed segments and any `/`, `\` or control character, so `payments/.inbox/x.md` is not addressable from any surface while `Login (v2).md` is. The resolved path is also checked against the knowledge root on its nearest existing ancestor, so a symlinked directory inside the root cannot carry a write out of it. Writes go through a sibling temp file opened with `O_EXCL | O_NOFOLLOW`, followed by one atomic rename, and are committed through the vault's one writer. The root is always `~/.coffer/vault/knowledge`; there is no override.
+One module in the knowledge infrastructure (`infrastructure/knowledge/paths.py`) builds every path and names the uploads folder; nothing else constructs one. Every segment passes a guard that refuses empty, all-dot and dot-prefixed segments and any `/`, `\` or control character, so `payments/.scratch/x.md` is not addressable from any surface while `Login (v2).md` is. The resolved path is also checked against the knowledge root on its nearest existing ancestor, so a symlinked directory inside the root cannot carry a write out of it. Writes go through a sibling temp file opened with `O_EXCL | O_NOFOLLOW`, followed by one atomic rename, and are committed through the vault's one writer. The root is always `~/.coffer/vault/knowledge`; there is no override.
 
 ## From material to the uploads folder
 
@@ -152,7 +150,6 @@ Every entrance Coffer serves ends in a Markdown file in the collection's uploads
 | --- | --- | --- |
 | Upload, converted to Markdown first | The Knowledge page, `coffer knowledge upload` | A Markdown file in the uploads folder (a folder with its pictures, when it has any), and the original on this Mac |
 | A Confluence page export (JSON) | The Knowledge page, `coffer knowledge upload` | A readable Markdown file in a folder with its attachments, and an import report |
-| A Markdown file dropped into `<collection>/.inbox/` | An agent outside Coffer, another machine, or an older guide; the sweep adopts it | A Markdown file in the uploads folder |
 | A file written straight into the collection | An agent's own file tools, or a person's editor | That file, committed as an edit on disk |
 
 The web UI has no form for typing a file in: a person writes in their own editor or uploads. The web UI shows every file read-only and opens it in the editor.
@@ -162,8 +159,6 @@ flowchart TD
   U["Upload"] --> C["Convert to Markdown"]
   C --> D["Describe from its frontmatter or the opening prose"]
   D --> S["Write at once"]
-  W["File dropped into .inbox/"] --> N["Sweep normalises frontmatter, audits"]
-  N --> S
   S --> UP["Uploads folder (sources/ by default)"]
   UP -->|the collection's rules, e.g. Tidy| P["Whatever the rules say: pages, an index, nothing"]
   E["Agent or person writes a file directly"] --> DISK["Sweep commits it as an edit on disk"]
@@ -179,24 +174,12 @@ What happens to it next is the collection's rules. In an `llm-wiki` collection i
 
 The answer to an upload carries the new file's path.
 
-### A file dropped into the inbox
-
-A file can arrive at `<collection>/.inbox/<any-name>.md`, from an agent outside Coffer, from another machine's older build, or from an older guide. The sweep recognises a new inbox file that no Coffer surface wrote and **normalises** it, then moves it into the uploads folder by the same operation a submission uses:
-
-- `title` is kept, else the first `# ` heading, else the file name's stem.
-- `description` is kept, else the first prose paragraph, else the title, the same fallback an upload uses.
-- `actor` is kept as written, because it is self-reported, else `agent`.
-- `created_at` and `updated_at` are kept, else the time the sweep saw the file.
-- Every other key the writer set is kept.
-
-One `knowledge_written` audit event is recorded per file, marked when the actor came from the file. A Markdown file in a top-level directory that is not a collection is left alone and never catalogued, because only a person creates a collection. A non-Markdown file in an inbox is left in place, logged, and not moved.
-
 ### Uploads
 
 An upload goes through four steps, in order:
 
 1. **Bounds the upload.** It takes one file per call, up to 20 MiB, and no folder. It refuses unknown collections before paying for conversion.
-2. **Converts it.** A converter registry first asks each converter whether it claims the content (the Confluence converter claims a `.json` file that reads as a page export), then dispatches by extension. Passthrough (Markdown, text and source files) runs first, then CSV, then MarkItDown for everything else, which also takes the pictures out (see [Pictures and originals](#pictures-and-originals)). An unsupported type is refused with `INGEST_REJECTED` and `reason: unsupported_type`. A conversion that yields no text, such as an image-only PDF, is refused too. Nothing is written in either case: no file, no picture, no original and no inbox file.
+2. **Converts it.** A converter registry first asks each converter whether it claims the content (the Confluence converter claims a `.json` file that reads as a page export), then dispatches by extension. Passthrough (Markdown, text and source files) runs first, then CSV, then MarkItDown for everything else, which also takes the pictures out (see [Pictures and originals](#pictures-and-originals)). An unsupported type is refused with `INGEST_REJECTED` and `reason: unsupported_type`. A conversion that yields no text, such as an image-only PDF, is refused too. Nothing is written in either case: no file, no picture and no original.
 3. **Describes it.** The description is the upload's own frontmatter `description` or `summary`, else the converted text's first prose paragraph, and failing that its title. It is never empty. No model writes it.
 4. **Writes the Markdown** with `actor: user` as `<uploads folder>/<slug>.md`, or as `<uploads folder>/<slug>/<slug>.md` with its pictures beside it in the same commit when it has any, and `original` and `original_sha256` in its frontmatter unless the passthrough converter ran. A collision suffixes the file's name (`-2`). Once the file is committed, the uploaded bytes are kept on this Mac; failing to keep them is logged and loses only the local copy.
 
@@ -265,7 +248,7 @@ Deciding what a tidy checks, putting a fact where it belongs, folding files that
 While the knowledge feature is on, the guide's knowledge section teaches no format. It says that each collection sets its own in its rules file, and carries four instructions:
 
 - **Before writing in a collection, read its rules file and follow it**; it wins over anything the agent would do by default. A collection with none is written the way its existing files are written.
-- **Read from its start page** when it names one; otherwise the catalogue lists its files.
+- **Read from its start page** when it names one; otherwise search its folder, since the catalogue gives only its file counts.
 - **Write back what it works out**: an answer found by reading the code, a system or a document, which the collection does not already give, goes where its rules say, with one line telling the person what was added. Not a guess, an opinion or something true only of that conversation.
 - **Tidying a collection**: one collection at a time, run `coffer knowledge tidy-start <collection>`; read the rules file and tidy by it; fix every broken link `coffer knowledge check` lists; leave alone what it is not sure about (two files that disagree with nothing to tell which is right, a deletion of much text, a change to the rules file) and list it in the report; then run `coffer knowledge tidy-finish <collection> --set summary="<report>"`, the report ending with **Gaps**. Asked only for a check or a review, the agent reports and changes nothing.
 
@@ -343,7 +326,7 @@ A **linked folder** is a collection the person keeps with their own tools anywhe
 
 ### In the guide
 
-`guide_render.py` gives a linked folder a section of its own in the `coffer-guide` catalogue, after the collections Coffer keeps: `### <name> (linked folder)`, its README description, its path with the home written as `~` (which keeps the render byte-identical across machines), the same line every collection gets naming its rules file and start page, and that it is not to be tidied, uploaded into or given inbox files; then, like any collection, its note count when it names a start page and its notes by folder otherwise. The guide's manual has a paragraph saying the same in general terms, and the skill's description names the folder's subject when it has notes.
+`guide_render.py` gives a linked folder a section of its own in the `coffer-guide` catalogue, after the collections Coffer keeps: `### <name> (linked folder)`, its README description, its path with the home written as `~` (which keeps the render byte-identical across machines), the same line every collection gets naming its rules file and start page, and that it is not to be tidied or uploaded into; then, like any collection, its note count when it names a start page and its note count by top-level folder otherwise. The guide's manual has a paragraph saying the same in general terms, and the skill's description names the folder's subject when it has notes.
 
 ### What is refused
 
@@ -351,28 +334,26 @@ A **linked folder** is a collection the person keeps with their own tools anywhe
 
 ## The sweep
 
-The sweep is a background worker in the daemon on the shared wakeable loop, and it calls no model. It runs when a file under `knowledge/` changes (it borrows the vault scanner's file watch, and a burst of events is one run), when the `knowledge` feature is switched on, and otherwise every 10 minutes. An inbox file still inside its quiet minute brings one more run once that minute is over, because no file event announces it.
+The sweep is a background worker in the daemon on the shared wakeable loop, and it calls no model. It runs when a file under `knowledge/` changes (it borrows the vault scanner's file watch, and a burst of events is one run), when the `knowledge` feature is switched on, and otherwise every 10 minutes.
 
 ```mermaid
 stateDiagram-v2
   [*] --> Waiting: start
-  Waiting --> Intake: file event or 10 min
-  Intake --> Record: move .inbox/ files into the uploads folder
+  Waiting --> Record: file event or 10 min
   Record --> Expire: commit edits on disk
   Expire --> Refresh: close idle tidies
   Refresh --> Waiting: re-render coffer-guide
 ```
 
-On each run the worker does exactly four things:
+On each run the worker does exactly three things:
 
-1. **Adopts `.inbox/` files.** Each new Markdown file in a collection's inbox is normalised and moved into the uploads folder (see [A file dropped into the inbox](#a-file-dropped-into-the-inbox)). Whatever it promotes, it announces as a `knowledge` event.
-2. **Commits edits on disk.** Anything changed in the tree since the last commit, such as a person's editor or an agent's file tools, is committed as an edit on disk through the vault writer, so the history stays current and nothing an agent wrote is counted as Coffer's. A collection with an open tidy is paused and left alone (see [A tidy is one change](#a-tidy-is-one-change)).
-3. **Closes idle tidies.** A tidy whose collection has not changed for 30 minutes is committed, at the first run after that, as one change with no report and status `expired`.
-4. **Re-renders the guide skill**, so a file added by hand is catalogued. A render that produces the same bytes writes nothing.
+1. **Commits edits on disk.** Anything changed in the tree since the last commit, such as a person's editor or an agent's file tools, is committed as an edit on disk through the vault writer, so the history stays current and nothing an agent wrote is counted as Coffer's. A collection with an open tidy is paused and left alone (see [A tidy is one change](#a-tidy-is-one-change)).
+2. **Closes idle tidies.** A tidy whose collection has not changed for 30 minutes is committed, at the first run after that, as one change with no report and status `expired`.
+3. **Re-renders the guide skill**, so a file added by hand is counted. A render that produces the same bytes writes nothing.
 
 A failed duty is logged and never ends the loop. The sweep moves no file: where a file lives is its writer's choice (see [Knowledge Files Stay Where Their Writer Put Them](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-files-stay-where-their-writer-put-them.md)). While the `knowledge` feature is switched off the sweep skips its rounds, and the collections stay on disk untouched. Shutdown cancels the task without waiting.
 
-The sweep runs on every machine. It writes only what it promotes and the edits it records, and those writes go through the vault's ordinary writer like any other, so it holds nothing against a [vault sync](/architecture/vault-sync) round and waits for none. Because it rewrites the content of no file, two machines sweeping the same vault cannot fold the same item into two different pages.
+The sweep runs on every machine. It writes only the edits it records, and those writes go through the vault's ordinary writer like any other, so it holds nothing against a [vault sync](/architecture/vault-sync) round and waits for none. Because it rewrites the content of no file, two machines sweeping the same vault cannot fold the same item into two different pages.
 
 ## History
 
@@ -383,7 +364,7 @@ Every accepted write to a collection is one git commit naming its **writer**, fo
 | Writer | What it covers |
 | --- | --- |
 | `user` | A person's upload, delete, undo of a delete or undo of a tidy, a collection's description edit, and collection create, rename and remove. |
-| `agent` | A tidy (operation `tidy`, the agent's report as its summary), and an agent's submission promoted on arrival, naming the agent, such as a file it dropped into the inbox. |
+| `agent` | A tidy (operation `tidy`, the agent's report as its summary), and an upload an agent made through `coffer knowledge upload`, naming the agent. |
 | `daemon` | A commit an earlier version of Coffer made when its sweep filed loose documents into `pages/` (operation `layout`). It stays in the history; the web UI shows it as **Coffer**. |
 | `curation` | A commit an earlier version of Coffer made as a curation pass. It stays in the history under this label. |
 | `sync` | Paths that vault sync applied. |
@@ -401,7 +382,7 @@ Knowledge commits carry the vault's trailers plus the knowledge ones (`Coffer-Wr
 
 A file's **History** button opens its history over the whole Knowledge area (`?history=1` in the address), which lists its versions, shows the diff of the chosen one and restores it, through `GET /api/v1/vault/history`, `GET /api/v1/vault/diff` and `POST /api/v1/vault/restore` (see [Persistence](/architecture/persistence)). The tree and the file make way while it is open, and the old `/history` path segment redirects to it. Which collections and folders the tree has open is kept in the browser's local storage (`coffer.knowledge.tree.*`), so the tree comes back as it was left. The sidebar's Knowledge entry returns to the collection and document last open (kept in memory for the window, `lib/knowledge/lastLocation.ts`), not to the bare landing. A restore is Coffer's own write: one new commit by the user with `Coffer-Operation: restore` and `Coffer-Restored-From: <commit>`, recorded as a `vault_file_restored` audit event. It is refused with `VAULT_FILE_STALE` when the file changed since the history was read; the history before it stays intact. A deleted file has no pane to open its history from once the delete's toast is gone, but its versions stay in the vault's git history, so git can bring it back from the version before its deletion.
 
-A delete has its own undo, while the toast's **Undo** is open. A delete, of one file or of a whole collection, is itself a change in the feed, listing every file it removed. Undo (`POST /knowledge/changes/{version}/restore`) reads each removed file from the commit before the delete and writes it back byte for byte, as one new commit naming the user and carrying `Coffer-Restored-From`. A file goes back into its collection. A collection gets its pages, its sources, its README and any files still in its inbox first, then a new resource file under its old name last, so a failure part-way leaves no row and no partial directory. Nothing is written when the restore would overwrite: a file at the same path or a collection of the same name is refused, as is restoring a change that is not a delete. A restore records a `knowledge_edited` audit event naming the delete it undid. Because a collection's registration cannot be brought back from git, **Delete collection** asks first; a file delete does not, since its file is one restore away.
+A delete has its own undo, while the toast's **Undo** is open. A delete, of one file or of a whole collection, is itself a change in the feed, listing every file it removed. Undo (`POST /knowledge/changes/{version}/restore`) reads each removed file from the commit before the delete and writes it back byte for byte, as one new commit naming the user and carrying `Coffer-Restored-From`. A file goes back into its collection. A collection gets its pages, its sources and its README first, then a new resource file under its old name last, so a failure part-way leaves no row and no partial directory. Nothing is written when the restore would overwrite: a file at the same path or a collection of the same name is refused, as is restoring a change that is not a delete. A restore records a `knowledge_edited` audit event naming the delete it undid. Because a collection's registration cannot be brought back from git, **Delete collection** asks first; a file delete does not, since its file is one restore away.
 
 ## The coffer-guide skill
 
@@ -414,7 +395,7 @@ The renderer (`application/knowledge/guide_render.py`) is pure: text in, text ou
 - **The frontmatter description.** This is the only part that is always in a model's context. It names Coffer and its builtin tools, the subjects the collections cover, each taken from the first sentence of the collection's README, and, while knowledge is on, that the skill teaches how to write, tidy and check knowledge, so an agent asked to organise it recognises it. It is capped at 1024 characters, the tightest limit among skill importers, by dropping whole subjects from the tail rather than cutting a sentence. It is emitted through a YAML dumper with unlimited width, so a README containing `: ` or ` #` cannot break or silently truncate the block.
 - **The body.** First comes the hand-written manual shipped as package data. It covers the built-in tool, the tool-tiering contract, the knowledge root, and that no Coffer tool waits on an approval. While the knowledge feature is on it also carries the instructions of [What the guide teaches](#what-the-guide-teaches), and no format. The generated catalogue follows: the knowledge root, and for each collection its description and one line naming its folder, its rules file ("read them before you write here, and follow them over anything this file says about format", or that it names none) and its start page. A collection with a start page gets its Markdown file count; one without gets its files grouped by folder, each with its collection-relative path, title and description. The manual tells the agent to read files with its own tools, to grep a collection for a literal string its start page does not lead to, and to write what it learns where the collection's rules say.
 
-A body is paid for only when a model opens it; a description is resident in every session. That is why Coffer ships one skill rather than a set. A catalogue entry costs roughly 40 tokens; one measured catalogue of 58 documents came to about 5.2K tokens. The catalogue has a budget of 60,000 characters: past it, the whole catalogue drops every file's description; past it again, it lists only each collection's file count and the folder to search. Either way it says it was shortened.
+A body is paid for only when a model opens it; a description is resident in every session. That is why Coffer ships one skill rather than a set. The catalogue lists no file by name. A collection with a start page gets its file count; one without gets the count for each of its top-level folders and is told to search the folder. So the body is as long as the collections' layouts, not their contents, and needs no budget. An agent finds a file from the start page or with the search tools it already has (see [The Guide Catalogue Counts Files, It Does Not List Them](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/the-guide-catalogue-counts-files.md)).
 
 ### Deterministic, byte-identical output
 
@@ -463,7 +444,7 @@ Coffer embeds nothing. It has no vector store, no embedding model and no FTS ind
 
 | Package | Responsibility |
 | --- | --- |
-| `application/knowledge/` | Collections and their templates (`templates.py`, `skill_assets/templates/`), submission into the uploads folder, normalising a dropped inbox file, uploads, the sweep, the tidy prompts (`tidy_handoff.py`), a tidy's start, finish and expiry (`tidy_service.py`), the changes feed, undoing a delete or a tidy (`collection_writes.py`), linking a folder (`linking.py`), and the `coffer-guide` text and catalogue (`guide_render.py`) |
+| `application/knowledge/` | Collections and their templates (`templates.py`, `skill_assets/templates/`), uploads into the uploads folder, the sweep, the tidy prompts (`tidy_handoff.py`), a tidy's start, finish and expiry (`tidy_service.py`), the changes feed, undoing a delete or a tidy (`collection_writes.py`), linking a folder (`linking.py`), and the `coffer-guide` text and catalogue (`guide_render.py`) |
 | `infrastructure/knowledge/` | Paths and their guards, file reads and writes, frontmatter, naming, a collection's declarations (`collection_settings.py`), the catalogue, links and broken links (`link_graph.py`, `links.py`, `file_links.py`), Confluence imports (`converters/confluence/`, `source_imports.py`, `source_view.py`), the history repository and its paused collections (`history.py`), the open tidies (`tidy_runs.py`), reading a linked folder (`linked.py`), converters and taking pictures out (`converters/images.py`), an upload's pictures (`assets.py`), the machine-local originals (`originals.py`) |
 | `domain/handoff` | The one place every hand-off prompt, Tidy included, is rendered |
 | `surfaces/http/` | Sweep wiring and start; the renderer-to-skill-seed join; the web UI's knowledge routes, the check and files routes, the tidy start, finish and undo routes, and the history hand-off |

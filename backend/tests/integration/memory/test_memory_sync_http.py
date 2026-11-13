@@ -1,5 +1,5 @@
 """The memory sync through the daemon: its routes, its audit log and its
-database (spec memory "Audit every sync, undo and curation request", "Add no
+database (spec memory "Audit every sync and undo", "Add no
 table or resource kind", "Sync on an interval and on demand").
 
 Boots the real app against a fresh SQLite file with ``HOME`` pinned into
@@ -17,7 +17,7 @@ from starlette.testclient import TestClient
 
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
-from tests.integration.memory._sync_harness import cc_file, cc_project, codex_dir, codex_memory
+from tests.integration.memory._sync_harness import cc_file, cc_project, codex_dir, codex_topics
 from tests.integration.memory.conftest import init_repository
 
 _TOKEN = "test-token-memory-sync"
@@ -51,7 +51,7 @@ def _seed(c: TestClient, home: pathlib.Path) -> pathlib.Path:
         assert r.status_code == 201, r.text
     repo = init_repository(home / "src" / "payments", remote="git@github.com:acme/payments.git")
     cc_project(home / ".claude", repo, {"p.md": cc_file("Ledger", "Retries", "project", "Retry.")})
-    codex_dir(home / ".codex", codex_memory([("Payments", str(repo), ["Codex lesson one here."])]))
+    codex_dir(home / ".codex", codex_topics([("Payments", str(repo), ["Codex lesson one here."])]))
     return repo
 
 
@@ -66,7 +66,8 @@ def test_a_requested_sync_records_one_event_naming_the_user(
 
     state = client.get("/api/v1/memory/sync/state").json()
     # Codex's memory is written into Claude Code's block; Claude Code's is copied into Codex.
-    assert state["preview"]["copies"] == 1
+    # One copy into each of Codex's two memory folders.
+    assert state["preview"]["copies"] == 2
     assert {p["key"] for p in state["projects"]} == {"github.com/acme/payments"}
     r = client.post("/api/v1/memory/sync/preview/write")
     assert r.status_code == 200, r.text

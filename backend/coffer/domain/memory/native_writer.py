@@ -54,7 +54,7 @@ class WriteLocation:
 @dataclass(frozen=True)
 class AuxWrite:
     """A file a writer keeps beside the copies (``MEMORY.md`` with Coffer's
-    block, the rules file, ``instructions.md``): the file's whole new content,
+    block, ``instructions.md``): the file's whole new content,
     or ``None`` to delete it. A writer computes ``MEMORY.md``'s new content
     from what is on disk, changing only the bytes between its markers."""
 
@@ -75,8 +75,9 @@ class NativeWriter(Protocol):
     def status(self, location: str) -> WriterStatus: ...
 
     def wants(self, target: Target) -> bool:
-        """Whether ``target`` is written as a per-entry copy (rather than only
-        through an aux file, as Claude Code's global memories are)."""
+        """Whether ``target`` is written as a file of its own (Codex) rather
+        than as a line of an aux file (Claude Code's block). ``path_for`` and
+        ``render`` are only ever called for a target the writer wants."""
         ...
 
     def path_for(self, location: str, target: Target, taken: set[str]) -> str: ...
@@ -88,10 +89,10 @@ class NativeWriter(Protocol):
         location: str,
         copies: Mapping[str, CopyRecord],
         targets: Mapping[str, Target],
-        global_targets: Sequence[Target],
+        inline: Sequence[Target],
     ) -> list[AuxWrite]:
         """Coffer's own files beside the copies, rendered from the copies as
-        they stand after a sync."""
+        they stand after a sync and from the targets written inline."""
         ...
 
     def undo(self, location: str, copies: Mapping[str, CopyRecord]) -> list[AuxWrite]:

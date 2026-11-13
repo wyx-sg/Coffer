@@ -46,7 +46,8 @@ file and, where it has one, the page to start reading at.
   wins over anything you would do by default. A collection that names none is
   written the way its existing files are written.
 - **Read from its start page** (an `index.md`, say) when it names one; otherwise
-  the catalogue lists its files with their titles.
+  search its folder with your own tools: the catalogue gives only how many
+  files each of its folders holds.
 - Its `README.md` says what it is about: its first paragraph is the description
   you see below. The keys at the top of the README are what it declares to
   Coffer: `rules`, `entry` and `uploads`.
@@ -85,8 +86,8 @@ The collection must already exist: only the developer creates one.
 Some collections are **linked folders**: folders the developer keeps with their
 own tools, an Obsidian vault say, which Coffer shares with you but does not
 keep. Each one's section in the catalogue names its own path and rules file.
-Read it the same way; write in it only by its rules, and do not tidy, upload
-into or drop files for the inbox of one.
+Read it the same way; write in it only by its rules, and do not tidy or upload
+into one.
 
 ### Memory, knowledge or a skill
 

@@ -135,9 +135,8 @@ class EmptyConversion(Exception):  # noqa: N818 - carries the rejected type, not
     The case that matters is an image-only PDF: MarkItDown extracts no text
     from it, returns ``""``, and reports no error — it did its job, the
     document simply has no text layer. Stored, that is a knowledge file with a
-    title and an empty body, which that requirement's "no inbox item, no
-    document" forbids and which is worse than a refusal: search will never
-    find it and nothing says why.
+    title and an empty body, which that requirement forbids and which is worse
+    than a refusal: search will never find it and nothing says why.
 
     A sibling of :class:`UnsupportedDocument` and, like it, deliberately NOT a
     ``CofferError``: both are refusals of one upload that the route turns into

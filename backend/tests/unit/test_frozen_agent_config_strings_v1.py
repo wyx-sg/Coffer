@@ -16,7 +16,6 @@ already on users' disks, and then an edit to the expected text below.
 
 from __future__ import annotations
 
-import json
 import pathlib
 from datetime import UTC, datetime
 from typing import Any
@@ -27,7 +26,6 @@ from coffer.domain.agent.config_files import spec_for
 from coffer.domain.agent.descriptor import descriptor_for
 from coffer.domain.agent.mcp_install import apply_install
 from coffer.domain.agent.types import AgentType
-from coffer.domain.memory.legacy_hook import remove_entries
 from coffer.domain.model_proxy.state import DEFAULT_PROXY_PORT, proxy_root
 from coffer.domain.provider.agent_projection import (
     ClaudeCodeProviderProjection,
@@ -47,10 +45,6 @@ _CONNECTION = {
     "base_url": "https://gw.example",
     "secret_ref": "gw-key",
 }
-
-#: The one command every memory hook entry ran, marker first. The hook is
-#: retired; the upgrade step removes these entries.
-_HOOK_COMMAND = f': coffer-memory; {_CLI} memory hook --agent-uid {_AGENT_UID} --cwd "$PWD"'
 
 
 def _resource(kind: str, name: str, config: dict[str, Any], uid: str) -> Resource:
@@ -152,27 +146,3 @@ def test_codex_mcp_entry_is_frozen() -> None:
         f'[mcp_servers.coffer]\ncommand = "{_SHIM}"\nargs = ["--agent-uid", "{_AGENT_UID}"]\n'
         'env_vars = ["COFFER_TURN_TOKEN"]\ntool_timeout_sec = 86400\n'
     )
-
-
-def _entry(matcher: str | None, timeout: int) -> dict[str, Any]:
-    leaf = {"type": "command", "command": _HOOK_COMMAND, "timeout": timeout}
-    return {"matcher": matcher, "hooks": [leaf]} if matcher else {"hooks": [leaf]}
-
-
-#: What both agents carried: the same two entries, in this order.
-_FROZEN_HOOKS = {
-    "hooks": {
-        "SessionStart": [_entry("startup|resume|clear|compact", 10)],
-        "UserPromptSubmit": [_entry(None, 5)],
-    }
-}
-
-
-def test_the_upgrade_removes_the_frozen_memory_hook_entries() -> None:
-    """The memory hook is retired, but the 1.0 entries are still on users'
-    disks: the upgrade step must recognise exactly this text and take it out,
-    leaving the user's own hooks."""
-    foreign = {"hooks": [{"type": "command", "command": "echo mine"}]}
-    doc = {**_FROZEN_HOOKS, "hooks": {**_FROZEN_HOOKS["hooks"], "Stop": [foreign]}}
-    assert json.loads(remove_entries(json.dumps(doc)) or "") == {"hooks": {"Stop": [foreign]}}
-    assert json.loads(remove_entries(json.dumps(_FROZEN_HOOKS)) or "") == {}

@@ -96,7 +96,7 @@ function PreviewGroup({
             ←
           </span>
           <span className="min-w-0 truncate font-medium" title={row.project || undefined}>
-            {row.project ? projectName(row.project) : t("memory.projects.global")}
+            {projectName(row.project)}
           </span>
           <span className="ml-auto shrink-0 text-xs text-text-muted">{counts}</span>
         </summary>

@@ -1,16 +1,13 @@
 """One tick of the knowledge sweep: the mechanical upkeep a collection needs
 without anyone pressing a button.
 
-Three duties, in this order (spec knowledge "Sweep the knowledge root on its
-mechanical duties", "Adopt a file dropped into the inbox", "Commit every
-knowledge write naming its writer"):
+Two duties, in this order (spec knowledge "Sweep the knowledge root on its
+mechanical duties", "Commit every knowledge write naming its writer"):
 
-1. **Adopt and promote** every file waiting in a collection's hidden ``.inbox/``
-   — one an agent outside Coffer wrote, another machine synced, or an older guide
-   told an agent to write — so it becomes a source under ``sources/``.
-2. **Commit edits found on disk** as ``disk`` writes, so a person's own editor or
-   an agent's file tools are never attributed to Coffer.
-3. **Re-render the guide skill**, because a collection created, renamed or deleted
+1. **Commit edits found on disk** as ``disk`` writes, so a person's own editor or
+   an agent's file tools are never attributed to Coffer. This is how an agent
+   adds knowledge: it writes the file where the collection's rules say.
+2. **Re-render the guide skill**, because a collection created, renamed or deleted
    changes what every agent must be told. It is cheap and skips a copy that
    already matches.
 
@@ -26,7 +23,6 @@ from __future__ import annotations
 import logging
 from collections.abc import Awaitable, Callable
 
-from coffer.application.knowledge.intake import adopt_dropped_files, promote_waiting_files
 from coffer.application.knowledge.recording import settle
 from coffer.application.knowledge.service import KnowledgeService
 
@@ -36,12 +32,7 @@ GuideRefresh = Callable[[], Awaitable[object]]
 
 
 async def sweep_once(service: KnowledgeService, refresh_guide: GuideRefresh) -> None:
-    """Run the three duties; a failing one is logged and never stops the others."""
-    try:
-        await adopt_dropped_files(service)
-        await promote_waiting_files(service)
-    except Exception:
-        logger.warning("knowledge.sweep.intake_failed", exc_info=True)
+    """Run the two duties; a failing one is logged and never stops the other."""
     try:
         await settle(service.history)
     except Exception:

@@ -3,7 +3,9 @@
 **Status**: Accepted
 **Date**: 2026-11-03
 **Deciders**: Yuxing Wu
-**Related**: [Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault](sync-memory-into-each-agents-own-memory.md), [File a Memory Where Its Agent Filed It](file-a-memory-where-its-agent-filed-it.md), [Claude Code Reads Other Agents' Memories as Text It Loads](claude-code-reads-other-agents-memories-as-text.md), [A Codex Memory Is Identified by Its Content, and a Rewrite Keeps the Identity](codex-memory-identity-is-content-with-rewrite-carry-over.md), spec memory "Write the hub into Codex's memory extension", "Read Codex's v2 memory", "Read no transcripts or rollouts"
+**Related**: [Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault](sync-memory-into-each-agents-own-memory.md), [File a Memory Where Its Agent Filed It](file-a-memory-where-its-agent-filed-it.md), [Claude Code Reads Other Agents' Memories as Text It Loads](claude-code-reads-other-agents-memories-as-text.md), spec memory "Write the hub into Codex's memory extension", "Read Codex's memory from its v2 summary", "Read no transcripts or rollouts"
+
+> **Superseded in part (2026-11-13).** [Sync Memories, Not Task Notes](sync-memories-not-task-notes.md): Coffer no longer reads v1 at all, and from v2 reads only the topics of What's in Memory. Decisions 2 and 3 below and the overlap section describe the design until then. Decision 1, writing into every folder, stands.
 
 ## Context
 

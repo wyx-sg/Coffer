@@ -24,9 +24,7 @@ settings document (spec internal-engine).
 ```
 
 Only memories learned in a repository are published ("Sync only project
-memories"). An entry an earlier build published under `global/` is written
-into no agent and is deleted by the machine that published it on its next
-sync; `sorted/` records an earlier build wrote are not read.
+memories"), and only `projects/` is read.
 
 The hub is in the vault, so vault sync carries it to every machine. Each
 entry is one Markdown file with this frontmatter, then the memory's body:
@@ -39,7 +37,6 @@ project: github.com/acme/payments
 type: feedback                         # user | feedback | project | reference
 title: Integration tests hit a real database
 description: Never mock the DB in integration tests; a mocked run hid a broken migration.
-search_terms: [migration, integration test]   # when the source states them
 created_at: 2026-10-09T06:00:00Z
 updated_at: 2026-10-09T06:00:00Z
 ---
@@ -50,7 +47,7 @@ updated_at: 2026-10-09T06:00:00Z
 | `id` | `sha256(machine, agent, source)[:16]`: an unchanged source re-read maps to the same entry, so an edit is an update |
 | `origin` | the one machine and agent that may change or delete the entry ("Publish only what the origin agent wrote, and only from its machine") |
 | `project` | the project key: the normalised remote of the repository, or its directory name when it has none |
-| `type` | the agent's own memory type; Codex sections map onto `user` and `project` |
+| `type` | the agent's own memory type; a Codex topic is `project` |
 | `body` | stored portably: the repository root is `<repo>` and the home directory `~` ("Store paths in a memory portably") |
 
 - The project folder name is the key with every character outside
@@ -72,13 +69,9 @@ back from its own machine.
 | Claude Code | a block at the end of `<config_dir>/projects/<slug>/memory/MEMORY.md` between `<!-- coffer:memory-sync:begin -->` and `<!-- coffer:memory-sync:end -->`: one line per memory with its text (at most 800 characters) and the agent it came from, newest first, at most 4 KB, the rest counted |
 | Codex | `extensions/coffer/resources/<id>-<title-slug>.md` in every Codex memory folder (`memories/`, `memories_v2/`), with `instructions.md` beside them |
 
-The global rules file an earlier build wrote, `<config_dir>/rules/coffer-memory.md`,
-is deleted by the next sync.
-
-Claude Code gets no file per memory. A `coffer_*` copy an earlier build wrote
-carries `coffer: {entry, from, synced_at}` in its frontmatter; readers skip
-every such file, the marked block, everything under Codex's `extensions/`, and any
-Codex bullet tagged `[via Coffer]` ("Never republish Coffer's own copies").
+Claude Code gets no file per memory. Readers skip the marked block,
+everything under Codex's `extensions/`, and any Codex topic tagged
+`[via Coffer]` ("Never republish Coffer's own copies").
 Codex writes nothing while its `memories` feature is off.
 
 ## The ledger
@@ -129,5 +122,3 @@ memory and the hub stay.
 |---|---|---|
 | `memory_synced` | a sync changed the hub or a copy | the person, or `system:memory-sync-worker` |
 | `memory_sync_undone` | Undo sync | the person |
-| `memory_curation_requested` | Curate now | the person |
-| `memory_hook_removed` | the upgrade took the retired hook out of one agent | `system:upgrade` |

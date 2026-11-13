@@ -98,6 +98,8 @@ REMOVED: tuple[tuple[str, str], ...] = (
     ("coffer memory context", "coffer memory reading"),
     ("coffer memory delivery", "coffer agent connect"),
     ("coffer memory distil", "coffer memory sync"),
+    ("coffer memory curate", "nothing: each agent curates its own memory"),
+    ("coffer memory curation-enable", "the agent's own settings"),
     ("coffer daemon service", "coffer daemon residency set"),
     ("coffer log prune", "coffer settings retention prune"),
     ("coffer mcp edit", "coffer mcp update"),
@@ -125,7 +127,7 @@ REMOVED: tuple[tuple[str, str], ...] = (
     ("coffer__diagnose", "coffer log audit|mcp|daemon, coffer path logs"),
     # Removed by the OpenSpec change make-knowledge-and-memory-files-only: an
     # agent adds knowledge with its own file tools.
-    ("coffer__write", "write a file into <collection>/.inbox/"),
+    ("coffer__write", "write the file into the collection, by its rules"),
     # Removed by the OpenSpec change act-on-secret-approvals-where-they-show:
     # only the desktop app can sign the grant an install needs.
     ("coffer secret key-install", "coffer secret import-key"),

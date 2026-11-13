@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import pathlib
+import shutil
 
 import pytest
 
@@ -19,7 +20,6 @@ from tests.integration.memory._sync_harness import (
     Machine,
     cc_file,
     cc_project,
-    codex_memory,
     hub_files,
 )
 from tests.integration.memory.conftest import git, init_repository
@@ -101,43 +101,11 @@ async def test_only_a_memory_learned_in_a_repository_is_published(
         payments,
         {"user_pr.md": cc_file("Small PRs here", "In payments", "user", "Keep PRs small.")},
     )
-    a.codex(
-        memory_md="",
-        summary_md="## User Profile\nA backend engineer who prefers small pull requests.\n",
-    )
     await a.sync()
 
     assert [(e.title, e.project) for e in _entries()] == [
         ("Small PRs here", "github.com/acme/payments")
     ]
-
-
-@pytest.mark.acceptance(
-    spec="memory", scenario="a Codex preference follows the repository its task worked in"
-)
-async def test_a_codex_preference_follows_the_repository_its_task_worked_in(
-    tmp_path: pathlib.Path, payments: pathlib.Path
-) -> None:
-    chat = tmp_path / "Documents" / "Codex" / "2026-10-14" / "chat"
-    chat.mkdir(parents=True)
-    a = Machine("machine-a", tmp_path / "a")
-    a.codex(
-        memory_md=(
-            "# Task Group: payments retry work\n"
-            f"applies_to: cwd={chat} (payments implementation in {payments}); reuse_rule=x\n\n"
-            "## User preferences\n- when retrying, the user wanted backoff capped at 30s\n\n"
-            "# Task Group: appraisal drafts\n"
-            f"applies_to: cwd={chat}; reuse_rule=x\n\n"
-            "## User preferences\n- keep appraisal drafts under one page\n"
-        ),
-    )
-    await a.sync()
-
-    by_title = {e.title: e for e in _entries()}
-    assert by_title["when retrying, the user wanted backoff capped at 30s"].project == (
-        "github.com/acme/payments"
-    )
-    assert "keep appraisal drafts under one page" not in by_title
 
 
 @pytest.mark.acceptance(spec="memory", scenario="two clones on two machines share one project")
@@ -218,14 +186,14 @@ async def test_a_memory_the_agent_changed_updates_its_hub_entry(
     tmp_path: pathlib.Path, payments: pathlib.Path
 ) -> None:
     a = Machine("machine-a", tmp_path / "a")
-    codex = a.codex(
-        memory_md=codex_memory([("Payments", str(payments), ["Use uv sync --frozen."])])
+    memory = cc_project(
+        a.claude(), payments, {"p.md": cc_file("Sync", "How to sync", "project", "Use uv sync.")}
     )
     await a.sync()
     (before,) = _entries()
 
-    (codex / "memories" / "MEMORY.md").write_text(
-        codex_memory([("Payments", str(payments), ["Use uv sync --frozen --no-dev in CI."])]),
+    (memory / "p.md").write_text(
+        cc_file("Sync", "How to sync", "project", "Use uv sync --frozen --no-dev in CI."),
         encoding="utf-8",
     )
     a.service._now = lambda: "2026-10-10T00:00:00Z"  # type: ignore[method-assign]
@@ -237,54 +205,30 @@ async def test_a_memory_the_agent_changed_updates_its_hub_entry(
 
 
 @pytest.mark.acceptance(
-    spec="memory", scenario="a Codex memory keeps its id when bullets around it move"
+    spec="memory",
+    scenario="a memory whose repository is gone from this machine stays in the hub",
 )
-async def test_a_codex_memory_keeps_its_id_when_bullets_around_it_move(
+async def test_a_memory_whose_repository_is_gone_stays_in_the_hub(
     tmp_path: pathlib.Path, payments: pathlib.Path
 ) -> None:
     a = Machine("machine-a", tmp_path / "a")
-    bullets = ["Use uv sync --frozen.", "Run make verify before pushing.", "Tag releases by hand."]
-    codex = a.codex(memory_md=codex_memory([("Payments", str(payments), bullets)]))
+    memory = cc_project(a.claude(), payments, {"p.md": cc_file("T", "D", "project", "B")})
     await a.sync()
-    before = {e.body: e.id for e in _entries()}
+    (path,) = hub_files(_vault())
+    before = path.read_bytes()
 
-    reordered = ["Never commit generated files.", bullets[2], bullets[0]]
-    (codex / "memories" / "MEMORY.md").write_text(
-        codex_memory([("Payments", str(payments), reordered)]), encoding="utf-8"
-    )
-    report = await a.sync()
-    after = {e.body: e.id for e in _entries()}
-    assert after[bullets[0]] == before[bullets[0]]
-    assert after[bullets[2]] == before[bullets[2]]
-    assert bullets[1] not in after
-    assert after["Never commit generated files."] not in before.values()
-    assert report.updated == []  # type: ignore[attr-defined]
-    assert [e["title"] for e in report.created] == ["Never commit generated files"]  # type: ignore[attr-defined]
-    assert [e["title"] for e in report.deleted] == ["Run make verify before pushing"]  # type: ignore[attr-defined]
+    shutil.rmtree(payments)
+    (memory / "p.md").write_text(cc_file("T", "D", "project", "Changed."), encoding="utf-8")
+    await a.sync()
+    assert [p.read_bytes() for p in hub_files(_vault())] == [before]
 
 
-@pytest.mark.acceptance(
-    spec="memory", scenario="a Codex bullet replaced by an unrelated one is a new memory"
-)
-async def test_a_codex_bullet_replaced_by_an_unrelated_one_is_a_new_memory(
-    tmp_path: pathlib.Path, payments: pathlib.Path
-) -> None:
+@pytest.mark.acceptance(spec="memory", scenario="the vault is not a project")
+async def test_the_vault_is_not_a_project(tmp_path: pathlib.Path) -> None:
     a = Machine("machine-a", tmp_path / "a")
-    codex = a.codex(
-        memory_md=codex_memory([("Payments", str(payments), ["Use uv sync --frozen."])])
-    )
+    cc_project(a.claude(), _vault(), {"p.md": cc_file("T", "D", "project", "B")})
     await a.sync()
-    (before,) = _entries()
-
-    (codex / "memories" / "MEMORY.md").write_text(
-        codex_memory([("Payments", str(payments), ["Reviews need two approvals on main."])]),
-        encoding="utf-8",
-    )
-    report = await a.sync()
-    (after,) = _entries()
-    assert after.id != before.id
-    assert report.updated == []  # type: ignore[attr-defined]
-    assert [e["id"] for e in report.deleted] == [before.id]  # type: ignore[attr-defined]
+    assert hub_files(_vault()) == []
 
 
 @pytest.mark.acceptance(spec="memory", scenario="a memory the agent dropped leaves the hub")

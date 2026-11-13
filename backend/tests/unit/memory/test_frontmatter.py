@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import pathlib
 
-import pytest
 import yaml
 
 from coffer.infrastructure.memory.frontmatter import (
@@ -27,7 +26,6 @@ from coffer.infrastructure.memory.frontmatter import (
     read_text,
     render_frontmatter,
     split_frontmatter,
-    text_list,
 )
 
 
@@ -97,20 +95,6 @@ def test_a_non_mapping_block_degrades_to_an_empty_mapping() -> None:
     fm, body = split_frontmatter("---\n- one\n- two\n---\nbody\n")
     assert fm == {}
     assert body == "body\n"
-
-
-@pytest.mark.parametrize(
-    ("value", "expected"),
-    [
-        ("worktree", ("worktree",)),
-        (["worktree", "venv"], ("worktree", "venv")),
-        ([1, 2], ("1", "2")),
-        (None, ()),
-        ({"a": 1}, ()),
-    ],
-)
-def test_text_list_reads_a_scalar_or_a_sequence(value: object, expected: tuple[str, ...]) -> None:
-    assert text_list(value) == expected
 
 
 def test_atomic_write_creates_parents_and_leaves_no_temp_file(tmp_path: pathlib.Path) -> None:

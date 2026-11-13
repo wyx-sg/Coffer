@@ -13,7 +13,7 @@ history (spec knowledge "Undo a knowledge delete from its toast"). Restoring
 names the delete's change and puts back every file it removed, exactly as it
 was just before, as one new commit naming the user: a document into its
 collection; a collection as a new ``resources`` row under its
-old name with its documents, README and waiting items. Refused rather than
+old name with its documents and README. Refused rather than
 overwritten when the document, or a collection of that name, exists again.
 """
 
@@ -94,7 +94,8 @@ def _readme_text(collection: str) -> str:
 
 
 def _removed(change: Change) -> list[str]:
-    return [d.path for d in change.documents if d.status == REMOVED]
+    # A hidden path an earlier build tracked (its ``.inbox/``) is not put back.
+    return [d.path for d in change.documents if d.status == REMOVED and not paths.is_hidden(d.path)]
 
 
 async def restore_deleted(
@@ -186,7 +187,7 @@ async def undo_change(
     bytes, a file it added is removed. One new commit naming the user, carrying
     the version it undoes. Refused, naming them, when a file has been edited
     since the change, unless ``force``."""
-    documents = [d.path for d in change.documents if f"/{paths.INBOX_DIR_NAME}/" not in d.path]
+    documents = [d.path for d in change.documents if not paths.is_hidden(d.path)]
     if not documents:
         raise KnowledgeNotAChange(change.version)
     name = change.meta.collection or documents[0].split("/", 1)[0]

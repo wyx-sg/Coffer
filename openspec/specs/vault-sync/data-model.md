@@ -231,7 +231,7 @@ round state, the secret boundary, machine-local ciphertext), `content/`,
 `logs/`, `daemon-config.json`, `daemon.json`, and the master key file or
 keychain entry. Inside the vault, `vault/.git/info/exclude` — never a tracked
 `.gitignore` another machine could change — keeps out editor and system
-litter, hidden entries in knowledge collections (except the inbox), and
+litter, hidden entries in knowledge collections, and
 `/secret/` unless the remote has `include_secret`.
 
 ## Path portability

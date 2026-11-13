@@ -2,10 +2,11 @@
 
 Every operation resolves to a filesystem operation over ``~/.coffer/vault/knowledge/``
 (spec knowledge "Store each collection as one tree of Markdown files"). New knowledge
-arrives as **material**, which becomes a source under ``sources/`` on the spot ("Promote
-submitted material at once"); a file dropped into a hidden ``.inbox/`` is promoted by the
-next sweep. Every collection is served to every caller ("Serve every collection to every
-agent"); a **linked folder** is only read (``infrastructure/knowledge/linked.py``).
+arrives as an **upload**, written as a source under the collection's uploads folder on
+the spot ("Keep every upload as a Markdown source"); an agent adds knowledge with its
+own file tools, and the sweep commits what it wrote. Every collection is served to
+every caller ("Serve every collection to every agent"); a **linked folder** is only
+read (``infrastructure/knowledge/linked.py``).
 """
 
 from __future__ import annotations
@@ -52,10 +53,10 @@ from coffer.infrastructure.knowledge import (
     collection_files,
     file_links,
     fs,
-    inbox,
     linked,
     paths,
     source_imports,
+    sources,
 )
 from coffer.infrastructure.knowledge.history import KnowledgeHistory
 
@@ -242,7 +243,7 @@ class KnowledgeService:
         return catalogue.list_level(relpath)
 
     async def read(self, relpath: str) -> KnowledgeFile:
-        """A document, for the human surfaces. A hidden path, the inbox included,
+        """A document, for the human surfaces. A hidden path
         is refused by the path guard."""
         row = await self.find_collection(relpath)
         folder = linked_folder(row.config)
@@ -311,8 +312,8 @@ class KnowledgeService:
         files: Mapping[str, bytes] | None = None,
         supersede: Sequence[str] = (),
     ) -> Submission:
-        """Add new material to a collection ("Promote submitted material at once"):
-        a source under ``sources/`` on the spot, waiting until an agent compiles it.
+        """Add an upload to a collection ("Keep every upload as a Markdown source"):
+        a source under its uploads folder on the spot, waiting until an agent compiles it.
         ``extra`` adds frontmatter keys; ``files`` (bare name to bytes) land in
         the same commit in the upload's own folder, the source beside them —
         picked here with no await before the writes, so no two uploads share
@@ -331,16 +332,15 @@ class KnowledgeService:
             for relpath, data in assets.bundle_paths(row.name, folder, files or {}).items():
                 tx.touch(relpath)
                 assets.write_bytes(relpath, data)
-            name = inbox.submit_material(
+            document = sources.write_source(
                 row.name,
                 title=title,
                 description=description,
                 body=body,
                 actor=actor_kind,
                 extra=extra,
+                folder=folder,
             )
-            tx.touch(f"{row.name}/{paths.INBOX_DIR_NAME}/{name}")
-            document = inbox.promote(row.name, name, folder)
             tx.touch(document.path)
             for older in supersede:
                 tx.touch(older)

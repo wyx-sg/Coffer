@@ -189,7 +189,7 @@ class CodexMemoryWriter:
         location: str,
         copies: Mapping[str, CopyRecord],
         targets: Mapping[str, Target],
-        global_targets: Sequence[Target],
+        inline: Sequence[Target],
     ) -> list[AuxWrite]:
         path = extension_dir(location) / "instructions.md"
         if copies:

@@ -7,9 +7,9 @@
 // is what the very next call returns and there is nothing to reindex.
 //
 // There is no `search` and no `grep` here because the daemon serves neither
-// (see "Cover knowledge management on REST and the CLI"). New knowledge goes in as MATERIAL — an
-// upload here, an agent's file in `.inbox/` — and becomes a document as it is
-// (see "Promote submitted material at once").
+// (see "Cover knowledge management on REST and the CLI"). An upload here becomes a source as it is,
+// and an agent adds knowledge with its own file tools
+// (see "Store an upload the moment it arrives").
 //
 // Deleting a COLLECTION is deliberately absent: a collection is one `knowledge`
 // Resource, so it goes through the kind-agnostic `DELETE /resources/{uid}`
@@ -217,7 +217,7 @@ export function describeCollection(uid: string, description: string): Promise<Co
 
 /**
  * Convert an uploaded file into a source of a collection, at once (see
- * "Promote submitted material at once"); `path` names it. Only the Markdown
+ * "Store an upload the moment it arrives"); `path` names it. Only the Markdown
  * is kept (see "Keep every upload as a Markdown source").
  */
 export function uploadFile(params: {

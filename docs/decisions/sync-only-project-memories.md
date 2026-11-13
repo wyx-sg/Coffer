@@ -1,9 +1,9 @@
-# Sync Only Project Memories; Task Notes Sync Like Any Other
+# Sync Only Project Memories
 
 **Status**: Accepted
 **Date**: 2026-11-11
 **Deciders**: Yuxing Wu
-**Related**: [Memory Is About the Person, Knowledge Is About the World](memory-is-about-the-person-knowledge-is-about-the-world.md) (superseded in part: task notes are no longer flagged, held back or sorted), [Claude Code Reads Other Agents' Memories as Text It Loads](claude-code-reads-other-agents-memories-as-text.md) (superseded in part: no global rules file), [File a Memory Where Its Agent Filed It](file-a-memory-where-its-agent-filed-it.md) (superseded in part: nothing is filed under `global`), [Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault](sync-memory-into-each-agents-own-memory.md), spec memory "Sync only project memories"
+**Related**: [Sync Memories, Not Task Notes](sync-memories-not-task-notes.md) (what counts as a memory inside a project), [Memory Is About the Person, Knowledge Is About the World](memory-is-about-the-person-knowledge-is-about-the-world.md) (superseded in part: task notes are no longer flagged, held back or sorted), [Claude Code Reads Other Agents' Memories as Text It Loads](claude-code-reads-other-agents-memories-as-text.md) (superseded in part: no global rules file), [File a Memory Where Its Agent Filed It](file-a-memory-where-its-agent-filed-it.md) (superseded in part: nothing is filed under `global`), [Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault](sync-memory-into-each-agents-own-memory.md), spec memory "Sync only project memories"
 
 ## Context
 
@@ -45,8 +45,6 @@ text a person writes.
 
 ## Options Considered
 
-### Global memory
-
 1. **Keep it.** Each agent's person-wide memories reach the other agents.
    Pros: a preference Codex learned reaches Claude Code. Cons: what Codex
    learns outside a repository is mostly one employer's tool habits, loaded
@@ -62,45 +60,23 @@ text a person writes.
    `~/.claude/CLAUDE.md` or `AGENTS.md`, which the person writes, and both
    agents already keep their own.
 
-### Task notes
-
-1. **Keep the flag, the hold and Sort into knowledge.** Pros: task notes stay
-   out of the other agent. Cons: the sorting never happened; the page asked
-   for work nobody did, and Codex project memories never reached Claude Code.
-2. **Stop publishing task notes.** Pros: the hub holds only standing
-   memories. Cons: Codex files every memory learned in a repository as a task
-   note, so Codex would publish nothing at all; the person wanted project
-   memories kept.
-3. **Sync them like any project memory (chosen).** Coffer judges no memory by
-   where inside a project its agent filed it. Pros: removes the flag, the hold,
-   the sort hand-off, the sorted records, the `memory_to_sort` reminder and the
-   `coffer memory to-sort/sort/sorted` commands; Codex project memories reach
-   Claude Code again. Cons: Claude Code's 4 KB project block carries Codex's
-   per-task notes; the newest win and the rest are counted, and each agent's
-   own curation prunes what goes stale.
+What happens to task notes inside a project was decided with this and then
+revised two days later; that decision, with its options, is
+[Sync Memories, Not Task Notes](sync-memories-not-task-notes.md).
 
 ## Decision
 
 Coffer syncs only memories learned in a repository. A memory learned outside
 any repository stays with its own agent: it is not published, and no global
-copy of it is written anywhere. The rules file an earlier build wrote is
-deleted by the next sync, and a `global/` entry an earlier build published is
-written into no agent and deleted by its machine on that machine's next sync.
-
-Within a project, every memory syncs: task notes are not flagged, held back or
-sorted. Moving a task note into knowledge is the person's and their agent's
-business, as writing any knowledge is.
+copy of it is written anywhere. The vault's own checkout, `~/.coffer/vault`, is
+not a project either: what an agent learns there is about Coffer's data, not a
+codebase.
 
 ## Consequences
 
-- The Memory page lists projects only; the "to sort" line, its badge and the
-  copy states `rules` and `stays_home` are gone. `/memory/global` opens the page.
-- `coffer memory to-sort`, `sort` and `sorted`, and `/api/v1/memory/sync/to-sort`,
-  `/sort/handoff` and `/sorted`, are removed. The `memory_sort_requested` and
-  `memory_sorted` event types stay only so older Activity rows keep their names.
-- The ledger's reader revision is bumped, so the first sync re-reads every
-  source and drops the global entries this machine published.
-- `vault/memory/sorted/` records an earlier build wrote are left in place and
-  not read.
+- The Memory page lists projects only; the copy states `rules` and
+  `stays_home` are gone. `/memory/global` opens the page.
+- Only `vault/memory/projects/` is read; a `global/` or `sorted/` folder an
+  earlier build wrote is ignored.
 - If a person-wide preference later needs to cross agents, it is written by a
   person into each agent's own instructions file, not learned and synced.

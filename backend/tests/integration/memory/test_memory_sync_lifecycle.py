@@ -1,6 +1,6 @@
 """The memory sync over time: copies read back, curated, edited and removed by
-the agents, the preview, the Activity record, undo, curation and failures
-(spec memory)."""
+the agents, the preview, the Activity record, undo and failures (spec
+memory)."""
 
 from __future__ import annotations
 
@@ -12,12 +12,11 @@ import pytest
 
 from coffer.domain.memory.errors import MemorySyncRunning
 from tests.integration.memory._sync_harness import (
-    CHINESE,
     Machine,
     cc_file,
     cc_memory_dir,
     cc_project,
-    codex_memory,
+    codex_topics,
     hub_files,
     resources,
 )
@@ -38,7 +37,7 @@ async def _claude_to_codex(
 ) -> tuple[Machine, pathlib.Path]:
     """A Claude Code project memory copied into Codex; answers the copy."""
     a = Machine("machine-a", tmp_path / "a")
-    codex = a.codex(memory_md=codex_memory([("Payments", str(payments), [])]))
+    codex = a.codex(memory=codex_topics([("Payments", str(payments), [])]))
     cc_project(
         a.claude(), payments, {"p.md": cc_file("Ledger", "Retries", "project", "Idempotent.")}
     )
@@ -53,7 +52,7 @@ async def test_a_copy_read_back_is_not_published(
 ) -> None:
     a = Machine("machine-a", tmp_path / "a")
     a.codex(
-        memory_md=codex_memory(
+        memory=codex_topics(
             [
                 (
                     "Payments",
@@ -76,7 +75,7 @@ async def test_an_absorbed_copy_does_not_circulate(
     tmp_path: pathlib.Path, payments: pathlib.Path
 ) -> None:
     a = Machine("machine-a", tmp_path / "a")
-    a.codex(memory_md=codex_memory([("Payments", str(payments), ["Prefers replies in Chinese."])]))
+    a.codex(memory=codex_topics([("Payments", str(payments), ["Prefers replies in Chinese."])]))
     cc = a.claude()
     memory = cc_project(cc, payments, {})
     await a.sync()
@@ -120,8 +119,7 @@ async def test_an_agents_own_files_are_byte_identical_after_a_sync(
 ) -> None:
     a = Machine("machine-a", tmp_path / "a")
     codex = a.codex(
-        memory_md=codex_memory([("Payments", str(payments), ["Codex fact one here."])]),
-        summary_md=CHINESE,
+        memory=codex_topics([("Payments", str(payments), ["Codex fact one here."])]),
     )
     cc = a.claude()
     cc_project(cc, payments, {"own.md": cc_file("Own", "mine", "project", "Mine.")})
@@ -150,7 +148,7 @@ async def test_the_first_sync_waits_for_the_person(
 ) -> None:
     a = Machine("machine-a", tmp_path / "a")
     codex = a.codex(
-        memory_md=codex_memory([("Payments", str(payments), ["Prefers replies in Chinese."])])
+        memory=codex_topics([("Payments", str(payments), ["Prefers replies in Chinese."])])
     )
     cc = a.claude()
     memory = cc_project(cc, payments, {"p.md": cc_file("Ledger", "Retries", "project", "x")})
@@ -162,7 +160,8 @@ async def test_the_first_sync_waits_for_the_person(
     state = await a.view.state()
     assert state.preview is not None
     listed = {(r["agent"], r["write"]) for r in state.preview["rows"]}
-    assert ("codex", 1) in listed
+    # One memory, into each of Codex's two memory folders.
+    assert ("codex", 2) in listed
 
     await a.service.write_preview("user")
     assert "Prefers replies in Chinese." in (memory / "MEMORY.md").read_text()
@@ -175,17 +174,18 @@ async def test_a_sync_lists_what_it_wrote(tmp_path: pathlib.Path, payments: path
     a = Machine("machine-a", tmp_path / "a")
     cc = a.claude()
     cc_project(cc, payments, {"p.md": cc_file("Ledger", "Retries", "project", "x")})
-    a.codex(memory_md=codex_memory([("Payments", str(payments), [])]))
+    a.codex(memory=codex_topics([("Payments", str(payments), [])]))
     await a.sync()
-    a.codex("cx2", memory_md=codex_memory([("Payments", str(payments), [])]))
+    a.codex("cx2", memory=codex_topics([("Payments", str(payments), [])]))
     a.audit.events.clear()
     cc_project(cc, payments, {"q.md": cc_file("Fees", "Fees", "project", "Fees round down.")})
     await a.service.sync("user")
     ((event, actor, details),) = a.audit.events
     assert (event, actor) == ("memory_synced", "user")
     assert [c["title"] for c in details["hub"]["created"]] == ["Fees"]
-    # The new memory into both Codex agents, and the first into the new one.
-    assert len(details["copies"]["codex"]["written"]) == 3
+    # The new memory into both Codex agents, and the first into the new one,
+    # each into Codex's two memory folders.
+    assert len(details["copies"]["codex"]["written"]) == 6
 
 
 @pytest.mark.acceptance(spec="memory", scenario="undo removes Coffer's copies and nothing else")
@@ -193,7 +193,7 @@ async def test_undo_removes_coffers_copies_and_nothing_else(
     tmp_path: pathlib.Path, payments: pathlib.Path
 ) -> None:
     a = Machine("machine-a", tmp_path / "a")
-    codex = a.codex(memory_md=codex_memory([("Payments", str(payments), [])]), summary_md=CHINESE)
+    codex = a.codex(memory=codex_topics([("Payments", str(payments), ["A Codex fact."])]))
     cc = a.claude()
     memory = cc_project(
         cc,
@@ -217,7 +217,6 @@ async def test_undo_removes_coffers_copies_and_nothing_else(
     await a.service.undo("user")
 
     assert not one.exists() and two.exists()
-    assert not (cc / "rules" / "coffer-memory.md").exists()
     assert (memory / "MEMORY.md").read_text(encoding="utf-8") == "# mine\n"
     assert (memory / "p.md").exists()
     assert sorted(p.read_bytes() for p in hub_files(_vault())) == hub_before
@@ -225,22 +224,30 @@ async def test_undo_removes_coffers_copies_and_nothing_else(
     assert a.audit.events[-1][0] == "memory_sync_undone"
 
 
-@pytest.mark.acceptance(spec="memory", scenario="an agent's curation state is shown")
-async def test_an_agents_curation_state_is_shown(tmp_path: pathlib.Path) -> None:
+@pytest.mark.acceptance(spec="memory", scenario="an agent's tab shows what Coffer wrote into it")
+async def test_an_agents_row_carries_what_coffer_wrote_into_it(
+    tmp_path: pathlib.Path, payments: pathlib.Path
+) -> None:
     a = Machine("machine-a", tmp_path / "a")
-    a.claude()
-    a.codex(memory_md="")
+    cc_project(
+        a.claude(),
+        payments,
+        {
+            "p.md": cc_file("Ledger", "Retries", "project", "x"),
+            "q.md": cc_file("Fees", "Fees", "project", "y"),
+        },
+    )
+    a.codex(memory=codex_topics([("Payments", str(payments), ["A Codex fact."])]))
+    await a.sync()
     state = await a.view.state()
     rows = {r.agent_type: r for r in state.agents}
-    assert rows["claude_code"].curation.memory == "on"
-    assert rows["claude_code"].curation.curation == "unknown"
-    assert rows["claude_code"].curation.last_curated_at == ""
-    assert rows["codex"].curation.memory == "on"
-    prompt = await a.view.curation_handoff("claude_code", "user")
-    assert prompt is not None and "consolidate your auto-memory folders" in prompt
-    assert a.audit.events[-1][0] == "memory_curation_requested"
-    # Codex consolidates on its own whenever its memories are on.
-    assert await a.view.curation_handoff("codex", "user") is None
+    assert rows["codex"].writer["state"] == "ok"
+    # Two memories, into each of Codex's two memory folders.
+    assert rows["codex"].copies == {"written": 4}
+    # Claude Code gets text in a block, no copies to count.
+    assert rows["claude_code"].writer["state"] == "ok"
+    assert rows["claude_code"].copies == {}
+    assert not hasattr(rows["claude_code"], "curation")
 
 
 @pytest.mark.acceptance(
@@ -253,7 +260,7 @@ async def test_an_unreadable_agent_degrades_loudly(
     memory = cc_project(
         a.claude(), payments, {"p.md": cc_file("Ledger", "Retries", "project", "x")}
     )
-    a.codex(memory_md=codex_memory([("Payments", str(payments), ["Codex fact one here."])]))
+    a.codex(memory=codex_topics([("Payments", str(payments), ["Codex fact one here."])]))
     await a.sync()
     (memory / "p.md").write_text("---\nname: [unterminated\n", encoding="utf-8")
     report = await a.service.sync("user")

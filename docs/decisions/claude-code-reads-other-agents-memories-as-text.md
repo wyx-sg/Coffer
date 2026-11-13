@@ -5,7 +5,7 @@
 **Status**: Accepted
 **Date**: 2026-11-03
 **Deciders**: Yuxing Wu
-**Related**: [Memory Is About the Person, Knowledge Is About the World](memory-is-about-the-person-knowledge-is-about-the-world.md), [Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault](sync-memory-into-each-agents-own-memory.md), [File a Memory Where Its Agent Filed It](file-a-memory-where-its-agent-filed-it.md), [Curate Claude Code's Memory in the Open](curate-claude-memory-in-the-open.md), research note [agent memory](../research/agent-memory.md), spec memory "Write the hub into Claude Code as text it loads"
+**Related**: [Memory Is About the Person, Knowledge Is About the World](memory-is-about-the-person-knowledge-is-about-the-world.md), [Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault](sync-memory-into-each-agents-own-memory.md), [File a Memory Where Its Agent Filed It](file-a-memory-where-its-agent-filed-it.md), [Leave an Agent's Memory Curation to the Agent](leave-agent-memory-curation-to-the-agent.md), research note [agent memory](../research/agent-memory.md), spec memory "Write the hub into Claude Code as text it loads"
 
 This decision replaces two earlier ones, now deleted: *Global Memories Live in
 a Claude Code Project of Their Own, Pointed at From a Rules File* (2026-10-13)

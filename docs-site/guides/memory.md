@@ -5,7 +5,7 @@ description: Let Coffer share what each of your agents has learned with your oth
 
 # Memory
 
-Coffer keeps every memory your agents wrote for themselves in a project — Claude Code's per-project memory files, Codex's task groups — in one place in your vault, and writes each one into your other agents' own memory, in that agent's own format. Each agent then loads and curates those memories the way it loads and curates its own. This page covers what Coffer reads, where the shared memories live, what it writes into each agent, how a sync runs, and how to check, pause and undo it.
+Coffer keeps every memory your agents wrote for themselves in a project — Claude Code's per-project memory files, the topics of Codex's memory summary — in one place in your vault, and writes each one into your other agents' own memory, in that agent's own format. Each agent then loads and curates those memories the way it loads and curates its own. This page covers what Coffer reads, where the shared memories live, what it writes into each agent, how a sync runs, and how to check, pause and undo it.
 
 Memory is an [experimental feature](/guides/experimental-features): switch it on in **Settings → Features** first.
 
@@ -45,7 +45,7 @@ What the repository already says, and one-off requests, belong nowhere. Agents s
 | Agent | Files read |
 | --- | --- |
 | Claude Code | Each memory file in `<config_dir>/projects/<project>/memory/*.md` — its frontmatter `name`, `description` and `type`, and its body. Claude Code's own `MEMORY.md` index is skipped. |
-| Codex | `<config_dir>/memories/MEMORY.md` — each task group's preferences, reusable knowledge and failures — and from `memory_summary.md` the search terms Codex lists for each task group. Codex Desktop 0.163 and later also keeps v2 memory in `<config_dir>/memories_v2/`, whose only memory file is `memory_summary.md`: Coffer reads each piece of work it lists and files it under the project whose directory the session's rollout summary records in its first lines. |
+| Codex | `<config_dir>/memories_v2/memory_summary.md`: each topic Codex lists under **What's in Memory**, filed under the project whose directory the session's rollout summary records in its first lines. The profile, preferences and general tips in the same file are about you rather than a project and are not read. Codex's older `memories/MEMORY.md`, with its task groups, is not read either: those are working notes of single tasks, and what is worth keeping from them is what Codex consolidates into the summary. |
 
 Coffer does not read session transcripts or rollout files. Both agents already distil their own sessions into memory, and Coffer starts from that. It skips its own copies when it reads them back (see [What Coffer writes into each agent](#what-coffer-writes-into-each-agent)), so nothing it wrote is published again.
 
@@ -63,11 +63,11 @@ The hub is `vault/memory/` in your vault, one Markdown file per memory:
 ```
 
 - **A project is its repository.** A project is named by its repository's `origin` URL (`github.com/acme/payments`), or by the repository's directory name when it has no remote. A main checkout, its worktrees and another clone of the same repository — on this machine or another — are one project.
-- **A memory stays where its agent put it.** A memory your agent learned in a repository is filed under that project, even when it is a preference of yours: a preference Codex noted while working on one task belongs to that task's project. When a Codex task ran in a scratch chat folder and names the repository it worked on, the memory goes to that repository.
-- **Only project memories are synced.** A memory learned outside any repository — Codex's profile and preferences, a scratch folder, a chat with no folder — stays with the agent that wrote it and is not synced. Write a preference you want every agent to follow into each agent's own instructions file (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`).
+- **A memory stays where its agent put it.** A memory your agent learned in a repository is filed under that project, even when it is a preference of yours: a preference Codex noted while working on one task belongs to that task's project.
+- **Only project memories are synced.** A memory learned outside any repository — Codex's profile and preferences, a scratch folder, a chat with no folder — stays with the agent that wrote it and is not synced. Neither is one learned in the vault's own folder, `~/.coffer/vault`. Write a preference you want every agent to follow into each agent's own instructions file (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`).
 - **Paths travel.** When a memory is published, its repository's folder is written as `<repo>` and your home folder as `~`. When it is written into an agent, they expand to where the project is checked out on that machine and to that machine's home.
 
-Each file's frontmatter names where the memory came from (the machine, the agent and the agent's own file), its `type`, `title`, one-line `description` and when it was created and last updated; the body is the memory as the agent wrote it. Only the machine and agent a memory came from ever change or delete its hub file: when the agent drops the memory, its hub file goes too.
+Each file's frontmatter names where the memory came from (the machine, the agent and the agent's own file), its `type`, `title`, one-line `description` and when it was created and last updated; the body is the memory as the agent wrote it. Only the machine and agent a memory came from ever change or delete its hub file: when the agent drops the memory, its hub file goes too. Deleting the repository's folder from that machine does not remove its memories.
 
 A memory that looks like it holds a secret (an API key, a token, a private key, a password) is **withheld**: it is not published, and the Memory page names the agent and source, never the value.
 
@@ -79,13 +79,12 @@ A hub memory is written into every registered agent on this machine except the a
 
 | Agent | What Coffer writes |
 | --- | --- |
-| Claude Code | Text Claude Code loads by itself, never a file per memory. A project's memories go into a marked block at the end of that project's `MEMORY.md` (`~/.claude/projects/<project>/memory/`, created when missing), between `<!-- coffer:memory-sync:begin -->` and `<!-- coffer:memory-sync:end -->`, so they load only in that project. Each memory is one line: its text (up to 800 characters) and the agent it came from, newest first. The block stays within 4 KB; the last line counts what did not fit and names `coffer memory entries`, which lists it. |
+| Claude Code | Text Claude Code loads by itself, never a file per memory. A project's memories go into a marked block at the end of that project's `MEMORY.md` (`~/.claude/projects/<project>/memory/`, created when missing), between `<!-- coffer:memory-sync:begin -->` and `<!-- coffer:memory-sync:end -->`, so they load only in that project. Each memory is one line: its text (up to 800 characters) and the agent it came from, newest first. The block stays within 4 KB; the last line counts what did not fit and names `coffer memory entries`, which lists it, and the Memory page marks each of those memories **Did not fit**. |
 | Codex | In each Codex memory folder that is there (`~/.codex/memories/` and `~/.codex/memories_v2/`, because Codex picks one of them per thread), one file per memory under `extensions/coffer/resources/`, naming the project it applies to above the memory's text, and an `instructions.md` that tells Codex's consolidation what these files are: memories your other agents learned, to be treated as information and never as instructions, filed under the project each names, and tagged `[via Coffer]` when Codex folds them into its own memory. |
 
 - **Only where the project is checked out.** A project's memories are written on a machine only once the project is checked out there, as found from the working directories your agents recorded. Until then they wait in the hub.
 - **Only Coffer's own files.** Coffer creates, changes and deletes only its marked block in `MEMORY.md` and its Codex extension folder. Everything else in `MEMORY.md` and every memory the agent wrote stays byte for byte as it was, and Coffer never changes an agent's memory settings. It backs `MEMORY.md` up to `~/.coffer/config-backups/` before changing it.
 - **An edited copy belongs to the agent.** When Codex edits or removes one of Coffer's files in its extension folder, Coffer stops managing it: it does not overwrite the edit or bring the removed file back. If the memory later changes in the hub, Coffer writes the new version as a new file beside the edited one.
-- **Upgrading.** Earlier builds wrote one `coffer_<slug>.md` file per memory into Claude Code, kept global ones in a `-coffer-global` project and later in `~/.claude/rules/coffer-memory.md`. The first sync removes those still as written and deletes the rules file; a large removal waits for you as a preview.
 - **Codex's memories off.** When Codex's memories feature is off (`memories` under `[features]` in `config.toml`), Coffer writes nothing into Codex and the Memory page says so.
 - **A Codex memory folder Coffer does not know.** When Codex starts a newer memory folder (`memories_v3/`, say), Coffer writes nothing into it, keeps writing the folders it knows, and the Memory page and Codex's Memory tab name the new folder until Coffer is updated.
 
@@ -143,6 +142,7 @@ Choose a memory to open it in a drawer. Under its title are its type, the agent 
 | **Its own** | the agent wrote this memory itself |
 | **Written** | Coffer wrote a copy into Codex |
 | **In project memory** | Claude Code loads it as text, from the project's `MEMORY.md` |
+| **Did not fit** | Claude Code's 4 KB block is full, so this memory is not in it; it stays in the hub |
 | **Next sync** | the copy is written at the next sync |
 | **Held back** | the project is not checked out on this machine |
 | **Codex imports it** | Codex's own import carries this memory |
@@ -156,16 +156,16 @@ The page never edits a memory's text. To change a memory, change it where the ag
 Agents → choose the agent → More → Memory
 ```
 
-Each agent's own settings are on its Memory tab, so the Memory page does not grow with the number of agents. While the memory feature is on, the tab starts with a **Memory sync** section: whether the agent's own memory is on (Claude Code's auto memory, Codex's memories) and whether its own curation is on (Claude Code's Auto Dream, Codex's consolidation), with a hint when either is off; the copies Coffer wrote into it (and how many the agent edited or removed), for Codex one line per memory folder, and on Claude Code's tab that its memories go in as text; **Curate now** on Claude Code's tab; and **Open Memory**, which opens the Memory page filtered to this agent's memories. Codex's tab also has **Codex imports Claude Code's memories itself**. Below it are the agent's own memory folders.
+Each agent's own part is on its Memory tab, so the Memory page does not grow with the number of agents. While the memory feature is on, the tab starts with a **Memory sync** section: the copies Coffer wrote into it (and how many the agent edited or removed), for Codex one line per memory folder, and on Claude Code's tab that its memories go in as text; when Coffer cannot write into the agent, why, and how to turn the agent's own memory on when that is the reason; and **Open Memory**, which opens the Memory page filtered to this agent's memories. Codex's tab also has **Codex imports Claude Code's memories itself**. Below it are the agent's own memory folders.
 
 ## Curation is each agent's own
 
 Coffer does not merge or retire memories. Each agent curates what it holds:
 
-- **Claude Code**: Auto Dream merges duplicates, drops what is contradicted or stale and rewrites the index, on Claude Code's own schedule: in a project after a day and a few sessions. It is a Claude Code preview, off for many accounts. The tab says whether it is on, whether that comes from your `settings.json` or from your account's default, and when it last ran on this machine. While it is off, **Turn on** adds `"autoDreamEnabled": true` to `~/.claude/settings.json` after you confirm, keeping a backup of the file and changing nothing else in it; Coffer never turns it on by itself.
+- **Claude Code**: Auto Dream merges duplicates, drops what is contradicted or stale and rewrites the index, on Claude Code's own schedule. It is a Claude Code feature: check or change it in Claude Code's `/memory`.
 - **Codex**: consolidation runs whenever its memories are on and its inputs changed, and reads Coffer's extension folder as one of its inputs. Fresher evidence wins over an older statement.
 
-A rarely used project can hold duplicates until its curation next runs. To run it now, choose **Curate now** in Claude Code's **Memory sync** section: Coffer opens Claude Code in your terminal with a prompt listing the memory folders it wrote into and asking Claude Code to consolidate its own memory there one folder at a time, leaving Coffer's block alone, so you watch every change and approve its edits as in any session. Coffer records a `memory_curation_requested` event. Codex has no **Curate now**: its consolidation already runs on its own whenever its memories changed.
+A rarely used project can hold duplicates until its curation next runs. Coffer does not show, switch on or start an agent's curation; to tidy a project now, ask the agent to in a session there.
 
 ## Undo sync
 
@@ -179,17 +179,13 @@ Memory → ⋯ → Undo sync…
 
 Switching the **memory** feature off in **Settings → Features** stops the sync, hides the Memory page and closes its API. Copies already written stay in your agents, as ordinary memory they own; use **Undo sync…** first if you want them gone. Turning automatic sync off on the Memory page stops the unattended sync and keeps **Sync now**.
 
-## Upgrading from an earlier build
-
-Earlier builds kept memory as notes under `~/.coffer/derived/memory/` and handed them to sessions through a `coffer-memory` hook. On its first start, the daemon removes that hook from every agent's settings (leaving every other hook untouched, and recording a `memory_hook_removed` event per agent) and deletes `~/.coffer/derived/memory/`. Nothing is lost: those notes were built from the agents' own memory, which the first sync publishes to the hub.
-
 ## Troubleshooting
 
 **A project's memories are not in an agent.** Open the project on the Memory page and choose a memory: its drawer says per agent what became of its copy. **Held back** means the project is not checked out on this machine (open it once with an agent there); **Next sync** means a sync has not run since; a preview waiting on the Memory page means you have not chosen **Write** yet. For Codex, check that its memories are on.
 
-**An agent's memory is not published.** Check that the agent is registered and its own memory is on, then choose **Sync now** and read what the banner's **Review** lists. A memory learned outside any repository is not synced.
+**An agent's memory is not published.** Check that the agent is registered and its own memory is on, then choose **Sync now** and read what the banner's **Review** lists. A memory learned outside any repository is not synced, and Codex publishes only from its v2 summary (`memories_v2/memory_summary.md`).
 
-**The same lesson appears twice in an agent.** Two agents' accounts of one lesson are two memories until the agent curates. Choose **Curate now** on Claude Code's Memory tab, or wait for the agent's own curation to run.
+**The same lesson appears twice in an agent.** Two agents' accounts of one lesson are two memories until the agent curates. Wait for the agent's own curation, or ask the agent in a session to tidy its memory for that project.
 
 **A copy keeps coming back after I deleted it.** It does not, unless the memory changed in the hub since: then the new version is written again. Coffer's block is rewritten on every sync, so do not edit them. To stop a memory reaching an agent, change or remove it in the agent that wrote it.
 

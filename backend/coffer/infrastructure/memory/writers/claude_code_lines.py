@@ -15,8 +15,6 @@ from collections.abc import Sequence
 from coffer.domain.memory.hub import AGENT_LABELS, one_line
 from coffer.domain.memory.sync_plan import Target
 
-#: The file name of the copies earlier builds wrote; the first sync removes them.
-COPY_PREFIX = "coffer_"
 INDEX_NAME = "MEMORY.md"
 #: A project block's bound: it sits at the end of the project's ``MEMORY.md``,
 #: of which Claude Code loads the first 200 lines and 25 KB.
@@ -67,18 +65,30 @@ def _bounded(lines: Sequence[str], used: int, limit: int, more: str) -> list[str
     return [*out, more.format(len(lines) - len(out))]
 
 
+def _more(project: str) -> str:
+    return f"- …and {{}} more from your other agents: `coffer memory entries --project {project}`"
+
+
 def block_lines(targets: Sequence[Target], project: str) -> list[str]:
     """A project's block: its memories' text, newest first, bounded."""
     lines = [_line(t) for t in _ordered(targets)]
-    more = f"- …and {{}} more from your other agents: `coffer memory entries --project {project}`"
-    return _bounded(lines, 0, BLOCK_MAX_BYTES, more)
+    return _bounded(lines, 0, BLOCK_MAX_BYTES, _more(project))
+
+
+def block_entries(targets: Sequence[Target], project: str) -> list[Target]:
+    """The targets whose text :func:`block_lines` holds: all of them, or the
+    newest that fit when the block is full."""
+    ordered = _ordered(targets)
+    lines = block_lines(targets, project)
+    held = len(lines) if len(lines) == len(ordered) else len(lines) - 1
+    return ordered[:held]
 
 
 __all__ = [
     "BLOCK_MAX_BYTES",
-    "COPY_PREFIX",
     "INDEX_NAME",
     "MEMORY_TEXT_MAX",
+    "block_entries",
     "block_lines",
     "memory_text",
 ]

@@ -1,10 +1,6 @@
-"""What the Memory page reads about the sync, and **Curate now** (spec memory
-"Manage memory sync in the web UI and on the command line", "Show each agent's
-own curation and ask it to curate now").
-
-Read-only views over the hub, the ledger and the agents' own settings, plus
-the two actions on an agent's own curation: ask it to curate now, and turn it
-on when the person asks.
+"""What the Memory page reads about the sync (spec memory "Manage memory sync
+in the web UI and on the command line"): read-only views over the hub and the
+ledger.
 """
 
 from __future__ import annotations
@@ -20,7 +16,6 @@ from coffer.application.memory.sync_locations import (
     location_rows,
     summed,
 )
-from coffer.application.memory.sync_prompts import claude_curation_prompt
 from coffer.application.memory.sync_report import preview_summary
 from coffer.application.memory.sync_rows import (
     AgentRow,
@@ -30,15 +25,14 @@ from coffer.application.memory.sync_rows import (
     ProjectRow,
     SyncState,
 )
-from coffer.application.memory.sync_service import AuditPort, MemorySyncService
+from coffer.application.memory.sync_service import MemorySyncService
 from coffer.application.memory.sync_write import LocalAgent
-from coffer.domain.audit import AuditEventType
 from coffer.domain.memory.hub import CLAUDE_CODE, CODEX, HubEntry, project_folder
 from coffer.domain.memory.portable import from_portable
-from coffer.domain.memory.sync_plan import STATE_WRITTEN
+from coffer.domain.memory.sync_plan import STATE_WRITTEN, Target
 from coffer.infrastructure.memory import checkouts as checkout_map
-from coffer.infrastructure.memory.curation import curation_state, enable_curation
 from coffer.infrastructure.memory.writers.claude_code import memory_dir
+from coffer.infrastructure.memory.writers.claude_code_lines import block_entries
 
 #: A copy's state on the page, per local agent.
 COPY_ORIGIN = "origin"
@@ -46,6 +40,8 @@ COPY_HELD_BACK = "held_back"
 COPY_DEFERRED = "deferred"
 #: Written as text into the project's ``MEMORY.md`` block (Claude Code).
 COPY_BLOCK = "block"
+#: Left out of the block because the block is full (Claude Code).
+COPY_OVER_LIMIT = "over_limit"
 COPY_PENDING = "pending"
 
 
@@ -56,12 +52,10 @@ class MemorySyncView:
         *,
         machine: Callable[[], str],
         home: Callable[[], str],
-        audit: AuditPort,
     ) -> None:
         self._svc = service
         self._machine = machine
         self._home = home
-        self._audit = audit
 
     async def _checkouts(self, agents: list[LocalAgent]) -> dict[str, str]:
         # Walks each agent's projects tree and probes every repository: blocking
@@ -95,15 +89,13 @@ class MemorySyncView:
                     agent=a.agent,
                     agent_type=a.agent_type,
                     writer=writer_state,
-                    curation=curation_state(a.agent_type, a.config_dir),
                     copies=copies,
                     locations=locations,
                 )
             )
         by_project: dict[str, Counter[str]] = defaultdict(Counter)
         for entry in hub.values():
-            if entry.project:
-                by_project[entry.project][entry.origin.agent] += 1
+            by_project[entry.project][entry.origin.agent] += 1
         projects = [
             ProjectRow(
                 key=key,
@@ -152,12 +144,14 @@ class MemorySyncView:
         by_entry = await self._copies_by_entry(agents)
         states = {e: {t: v[0] for t, v in m.items()} for e, m in by_entry.items()}
         hub = await asyncio.to_thread(self._svc.hub.entries)
+        in_block = self._in_block(hub, project, here)
         out = []
         for entry in sorted(hub.values(), key=lambda e: e.updated_at, reverse=True):
-            if not entry.project or entry.project != project:
+            if entry.project != project:
                 continue
             copies = {
-                a.agent_type: _copy_state(entry, a, machine, here, states, imports) for a in agents
+                a.agent_type: _copy_state(entry, a, machine, here, states, imports, in_block)
+                for a in agents
             }
             out.append(EntryRow(entry=entry, copies=copies))
         return out
@@ -167,7 +161,7 @@ class MemorySyncView:
         ("Manage memory sync in the web UI and on the command line")."""
         hub = await asyncio.to_thread(self._svc.hub.entries)
         entry = hub.get(entry_id)
-        if entry is None or not entry.project:
+        if entry is None:
             return None
         agents = await self._svc.local_agents()
         imports = self._svc.ledger.load().codex_imports_claude
@@ -175,9 +169,10 @@ class MemorySyncView:
         machine = self._machine()
         held = (await self._copies_by_entry(agents)).get(entry.id, {})
         states = {entry.id: {t: v[0] for t, v in held.items()}}
+        in_block = self._in_block(hub, entry.project, here)
         copies = []
         for a in agents:
-            state = _copy_state(entry, a, machine, here, states, imports)
+            state = _copy_state(entry, a, machine, here, states, imports, in_block)
             copies.append(
                 CopyLocation(
                     agent_type=a.agent_type,
@@ -188,47 +183,22 @@ class MemorySyncView:
         body = from_portable(entry.body, repo_root=here.get(entry.project), home=self._home())
         return EntryDetail(entry=entry, body=body, copies=copies)
 
-    async def curation_handoff(self, agent_type: str, actor: str) -> str | None:
-        """**Curate now**: the prompt that asks the agent, in a terminal the
-        person watches, to consolidate the memory folders Coffer wrote copies
-        into; ``None`` for an agent whose own curation needs no asking (Codex
-        consolidates whenever its memories are on)."""
-        if agent_type != CLAUDE_CODE:
-            return None
-        agents = [a for a in await self._svc.local_agents() if a.agent_type == agent_type]
-        if not agents:
-            return None
-        local = agents[0]
-        ledger = await asyncio.to_thread(self._svc.ledger.load)
-        folders = sorted(
-            {
-                str(pathlib.Path(path).parent)
-                for path, rec in ledger.agent_copies(local.key).items()
-                if rec.state == STATE_WRITTEN
-            }
-        )
-        await self._audit.record(
-            AuditEventType.MEMORY_CURATION_REQUESTED.value,
-            actor=actor,
-            details={"agent": local.agent, "agent_type": local.agent_type, "folders": len(folders)},
-        )
-        return claude_curation_prompt(folders)
-
-    async def enable_curation(self, agent_type: str, actor: str) -> bool:
-        """**Turn on** the agent's own curation in its settings (Claude Code's
-        Auto Dream), backed up first; answer whether a setting was written."""
-        agents = [a for a in await self._svc.local_agents() if a.agent_type == agent_type]
-        if not agents:
-            return False
-        local = agents[0]
-        changed = await asyncio.to_thread(enable_curation, local.agent_type, local.config_dir)
-        if changed:
-            await self._audit.record(
-                AuditEventType.MEMORY_CURATION_ENABLED.value,
-                actor=actor,
-                details={"agent": local.agent, "agent_type": local.agent_type},
-            )
-        return changed
+    def _in_block(
+        self, hub: Mapping[str, HubEntry], project: str, here: Mapping[str, str]
+    ) -> set[str]:
+        """The ids of ``project``'s memories that the block Coffer writes into
+        Claude Code here holds; the rest did not fit."""
+        root = here.get(project)
+        if root is None:
+            return set()
+        machine, home = self._machine(), self._home()
+        targets = [
+            Target(entry=e, root=root, body=from_portable(e.body, repo_root=root, home=home))
+            for e in hub.values()
+            if e.project == project
+            and not (e.origin.machine == machine and e.origin.agent == CLAUDE_CODE)
+        ]
+        return {t.entry.id for t in block_entries(targets, project)}
 
 
 def _copy_state(
@@ -238,6 +208,7 @@ def _copy_state(
     here: Mapping[str, str],
     copies: Mapping[str, Mapping[str, str]],
     codex_imports: bool | None,
+    in_block: set[str],
 ) -> str:
     if entry.origin.machine == machine and entry.origin.agent == agent.agent_type:
         return COPY_ORIGIN
@@ -249,7 +220,7 @@ def _copy_state(
     if state:
         return state
     if agent.agent_type == CLAUDE_CODE:
-        return COPY_BLOCK
+        return COPY_BLOCK if entry.id in in_block else COPY_OVER_LIMIT
     return COPY_PENDING
 
 
@@ -278,6 +249,7 @@ __all__ = [
     "COPY_DEFERRED",
     "COPY_HELD_BACK",
     "COPY_ORIGIN",
+    "COPY_OVER_LIMIT",
     "COPY_PENDING",
     "AgentRow",
     "CopyLocation",

@@ -97,12 +97,11 @@ def resolve_repository(directory: str | pathlib.Path) -> Repository | None:
     """The repository ``directory`` is inside, or ``None`` when it is in none.
 
     ``None`` is not an error: a dated scratch folder a session happened to run
-    in gets no project, and only a memory about the person learned there is
-    published, under ``global`` (spec memory "Identify a project by a key that
-    does not depend on the machine"). The previous design keyed projects on the raw
-    working directory and turned six such folders on the maintainer's machine
-    into six permanent projects whose contents could never reach the project
-    they were actually about.
+    in gets no project, and nothing learned there is published (spec memory
+    "Identify a project by a key that does not depend on the machine"). The
+    previous design keyed projects on the raw working directory and turned six
+    such folders on the maintainer's machine into six permanent projects whose
+    contents could never reach the project they were actually about.
 
     The path is resolved before the walk, so a symlinked checkout and its real
     location agree on one answer rather than producing two projects for one
@@ -210,7 +209,7 @@ def _is_plausible_root(root: pathlib.Path) -> bool:
     A ``commondir`` of ``../../../../..`` that climbs out of everything
     resolves to ``/``, and ``/`` as a project's repository root would name
     the whole machine as one project. It is cheaper to refuse it here than to
-    explain later why a project called ``global`` appeared twice.
+    explain later why every directory belongs to one project.
     """
     try:
         return root.parent != root and root.is_dir()

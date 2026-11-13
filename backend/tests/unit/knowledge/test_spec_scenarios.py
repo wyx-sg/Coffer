@@ -14,7 +14,6 @@ import pytest
 
 from coffer.application.knowledge.guide_render import render_catalogue
 from coffer.application.knowledge.ingest import IngestService
-from coffer.application.knowledge.intake import adopt_dropped_files
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
 from coffer.domain.errors import ResourceNotFound
 from coffer.domain.resource import Resource
@@ -178,14 +177,20 @@ def test_the_catalogue_says_read_the_files_with_your_own_tool(root: pathlib.Path
 async def test_a_file_under_global_is_left_alone_and_provisions_nothing(
     root: pathlib.Path,
 ) -> None:
-    note = root / "global" / ".inbox" / "note.md"
+    note = root / "global" / "note.md"
     note.parent.mkdir(parents=True)
     note.write_text("an agent's note\n", encoding="utf-8")
     service = _service("shopee")
 
-    assert await adopt_dropped_files(service) == []
-
-    # Left exactly where it is, with no frontmatter added, and not a collection.
+    # Left exactly where it is, with no frontmatter added, and not a collection:
+    # the guide's catalogue, drawn from the registered collections, has no `global`.
+    names = await service.collection_names()
+    listed = [c for c in catalogue.list_collections() if c.name in names]
+    text = render_catalogue(
+        "~/.coffer/knowledge",
+        [(c, catalogue.walk_files(paths.collection_dir(c.name))) for c in listed],
+    )
+    assert "global" not in text
     assert note.read_text(encoding="utf-8") == "an agent's note\n"
     assert [c.name for c in await service.list_collections()] == ["shopee"]
     assert await service.collection_names() == ["shopee"]

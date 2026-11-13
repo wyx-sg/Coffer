@@ -49,7 +49,7 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 ├── state/settings/internal-engine.json
 ├── state/secret-notes/notes.json
 ├── state/cli-tools/tools.json
-├── knowledge/<collection>/             # README.md, its rules file, sources/, hidden .inbox/
+├── knowledge/<collection>/             # README.md, its rules file, sources/
 ├── skills/<name>/                      # skill master folders
 ├── memory/                             # the memory hub: projects/<project>/
 ├── secret/<ref>.enc
@@ -67,8 +67,8 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 | `state/secret-notes/notes.json` | 每个密钥的标签和描述（从不含值）。 | 你、守护进程 | 是 | 标签和描述会丢失，值还在。 |
 | `state/cli-tools/tools.json` | 你手动添加的命令行工具，以及你对技能所需工具的修改。 | 你、守护进程 | 是 | 可以：手动添加的工具和你的修改会丢失。 |
 | `knowledge/<collection>/` | 一个知识集：一个描述它的 `README.md`、它的规则文件（比如一个 `AGENTS.md`），以及它的规则给它的任何文件和文件夹。Coffer 不移动任何文件。整理则交给智能体按这些规则来维护。 | 你、你的智能体、守护进程 | 是 | **不能。** 这是写下来的知识。 |
-| `knowledge/<collection>/sources/` | 上传文件夹（默认 `sources/`，README 的 `uploads` 可以另指）：每次上传和每个收件箱文件，转换成 Markdown；带图片或附件的上传是一个放着文件和图片的文件夹。 | 守护进程 | 是 | **不能。** 其他文件可能引用它们，它们也要显示这些图片。 |
-| `knowledge/<collection>/.inbox/` | 投放区：智能体或另一台机器放在这里的 Markdown 文件，会被下一次扫描（一分钟内）移进上传文件夹。 | 你、你的智能体、守护进程 | 是 | 不能：尚未收编的文件会丢失。 |
+| `knowledge/<collection>/sources/` | 上传文件夹（默认 `sources/`，README 的 `uploads` 可以另指）：每次上传，转换成 Markdown；带图片或附件的上传是一个放着文件和图片的文件夹。 | 守护进程 | 是 | **不能。** 其他文件可能引用它们，它们也要显示这些图片。 |
+
 | `skills/<name>/` | 托管技能的主副本：`SKILL.md`、其他文件，以及 `.coffer.meta.json`（Coffer 的元数据）。智能体拿到的是指向这个目录的符号链接。 | 你、守护进程 | 是 | **不能。** 删掉目录会让投递给智能体的链接失效。 |
 | `memory/` | [记忆](/zh/guides/memory)中心库：你任意一台机器上的智能体为自己在仓库里写下的每条记忆一个 Markdown 文件，放在 `projects/<project>/` 下（项目是仓库的远端，`[A-Za-z0-9._-]` 之外的字符都换成 `-`）。Frontmatter 写明来源机器、智能体和来源文件；文本里的路径存为 `<repo>` 和 `~`。只有条目来源的那台机器会修改它。 | 记忆同步 | 是 | 每台机器会在下次同步时重新发布自己智能体的记忆；另一台机器的记忆只能由那台机器重新发布。 |
 | `secret/<ref>.enc` | 一个密钥的 Fernet 密文，权限 `0600`。从不包含主密钥本身。除非同步远端允许携带密钥，否则不进仓库。 | 守护进程 | 仅在 `--with-secret` 时 | **不能。** 密钥就没了。 |
@@ -219,7 +219,7 @@ Coffer 只会为你要求的事写入已注册智能体自己的配置目录：�
 | `memories/extensions/coffer/`、`memories_v2/extensions/coffer/` | 每个存在的 Codex 记忆文件夹里各一个。`instructions.md`（告诉 Codex 的整合这些文件是什么）和 `resources/<id>-<slug>.md`（另一个智能体或另一台机器学到的每条记忆一个）。Codex 的记忆关闭时什么都不写。 | 记忆同步。见[记忆](/zh/guides/memory#what-coffer-writes-into-each-agent)。 |
 | `skills/<name>` | 指向 `~/.coffer/vault/skills/<name>` 的符号链接。 | 向智能体投递技能时。 |
 
-Coffer 通过 `coffer` 服务器键，以及运行 `coffer` CLI（裸名或任意路径）加 `proxy token` 的 `apiKeyHelper` 来识别自己的条目，并且只删除这些。其他条目——你自己的 MCP 服务器、你的 Hook、你的 `env`——保持原样。在智能体的记忆里，Coffer 只写上面列出的文件和标记区块（早先版本的 `coffer_*.md` 副本、`-coffer-global` 项目和 `rules/coffer-memory.md` 会在第一次同步时移除），从不写智能体自己写的记忆；记忆页上的**撤销同步…**会移除它们。升级后首次启动时，守护进程会移除早期版本装在 `settings.json` 和 `hooks.json` 里的 `: coffer-memory` Hook 条目。
+Coffer 通过 `coffer` 服务器键，以及运行 `coffer` CLI（裸名或任意路径）加 `proxy token` 的 `apiKeyHelper` 来识别自己的条目，并且只删除这些。其他条目——你自己的 MCP 服务器、你的 Hook、你的 `env`——保持原样。在智能体的记忆里，Coffer 只写上面列出的文件和标记区块，从不写智能体自己写的记忆；记忆页上的**撤销同步…**会移除它们。
 
 ::: tip 清理智能体
 要移除 Coffer，运行 `coffer uninstall`（桌面应用里是**设置 › 关于 › 卸载 Coffer**）。它会断开每个智能体与 Coffer 的连接、移除每个智能体上的提供商投影，并删除技能链接、开机自启动、终端启动文件、安装脚本加的 `PATH` 行和 `~/.coffer/bin`；`~/.coffer` 会保留，除非加上 `--delete-data`。先手动删 `~/.coffer` 的话，智能体会指向一个已经不存在的 shim。见[安装 → 卸载](/zh/start/install#uninstall)。

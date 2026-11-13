@@ -250,17 +250,20 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`knowledge-collections-own-their-format`](knowledge-collections-own-their-format.md) | Knowledge Collections Own Their Format; Coffer Checks Only Links |
 | [`knowledge-sources-keep-their-images-and-originals-stay-on-this-mac`](knowledge-sources-keep-their-images-and-originals-stay-on-this-mac.md) | Knowledge Sources Keep Their Images; Originals Stay on This Mac |
 | [`knowledge-files-stay-where-their-writer-put-them`](knowledge-files-stay-where-their-writer-put-them.md) | Knowledge Files Stay Where Their Writer Put Them, and Every Link Is Checked |
+| [`knowledge-has-no-inbox`](knowledge-has-no-inbox.md) | Knowledge Has No Inbox: an Upload Is Written Where It Stays |
+| [`the-guide-catalogue-counts-files`](the-guide-catalogue-counts-files.md) | The Guide Catalogue Counts Files, It Does Not List Them |
 | [`markdown-diagrams-render-with-mermaid`](markdown-diagrams-render-with-mermaid.md) | Markdown Diagrams Render With Mermaid, in the Browser, Loaded on Demand |
 | [`confluence-pages-import-as-readable-sources`](confluence-pages-import-as-readable-sources.md) | Confluence Pages Import as Readable Sources With Their Attachments |
 | [`linked-knowledge-folders-are-read-only-and-machine-local`](linked-knowledge-folders-are-read-only-and-machine-local.md) | A Linked Knowledge Folder Is Shared in Place, Read-Only to Coffer, and Recorded Machine-Local |
 | [`sync-memory-into-each-agents-own-memory`](sync-memory-into-each-agents-own-memory.md) | Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault |
 | [`file-a-memory-where-its-agent-filed-it`](file-a-memory-where-its-agent-filed-it.md) | File a Memory Where Its Agent Filed It |
-| [`curate-claude-memory-in-the-open`](curate-claude-memory-in-the-open.md) | Curate Claude Code's Memory in the Open, and Turn Auto Dream On Only When Asked |
-| [`codex-memory-identity-is-content-with-rewrite-carry-over`](codex-memory-identity-is-content-with-rewrite-carry-over.md) | A Codex Memory Is Identified by Its Content, and a Rewrite Keeps the Identity |
+| [`leave-agent-memory-curation-to-the-agent`](leave-agent-memory-curation-to-the-agent.md) | Leave an Agent's Memory Curation to the Agent |
 | [`memory-page-lists-memories-by-scope`](memory-page-lists-memories-by-scope.md) | The Memory Page Lists the Memories by Scope; the Sync Shows Only When It Needs the Person |
 | [`follow-codex-memory-into-every-version-folder`](follow-codex-memory-into-every-version-folder.md) | Follow Codex's Memory Into Every Version Folder It Keeps |
 | [`memory-is-about-the-person-knowledge-is-about-the-world`](memory-is-about-the-person-knowledge-is-about-the-world.md) | Memory Is About the Person, Knowledge Is About the World; Task Notes Are Sorted Into Knowledge on Request |
-| [`sync-only-project-memories`](sync-only-project-memories.md) | Sync Only Project Memories; Task Notes Sync Like Any Other |
+| [`sync-only-project-memories`](sync-only-project-memories.md) | Sync Only Project Memories |
+| [`sync-memories-not-task-notes`](sync-memories-not-task-notes.md) | Sync Memories, Not Task Notes: Read Codex Only From Its v2 Summary |
+| [`a-memory-outlives-its-checkout`](a-memory-outlives-its-checkout.md) | A Memory Outlives Its Checkout |
 | [`claude-code-reads-other-agents-memories-as-text`](claude-code-reads-other-agents-memories-as-text.md) | Claude Code Reads Other Agents' Memories as Text It Loads |
 
 ### Sync & secrets

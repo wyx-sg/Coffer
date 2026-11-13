@@ -78,8 +78,8 @@ def _submit(
 ) -> str:
     """Submit material and return the document it became.
 
-    Material is promoted to a document on the spot (spec knowledge "Promote submitted
-    material at once") — which is what gives the caller a path to read
+    Material is written as a source on the spot (spec knowledge "Store an upload
+    the moment it arrives") — which is what gives the caller a path to read
     back.
     """
     submitted = _submit_material(

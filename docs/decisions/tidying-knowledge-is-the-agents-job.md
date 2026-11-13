@@ -5,6 +5,8 @@
 **Deciders**: Yuxing Wu
 **Related**: [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md), [Knowledge Collections Own Their Format; Coffer Checks Only Links](knowledge-collections-own-their-format.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault](sync-memory-into-each-agents-own-memory.md), [Coffer Ships Its Own Manual as a Skill Resource](coffer-ships-its-own-skill.md), [Managed Agents Run With Full Permissions; Owner Pairing Is the Gate](managed-agents-run-with-full-permissions.md), [Internal Engine Settings](internal-engine-settings.md), research notes [knowledge curation](../research/knowledge-curation.md) and [knowledge structures](../research/knowledge-structures.md), spec knowledge "Teach writing and tidying in the guide", "Hand a tidy to the agent", "Record a tidy as one change", "Undo a tidy", spec vault-storage "Keep the last valid version when a hand edit is invalid", OpenSpec change `make-a-tidy-one-change`
 
+**Partly superseded** (2026-11-13): a collection has no `.inbox/`, so the sweep adopts nothing; see [Knowledge Has No Inbox](knowledge-has-no-inbox.md).
+
 ## Context
 
 Knowledge rots unless something tidies it. Pages repeat each other and

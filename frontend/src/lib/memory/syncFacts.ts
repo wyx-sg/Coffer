@@ -12,7 +12,7 @@ import type { StatusTone } from "@/lib/statusTone";
 export interface PreviewRow {
   /** The agent type. */
   agent: string;
-  /** The project key; `""` for global memories. */
+  /** The project key. */
   project: string;
   write: number;
   update: number;
@@ -111,6 +111,7 @@ const COPY_STATES = [
   "origin",
   "written",
   "block",
+  "over_limit",
   "pending",
   "held_back",
   "deferred",
@@ -125,6 +126,7 @@ const COPY_TONE: Record<CopyState, StatusTone> = {
   block: "ok",
   // Nothing to do, or the agent's own business: none of these is a problem.
   origin: "off",
+  over_limit: "off",
   pending: "off",
   held_back: "off",
   deferred: "off",
@@ -155,8 +157,10 @@ export function defaultScope(state: Pick<MemorySyncState, "projects">): string |
 
 /** The copy states that mean something needs a look: everything else (the
  *  origin, written, Claude Code's block, Codex's own import, held back with its
- *  whole project) is how a copy normally is, and the list says nothing. */
-const NOTABLE: readonly CopyState[] = ["pending", "edited", "removed"];
+ *  whole project) is how a copy normally is, and the list says nothing. A
+ *  memory that did not fit in Claude Code's block is called out: the agent
+ *  does not see it. */
+const NOTABLE: readonly CopyState[] = ["pending", "over_limit", "edited", "removed"];
 
 /** Per agent, the copy states a memory's row calls out. */
 export function notableCopies(copies: Record<string, string>): [string, CopyState][] {

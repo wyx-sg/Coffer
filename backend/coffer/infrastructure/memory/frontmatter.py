@@ -26,7 +26,7 @@ def render_frontmatter(frontmatter: dict[str, Any], body: str) -> str:
     """Fence, YAML, fence, then ``body`` exactly as given.
 
     Key order is the caller's, not alphabetical: these files are read by people
-    in a preview pane, and ``title`` belongs above ``search_terms`` whatever the
+    in a preview pane, and ``title`` belongs above ``created_at`` whatever the
     alphabet thinks.
     """
     block = yaml.safe_dump(
@@ -72,21 +72,6 @@ def split_frontmatter(text: str) -> tuple[dict[str, Any], str]:
     return {}, text
 
 
-def text_list(values: Any) -> tuple[str, ...]:
-    """A YAML scalar-or-sequence read back as a tuple of strings.
-
-    ``search_terms: worktree`` and ``search_terms: [worktree]`` mean the same
-    thing to the person who would write either; a reader that accepted only the
-    second would drop the terms rather than say so, and "Write each index line
-    to stand on its own" has the index line restating them.
-    """
-    if isinstance(values, str):
-        return (values,)
-    if isinstance(values, list):
-        return tuple(str(v) for v in values)
-    return ()
-
-
 def atomic_write(path: pathlib.Path, text: str) -> None:
     """Write ``text`` to ``path`` via a temp file in the same directory.
 
@@ -120,5 +105,4 @@ __all__ = [
     "read_text",
     "render_frontmatter",
     "split_frontmatter",
-    "text_list",
 ]

@@ -49,7 +49,7 @@ State is kept in five [storage classes](/architecture/persistence), one director
 ├── state/settings/internal-engine.json
 ├── state/secret-notes/notes.json
 ├── state/cli-tools/tools.json
-├── knowledge/<collection>/             # README.md, its rules file, sources/, hidden .inbox/
+├── knowledge/<collection>/             # README.md, its rules file, sources/
 ├── skills/<name>/                      # skill master folders
 ├── memory/                             # the memory hub: projects/<project>/
 ├── secret/<ref>.enc
@@ -67,8 +67,8 @@ State is kept in five [storage classes](/architecture/persistence), one director
 | `state/secret-notes/notes.json` | Each secret's label and description (never its value). | you, daemon | Yes | The labels and descriptions are lost; the values stay. |
 | `state/cli-tools/tools.json` | The command-line tools you added by hand, and your edits to ones a skill requires. | you, daemon | Yes | Yes: hand-added tools and your edits are gone. |
 | `knowledge/<collection>/` | A collection: a `README.md` describing it, its rules file (an `AGENTS.md`, say) and whatever files and folders its rules give it. Coffer moves no file. A Tidy hands keeping it to an agent, by those rules. | you, your agents, daemon | Yes | **No.** This is written knowledge. |
-| `knowledge/<collection>/sources/` | The uploads folder (`sources/` unless the README's `uploads` names another): each upload and each inbox file, converted to Markdown; an upload with pictures or attachments is a folder holding the file and its pictures. | daemon | Yes | **No.** Its files may be cited by others, and show these pictures. |
-| `knowledge/<collection>/.inbox/` | A drop zone: a Markdown file an agent or another machine leaves here is moved into the uploads folder by the next sweep (within a minute). | you, your agents, daemon | Yes | No: a file not yet adopted is lost. |
+| `knowledge/<collection>/sources/` | The uploads folder (`sources/` unless the README's `uploads` names another): each upload, converted to Markdown; an upload with pictures or attachments is a folder holding the file and its pictures. | daemon | Yes | **No.** Its files may be cited by others, and show these pictures. |
+
 | `skills/<name>/` | The master copy of a managed skill: `SKILL.md`, its other files, and `.coffer.meta.json` (Coffer's metadata). Agents receive a symlink to this folder. | you, daemon | Yes | **No.** Deleting a folder breaks the links delivered to agents. |
 | `memory/` | The [memory](/guides/memory) hub: one Markdown file per memory an agent on any of your machines wrote for itself in a repository, under `projects/<project>/` (the project's repository remote, with every character outside `[A-Za-z0-9._-]` turned into `-`). Frontmatter names the origin machine, agent and source; paths in the text are stored as `<repo>` and `~`. Only the machine an entry came from changes it. | memory sync | Yes | Each machine publishes its own agents' memories again at the next sync; another machine's memories come back only from that machine. |
 | `secret/<ref>.enc` | One secret's Fernet ciphertext, mode `0600`. Never the key. Excluded from the repository unless the sync remote carries secrets. | daemon | Only with `--with-secret` | **No.** The secret is gone. |
@@ -219,7 +219,7 @@ The config directory is `~/.claude` for Claude Code and `~/.codex` for Codex by 
 | `memories/extensions/coffer/`, `memories_v2/extensions/coffer/` | One in each Codex memory folder that is there. `instructions.md`, telling Codex's consolidation what the files are, and `resources/<id>-<slug>.md`, one per memory another agent or machine learned. Nothing is written while Codex's memories are off. | Memory sync. See [Memory](/guides/memory#what-coffer-writes-into-each-agent). |
 | `skills/<name>` | A symlink to `~/.coffer/vault/skills/<name>`. | Delivering a skill to the agent. |
 
-Coffer recognises its own entries by the `coffer` server key and an `apiKeyHelper` that runs the `coffer` CLI (bare or by any path) with `proxy token`, and removes only those. Every other entry — your own MCP servers, your hooks, your `env` — is left as it was. In an agent's memory, Coffer writes only the files and the marked block above (an earlier build's `coffer_*.md` copies, `-coffer-global` project and `rules/coffer-memory.md` are removed by the first sync), never a memory the agent wrote itself; **Undo sync…** on the Memory page removes them. On its first start after an upgrade, the daemon removes the `: coffer-memory` hook entries earlier builds installed in `settings.json` and `hooks.json`.
+Coffer recognises its own entries by the `coffer` server key and an `apiKeyHelper` that runs the `coffer` CLI (bare or by any path) with `proxy token`, and removes only those. Every other entry — your own MCP servers, your hooks, your `env` — is left as it was. In an agent's memory, Coffer writes only the files and the marked block above, never a memory the agent wrote itself; **Undo sync…** on the Memory page removes them.
 
 ::: tip Cleaning up an agent
 To remove Coffer, run `coffer uninstall` (in the desktop app, **Settings › About › Uninstall Coffer**). It disconnects every agent from Coffer, takes the provider projection out of each, and removes the skill links, start at login, the terminal launch files, the installer's `PATH` lines and `~/.coffer/bin`; `~/.coffer` stays unless you add `--delete-data`. Deleting `~/.coffer` by hand first leaves the agents pointing at a shim that no longer exists. See [Install → Uninstall](/start/install#uninstall).

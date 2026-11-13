@@ -48,9 +48,9 @@ def test_hidden_entries_are_in_no_listing_count_or_catalogue(  # type: ignore[no
     scratch = tmp_path / ".coffer" / "vault" / "knowledge" / "shopee" / ".scratch" / "hidden.md"
     scratch.parent.mkdir(parents=True)
     scratch.write_text("---\ntitle: Hidden\ndescription: d\n---\n\nb\n", encoding="utf-8")
-    inbox_dir = paths.inbox_dir("shopee")
-    inbox_dir.mkdir(parents=True, exist_ok=True)
-    (inbox_dir / "waiting.md").write_text("waiting\n", encoding="utf-8")
+    hidden = paths.collection_dir("shopee") / ".inbox"
+    hidden.mkdir(parents=True, exist_ok=True)
+    (hidden / "waiting.md").write_text("waiting\n", encoding="utf-8")
 
     [entry] = client.get("/api/v1/knowledge/collections").json()["collections"]
     assert entry["note_count"] == 1
@@ -60,7 +60,7 @@ def test_hidden_entries_are_in_no_listing_count_or_catalogue(  # type: ignore[no
     walked = catalogue.walk_files(paths.collection_dir("shopee"))
     assert [f.path for f in walked] == [document]
 
-    # The tree names the document — and nothing from `.scratch/` or the inbox.
+    # The tree names the document — and nothing from `.scratch/` or `.inbox/`.
     level = client.get("/api/v1/knowledge/tree", params={"path": "shopee"}).json()
     assert [f["path"] for f in level["files"]] == ["shopee/README.md"]
     assert [d["path"] for d in level["directories"]] == ["shopee/sources"]

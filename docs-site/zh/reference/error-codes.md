@@ -192,7 +192,6 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `MEMORY_UNREADABLE` | 422 | 某个智能体的原生记忆文件无法解析。 | 修复消息中指出的文件。 |
 | `MEMORY_SYNC_RUNNING` | 409 | 已有一次记忆同步在运行。 | 等它结束后再同步。 |
 | `MEMORY_SYNC_NO_PREVIEW` | 409 | 没有等待写入或取消的记忆同步预览。 | 刷新记忆页面。 |
-| `MEMORY_DELIVERY_CONFIG_INVALID` | 422 | 智能体的设置或 Hook 文件不是 JSON 对象，因此无法从中移除已停用的记忆 Hook。 | 修复该文件；下次启动时会移除该 Hook。 |
 
 ## 聊天与消息渠道 {#chat-and-channels}
 
