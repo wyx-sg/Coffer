@@ -12,7 +12,7 @@ export interface AllGoodFacts {
   agents?: number;
   /** Enabled MCP servers. */
   servers?: number;
-  /** Sync is on, set up, and has nothing held or in conflict. */
+  /** Sync is on, set up, and has nothing in conflict. */
   vaultInSync?: boolean;
 }
 

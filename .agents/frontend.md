@@ -573,7 +573,6 @@ A menu item ends in `…` only when a dialog follows. Progress in zh is
 | Coffer's own items on an agent's Skills / MCP servers tab | From Coffer (one row, linking to `/skills?agent=` or `/mcp-servers?agent=`) | 来自 Coffer | Owner filter, All / Coffer’s / The agent’s own |
 | An agent's own items there | <Agent>’s own skills / MCP servers / hooks | <智能体> 自己的技能 / MCP 服务器 / 钩子 | |
 | Rename | Rename | 重命名 | 改名 |
-| Held deletions (sync) | held | 暂扣 | 暂停, 拦下 |
 | Jump to the audit log | View in Activity | 在活动中查看 | 在活动中打开 |
 | Reveal a file in the OS file manager | Reveal in Finder | 在访达中显示 | Show in Finder, Finder |
 

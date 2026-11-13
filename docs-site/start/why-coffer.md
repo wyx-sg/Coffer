@@ -73,7 +73,7 @@ See [Security model](/architecture/security) for the full threat model.
 
 ## Sync goes through a git remote you own
 
-**The decision.** To share one vault between your machines, point each of them at a git repository you own. Sync is off until you set it up. The vault is already a git repository, so a background worker only fetches, lets git merge, and pushes. A clean merge is applied; any conflict stops the round, with nothing changed on either side, until you choose per file. A round that would delete more than a set share of the vault stops and asks you first, and every round can be rolled back. Secrets travel only as ciphertext. The master key moves between machines only when you carry the key yourself: the desktop app writes a backup, and **Settings › Security › Import a master key** installs it.
+**The decision.** To share one vault between your machines, point each of them at a git repository you own. Sync is off until you set it up. The vault is already a git repository, so a background worker only fetches, lets git merge, and pushes. A clean merge is applied; any conflict stops the round, with nothing changed on either side, until you choose per file. Every round snapshots the vault first and can be rolled back. Secrets travel only as ciphertext. The master key moves between machines only when you carry the key yourself: the desktop app writes a backup, and **Settings › Security › Import a master key** installs it.
 
 **Why.** A service run by Coffer would break the local-first rule. A git remote under your control is a meeting point, not a system of record: every machine keeps the complete vault, so you can delete the remote and rebuild it from any single machine.
 

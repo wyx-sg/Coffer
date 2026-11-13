@@ -907,8 +907,6 @@
       "sync_run_conflicts_one": "Sync stopped: {{count}} file in conflict",
       "sync_run_conflicts_other": "Sync stopped: {{count}} files in conflict",
       "sync_run_stopped": "Sync stopped on a conflict",
-      "sync_run_heldCount_one": "Sync held: it would delete {{count}} file",
-      "sync_run_heldCount_other": "Sync held: it would delete {{count}} files",
       "sync_run_held": "Sync held before deleting files",
       "sync_run_pushFailedPulled_one": "Synced: pulled {{count}} file, but the remote refused the push",
       "sync_run_pushFailedPulled_other": "Synced: pulled {{count}} files, but the remote refused the push",
@@ -4335,7 +4333,6 @@
       "roundDone": "Round finished: {{status}} ({{pulled}} pulled, {{pushed}} pushed)",
       "needs": {
         "stopped": "Sync stopped on files both machines changed — answer them on the Sync page.",
-        "held": "Sync held a large deletion — review it on the Sync page.",
         "waiting_on_edit": "Sync is waiting: a file the round would change has an edit in progress.",
         "join_required": "This machine has not joined the remote yet — join it on the Sync page.",
         "plaintext_found": "Sync pushed nothing: a file holds a plaintext secret — see the Sync page."
@@ -4444,32 +4441,6 @@
         "title": "Nothing to resolve",
         "body": "No round is stopped on conflicts right now."
       }
-    },
-    "deletions": {
-      "title": "Review held deletions",
-      "pill": "Round held",
-      "subline": {
-        "incoming": "Round at {{time}} · {{files}} in {{folders}}, deleted on {{machine}} · the rest of what was pulled applies once you decide.",
-        "outgoing": "Round at {{time}} · {{files}} in {{folders}}, deleted on {{machine}} · nothing is pushed until you decide."
-      },
-      "files_one": "{{count}} file",
-      "files_other": "{{count}} files",
-      "folders_one": "{{count}} folder",
-      "folders_other": "{{count}} folders",
-      "thisMac": "this Mac",
-      "anotherMachine": "another Mac",
-      "hint": {
-        "incoming": "Delete removes them here too, after a safety snapshot, so the round can be rolled back. Keep the files holds them here and pushes them back, so {{machine}} gets them again in its next round.",
-        "outgoing": "Delete removes them on the remote and every other Mac in their next round, after a safety snapshot. Keep the files puts them back on this Mac, so nothing is deleted anywhere."
-      },
-      "keep": "Keep the files",
-      "delete_one": "Delete {{count}} file",
-      "delete_other": "Delete {{count}} files",
-      "empty": {
-        "title": "Nothing is held",
-        "body": "No round is waiting on deletions right now."
-      },
-      "deletedOn": "Deleted on {{machine}}"
     },
     "machines": {
       "description": "Macs that sync with this repository. A Mac appears here after its first round.",
@@ -4664,8 +4635,6 @@
       "paused": "Paused",
       "conflicts_one": "Stopped: {{count}} conflict",
       "conflicts_other": "Stopped: {{count}} conflicts",
-      "held_one": "Stopped: {{count}} deletion held",
-      "held_other": "Stopped: {{count}} deletions held",
       "push_failed": "Push failed",
       "plaintext_found": "Not pushed: plaintext secret",
       "unreachable": "Remote unreachable",
@@ -4722,12 +4691,6 @@
       "stoppedConflicts_other": "This round stopped on {{count}} conflicts",
       "stoppedConflictsBody": "This Mac and {{peer}} changed the same lines. Nothing was checked out or pushed; this Mac keeps working meanwhile.",
       "resolveConflicts": "Resolve conflicts",
-      "heldIncoming_one": "{{peer}} deleted {{count}} file, more than one round may delete",
-      "heldIncoming_other": "{{peer}} deleted {{count}} files, more than one round may delete",
-      "heldOutgoing_one": "This Mac deleted {{count}} file, more than one round may delete",
-      "heldOutgoing_other": "This Mac deleted {{count}} files, more than one round may delete",
-      "heldBody": "Rounds that delete 20 files or more, or 5 or more that are over half of an area, wait for you. Nothing was checked out and nothing was pushed. Review the list, then delete them here too or restore them.",
-      "reviewDeletions": "Review deletions",
       "reviewChanges": "Review changes"
     },
     "areas": {
@@ -4780,8 +4743,6 @@
         "pulledPushFailed": "Pulled, push failed",
         "stoppedOn_one": "Stopped on {{count}} conflict",
         "stoppedOn_other": "Stopped on {{count}} conflicts",
-        "heldCount_one": "Held: {{count}} deletion",
-        "heldCount_other": "Held: {{count}} deletions",
         "rolledBackRound": "Rolled back the {{time}} round"
       },
       "detail": {
@@ -4822,12 +4783,7 @@
       "viewActivity": "View in Activity",
       "stop": {
         "title": "Why this round stopped",
-        "heldOutgoing_one": "This Mac's changes would delete {{count}} file from the remote — more than a round deletes without asking, so it waited for you.",
-        "heldOutgoing_other": "This Mac's changes would delete {{count}} files from the remote — more than a round deletes without asking, so it waited for you.",
-        "heldIncoming_one": "Another machine's changes would delete {{count}} file here — more than a round deletes without asking, so it waited for you.",
-        "heldIncoming_other": "Another machine's changes would delete {{count}} files here — more than a round deletes without asking, so it waited for you.",
-        "held_one": "This round would delete {{count}} file — more than a round deletes without asking, so it waited for you.",
-        "held_other": "This round would delete {{count}} files — more than a round deletes without asking, so it waited for you.",
+        "held": "An earlier version of Coffer held this round before deleting files and waited for you. Nothing was checked out and nothing was pushed.",
         "conflicts_one": "{{count}} file changed on both sides and could not be merged, so it waited for you to choose.",
         "conflicts_other": "{{count}} files changed on both sides and could not be merged, so it waited for you to choose.",
         "plaintext_one": "A file it was about to push holds a plaintext secret ({{count}} place), so nothing was pushed.",
@@ -4850,6 +4806,8 @@
       "title": "Review changes to push",
       "subline": "{{files}} on this Mac the remote does not have yet · they go out in the next round.",
       "sublineAt": "{{files}} on this Mac the remote does not have yet · they go out in the next round at {{time}}.",
+      "files_one": "{{count}} file",
+      "files_other": "{{count}} files",
       "hint": "Push now runs the round at once: it pulls first, then pushes these.",
       "back": "Back to Sync",
       "pushNow": "Push now",
@@ -4916,7 +4874,7 @@
       "repair": "Repair drift",
       "open": "Open",
       "reconnectChannel": "Reconnect channel",
-      "reviewHeld": "Review held changes",
+      "reviewSync": "Review sync",
       "openSecrets": "Open Secrets",
       "turn_on": "Turn on"
     },
@@ -5029,8 +4987,8 @@
       },
       "sync": {
         "ok": "In sync",
-        "warn_one": "{{count}} held",
-        "warn_other": "{{count}} held",
+        "warn_one": "{{count}} needs attention",
+        "warn_other": "{{count}} need attention",
         "notSetUp": "Not set up",
         "noRound": "No round yet",
         "lastRound": "last round",

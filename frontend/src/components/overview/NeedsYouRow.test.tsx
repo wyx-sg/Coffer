@@ -139,12 +139,12 @@ acceptance("web-ui", "a needs-you row's action reads what it does for its kind",
       kind: "sync",
       uid: null,
       title: "Vault sync",
-      reason_code: "held",
+      reason_code: "sync_conflicts",
       action: verbOf("review"),
     }),
     false,
   );
-  expect(screen.getByRole("link", { name: "Review held changes: Vault sync" })).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Review sync: Vault sync" })).toBeInTheDocument();
 });
 
 test("Review on waiting approvals opens the global dialog instead of leaving Overview", async () => {

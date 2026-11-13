@@ -74,7 +74,6 @@ class SyncStatus:
     synchroniser: str | None
     problem: Problem | None
     conflicts: int = 0
-    held: int = 0
     join_choices: int = 0
     #: How many commits this vault has that the remote (as last fetched) does
     #: not, and how many the remote has that this vault does not.
@@ -103,23 +102,9 @@ class StoppedFile:
 
 
 @dataclass(frozen=True)
-class HoldGroup:
-    """The held losses under one folder, and how much of it they are."""
-
-    folder: str
-    paths: tuple[str, ...]
-    #: How many files the folder held before the round.
-    total: int
-
-
-@dataclass(frozen=True)
 class StoppedRound:
     stop: Stop
     files: tuple[StoppedFile, ...] = ()
-    groups: tuple[HoldGroup, ...] = ()
-    #: The machines whose changes raised the stop (incoming), by label.
-    machines: tuple[str, ...] = ()
-    confirmed: bool = False
 
 
 @dataclass(frozen=True)
@@ -201,7 +186,6 @@ __all__ = [
     "AreaCounts",
     "FileVersions",
     "HandoffResult",
-    "HoldGroup",
     "MachineView",
     "Problem",
     "RemoteCheck",

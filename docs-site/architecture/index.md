@@ -101,9 +101,9 @@ The CLI, the shim and the desktop shell all discover the daemon through `~/.coff
 ### A sync round
 
 1. **Worker** When you configure a git remote you own, a worker runs a round on the remote's interval, hourly by default.
-2. **Merge** The vault is already a git repository, so a round only fetches, lets git compute the merge outside the working tree, and, if the merge is clean, valid and within the deletion breaker, snapshots the vault, checks the merge out and pushes.
+2. **Merge** The vault is already a git repository, so a round only fetches, lets git compute the merge outside the working tree, and, if the merge is clean and valid, snapshots the vault, checks the merge out and pushes.
 3. **Conflict** Any conflict stops the round with nothing changed on either side until you answer per file.
-4. **What travels** Reach and agents never travel (they are in `local/`), secrets travel only as Fernet ciphertext and only when you opt in, and a round that would lose too much holds for your answer. Details: [Vault sync](/architecture/vault-sync).
+4. **What travels** Reach and agents never travel (they are in `local/`), secrets travel only as Fernet ciphertext and only when you opt in, and a deletion syncs like any other change, undone from the round's snapshot. Details: [Vault sync](/architecture/vault-sync).
 
 </DataFlows>
 

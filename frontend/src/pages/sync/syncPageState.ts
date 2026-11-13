@@ -18,7 +18,6 @@ export type SyncStateKind =
   | "syncing"
   | "paused"
   | "conflicts"
-  | "held"
   | "push_failed"
   | "plaintext_found"
   | "unreachable"
@@ -48,7 +47,6 @@ const PILL_TONE: Record<SyncStateKind, PillTone> = {
   syncing: "info",
   paused: "off",
   conflicts: "err",
-  held: "err",
   push_failed: "err",
   plaintext_found: "err",
   unreachable: "warn",
@@ -80,7 +78,6 @@ function kindOf(status: SyncStatus, pending: boolean): SyncStateKind {
   if (pending || status.running_since !== null) return "syncing";
   if (status.remote && !status.remote.enabled) return "paused";
   if (status.conflicts > 0) return "conflicts";
-  if (status.held > 0) return "held";
   const problem = status.problem?.kind;
   if (problem === "cloud_folder") return "cloud_folder";
   if (problem) return problem;
@@ -95,13 +92,11 @@ export function syncState(status: SyncStatus, pending = false): SyncState {
   const count =
     kind === "conflicts"
       ? status.conflicts
-      : kind === "held"
-        ? status.held
-        : kind === "to_push"
-          ? waitingCount(status)
-          : kind === "pulled"
-            ? (status.last_round?.pulled_files ?? 0)
-            : 0;
+      : kind === "to_push"
+        ? waitingCount(status)
+        : kind === "pulled"
+          ? (status.last_round?.pulled_files ?? 0)
+          : 0;
   return { kind, count, tone: PILL_TONE[kind] };
 }
 
@@ -109,5 +104,5 @@ export function syncState(status: SyncStatus, pending = false): SyncState {
 export function primaryAction(kind: SyncStateKind): { syncing: boolean; disabled: boolean } {
   if (kind === "syncing") return { syncing: true, disabled: true };
   // A stopped round is answered on its own page; another round would only stop again.
-  return { syncing: false, disabled: kind === "conflicts" || kind === "held" };
+  return { syncing: false, disabled: kind === "conflicts" };
 }

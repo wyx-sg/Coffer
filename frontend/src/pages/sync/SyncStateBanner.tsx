@@ -63,8 +63,7 @@ export function SyncStateBanner({ status, state, runs, startedAt, onRecheck, rec
         </SyncBannerLine>
       );
     case "conflicts":
-    case "held":
-      return <SyncStopBanner kind={state.kind} count={state.count} />;
+      return <SyncStopBanner count={state.count} />;
     case "push_failed":
     case "plaintext_found":
     case "unreachable":

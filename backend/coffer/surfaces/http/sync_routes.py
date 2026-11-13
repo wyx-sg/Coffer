@@ -2,7 +2,7 @@
 (spec vault-sync; ADR sync-applies-clean-merges-and-stops-on-any-conflict).
 
 Sync is a cross-cutting service, not a resource kind, so it has its own
-routes. What a round waiting for a person needs — the stopped files, a hold,
+routes. What a round waiting for a person needs — the stopped files,
 a join and its choices, a rollback — is in ``sync_stop_routes``, on the same
 router.
 
@@ -102,16 +102,6 @@ async def get_pending_file_diff(
     (every waiting commit that touched it, as one change). 404
     ``SYNC_ROUND_FILE_NOT_LISTED`` for a path nothing waiting touches."""
     return _file_diff_out(await get_sync_service().pending_file_diff(path))
-
-
-@router.get("/hold/diff", response_model=RoundFileDiffOut)
-async def get_held_file_diff(
-    path: str = Query(description="A file the held round would delete; else 404."),
-) -> RoundFileDiffOut:
-    """One file a held round would delete, its whole text as removed lines.
-    404 ``SYNC_ROUND_FILE_NOT_LISTED`` when no round is held or the hold does
-    not list the path."""
-    return _file_diff_out(await get_sync_service().held_file_diff(path))
 
 
 def _file_diff_out(found: RoundFileDiff) -> RoundFileDiffOut:

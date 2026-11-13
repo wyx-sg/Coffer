@@ -197,7 +197,7 @@ See [Secret store](/guides/secret-store).
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| The **Sync** page shows `deletions held` (**Review deletions**) | The deletion breaker held a round. | Read the list on **Review held deletions**, then press **Delete N files** or **Keep the files**. After a reinstall, keep the files. |
+| Files deleted by mistake (after a reinstall or a failed restore) reached the other machines | A deletion syncs like any other change. | On a machine that pulled it, open that round on the **Sync** page's **Status** tab and choose **Roll back to before this round**. See [Vault sync](/guides/vault-sync#when-files-are-deleted). |
 | `stopped on conflicts` | Two machines changed the same file in ways git cannot merge. | **Resolve conflicts** on the **Sync** page: answer each file, then **Continue round**. To have your agent merge them, press **Hand off to &lt;Agent&gt;**; when its merge shows as **Merged by an agent · check it**, read the copy with **Open in editor** and press **Mark resolved**. |
 | `join required` | This machine has not joined the remote. | **Join and pull** on the **Sync** page |
 | Secrets cannot be decrypted | This machine lacks the master key. | **Import a master key** on **Settings › Security** |

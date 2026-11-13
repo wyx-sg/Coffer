@@ -4,7 +4,7 @@
 // `backend/coffer/surfaces/http/sync_schemas.py` and `sync_stop_schemas.py`.
 //
 // Sync is thin: a round fetches, merges with git, and stops for a person on
-// anything it cannot decide alone — a conflicting file, a large deletion, a
+// anything it cannot decide alone — a conflicting file, a
 // join that finds differing files. Each of those has its own routes here, and
 // each answers the one situation the daemon is holding rather than a round
 // named in the request, except rollback, which names the round it undoes.
@@ -75,9 +75,6 @@ export type JoinChoice = Schemas["JoinChoiceIn"];
 export type StopState = Schemas["StopStateOut"];
 
 export type StoppedRound = Schemas["StoppedRoundOut"];
-
-/** The deletion breaker's hold on a stopped round. */
-export type SyncHold = Schemas["HoldOut"];
 
 /** Both sides of one conflicting file, and what taking theirs changes. */
 export type FileVersions = Schemas["FileVersionsOut"];
@@ -174,8 +171,6 @@ export const syncApi = {
   discardCopy: (path: string): Promise<StopState> =>
     unwrap(api().POST("/sync/stop/files/discard", { body: { path } })),
   continueRound: (): Promise<SyncRound> => unwrap(api().POST("/sync/continue")),
-  confirmHold: (): Promise<SyncRound> => unwrap(api().POST("/sync/hold/confirm")),
-  restoreHold: (): Promise<SyncRound> => unwrap(api().POST("/sync/hold/restore")),
   /** "I checked it, push anyway" for a round that found a plaintext secret. */
   pushAnyway: (): Promise<SyncRound> => unwrap(api().POST("/sync/plaintext/push-anyway")),
   /** One place the last round found, in its file: masked lines, shape, masked diff. */
@@ -192,9 +187,6 @@ export const syncApi = {
 
   pendingDiff: (path: string): Promise<RoundFileDiff> =>
     unwrap(api().GET("/sync/pending/diff", { params: { query: { path } } })),
-
-  heldDiff: (path: string): Promise<RoundFileDiff> =>
-    unwrap(api().GET("/sync/hold/diff", { params: { query: { path } } })),
 
   rollbackPlan: (runId: number): Promise<RollbackPlan> =>
     unwrap(api().GET("/sync/runs/{run_id}/rollback-plan", { params: { path: { run_id: runId } } })),

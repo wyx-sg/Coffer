@@ -125,7 +125,7 @@ backend/coffer/
 │   ├── model_proxy/        # the state the daemon pushes the model proxy
 │   ├── usage/              # usage records, stream usage readers, prices, ranges
 │   ├── vault/              # layout, storage classes, documents, format versions, writers
-│   └── sync/               # round statuses, stops, joins, the deletion breaker, machines
+│   └── sync/               # round statuses, stops, joins, machines
 ├── application/            # each kind package holds its services, ports and make_<kind>_kind()
 │   ├── resource_service.py # kind-agnostic CRUD, plus resource_*_ops.py
 │   ├── audit_service.py

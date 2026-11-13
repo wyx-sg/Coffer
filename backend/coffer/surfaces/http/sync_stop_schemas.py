@@ -1,6 +1,6 @@
 """Wire shapes for a round waiting for a person — a stop on conflicts, a
-hold, a join and its differing files, a rollback
-(spec vault-sync "Hold a round that would lose too much", "Report a join
+join and its differing files, a rollback
+(spec vault-sync "Report a join
 before applying it", "Snapshot before checking out and roll a round back from it").
 
 A file's path is vault-relative and always travels in a body or a query,
@@ -52,41 +52,13 @@ class ConflictFileOut(BaseModel):
     agent_merged_at: str | None = None
 
 
-class BreachOut(BaseModel):
-    area: str
-    lost: int
-    total: int
-
-
-class HoldGroupOut(BaseModel):
-    """The held files under one folder, and how many files it held."""
-
-    folder: str
-    paths: list[str]
-    total: int
-
-
-class HoldOut(BaseModel):
-    #: ``incoming``: the other machine's changes would delete these here;
-    #: ``outgoing``: this machine's commits would delete them on the remote.
-    direction: Literal["incoming", "outgoing"]
-    breaches: list[BreachOut]
-    paths: list[str]
-    groups: list[HoldGroupOut]
-    #: The machines whose changes would delete them, by label.
-    machines: list[str]
-    confirmed: bool
-
-
 class StoppedRoundOut(BaseModel):
-    kind: Literal["conflicts", "hold"]
     raised_at: str
     local: str
     remote: str
     join: str | None
     files: list[ConflictFileOut]
     unanswered: int
-    hold: HoldOut | None
 
 
 class StopStateOut(BaseModel):
@@ -246,15 +218,12 @@ class PlaintextContextOut(BaseModel):
 __all__ = [
     "AgentHandoffOut",
     "AreaCountOut",
-    "BreachOut",
     "ConflictFileOut",
     "EditorCopyOut",
     "FileAnswerIn",
     "FilePathIn",
     "FileVersionsOut",
     "HandoffIn",
-    "HoldGroupOut",
-    "HoldOut",
     "JoinChoiceIn",
     "JoinChoicesIn",
     "JoinChoicesOut",

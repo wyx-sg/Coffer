@@ -16,15 +16,11 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from coffer.domain.sync.breaker import Breach
 from coffer.domain.sync.stops import (
     Answer,
     ConflictFile,
     ConflictReason,
-    Hold,
-    HoldDirection,
     Stop,
-    StopKind,
     stop_from_json,
     to_json,
 )
@@ -59,29 +55,14 @@ def _conflict(draw: st.DrawFn, path: str) -> ConflictFile:
 
 @st.composite
 def stops(draw: st.DrawFn) -> Stop:
-    kind = draw(st.sampled_from(StopKind))
     paths = draw(st.lists(_PATH, unique=True, max_size=12))
-    conflicts = tuple(draw(_conflict(p)) for p in paths) if kind is StopKind.CONFLICTS else ()
-    hold = (
-        Hold(
-            direction=draw(st.sampled_from(HoldDirection)),
-            breaches=tuple(
-                Breach(area, draw(st.integers(1, 50)), draw(st.integers(0, 500)))
-                for area in draw(st.sets(st.sampled_from(("knowledge", "skills")), min_size=1))
-            ),
-            paths=tuple(sorted(paths)),
-        )
-        if kind is StopKind.HOLD
-        else None
-    )
+    conflicts = tuple(draw(_conflict(p)) for p in paths)
     return Stop(
-        kind=kind,
         local=draw(_BLOB),
         remote=draw(_BLOB),
         base=draw(st.none() | _BLOB),
         raised_at="2026-10-01T09:30:00+00:00",
         conflicts=conflicts,
-        hold=hold,
         tree=draw(st.none() | _BLOB),
         join=draw(st.none() | _BLOB),
     )
@@ -97,7 +78,6 @@ def test_a_stop_reads_back_as_it_was_written(stop: Stop) -> None:
 def _unanswered_and_order(draw: st.DrawFn) -> tuple[Stop, list[tuple[str, Answer]]]:
     paths = draw(st.lists(_PATH, unique=True, min_size=1, max_size=12))
     stop = Stop(
-        kind=StopKind.CONFLICTS,
         local="l" * 40,
         remote="r" * 40,
         base=None,

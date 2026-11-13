@@ -6,11 +6,10 @@ and only ``vault/`` is ever committed or pushed, so "reach never syncs" is a
 fact about where reach is stored rather than a rule a translator must
 remember.
 
-Inside the vault, every path belongs to one **area** — the unit the deletion
-breaker counts in and the Sync page groups by. An area is the first path
+Inside the vault, every path belongs to one **area** — the unit the Sync
+page counts in. An area is the first path
 segment, except that ``resources/<kind>/`` and ``state/<area>/`` are areas of
-their own, so a mass deletion of one kind's resources is not diluted by the
-others.
+their own, so one kind's resources are counted apart from the others.
 """
 
 from __future__ import annotations

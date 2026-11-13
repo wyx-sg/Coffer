@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-29
 **Deciders**: Yuxing Wu
-**Related**: [A Sync Round That Would Lose Too Much Is Held, in Both Directions, Counting Losses Not Moves](sync-deletion-breaker.md), [A Machine Is Identified by a Hash of Its Host's Own ID, and Owns One Descriptor in the Tree](sync-machine-identity.md), [Secrets Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](secrets-cross-machines-only-as-ciphertext.md), [Sync Withholds Derived Output; Each Machine Renders Its Own](sync-withholds-derived-output.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Every Vault File Carries Its Own Format Version; One Owner Machine Commits Layout Upgrades](every-vault-file-carries-its-format-version.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database, Comparing Parameters](one-level-triggered-reconciler-compares-parameters.md), [principles](../../docs-site/architecture/principles.md) (Local-First — the user-owned sync remote exception; "Not a hosted sync service"), research note [multi-machine sync](../research/multi-machine-sync.md), spec vault-sync "Run a round as pull, merge, guard, check out, push", spec vault-sync "Never overwrite a person's unsettled edit", spec vault-sync "Keep the pointer local", spec vault-sync "Snapshot before checking out and roll a round back from it", spec vault-sync "Guard both directions", spec vault-sync "Let the fresher secret ciphertext win", spec vault-sync "Stop the round on any conflict", spec vault-sync "Answer each conflicting file and continue the round", spec vault-sync "Show a conflict as a banner"
+**Related**: [Sync Applies a Mass Deletion Like Any Other Change; Snapshots and History Undo One Nobody Meant](sync-applies-mass-deletions-like-any-change.md), [A Machine Is Identified by a Hash of Its Host's Own ID, and Owns One Descriptor in the Tree](sync-machine-identity.md), [Secrets Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](secrets-cross-machines-only-as-ciphertext.md), [Sync Withholds Derived Output; Each Machine Renders Its Own](sync-withholds-derived-output.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Every Vault File Carries Its Own Format Version; One Owner Machine Commits Layout Upgrades](every-vault-file-carries-its-format-version.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database, Comparing Parameters](one-level-triggered-reconciler-compares-parameters.md), [principles](../../docs-site/architecture/principles.md) (Local-First — the user-owned sync remote exception; "Not a hosted sync service"), research note [multi-machine sync](../research/multi-machine-sync.md), spec vault-sync "Run a round as pull, merge, check out, push", spec vault-sync "Never overwrite a person's unsettled edit", spec vault-sync "Keep the pointer local", spec vault-sync "Snapshot before checking out and roll a round back from it", spec vault-sync "Let the fresher secret ciphertext win", spec vault-sync "Stop the round on any conflict", spec vault-sync "Answer each conflicting file and continue the round", spec vault-sync "Show a conflict as a banner"
 
 **Partly superseded** (2026-10-05): the conflict page no longer shows a file's text as saved or a diff of an agent's merge; each file keeps Keep this Mac's, Take <machine>'s, Open in editor on the marked-up copy, the hand-off to an agent, Mark resolved and Back to two choices, see the OpenSpec change `hand-files-to-external-tools`.
 
@@ -27,8 +27,8 @@ The forces on the answer:
   the result can be judged before any vault file changes.
 - **Nobody approves a round.** Whatever converges the vault runs on a timer and
   writes the user's data with no human reading the diff. A wrong deletion or a
-  silently chosen side is the failure that matters; a held round is
-  recoverable.
+  silently chosen side is the failure that matters; a stopped round, or one
+  rolled back from its snapshot, is recoverable.
 - **The incident that shaped the safety rules.** On 2026-07-10 two machines on
   different builds mutually deleted skills, memory and resources. An earlier
   sync cleared a tree and rewrote it from local state before the machine's
@@ -102,7 +102,7 @@ schedule or when the person asks ("Sync now"). A round:
 3 Merge     — git merge-tree --write-tree L R -> tree T, or conflicts;
               nothing in the vault touched
 4 Stop?     — any conflict: stop here. Nothing is checked out, nothing is pushed
-5 Guard     — validate T; the deletion breaker in both directions
+5 Validate  — validate T
 6 Check out — safety snapshot of L; M := commit(T; parents L and R);
               read T into the vault, refusing first if any path it changes
               differs from L on disk; HEAD := M
@@ -118,7 +118,7 @@ schedule or when the person asks ("Sync now"). A round:
   conflict marker. The answers are `coffer sync conflicts`, `resolve <path>
   --mine|--theirs|--edited`, `edit <path>` and `continue`. When every file has
   an answer, the resolved tree goes through the same steps 5–7: validation, the
-  breaker, the snapshot, the checkout, the push. A stop is a question about one
+  snapshot, the checkout, the push. A stop is a question about one
   pair of commits: it records the remote tip it was raised against, and if
   either side moves before the person answers, the round is re-derived and
   asked again. Local writes keep being committed while a round is stopped; only
@@ -143,15 +143,11 @@ schedule or when the person asks ("Sync now"). A round:
   blobs they cannot compare. Ciphertext that has entered a pushed commit cannot
   be withdrawn; revocation is rotation. Before every push the round also reads
   every blob the remote lacks and refuses to publish a plaintext secret.
-- **The deletion breaker** holds a round in both directions, with its
-  thresholds (20 files, or 5 or more over half of an area): incoming is `L → T`, outgoing is
-  what `L` deletes relative to the merge base. For resource files it counts
-  lost uids, so a moved or renamed file is a move by construction; for other
-  files it keeps content-id and rename pairing
-  ([A Sync Round That Would Lose Too Much Is Held](sync-deletion-breaker.md)).
-  A layout commit is checked by its stricter no-loss rule
-  ([Every Vault File Carries Its Own Format Version](every-vault-file-carries-its-format-version.md)),
-  and the remote's layout must match this build's exactly: an older one is
+- **A deletion syncs like any other change**, however many files it removes
+  and in either direction; the snapshot and the history undo one nobody meant
+  ([Sync Applies a Mass Deletion Like Any Other Change; Snapshots and History Undo One Nobody Meant](sync-applies-mass-deletions-like-any-change.md)).
+  The remote's layout must match this build's exactly
+  ([Every Vault File Carries Its Own Format Version](every-vault-file-carries-its-format-version.md)): an older one is
   rebuilt from an upgraded machine, not converted.
 - **A safety snapshot before every checkout, and rollback from it.** `L` is
   tagged before every checkout (ten kept). Rolling back checks a snapshot out
@@ -199,7 +195,7 @@ stopped, which is why a stop is surfaced where they already are (the
 navigation mark, `coffer sync status`, the desktop notification).
 
 It wins because it keeps every guarantee that protects data (base-relative
-merge, the breaker, the snapshot, the compare-and-swap checkout) and drops
+merge, validation, the snapshot, the compare-and-swap checkout) and drops
 exactly the part that changes data without anyone deciding.
 
 ### Option C — Per-resource timestamps and tombstones in Coffer's own code
@@ -301,7 +297,7 @@ Leave multi-machine use to the person's own tools.
 
 - **Pros.** No code and no risk.
 - **Cons.** A person who runs `git pull` in the vault themselves gets none of
-  the protections (no breaker, no validation before checkout, no snapshot).
+  the protections (no validation before checkout, no snapshot).
   Leaving the remote unconfigured already gives users who want no sync exactly
   that.
 - **Why it loses.** The unprotected route would be the only route.
@@ -314,8 +310,8 @@ Three mechanics were weighed for Option B's step 3 and lost:
   reason to exist is gone, and its per-path, in-place apply is what overwrites
   a person's edit made mid-round.
 - **Merge in the vault's own working tree (`git pull` / `git merge`).** A
-  conflicted merge writes markers into live files that agents read, and the
-  breaker could only look after the files had changed, the reverse of the
+  conflicted merge writes markers into live files that agents read, and
+  validation could only look after the files had changed, the reverse of the
   order it depends on. obsidian-git's users live with exactly this.
 - **Rebase local commits onto the remote.** It rewrites the commit ids that
   audit rows and a skill's History tab cite, and turns one conflict into one
@@ -328,7 +324,7 @@ user-owned remote, on a schedule or on demand. The remote is a rendezvous and
 never a system of record: every machine's vault stays complete, so the remote
 can be deleted and rebuilt from any single machine. A merge git completes
 cleanly is computed with `git merge-tree --write-tree` outside the working
-tree, validated, passed through the deletion breaker in both directions,
+tree, validated,
 snapshotted, checked out under the vault's write lock with a whole-tree
 compare-and-swap, and pushed. **Any conflict stops the round**: nothing is
 checked out and nothing is pushed, and the person resolves each file (keep this
@@ -360,16 +356,15 @@ Rules a future change must respect:
 ## Consequences
 
 - The only egress is `git fetch` / `git push` to the user's own remote.
-- [A Sync Round That Would Lose Too Much Is Held](sync-deletion-breaker.md)
-  counts uids for resource files.
+- A deletion of any size syncs like any other change
+  ([Sync Applies a Mass Deletion Like Any Other Change; Snapshots and History Undo One Nobody Meant](sync-applies-mass-deletions-like-any-change.md)).
 - A git version check (2.40: the merge passes `--merge-base` to `git
   merge-tree --write-tree`) runs at boot and in `coffer sync status`.
-- A vault that needs a human (stopped, held, failing to push, or waiting to
+- A vault that needs a human (stopped, failing to push, or waiting to
   join) says so in `coffer sync status` (non-zero exit), the navigation mark and
   the desktop notification. A stopped vault converges no further, so a stop
   nobody sees is an outage.
 - The behaviour is covered by tests that a clean merge applies, any conflict
-  stops with the vault and remote untouched, the breaker holds every loss and
-  passes every move, a person's uncommitted edit on a path the round would
+  stops with the vault and remote untouched, a person's uncommitted edit on a path the round would
   change is never overwritten, and a vault inside a file synchroniser is
   reported.

@@ -1,6 +1,6 @@
 // frontend/src/pages/sync/syncConflictFormat.ts
 //
-// The words the conflict and deletion views share: when a side changed a file
+// The words the conflict views share: when a side changed a file
 // ("14:10" today, "12 Aug 14:10" before), which area a path is in, what one
 // file's answer reads as in the file list, and the unified diff the daemon
 // sends (`take_theirs`) split into rows with line numbers. Pure: the
@@ -134,13 +134,6 @@ export function parseUnifiedDiff(text: string): ParsedDiff {
     }
   }
   return { lines, added, removed };
-}
-
-/** A held folder as its header says it: "Knowledge · archive/chat-bot". */
-export function folderLabel(t: TFunction, folder: string): string {
-  const [area, ...rest] = folder.replace(/\/$/, "").split("/");
-  const name = areaLabel(t, area ?? folder);
-  return rest.length > 0 ? `${name} · ${rest.join("/")}` : name;
 }
 
 /** A refused answer, in place. A copy that still has conflict markers is

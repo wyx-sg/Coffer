@@ -5,7 +5,6 @@ One item per situation, each with the action that answers it:
 
 - ``sync_conflicts`` — a round stopped on files both machines changed; the
   action opens the stopped round;
-- ``sync_deletions_held`` — the deletion breaker held a round;
 - ``sync_join_choices`` — a join left differing files for the person;
 - ``sync_auth_failed`` — the remote refused the push secret;
 - ``sync_waiting_approval`` — the push token waits for approval in the desktop app;
@@ -23,8 +22,8 @@ well as for sync), and while it is missing the last round's problem is not
 raised either. The Sync page still shows its own in-page problem.
 
 Ignoring is by the item's key (kind, uid, reason). The uid is a fingerprint of
-the situation — which files conflict and against which commits, which files a
-hold or a join left, which plaintext values a round found, which remote
+the situation — which files conflict and against which commits, which files
+a join left, which plaintext values a round found, which remote
 failed — so an item ignored on the Overview or on the Sync page stays ignored
 for as long as it is the same situation, and comes back as a new item when the
 situation changes (principle: an ignored item is not a hidden one).
@@ -48,7 +47,7 @@ from coffer.application.attention import AttentionAction, AttentionItem, Severit
 from coffer.domain.sync.handoffs import remote_failure_handoff, scrub_git_text
 from coffer.domain.sync.remote import SyncRemote
 from coffer.domain.sync.rounds import APPROVAL_WAIT, RoundRecord, RoundStatus
-from coffer.domain.sync.stops import ConflictFile, Stop, StopKind
+from coffer.domain.sync.stops import ConflictFile, Stop
 
 KIND = "sync"
 _TITLE = "Sync"
@@ -115,7 +114,7 @@ class SyncAttentionSource:
             return []
         out: list[AttentionItem] = []
         stop = await self._sync.stop()
-        if stop is not None and stop.kind is StopKind.CONFLICTS:
+        if stop is not None:
             out.append(
                 _item(
                     "sync_conflicts",
@@ -126,18 +125,6 @@ class SyncAttentionSource:
                     stop.raised_at,
                     handoff=await self._sync.conflict_handoff(),
                     uid=fingerprint(stop.local, stop.remote, (c.path for c in stop.conflicts)),
-                )
-            )
-        elif stop is not None and stop.hold is not None:
-            out.append(
-                _item(
-                    "sync_deletions_held",
-                    f"A round would delete {_files(len(stop.hold.paths))}; review before "
-                    "they are deleted or restored.",
-                    Severity.WARNING,
-                    "/api/v1/sync/stop",
-                    stop.raised_at,
-                    uid=fingerprint(stop.local, stop.remote, stop.hold.paths),
                 )
             )
         choices = await self._sync.join_choices()

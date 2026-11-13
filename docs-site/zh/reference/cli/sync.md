@@ -36,9 +36,6 @@ coffer sync [OPTIONS] COMMAND [ARGS]...
 | [`sync file-answer`](#sync-file-answer) | Answer for one file. |
 | [`sync file-discard`](#sync-file-discard) | Body: path. |
 | [`sync stop-handoff`](#sync-stop-handoff) | The prompt that hands resolving to an agent. |
-| [`sync hold-diff`](#sync-hold-diff) | A change held for confirmation, one file. |
-| [`sync hold-confirm`](#sync-hold-confirm) | Apply the held changes. |
-| [`sync hold-restore`](#sync-hold-restore) | Put back what the held round would delete. |
 | [`sync pending-diff`](#sync-pending-diff) | A local change waiting to be pushed, one file. |
 | [`sync plaintext-context`](#sync-plaintext-context) | The lines around a plaintext secret. |
 | [`sync push-anyway`](#sync-push-anyway) | Push although a file holds plaintext. |
@@ -361,55 +358,6 @@ coffer sync stop-handoff [OPTIONS]
 | --- | --- | --- | --- |
 | `--data, -d` <span class="cli-chip">选项</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
 | `--set` <span class="cli-chip">选项</span> | text（可重复） |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
-| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
-
-## sync hold-diff
-
-A change held for confirmation, one file.
-
-<p class="cli-label">概要</p>
-
-```sh
-coffer sync hold-diff [OPTIONS]
-```
-
-<p class="cli-label">参数与选项</p>
-
-| 名称 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- |
-| `--path` <span class="cli-chip">选项</span> | text |  | A path under the vault |
-| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
-
-## sync hold-confirm
-
-Apply the held changes.
-
-<p class="cli-label">概要</p>
-
-```sh
-coffer sync hold-confirm [OPTIONS]
-```
-
-<p class="cli-label">参数与选项</p>
-
-| 名称 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- |
-| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
-
-## sync hold-restore
-
-Put back what the held round would delete.
-
-<p class="cli-label">概要</p>
-
-```sh
-coffer sync hold-restore [OPTIONS]
-```
-
-<p class="cli-label">参数与选项</p>
-
-| 名称 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- |
 | `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
 
 ## sync pending-diff

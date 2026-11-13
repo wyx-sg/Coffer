@@ -10,8 +10,8 @@
 // daemon gives every item a hand-off prompt), and a ⋯ holding Ignore, which
 // takes the item off the Overview, the sidebar badges and the menu-bar count
 // whatever its severity (Overview boards 1.2.01 / 1.2.09). The button reads
-// what it does for that kind and reason ("Reconnect channel", "Review held
-// changes", lib/overview/attention itemActionLabelKey) behind a 14px icon for
+// what it does for that kind and reason ("Reconnect channel", "Review
+// sync", lib/overview/attention itemActionLabelKey) behind a 14px icon for
 // its verb; the reason may wrap to two lines, the full text on hover; the row
 // takes the hover surface; the ⋯ menu item carries a 15px icon.
 //
@@ -49,7 +49,7 @@ import { openApprovalsSheet } from "@/lib/hooks/useApprovals";
 import { cn } from "@/lib/utils";
 
 /** Dot · name 168 · reason · since 96 · action 364, 14 apart (board 1.2.09).
- *  364 holds the longest action ("Review held changes") beside Hand off to <Agent> ▾
+ *  364 holds the longest action ("Review sync") beside Hand off to <Agent> ▾
  *  and the ⋯, so the ⋯ lines up on every row; a longer label truncates in its
  *  button rather than widening the cell. */
 const ROW_GRID =

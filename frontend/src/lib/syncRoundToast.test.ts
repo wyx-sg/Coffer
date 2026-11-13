@@ -1,7 +1,7 @@
 // frontend/src/lib/syncRoundToast.test.ts
 //
-// A finished round's toast says what actually happened: a round that stopped,
-// was held, failed or is waiting to join is not a "success".
+// A finished round's toast says what actually happened: a round that
+// stopped, failed or is waiting to join is not a "success".
 import { describe, expect, test } from "vitest";
 import i18next from "@/i18n";
 import type { TFunction } from "i18next";
@@ -22,7 +22,7 @@ describe("roundToast", () => {
     expect(toast.message).toMatch(/2/);
   });
 
-  test.each(["stopped", "held", "waiting_on_edit", "join_required"] as const)(
+  test.each(["stopped", "waiting_on_edit", "join_required"] as const)(
     "%s asks for an answer rather than reporting success",
     (status) => {
       const toast = roundToast(t, makeRound({ status }));

@@ -6,7 +6,7 @@ The upgraded vault is the source of truth. The push is a fast-forward: one
 commit whose tree is exactly this machine's content, with this machine's
 commit and the old remote tip as parents, so the old history stays in git.
 The files only the old remote had go away on purpose, so the outgoing
-deletion breaker does not apply; the plaintext check still does.
+the plaintext check still applies.
 """
 
 from __future__ import annotations
@@ -100,7 +100,6 @@ def replace(
             folded=checked.folded,
             **fields,
         )
-    d.state.set_confirmed(None)
     return rec(RoundStatus.PUSHED, to_commit=final, pushed=pushed, folded=checked.folded, **fields)
 
 

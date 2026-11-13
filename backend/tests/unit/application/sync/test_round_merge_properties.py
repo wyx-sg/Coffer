@@ -1,7 +1,6 @@
 """Properties of a round's merge decision (ADR
 sync-applies-clean-merges-and-stops-on-any-conflict; spec vault-sync "Run a
-round as pull, merge, guard, check out, push", "Hold a round that would lose
-too much").
+round as pull, merge, check out, push").
 
 A generated vault forks at a base; this machine and the remote each keep,
 edit, delete or add files (or do nothing). One round runs over an in-memory
@@ -9,18 +8,15 @@ git (``fake_git``), and the decision is checked against an oracle:
 
 - any path both sides changed differently stops the round, naming exactly
   those paths, with nothing snapshotted, checked out or pushed;
-- a clean merge that loses more than the breaker allows, in either direction,
-  is held, again with nothing checked out or pushed;
 - any other clean merge is applied: the vault holds the merged files, the
   remote holds the vault's head, and the next round has nothing to do.
 
-A stopped or held round asked again with neither side moved stops again,
+A stopped round asked again with neither side moved stops again,
 still touching nothing.
 """
 
 from __future__ import annotations
 
-from collections import Counter
 from dataclasses import dataclass
 
 from hypothesis import event, given
@@ -28,11 +24,9 @@ from hypothesis import strategies as st
 
 from coffer.application.sync.round_deps import RoundDeps
 from coffer.application.sync.round_engine import RoundEngine
-from coffer.domain.sync.breaker import FLOOR, SHARE_MIN
 from coffer.domain.sync.remote import SyncRemote
 from coffer.domain.sync.rounds import RoundStatus
-from coffer.domain.sync.stops import HoldDirection, StopKind
-from coffer.domain.vault.layout import MACHINES, area_of
+from coffer.domain.vault.layout import MACHINES
 
 from .fake_git import FakeGit, FakeMachine, FakeState, FakeWriter
 
@@ -54,7 +48,7 @@ def _side(draw: st.DrawFn, base: Files, who: str) -> Files | None:
         return None
     out: Files = {}
     # How destructive this side is, so both "a few files" and "most of an
-    # area" are drawn often enough to reach both sides of the breaker.
+    # area" are drawn often.
     delete_weight = draw(st.sampled_from((0, 1, 3, 8)), label=f"{who} delete weight")
     edit_weight = draw(st.sampled_from((0, 1, 2)), label=f"{who} edit weight")
     fates = ("keep",) * 12 + ("edit", "shared-edit") * edit_weight + ("delete",) * delete_weight
@@ -107,17 +101,6 @@ def _merge(fork: Fork) -> tuple[Files, list[str]]:
     return merged, conflicts
 
 
-def _lost_too_much(before: Files, after: Files) -> list[str] | None:
-    """The deleted paths when ``before -> after`` breaches an area, else None
-    (the breaker's rule in integers; no bytes move, so every deletion is lost)."""
-    gone = sorted(p for p in before if p not in after)
-    held = Counter(area_of(p) for p in before)
-    for area, lost in Counter(area_of(p) for p in gone).items():
-        if lost >= FLOOR or (lost >= SHARE_MIN and 2 * lost > held[area]):
-            return gone
-    return None
-
-
 def _content(files: Files) -> Files:
     return {p: d for p, d in files.items() if not p.startswith(MACHINES + "/")}
 
@@ -168,22 +151,10 @@ def test_a_round_applies_a_clean_merge_and_stops_on_any_conflict(fork: Fork) -> 
     if conflicts:
         assert got.status is RoundStatus.STOPPED
         stop = rig.state.current
-        assert stop is not None and stop.kind is StopKind.CONFLICTS
+        assert stop is not None
         assert sorted(c.path for c in stop.conflicts) == conflicts
         assert (stop.local, stop.remote) == (rig.local, rig.tip)
         assert got.conflicts == len(conflicts)
-        _untouched(rig)
-        return
-
-    incoming = _lost_too_much(local_files, merged) if fork.remote is not None else None
-    outgoing = _lost_too_much(fork.base, local_files) if fork.local is not None else None
-    if incoming is not None or outgoing is not None:
-        assert got.status is RoundStatus.HELD
-        stop = rig.state.current
-        assert stop is not None and stop.kind is StopKind.HOLD and stop.hold is not None
-        direction = HoldDirection.INCOMING if incoming is not None else HoldDirection.OUTGOING
-        assert stop.hold.direction is direction
-        assert list(stop.hold.paths) == (incoming if incoming is not None else outgoing)
         _untouched(rig)
         return
 
@@ -215,14 +186,14 @@ def test_a_round_applies_a_clean_merge_and_stops_on_any_conflict(fork: Fork) -> 
 
 
 @given(forks())
-def test_a_stopped_or_held_round_asked_again_stops_again_and_touches_nothing(
+def test_a_stopped_round_asked_again_stops_again_and_touches_nothing(
     fork: Fork,
 ) -> None:
     rig = _rig(fork)
     first = rig.engine.run(_REMOTE, None)
-    if first.status not in (RoundStatus.STOPPED, RoundStatus.HELD):
+    if first.status is not RoundStatus.STOPPED:
         return
     second = rig.engine.run(_REMOTE, None)
     assert second.status is first.status
-    assert (second.conflicts, second.held) == (first.conflicts, first.held)
+    assert second.conflicts == first.conflicts
     _untouched(rig)

@@ -1,7 +1,6 @@
 """Round rules the Sync page and the CLI rely on (spec vault-sync): a quiet
 round makes no commit, the reconciler runs after a round that applied
-something, a stale machine takes a deletion, a hold is asked again once a
-side moves, the master key never
+something, a stale machine takes a deletion, the master key never
 travels, and the routes cover every operation."""
 
 from __future__ import annotations
@@ -76,24 +75,6 @@ def test_a_machine_that_did_not_touch_a_file_takes_its_deletion(tmp_path: Path) 
     assert DOC not in _remote_files(mac.url)
 
 
-@pytest.mark.acceptance(
-    spec="vault-sync", scenario="a hold is released once its diff no longer breaches"
-)
-def test_a_hold_is_asked_again_once_the_files_came_back(tmp_path: Path) -> None:
-    (mac,) = joined(tmp_path, "Mac")
-    paths = [f"knowledge/bulk/n{i:02}.md" for i in range(22)]
-    for p in paths:
-        mac.put(p, p)
-    mac.round()
-    mac.remove(*paths)
-    assert mac.round().status is RoundStatus.HELD
-    for p in paths:
-        mac.put(p, p)
-    got = mac.round()
-    assert got.status is not RoundStatus.HELD
-    assert mac.state.stop() is None
-
-
 @pytest.mark.acceptance(spec="vault-sync", scenario="the master key never enters the repository")
 def test_a_remote_carrying_secret_holds_ciphertext_and_no_key(tmp_path: Path) -> None:
     (mac,) = joined(tmp_path, "Mac")
@@ -152,8 +133,6 @@ def test_the_routes_cover_every_sync_operation() -> None:
         ("POST", "/remote/restore"),
         ("POST", "/machines/{machine_id}/restore"),
         ("POST", "/continue"),
-        ("POST", "/hold/confirm"),
-        ("POST", "/hold/restore"),
         ("POST", "/plaintext/push-anyway"),
         ("GET", "/machines"),
         ("PATCH", "/machines/self"),

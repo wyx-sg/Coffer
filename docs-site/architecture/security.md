@@ -402,7 +402,7 @@ Vault sync pulls and pushes the vault repository with a git remote you own. It i
 - **A machine without the matching key** reports the refs it holds ciphertext for but cannot decrypt, and the **Machines** tab flags a machine whose key fingerprint differs, rather than failing silently.
 - **The secret boundary stays on the machine.** Its bindings, approvals and switches are in `local/secret-boundary/`, never in the vault, so another machine cannot pre-approve a destination for this one.
 - **Reach does not travel.** Which resources are enabled, and for which agents, is decided on each machine, so another machine's round can never widen what this one exposes.
-- **Deletions are guarded.** A round that would lose 20 files, or 5 or more that are over half of an area, in either direction, holds for your answer.
+- **Deletions can be undone.** A deletion syncs like any other change; every round snapshots the vault before it checks anything out, so a round that pulled a deletion nobody meant is rolled back, and the vault's history keeps every deleted file.
 - **Conflicting ciphertexts are never shown to you.** Two ciphertexts for one ref are ordered by the encryption time the token carries in clear, and the fresher wins; and a secret has no readable history or restore through the vault's History.
 
 See [Vault sync](/architecture/vault-sync) for the full protocol.

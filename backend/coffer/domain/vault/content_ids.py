@@ -1,9 +1,8 @@
 """The two content ids the vault uses, computed without git.
 
 - The **blob id** is git's own object id for a file's bytes, so a file's id
-  here is the id ``git ls-tree`` reports for it: what the deletion breaker
-  pairs moves by, what a writer compares against ``HEAD``, and what the
-  resource revision counter watches.
+  here is the id ``git ls-tree`` reports for it: what a writer compares
+  against ``HEAD``, and what the resource revision counter watches.
 - The **fingerprint** is a SHA-256 of the bytes, the value every content API
   already takes as ``expected_fingerprint``: a writer states the fingerprint
   of what it read, and a mismatch is a stale write (409), never a silent

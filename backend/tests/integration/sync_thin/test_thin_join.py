@@ -63,7 +63,7 @@ def test_a_new_machine_takes_the_union_and_leaves_differing_files_alone(
     assert shown.differ == ("knowledge/team/on-call.md",)
     assert shown.pulled_files == 1 and shown.pushed_files == 1
     got = join(mini.engine, mini.remote, None)
-    assert got.status is RoundStatus.JOINED and got.held == 1
+    assert got.status is RoundStatus.JOINED
     assert mini.disk("knowledge/team/mac-only.md") == b"mac\n"
     assert mini.disk("knowledge/team/on-call.md") == b"escalate after 15 min\n"
     # The differing file is not pushed until chosen, and never settled.

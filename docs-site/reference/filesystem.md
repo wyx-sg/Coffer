@@ -94,7 +94,7 @@ State is kept in five [storage classes](/architecture/persistence), one director
 | `local/knowledge-originals/` | The files you uploaded to knowledge on this Mac, one per content, named by their SHA-256. A source names its original; only this Mac has the file. | daemon | Never | The originals are gone; the sources and their pictures are still in the vault. |
 | `local/memory-sync-preview.json` | A first or large memory sync waiting for **Write** or **Cancel** on the Memory page. | daemon | Never | Yes: the next sync plans again. |
 | `local/sync/remote.json` | The one sync remote: URL, branch, push secret ref, whether secrets travel, interval, paused. | daemon | Never | This machine forgets the remote. |
-| `local/sync/round.json` | A stopped round, a hold, or a join's pending choices, with your answers so far. | daemon | Never | The question is asked again on the next round. |
+| `local/sync/round.json` | A stopped round or a join's pending choices, with your answers so far. | daemon | Never | The question is asked again on the next round. |
 
 A local file that does not parse is moved aside as `<name>.unreadable-<n>` and read as empty.
 

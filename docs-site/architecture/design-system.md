@@ -11,7 +11,7 @@ The web UI and the desktop app render the same frontend, and every surface in it
 
 Six rules decide between two designs that both work. The one that follows more of them wins.
 
-- **Attention first.** A page leads with what needs you. Healthy things stay quiet; a failing server or a held sync round rises to the top.
+- **Attention first.** A page leads with what needs you. Healthy things stay quiet; a failing server or a stopped sync round rises to the top.
 - **One accent.** Indigo means "this is the action" or "this is selected" and nothing else.
 - **Status is a dot and a word.** Never colour alone: the dot always sits beside the word it means, so the state survives colour-blindness and a greyscale screenshot.
 - **Identifiers in mono.** Anything you could paste into a terminal — a path, a port, a tool name, an environment key, a commit id — is set in JetBrains Mono. Prose is in Figtree.

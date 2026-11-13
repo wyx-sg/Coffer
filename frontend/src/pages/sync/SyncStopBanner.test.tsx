@@ -13,7 +13,7 @@ import { makeConflict, makeStopped } from "./syncConflictTestKit";
 
 vi.mock("@/lib/hooks/useSyncStop", () => ({ useSyncStop: vi.fn(), useHandoffRequest: vi.fn() }));
 vi.mock("./useSyncIgnore", () => ({
-  STOP_REASON: { conflicts: "sync_conflicts", held: "sync_deletions_held" },
+  STOP_REASON: "sync_conflicts",
   useSyncIgnore: vi.fn(),
 }));
 vi.mock("@/components/handoff/AgentHandoff", () => ({
@@ -55,7 +55,7 @@ const show = (count = 1) =>
   render(
     <TooltipProvider>
       <MemoryRouter>
-        <SyncStopBanner kind="conflicts" count={count} />
+        <SyncStopBanner count={count} />
       </MemoryRouter>
     </TooltipProvider>,
   );

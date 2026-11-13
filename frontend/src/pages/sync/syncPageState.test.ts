@@ -41,7 +41,6 @@ describe("syncState", () => {
     expect(syncState(base, true).kind).toBe("syncing");
     expect(syncState({ ...base, remote: { ...base.remote!, enabled: false } }).kind).toBe("paused");
     expect(syncState(base).kind).toBe("conflicts");
-    expect(syncState({ ...base, conflicts: 0, held: 3 })).toMatchObject({ kind: "held", count: 3 });
     expect(syncState({ ...base, conflicts: 0 }).kind).toBe("unreachable");
     expect(syncState({ ...base, conflicts: 0, problem: null })).toMatchObject({
       kind: "to_push",

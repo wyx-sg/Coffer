@@ -23,7 +23,7 @@ from coffer.domain.sync.handoffs import (
     conflict_merge_handoff,
     is_secret_file,
 )
-from coffer.domain.sync.stops import ConflictFile, StopKind
+from coffer.domain.sync.stops import ConflictFile
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from coffer.application.sync.round_engine import RoundEngine
@@ -69,7 +69,7 @@ class MergeMixin:
         def build() -> str | None:
             d = self._engine.d
             stop = d.state.stop()
-            if stop is None or stop.kind is not StopKind.CONFLICTS:
+            if stop is None:
                 return None
             handed = tuple(c.path for c in stop.conflicts if agent_mergeable(c))
             for path in handed:

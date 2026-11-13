@@ -60,10 +60,9 @@ class RemoteMixin:
             d = self._engine.d
             before = self._remotes.get()
             if before is None or (before.url, before.branch) != (remote.url, remote.branch):
-                # A stop, a hold and "joined" are facts about one remote's
+                # A stop and "joined" are facts about one remote's
                 # history; another remote starts from the join again.
                 d.state.set_stop(None)
-                d.state.set_confirmed(None)
                 d.state.set_joined(False)
             self._remotes.put(remote)
             self._remotes.forget_removed()
@@ -99,21 +98,18 @@ class RemoteMixin:
             if remote is None:
                 return False
             stop = d.state.stop()
-            confirmed = d.state.confirmed()
             self._remotes.keep_removed(
                 {
                     "remote": remote.to_json(),
                     "joined": d.state.joined(),
                     "stop": to_json(stop) if stop is not None else None,
                     "join_choices": [to_json(c) for c in d.state.join_choices()],
-                    "confirmed": list(confirmed) if confirmed else None,
                 }
             )
             self._remotes.clear()
             d.git.clear_remote()
             d.git.set_carry_secret(False)
             d.state.set_stop(None)
-            d.state.set_confirmed(None)
             d.state.set_join_choices([])
             d.state.set_joined(False)
             if d.scratch is not None:
@@ -142,8 +138,6 @@ class RemoteMixin:
             d.state.set_join_choices(
                 [conflict_from_json(c) for c in snapshot.get("join_choices") or ()]
             )
-            confirmed = snapshot.get("confirmed")
-            d.state.set_confirmed((confirmed[0], confirmed[1]) if confirmed else None)
 
         await self._locked(reinstate)
         return remote

@@ -182,13 +182,6 @@ const pageRoutes: RouteObject[] = gateRoutes([
       "SyncResolveConflictsPage",
     ),
   },
-  {
-    path: "sync/deletions",
-    element: lazyPage(
-      () => import("./pages/sync/SyncDeletionReviewPage"),
-      "SyncDeletionReviewPage",
-    ),
-  },
   // One page: the Providers list beside the open provider, and the Usage tab
   // (`?tab=usage`).
   { path: "model-providers", element: <ModelProvidersPage /> },

@@ -29,10 +29,7 @@ from coffer.surfaces.http.sync_schemas import (
 )
 from coffer.surfaces.http.sync_stop_schemas import (
     AreaCountOut,
-    BreachOut,
     ConflictFileOut,
-    HoldGroupOut,
-    HoldOut,
     JoinPreviewOut,
     MaskedLineOut,
     MaskedValueOut,
@@ -67,9 +64,7 @@ def round_out(r: RoundRecord) -> RoundOut:
         pushed=[change_out(c) for c in r.pushed],
         with_machines=list(r.with_machines),
         conflicts=r.conflicts,
-        held=r.held,
         stopped_on=list(r.stopped_on),
-        held_direction=r.held_direction,  # type: ignore[arg-type]
         detail=r.detail,
         path=r.path,
         join=r.join,
@@ -171,7 +166,6 @@ def status_out(s: SyncStatus) -> SyncStatusOut:
         if problem
         else None,
         conflicts=s.conflicts,
-        held=s.held,
         join_choices=s.join_choices,
         ahead=s.ahead,
         behind=s.behind,
@@ -204,27 +198,13 @@ def conflict_out(f: StoppedFile) -> ConflictFileOut:
 
 def stopped_out(s: StoppedRound) -> StoppedRoundOut:
     stop = s.stop
-    hold = stop.hold
     return StoppedRoundOut(
-        kind=stop.kind.value,
         raised_at=stop.raised_at,
         local=stop.local,
         remote=stop.remote,
         join=stop.join,
         files=[conflict_out(f) for f in s.files],
         unanswered=len(stop.unanswered),
-        hold=HoldOut(
-            direction=hold.direction.value,
-            breaches=[BreachOut(area=b.area, lost=b.lost, total=b.total) for b in hold.breaches],
-            paths=list(hold.paths),
-            groups=[
-                HoldGroupOut(folder=g.folder, paths=list(g.paths), total=g.total) for g in s.groups
-            ],
-            machines=list(s.machines),
-            confirmed=s.confirmed,
-        )
-        if hold
-        else None,
     )
 
 

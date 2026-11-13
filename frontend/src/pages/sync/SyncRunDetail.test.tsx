@@ -89,9 +89,8 @@ describe("SyncRunDetail", () => {
   acceptance("vault-sync", "a stopped round keeps why it stopped", () => {
     const drawer = open(
       makeRound({
-        status: "held",
-        held: 3,
-        held_direction: "outgoing",
+        status: "stopped",
+        conflicts: 3,
         stopped_on: [
           "resources/mcp_server/demo-empty.json",
           "resources/mcp_server/demo-httpbin.json",
@@ -100,17 +99,17 @@ describe("SyncRunDetail", () => {
       }),
     );
     const stop = drawer.getByTestId("sync-run-stop");
-    expect(stop).toHaveTextContent("This Mac's changes would delete 3 files from the remote");
+    expect(stop).toHaveTextContent("3 files changed on both sides and could not be merged");
     expect(stop).toHaveTextContent("resources/mcp_server/demo-httpbin.json");
     // The four empty steps fold into one line.
     expect(drawer.queryByTestId("sync-run-snapshot")).toBeNull();
     expect(drawer.getByText(/stopped before checking anything out/)).toBeInTheDocument();
   });
 
-  test("a held round recorded without its files still says how many", () => {
-    const drawer = open(makeRound({ status: "held", held: 2 }));
+  test("a round an earlier version held for a mass deletion still says so", () => {
+    const drawer = open(makeRound({ status: "held" }));
     expect(drawer.getByTestId("sync-run-stop")).toHaveTextContent(
-      "This round would delete 2 files",
+      "An earlier version of Coffer held this round before deleting files",
     );
   });
 
@@ -119,7 +118,15 @@ describe("SyncRunDetail", () => {
       makeRound({
         status: "plaintext_found",
         detail: "a plaintext secret in skills/x/run.mjs; nothing was pushed",
-        plaintext: [{ path: "skills/x/run.mjs", line: 12, key: "TOKEN", current: true, rule: "generic-api-key" }],
+        plaintext: [
+          {
+            path: "skills/x/run.mjs",
+            line: 12,
+            key: "TOKEN",
+            current: true,
+            rule: "generic-api-key",
+          },
+        ],
       }),
     );
     expect(drawer.getByTestId("sync-run-stop")).toHaveTextContent("skills/x/run.mjs:12 · TOKEN");

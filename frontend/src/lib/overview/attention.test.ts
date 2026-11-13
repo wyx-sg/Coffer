@@ -90,7 +90,6 @@ describe("pages", () => {
     const sync = (reason_code: string) => itemPage(item({ kind: "sync", uid: "f1", reason_code }));
     expect(sync("sync_conflicts")).toBe("/sync/conflicts");
     expect(sync("sync_join_choices")).toBe("/sync/conflicts?mode=join");
-    expect(sync("sync_deletions_held")).toBe("/sync/deletions");
     expect(sync("sync_plaintext_found")).toBe("/sync");
   });
 
@@ -219,7 +218,7 @@ test("a channel's check and sync's review read by what they do", () => {
     kind: "sync",
     action: { verb: "review", method: "GET", path: "/x", body: null },
   });
-  expect(itemActionLabelKey(sync)).toBe("overview.actions.reviewHeld");
+  expect(itemActionLabelKey(sync)).toBe("overview.actions.reviewSync");
   // Another kind's check keeps the plain verb.
   expect(itemActionLabelKey(item({ kind: "cli", action: channel.action }))).toBe(
     "overview.actions.check",

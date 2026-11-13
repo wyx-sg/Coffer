@@ -1,4 +1,4 @@
-"""One thin sync round (spec vault-sync "Run a round as pull, merge, guard, check out, push").
+"""One thin sync round (spec vault-sync "Run a round as pull, merge, check out, push").
 
 ::
 
@@ -7,10 +7,9 @@
     2 Fetch     — R := origin/<branch>
     3 Merge     — git merge-tree L R -> T, outside the working tree
     4 Stop?     — any conflict (content, identity, validation): stop, whole
-    5 Guard     — the deletion breaker, incoming (L->T) and outgoing (base->L)
-    6 Check out — snapshot L; M := commit(T; L, R); read-tree -m -u L M under
+    5 Check out — snapshot L; M := commit(T; L, R); read-tree -m -u L M under
                   the vault's write lock, refusing if an edit is in the way
-    7 Publish   — this machine's descriptor; refuse a plaintext secret; push
+    6 Publish   — this machine's descriptor; refuse a plaintext secret; push
 
 Nothing Coffer did on its own ever needs to be found and undone: a clean merge
 is applied unattended, and everything else waits for the person with the vault
@@ -24,7 +23,7 @@ from typing import Any
 
 from coffer.application.sync import round_plaintext
 from coffer.application.sync.round_deps import RoundDeps
-from coffer.application.sync.round_guard import invalid_files, merge_hold, push_hold
+from coffer.application.sync.round_guard import invalid_files
 from coffer.application.sync.round_layout import is_older, refusal, unseen_older
 from coffer.application.sync.round_replace import replace
 from coffer.application.sync.round_trees import (
@@ -35,13 +34,7 @@ from coffer.application.sync.round_trees import (
 )
 from coffer.domain.sync.remote import SyncRemote
 from coffer.domain.sync.rounds import PROBLEM_STATUS, RoundRecord, RoundStatus
-from coffer.domain.sync.stops import (
-    ConflictFile,
-    Stop,
-    StopKind,
-    held_fields,
-    stop_fields,
-)
+from coffer.domain.sync.stops import ConflictFile, Stop, stop_fields
 from coffer.domain.vault.errors import VaultFileStale
 from coffer.domain.vault.remote_errors import RemoteFailed
 from coffer.domain.vault.writers import OP_UPDATE, WRITER_DAEMON, CommitMeta
@@ -99,8 +92,9 @@ class RoundEngine:
         stop = d.state.stop()
         if stop is not None:
             if stop.local == local and stop.remote == tip:
-                status = RoundStatus.HELD if stop.kind is StopKind.HOLD else RoundStatus.STOPPED
-                return rec(status, **stop_fields(stop), from_commit=local, to_commit=tip)
+                return rec(
+                    RoundStatus.STOPPED, **stop_fields(stop), from_commit=local, to_commit=tip
+                )
             d.state.set_stop(None)  # a side moved since the question: ask it again
         if tip is None:
             if not d.state.joined():
@@ -149,7 +143,7 @@ class RoundEngine:
         explicit_base: bool = False,
         join: str | None = None,
     ) -> RoundRecord:
-        """Steps 3-7 for a local and a remote commit that have diverged (or a
+        """Steps 3-6 for a local and a remote commit that have diverged (or a
         fast-forward). ``explicit_base`` merges against ``base`` rather than
         git's own merge base (a returning machine's join)."""
         d = self.d
@@ -183,7 +177,6 @@ class RoundEngine:
         dated = [self._dated(c, local, tip, base, labels) for c in found]
         d.state.set_stop(
             Stop(
-                StopKind.CONFLICTS,
                 local,
                 tip,
                 base,
@@ -227,17 +220,8 @@ class RoundEngine:
         *,
         join: str | None = None,
     ) -> RoundRecord:
-        """Steps 5-7 for a merged tree nothing stops on."""
+        """Steps 5-6 for a merged tree nothing stops on."""
         d = self.d
-        confirmed = d.state.confirmed() == (local, tip)
-        hold = merge_hold(d.git, d.trees, d.state, local=local, tip=tip, base=base, tree=tree)
-        if hold is not None and not confirmed:
-            d.state.set_stop(
-                Stop(StopKind.HOLD, local, tip, base, d.now(), hold=hold, tree=tree, join=join)
-            )
-            return rec(
-                RoundStatus.HELD, **held_fields(hold), from_commit=local, to_commit=tip, join=join
-            )
         pulled, machines = d.pulled(local, tip)
         fast_forward = tree == d.git.tree_of(tip) and d.git.is_ancestor(local, tip)
         with d.writer.lock:
@@ -262,7 +246,6 @@ class RoundEngine:
                 CommitResult(merged, d.sync_meta("Applied"), tuple(a.path for a in applied))
             )
         d.state.set_stop(None)
-        d.state.set_confirmed(None)
         if d.scratch is not None:
             d.scratch.clear()
         final = self._publish_descriptor(merged)
@@ -308,24 +291,8 @@ class RoundEngine:
         local: str,
         tip: str | None,
     ) -> RoundRecord:
-        """Nothing to pull: guard what this machine's commits delete, then push."""
+        """Nothing to pull: push what this machine committed."""
         d = self.d
-        confirmed = d.state.confirmed() == (local, tip or "")
-        if tip is not None and not confirmed:
-            hold = push_hold(d.git, d.trees, d.state, local=local, tip=tip)
-            if hold is not None:
-                d.state.set_stop(
-                    Stop(
-                        StopKind.HOLD,
-                        local,
-                        tip,
-                        tip,
-                        d.now(),
-                        hold=hold,
-                        tree=d.git.tree_of(local),
-                    )
-                )
-                return rec(RoundStatus.HELD, **held_fields(hold), from_commit=local, to_commit=tip)
         final = self._publish_descriptor(local)
         checked = round_plaintext.check(d, tip, final)
         if checked.findings or checked.moved:
@@ -343,7 +310,6 @@ class RoundEngine:
                 pushed=pushed,
                 folded=checked.folded,
             )
-        d.state.set_confirmed(None)
         return rec(
             RoundStatus.PUSHED,
             from_commit=tip,

@@ -225,13 +225,12 @@ class SyncService(MoveMixin, PlaintextMixin, RemoteMixin, MachinesMixin, StatusM
         # Why a round needs a person, or failed, is in the log too: a record
         # with only its status sends whoever reads the log to the Sync page.
         extra: dict[str, Any] = {"status": record.status.value}
-        for key in ("detail", "path", "held_direction"):
+        for key in ("detail", "path"):
             value = getattr(record, key)
             if value:
                 extra[key] = value
-        for key in ("held", "conflicts"):
-            if getattr(record, key):
-                extra[key] = getattr(record, key)
+        if record.conflicts:
+            extra["conflicts"] = record.conflicts
         if record.plaintext:
             extra["plaintext"] = len(record.plaintext)
         _log.log(level, "sync.%s", name, extra=extra)
@@ -247,7 +246,6 @@ class SyncService(MoveMixin, PlaintextMixin, RemoteMixin, MachinesMixin, StatusM
                 "pulled": record.pulled_files,
                 "pushed": record.pushed_files,
                 "conflicts": record.conflicts,
-                "held": record.held,
                 "join": record.join,
             },
         )
@@ -294,12 +292,6 @@ class SyncService(MoveMixin, PlaintextMixin, RemoteMixin, MachinesMixin, StatusM
         """The absolute path of ``path``'s hand-merge copy, written when first
         asked for; the OS-open action opens it."""
         return await self._locked(lambda: round_answers.editor_copy(self._engine, path, join=join))
-
-    async def confirm_hold(self) -> Stop:
-        return await self._locked(lambda: round_answers.confirm_hold(self._engine))
-
-    async def restore_hold(self, *, actor: str) -> str | None:
-        return await self._locked(lambda: round_answers.restore_held(self._engine, actor=actor))
 
     async def join_choices(self) -> tuple[ConflictFile, ...]:
         return await asyncio.to_thread(self._engine.d.state.join_choices)

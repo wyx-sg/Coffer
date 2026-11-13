@@ -28,7 +28,8 @@ class RoundStatus(StrEnum):
     PUSH_FAILED = "push_failed"
     #: Any conflict: nothing checked out, nothing pushed.
     STOPPED = "stopped"
-    #: The deletion breaker held the round.
+    #: A round an earlier build held for a mass deletion. No round is held now;
+    #: the history still reads the old ones.
     HELD = "held"
     #: A person's uncommitted edit is on a path the round would change.
     WAITING_ON_EDIT = "waiting_on_edit"
@@ -58,7 +59,6 @@ class RoundStatus(StrEnum):
 NEEDS_PERSON = frozenset(
     {
         RoundStatus.STOPPED,
-        RoundStatus.HELD,
         RoundStatus.WAITING_ON_EDIT,
         RoundStatus.JOIN_REQUIRED,
         RoundStatus.AUTH_FAILED,
@@ -115,13 +115,10 @@ class RoundRecord:
     #: The machines whose commits this round pulled, by label.
     with_machines: tuple[str, ...] = ()
     conflicts: int = 0
-    held: int = 0
     #: For a round that stopped for a person: the files it stopped on (the
-    #: unanswered conflicts, or what a hold would delete), so the round still
-    #: says why once the stop is answered.
+    #: unanswered conflicts), so the round still says why once the stop is
+    #: answered.
     stopped_on: tuple[str, ...] = ()
-    #: For a held round: ``incoming`` or ``outgoing``.
-    held_direction: str | None = None
     #: For a failure: git's redacted message, and the path a waiting round names.
     detail: str | None = None
     path: str | None = None
@@ -172,9 +169,7 @@ class RoundRecord:
             pushed=tuple(AppliedChange(**c) for c in raw.get("pushed") or ()),
             with_machines=tuple(raw.get("with_machines") or ()),
             conflicts=int(raw.get("conflicts") or 0),
-            held=int(raw.get("held") or 0),
             stopped_on=tuple(raw.get("stopped_on") or ()),
-            held_direction=raw.get("held_direction"),
             detail=raw.get("detail"),
             path=raw.get("path"),
             join=raw.get("join"),

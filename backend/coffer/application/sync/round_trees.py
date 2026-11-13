@@ -9,8 +9,7 @@ tree:
 - find the **identity** conflicts git cannot see: one uid at two paths (a
   rename git failed to pair), and two resources of one kind with the same
   name but different uids (ADR identity-is-the-uid-inside-the-file; the user's
-  rule for joins: stop and ask which to keep, or rename one);
-- read the uid of every resource file, for the breaker's uid-counted losses.
+  rule for joins: stop and ask which to keep, or rename one).
 """
 
 from __future__ import annotations
@@ -66,9 +65,6 @@ class TreeReader:
             if ident is not None:
                 out[path] = ResourceIdentity(path, ident.uid, ident.kind, ident.name)
         return out
-
-    def uids(self, tree: str) -> dict[str, str]:
-        return {p: r.uid for p, r in self.resources(tree).items() if r.uid}
 
     def blob(self, tree: str, path: str) -> str | None:
         return self._git.files(tree, path).get(path)

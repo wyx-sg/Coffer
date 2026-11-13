@@ -22,7 +22,7 @@ export const PROBLEM_REASON: Partial<Record<SyncProblem["kind"], string>> = {
   key_mismatch: "sync_key_mismatch",
 };
 
-export const STOP_REASON = { conflicts: "sync_conflicts", held: "sync_deletions_held" } as const;
+export const STOP_REASON = "sync_conflicts";
 
 export function useSyncIgnore() {
   const attention = useAttention();

@@ -134,7 +134,7 @@ describe("the route table", () => {
       "/model-providers/abc",
       "/sync",
       "/sync/conflicts",
-      "/sync/deletions",
+      "/sync/pending",
       "/",
     ]) {
       const matches = matchRoutes(appRoutes, path) ?? [];

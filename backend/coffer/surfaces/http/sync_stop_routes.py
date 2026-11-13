@@ -1,6 +1,6 @@
 """/api/v1/sync — what a round waiting for a person needs
-(spec vault-sync "Report a join before applying it", "Hold a round that would
-lose too much", "Snapshot before checking out and roll a round back from it").
+(spec vault-sync "Report a join before applying it", "Snapshot before checking
+out and roll a round back from it").
 
 A stop is answered file by file — keep this machine's, take the other's, or
 edit a marked-up copy (the person's, or an agent's merge they marked resolved)
@@ -175,22 +175,6 @@ async def continue_round() -> RoundOut:
     """Continue the stopped round once every file is answered: the resolved
     tree is validated, guarded, snapshotted, checked out and pushed."""
     return round_out(await get_sync_service().continue_round())
-
-
-@router.post("/hold/confirm", response_model=RoundOut)
-async def confirm_hold() -> RoundOut:
-    """Apply the held deletions, and continue the round."""
-    svc = get_sync_service()
-    await svc.confirm_hold()
-    return round_out(await svc.continue_round())
-
-
-@router.post("/hold/restore", response_model=RoundOut)
-async def restore_hold() -> RoundOut:
-    """Keep the held files, and continue the round (it pushes them back)."""
-    svc = get_sync_service()
-    await svc.restore_hold(actor=_ACTOR)
-    return round_out(await svc.continue_round())
 
 
 # --- a plaintext secret in what a round would push ---------------------------------------

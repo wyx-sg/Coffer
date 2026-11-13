@@ -47,7 +47,7 @@ Every vault asset — registered server configs, secret references, audit logs, 
 
 A hosted endpoint Coffer itself operates remains outside this exception.
 
-Convergence is **bidirectional**: Coffer applies what the remote brought in as well as pushing what this machine changed. It is authorised only under the safety rules the sync spec carries — git's own three-way merge is the arbiter, what gets applied is a **diff against the last state this vault provably held** rather than a wholesale overwrite, and a round that would delete more than its configured share stops and asks. A mechanism that writes the vault outside those rules is not covered by this exception. How the converge round meets these rules is described in [Vault sync](/architecture/vault-sync).
+Convergence is **bidirectional**: Coffer applies what the remote brought in as well as pushing what this machine changed. It is authorised only under the safety rules the sync spec carries — git's own three-way merge is the arbiter, what gets applied is a **diff against the last state this vault provably held** rather than a wholesale overwrite, and every round snapshots the vault before it checks anything out, so any round can be rolled back. A mechanism that writes the vault outside those rules is not covered by this exception. How the converge round meets these rules is described in [Vault sync](/architecture/vault-sync).
 
 ### II. Spec-as-Truth (OpenSpec)
 

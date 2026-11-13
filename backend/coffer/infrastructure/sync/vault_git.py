@@ -119,9 +119,6 @@ class VaultSyncGit:
     def diff(self, a: str | None, b: str) -> list[TreeChange]:
         return merge.diff_trees(self._repo, a, b)
 
-    def renames(self, a: str, b: str) -> list[tuple[str, str]]:
-        return merge.renames(self._repo, a, b)
-
     def files(self, commit_or_tree: str, prefix: str = "") -> dict[str, str]:
         return self._repo.tree(commit_or_tree, prefix)
 

@@ -236,7 +236,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `SYNC_PLAINTEXT_NOT_LISTED` | 404 | 请求查看某处明文密钥的上下文，但上一轮并没有在那个位置发现它。 | 从同步页面自己的列表里打开位置。 |
 | `SYNC_REMOTE_INVALID` | 422 | URL 或分支会被 git 当作选项解析，或者不是 git 接受的名字。 | 修正 URL 或分支。 |
 | `SYNC_REMOTE_FAILED` | 502 | 针对远端的某个 git 操作失败。消息已脱敏。 | 检查网络访问、远端 URL 和令牌的权限。 |
-| `SYNC_NOTHING_STOPPED` | 409 | 你回答了一个冲突、暂停或加入选择，但没有任何同步轮次在等这个回答。 | 无需操作。 |
+| `SYNC_NOTHING_STOPPED` | 409 | 你回答了一个冲突或加入选择，但没有任何同步轮次在等这个回答。 | 无需操作。 |
 | `SYNC_CONFLICT_MARKERS_LEFT` | 422 | 手动合并的副本中仍有冲突标记；消息会给出所在行。 | 删除它们，保存，然后把文件标记为已解决。 |
 | `SYNC_SECRET_NOT_EDITABLE` | 422 | 停下的一轮或加入中的加密密钥被在编辑器中打开、交给智能体，或被答复为“编辑”。 | 保留本机的版本，或采用另一台的。 |
 | `SYNC_ROUND_NOT_FOUND` | 404 | 没有这个 id 的同步轮次。 | 从**同步**页面的历史中选一个。 |

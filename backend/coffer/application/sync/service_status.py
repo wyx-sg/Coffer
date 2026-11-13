@@ -13,8 +13,6 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import difflib
-import posixpath
-from collections import Counter
 from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -24,7 +22,6 @@ from coffer.application.sync.round_merge import merge_info
 from coffer.application.sync.views import (
     AreaCounts,
     FileVersions,
-    HoldGroup,
     Problem,
     RoundFileDiff,
     StoppedFile,
@@ -42,7 +39,7 @@ from coffer.domain.sync.handoffs import (
 )
 from coffer.domain.sync.remote import SyncRemote
 from coffer.domain.sync.rounds import APPROVAL_WAIT, AppliedChange, RoundRecord, RoundStatus
-from coffer.domain.sync.stops import ConflictFile, HoldDirection, StopKind
+from coffer.domain.sync.stops import ConflictFile
 from coffer.domain.vault.layout import KNOWLEDGE, MACHINES, MANIFEST, RESOURCES, SKILLS
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -122,8 +119,7 @@ class StatusMixin:
             vault_path=str(self._vault_path()),
             synchroniser=d.cloud_folder(),
             problem=self._current_problem(remote, last),
-            conflicts=len(stop.unanswered) if stop and stop.kind is StopKind.CONFLICTS else 0,
-            held=len(stop.hold.paths) if stop and stop.hold else 0,
+            conflicts=len(stop.unanswered) if stop else 0,
             join_choices=len(d.state.join_choices()),
             ahead=ahead,
             behind=behind,
@@ -214,23 +210,7 @@ class StatusMixin:
         stop = d.state.stop()
         if stop is None:
             return None
-        files = self._stopped_files(stop.conflicts) if stop.kind is StopKind.CONFLICTS else ()
-        groups: tuple[HoldGroup, ...] = ()
-        machines: tuple[str, ...] = ()
-        if stop.hold is not None:
-            before = stop.local if stop.hold.direction is HoldDirection.INCOMING else stop.base
-            groups = _groups(stop.hold.paths, d.git.files(before) if before else {})
-            if stop.hold.direction is HoldDirection.INCOMING:
-                machines = d.pulled(stop.local, stop.remote)[1]
-            else:
-                machines = (self._machine.label(),)
-        return StoppedRound(
-            stop,
-            files=files,
-            groups=groups,
-            machines=machines,
-            confirmed=d.state.confirmed() == (stop.local, stop.remote),
-        )
+        return StoppedRound(stop, files=self._stopped_files(stop.conflicts))
 
     def _stopped_files(self, conflicts: tuple[ConflictFile, ...]) -> tuple[StoppedFile, ...]:
         """Each file with where its copy is and where an agent's merge of it stands."""
@@ -271,22 +251,6 @@ class StatusMixin:
             raise SyncRoundFileNotListed(path, "push")
         assert remote is not None
         return round_diff.between(d, path, "pending", d.git.remote_tip(remote.branch), head)
-
-    async def held_file_diff(self, path: str) -> RoundFileDiff:
-        """One file a held round would delete: its whole text, as removed."""
-        return await asyncio.to_thread(self._held_file_diff, path)
-
-    def _held_file_diff(self, path: str) -> RoundFileDiff:
-        d = self._engine.d
-        stop = d.state.stop()
-        hold = stop.hold if stop else None
-        if stop is None or hold is None or path not in hold.paths:
-            raise SyncRoundFileNotListed(path, "delete")
-        # Incoming: the other Mac deletes what this one still has; outgoing:
-        # this Mac deletes what the remote still has.
-        incoming = hold.direction is HoldDirection.INCOMING
-        before, after = (stop.local, stop.remote) if incoming else (stop.remote, stop.local)
-        return round_diff.between(d, path, "held", before, after)
 
     async def join_files(self) -> tuple[StoppedFile, ...]:
         """A join's differing files, in the shape a stopped round's are."""
@@ -331,18 +295,6 @@ class StatusMixin:
             take_theirs=take,
             binary=binary,
         )
-
-
-def _groups(paths: tuple[str, ...], before: dict[str, str]) -> tuple[HoldGroup, ...]:
-    """The held paths by folder, with how many files each folder held."""
-    held: dict[str, list[str]] = {}
-    for path in paths:
-        held.setdefault(posixpath.dirname(path) or ".", []).append(path)
-    sizes = Counter(posixpath.dirname(p) or "." for p in before)
-    return tuple(
-        HoldGroup(folder, tuple(sorted(items)), max(sizes.get(folder, 0), len(items)))
-        for folder, items in sorted(held.items(), key=lambda kv: (-len(kv[1]), kv[0]))
-    )
 
 
 def _problem(last: RoundRecord, remote: SyncRemote) -> Problem | None:

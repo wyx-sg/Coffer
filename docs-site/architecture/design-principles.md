@@ -43,7 +43,7 @@ Coffer is a **custodian, not an owner**. It holds your assets on your machine, h
 2. **Secrets travel as ciphertext only.** The master key leaves a machine only through an explicit out-of-band transfer: a key backup the desktop app writes behind a presence check, installed on the other machine from **Settings › Security › Import a master key**.
 3. **It is off by default** and pointed only at a repository you configure.
 
-Sync is bidirectional but only under the sync spec's safety rules: git computes the merge outside the vault, only a clean merge is applied, any conflict stops the round for you with nothing changed, a round that would lose too much stops and asks, and every round can be rolled back from its snapshot.
+Sync is bidirectional but only under the sync spec's safety rules: git computes the merge outside the vault, only a clean merge is applied, any conflict stops the round for you with nothing changed, and every round can be rolled back from its snapshot.
 
 **In the code.** The daemon binds `127.0.0.1` when it allocates its port. Channels reach Telegram and SeaTalk only over connections the daemon opens, so the loopback socket is the only one Coffer listens on. The sync remote defaults to absent, and secret ciphertext is carried only when you turn on `include_secret` for the remote.
 

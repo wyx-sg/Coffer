@@ -185,9 +185,8 @@ snapshots.
   not possible without rewriting the commits, which would break `HEAD` as the
   pointer and every merge base.
 - **What stays out.** Derived output is under `derived/`, never in the
-  repository; the deletion breaker and snapshot tags keep working on the
-  committed history (a local mass deletion is committed as a `disk` write,
-  recoverable in one restore, and held at push by the outgoing breaker).
+  repository; snapshot tags keep working on the committed history (a local
+  mass deletion is committed as a `disk` write, recoverable in one restore).
 
 Pros: every writer is subject to the same check and the same validator; a
 concurrent edit is refused instead of lost; an invalid edit cannot take effect

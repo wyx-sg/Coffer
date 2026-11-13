@@ -86,10 +86,7 @@ export function roundLabel(t: TFunction, round: SyncRound, ctx: Context): RoundL
         detail: t("sync.rounds.detail.nothingMoved"),
       };
     case "held":
-      return {
-        main: t("sync.rounds.label.heldCount", { count: round.held }),
-        detail: t("sync.rounds.detail.nothingMoved"),
-      };
+      return { main, detail: t("sync.rounds.detail.nothingMoved") };
     case "unreachable":
       return {
         main,

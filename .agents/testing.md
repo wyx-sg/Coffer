@@ -248,7 +248,7 @@ CI shards the integration tier as well — see [CI Jobs](#ci-jobs).
 
 ## Property-Based Tests
 
-A rule that must hold for every input — not for three hand-picked ones — is tested as a property with `hypothesis` (a dev dependency in `backend/uv.lock`). Today: the sync deletion breaker (`tests/unit/domain/sync/test_breaker_properties.py`, checked against the threshold in integers), a stop and its answers (`test_stop_properties.py`), and a round's merge decision (`tests/unit/application/sync/test_round_merge_properties.py`, the real `RoundEngine` over the in-memory `fake_git.py`: any conflict stops, a lossy clean merge is held, and neither snapshots, checks out or pushes).
+A rule that must hold for every input — not for three hand-picked ones — is tested as a property with `hypothesis` (a dev dependency in `backend/uv.lock`). Today: a stop and its answers (`test_stop_properties.py`), and a round's merge decision (`tests/unit/application/sync/test_round_merge_properties.py`, the real `RoundEngine` over the in-memory `fake_git.py`: any conflict stops and then snapshots, checks out and pushes nothing).
 
 - **Profiles** (`tests/support/hypothesis_profiles.py`, loaded by the root `conftest.py`): `ci` is the default — 100 examples, derandomized (every run draws the same cases), `deadline=None`, no example database. `HYPOTHESIS_PROFILE=thorough` draws 2000 random examples for a local hunt.
 - **No per-example deadline.** A deadline is a wall-clock assertion and fails on a loaded machine; keep it off.

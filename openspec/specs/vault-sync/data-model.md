@@ -60,9 +60,8 @@ when it has nothing to say.
 
 | Key | Shape | Meaning |
 | --- | --- | --- |
-| `stop` | `Stop` | the round waiting for a person — conflicts to answer, or a hold to confirm or restore |
+| `stop` | `Stop` | the round waiting for a person — conflicts to answer |
 | `join_choices` | `[ConflictFile]` | files a join left as they are here because both sides hold them with no common base, until the person chooses (keep mine / take theirs); while listed, the vault writer *holds* those paths and their effective version is the one on disk |
-| `confirmed` | `[local tip, remote tip]` | a hold the person confirmed, for exactly that pair of tips |
 | `joined` | `true` | this machine has joined the current remote |
 | `plaintext_allowed` | `[blob]` | the file versions a person pushed anyway although a round found a plaintext secret in them ("Refuse to push a plaintext secret"); a file changed since is a new blob and is read again |
 
@@ -70,11 +69,9 @@ when it has nothing to say.
 
 | Field | Notes |
 | --- | --- |
-| `kind` | `conflicts` \| `hold` |
 | `local`, `remote`, `base` | the commits the stop was raised against; if either tip moves before the person answers, the round is derived and asked again |
 | `raised_at` | ISO time |
 | `conflicts` | `[ConflictFile]` |
-| `hold` | `{direction: incoming \| outgoing, breaches: [{area, lost, total}], paths: [...]}` — the deletion breaker's stop |
 | `tree` | the merged tree git produced (conflict markers where it could not merge); answers are applied on top of it |
 | `join` | set when the stop belongs to a join |
 
@@ -191,7 +188,8 @@ and is what a row is read back from, so no column can disagree with it:
 | `pulled` | `[{version, time, machine, files}]` — the commits that came in |
 | `applied`, `pushed` | `[{path, status: added \| modified \| removed}]` — the files applied here and sent out |
 | `with_machines` | the labels of the machines whose commits the round pulled |
-| `conflicts`, `held` | counts for a stopped or held round |
+| `conflicts` | the count for a stopped round |
+| `stopped_on` | the files a stopped round stopped on |
 | `detail` | git's redacted message for a failure |
 | `path` | the file a `waiting_on_edit` round names |
 | `join` | `new` \| `returning` |
@@ -207,7 +205,7 @@ and is what a row is read back from, so no column can disagree with it:
 | `push_failed` | pulled and applied, but the remote refused the push |
 | `plaintext_found` | a file the push would publish holds a plaintext secret: nothing pushed |
 | `stopped` | any conflict: nothing checked out, nothing pushed |
-| `held` | the deletion breaker held the round (20 files, or 5 or more over half of an area, in either direction; `stopped_on` lists the files; resource files counted by uid, so a moved file is not a loss) |
+| `held` | an earlier build held the round before a mass deletion; no round is held now, and the history still reads these |
 | `waiting_on_edit` | a person's uncommitted edit is on a path the round would change; it is never overwritten |
 | `join_required` / `joined` | this machine has never converged with the remote / a join finished |
 | `unreachable` / `auth_failed` | the remote could not be reached / sign-in failed (or the token waits for approval) |
@@ -220,7 +218,7 @@ A remote at an older layout has no status: the round replaces it with this
 vault (a fast-forward whose parents are this machine's commit and the old tip)
 and ends `pushed` with `join: "replace"`.
 
-`stopped`, `held`, `waiting_on_edit`, `join_required`, `auth_failed`,
+`stopped`, `waiting_on_edit`, `join_required`, `auth_failed`,
 `paused_cloud_folder`, `remote_too_new` and `plaintext_found` leave the vault in
 a state a person must look at, and each raises an attention item. Swept by the
 retention worker as `sync_runs` (default 90 days).

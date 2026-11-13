@@ -1,4 +1,4 @@
-"""The breaker in both directions, snapshots and rollback, credentials and
+"""Mass deletions, snapshots and rollback, credentials and
 layouts (coffer.application.sync.round_*)."""
 
 from __future__ import annotations
@@ -11,14 +11,11 @@ from pathlib import Path
 
 import pytest
 
-from coffer.application.sync.round_answers import confirm_hold, restore_held
 from coffer.application.sync.round_join import join, preview
-from coffer.application.sync.round_resume import resume
 from coffer.application.sync.round_rollback import SyncNothingToRollBack, plan, rollback
 from coffer.domain.sync.joins import JoinKind
 from coffer.domain.sync.remote import SyncRemote
 from coffer.domain.sync.rounds import RoundStatus
-from coffer.domain.sync.stops import HoldDirection
 from coffer.domain.vault.writes import Expect
 from coffer.infrastructure.vault.remote import RemoteProblem, classify
 
@@ -31,53 +28,20 @@ def _many(m: Machine, n: int, prefix: str = "knowledge/team/doc") -> None:
             txn.write(f"{prefix}-{i}.md", f"document {i}\n".encode(), Expect.ABSENT)
 
 
-@pytest.mark.acceptance(
-    spec="vault-sync", scenario="a wiped area is held although rename pairings are consulted"
-)
-@pytest.mark.acceptance(
-    spec="vault-sync", scenario="a returning machine with an empty vault does not publish the loss"
-)
-def test_a_local_mass_deletion_is_held_before_it_is_pushed(pair: tuple[Machine, Machine]) -> None:
+@pytest.mark.acceptance(spec="vault-sync", scenario="a mass deletion syncs like any other change")
+def test_a_mass_deletion_syncs_like_any_other_change(pair: tuple[Machine, Machine]) -> None:
     mac, mini = pair
     _many(mac, 25)
     mac.round()
     mini.round()
     mac.remove(*(f"knowledge/team/doc-{i}.md" for i in range(25)))
-    tip = remote_ref(mac.remote)
-    got = mac.round()
-    assert got.status is RoundStatus.HELD and got.held == 25
-    assert remote_ref(mac.remote) == tip
-    stop = mac.state.stop()
-    assert stop and stop.hold and stop.hold.direction is HoldDirection.OUTGOING
-    confirm_hold(mac.engine)
-    assert resume(mac.engine, mac.remote, None).status is RoundStatus.PUSHED
-
-
-@pytest.mark.acceptance(
-    spec="vault-sync", scenario="an oversized deletion is held for confirmation"
-)
-def test_an_incoming_mass_deletion_is_held_and_can_be_restored(
-    pair: tuple[Machine, Machine],
-) -> None:
-    mac, mini = pair
-    _many(mac, 25)
-    mac.round()
-    mini.round()
-    mac.remove(*(f"knowledge/team/doc-{i}.md" for i in range(25)))
-    mac.round()
-    confirm_hold(mac.engine)
-    resume(mac.engine, mac.remote, None)
-    got = mini.round()
-    assert got.status is RoundStatus.HELD
-    stop = mini.state.stop()
-    assert stop and stop.hold and stop.hold.direction is HoldDirection.INCOMING
-    assert mini.disk("knowledge/team/doc-3.md") == b"document 3\n"
-    restore_held(mini.engine, actor="user")
-    after = resume(mini.engine, mini.remote, None)
-    assert after.status in (RoundStatus.PULLED_AND_PUSHED, RoundStatus.PUSHED)
-    assert mini.disk("knowledge/team/doc-3.md") == b"document 3\n"
-    mac.round()
-    assert mac.disk("knowledge/team/doc-3.md") == b"document 3\n"
+    pushed = mac.round()
+    assert pushed.status is RoundStatus.PUSHED
+    assert mac.state.stop() is None
+    pulled = mini.round()
+    assert pulled.status is RoundStatus.PULLED
+    assert mini.state.stop() is None
+    assert mini.disk("knowledge/team/doc-3.md") is None
 
 
 @pytest.mark.acceptance(spec="vault-sync", scenario="a round can be rolled back")

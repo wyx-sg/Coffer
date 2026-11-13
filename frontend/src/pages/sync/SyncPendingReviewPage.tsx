@@ -45,11 +45,11 @@ export function SyncPendingReviewPage() {
         files.length > 0
           ? status?.next_round_at
             ? t("sync.pending.sublineAt", {
-                files: t("sync.deletions.files", { count: files.length }),
+                files: t("sync.pending.files", { count: files.length }),
                 time: clock(status.next_round_at),
               })
             : t("sync.pending.subline", {
-                files: t("sync.deletions.files", { count: files.length }),
+                files: t("sync.pending.files", { count: files.length }),
               })
           : undefined
       }

@@ -25,68 +25,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/sync/hold/confirm": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Confirm Hold
-         * @description Apply the held deletions, and continue the round.
-         */
-        post: operations["confirm_hold_api_v1_sync_hold_confirm_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/sync/hold/diff": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Held File Diff
-         * @description One file a held round would delete, its whole text as removed lines.
-         *     404 ``SYNC_ROUND_FILE_NOT_LISTED`` when no round is held or the hold does
-         *     not list the path.
-         */
-        get: operations["get_held_file_diff_api_v1_sync_hold_diff_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/sync/hold/restore": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Restore Hold
-         * @description Keep the held files, and continue the round (it pushes them back).
-         */
-        post: operations["restore_hold_api_v1_sync_hold_restore_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/sync/join": {
         parameters: {
             query?: never;
@@ -755,15 +693,6 @@ export interface components {
             /** Skills */
             skills: number;
         };
-        /** BreachOut */
-        BreachOut: {
-            /** Area */
-            area: string;
-            /** Lost */
-            lost: number;
-            /** Total */
-            total: number;
-        };
         /** ConflictFileOut */
         ConflictFileOut: {
             /** Agent Conversation Id */
@@ -883,36 +812,6 @@ export interface components {
         HandoffOut: {
             /** Prompt */
             prompt: string;
-        };
-        /**
-         * HoldGroupOut
-         * @description The held files under one folder, and how many files it held.
-         */
-        HoldGroupOut: {
-            /** Folder */
-            folder: string;
-            /** Paths */
-            paths: string[];
-            /** Total */
-            total: number;
-        };
-        /** HoldOut */
-        HoldOut: {
-            /** Breaches */
-            breaches: components["schemas"]["BreachOut"][];
-            /** Confirmed */
-            confirmed: boolean;
-            /**
-             * Direction
-             * @enum {string}
-             */
-            direction: "incoming" | "outgoing";
-            /** Groups */
-            groups: components["schemas"]["HoldGroupOut"][];
-            /** Machines */
-            machines: string[];
-            /** Paths */
-            paths: string[];
         };
         /** JoinChoiceIn */
         JoinChoiceIn: {
@@ -1187,8 +1086,8 @@ export interface components {
         };
         /**
          * RoundFileDiffOut
-         * @description One file a round applied or pushed, one waiting to push (``pending``)
-         *     or one a held round would delete (``held``). ``text`` carries the unified
+         * @description One file a round applied or pushed, or one waiting to push
+         *     (``pending``). ``text`` carries the unified
          *     ``diff`` and its line counts; ``secret``, ``binary`` and ``too_large``
          *     carry no content at all (never ciphertext).
          */
@@ -1216,7 +1115,7 @@ export interface components {
              * Side
              * @enum {string}
              */
-            side: "applied" | "pushed" | "pending" | "held";
+            side: "applied" | "pushed" | "pending";
         };
         /**
          * RoundOut
@@ -1239,10 +1138,6 @@ export interface components {
             folded: number;
             /** From Commit */
             from_commit: string | null;
-            /** Held */
-            held: number;
-            /** Held Direction */
-            held_direction: ("incoming" | "outgoing") | null;
             /** Id */
             id: number | null;
             /** Join */
@@ -1294,14 +1189,8 @@ export interface components {
         StoppedRoundOut: {
             /** Files */
             files: components["schemas"]["ConflictFileOut"][];
-            hold: components["schemas"]["HoldOut"] | null;
             /** Join */
             join: string | null;
-            /**
-             * Kind
-             * @enum {string}
-             */
-            kind: "conflicts" | "hold";
             /** Local */
             local: string;
             /** Raised At */
@@ -1426,8 +1315,6 @@ export interface components {
             conflicts: number;
             /** Default Vault Path */
             default_vault_path: string | null;
-            /** Held */
-            held: number;
             /** Join Choices */
             join_choices: number;
             /** Joined */
@@ -1508,129 +1395,6 @@ export interface components {
 export type $defs = Record<string, never>;
 export interface operations {
     continue_round_api_v1_sync_continue_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RoundOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    confirm_hold_api_v1_sync_hold_confirm_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RoundOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    get_held_file_diff_api_v1_sync_hold_diff_get: {
-        parameters: {
-            query: {
-                /** @description A file the held round would delete; else 404. */
-                path: string;
-            };
-            header?: {
-                "x-coffer-token"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RoundFileDiffOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    restore_hold_api_v1_sync_hold_restore_post: {
         parameters: {
             query?: never;
             header?: {

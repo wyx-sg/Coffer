@@ -907,8 +907,6 @@
       "sync_run_conflicts_one": "同步已停止：{{count}} 个文件有冲突",
       "sync_run_conflicts_other": "同步已停止：{{count}} 个文件有冲突",
       "sync_run_stopped": "同步因冲突而停止",
-      "sync_run_heldCount_one": "同步已暂停：它会删除 {{count}} 个文件",
-      "sync_run_heldCount_other": "同步已暂停：它会删除 {{count}} 个文件",
       "sync_run_held": "同步在删除文件前暂停",
       "sync_run_pushFailedPulled_one": "已同步：拉取 {{count}} 个文件，但远端拒绝了推送",
       "sync_run_pushFailedPulled_other": "已同步：拉取 {{count}} 个文件，但远端拒绝了推送",
@@ -4335,7 +4333,6 @@
       "roundDone": "本轮完成：{{status}}（拉取 {{pulled}}，推送 {{pushed}}）",
       "needs": {
         "stopped": "同步因两台机器都改过的文件而停下——请到同步页面逐个回答。",
-        "held": "同步拦下了一次大量删除——请到同步页面查看。",
         "waiting_on_edit": "同步在等待：本轮要改的文件正在被编辑。",
         "join_required": "本机尚未加入这个远端——请到同步页面加入。",
         "plaintext_found": "同步没有推送任何内容：有文件含明文密钥——请到同步页面查看。"
@@ -4444,32 +4441,6 @@
         "title": "没有需要解决的冲突",
         "body": "目前没有因冲突而停下的一轮。"
       }
-    },
-    "deletions": {
-      "title": "查看暂扣的删除",
-      "pill": "这一轮已暂停",
-      "subline": {
-        "incoming": "这一轮在 {{time}} · {{folders}}里的{{files}}，在 {{machine}} 上被删除 · 你做出决定后，拉取到的其余内容才会应用。",
-        "outgoing": "这一轮在 {{time}} · {{folders}}里的{{files}}，在 {{machine}} 上被删除 · 你做出决定前不会推送任何内容。"
-      },
-      "files_one": "{{count}} 个文件",
-      "files_other": "{{count}} 个文件",
-      "folders_one": "{{count}} 个文件夹",
-      "folders_other": "{{count}} 个文件夹",
-      "thisMac": "本机",
-      "anotherMachine": "另一台 Mac",
-      "hint": {
-        "incoming": "删除会在本机也删掉它们，删除前先做安全快照，这一轮可以回滚。保留文件会在本机保留并推送回去，{{machine}} 下一轮会重新拿到它们。",
-        "outgoing": "删除会在下一轮于远端和其他每台 Mac 上删掉它们，删除前先做安全快照。保留文件会在本机恢复这些文件，哪里都不会删除。"
-      },
-      "keep": "保留文件",
-      "delete_one": "删除 {{count}} 个文件",
-      "delete_other": "删除 {{count}} 个文件",
-      "empty": {
-        "title": "没有暂扣的删除",
-        "body": "目前没有等待确认删除的一轮。"
-      },
-      "deletedOn": "在 {{machine}} 上被删除"
     },
     "machines": {
       "description": "与这个仓库同步的 Mac。一台 Mac 跑完第一轮后出现在这里。",
@@ -4664,8 +4635,6 @@
       "paused": "已暂停",
       "conflicts_one": "已停止：{{count}} 处冲突",
       "conflicts_other": "已停止：{{count}} 处冲突",
-      "held_one": "已停止：暂扣 {{count}} 项删除",
-      "held_other": "已停止：暂扣 {{count}} 项删除",
       "push_failed": "推送失败",
       "plaintext_found": "未推送：明文密钥",
       "unreachable": "远端无法连接",
@@ -4722,12 +4691,6 @@
       "stoppedConflicts_other": "本轮因 {{count}} 处冲突停止",
       "stoppedConflictsBody": "这台 Mac 和 {{peer}} 改了相同的行。没有检出或推送任何内容；这台 Mac 在此期间照常工作。",
       "resolveConflicts": "解决冲突",
-      "heldIncoming_one": "{{peer}} 删除了 {{count}} 个文件，超过了一轮允许删除的数量",
-      "heldIncoming_other": "{{peer}} 删除了 {{count}} 个文件，超过了一轮允许删除的数量",
-      "heldOutgoing_one": "这台 Mac 删除了 {{count}} 个文件，超过了一轮允许删除的数量",
-      "heldOutgoing_other": "这台 Mac 删除了 {{count}} 个文件，超过了一轮允许删除的数量",
-      "heldBody": "一轮删除 20 个及以上文件，或在某个区域删除 5 个以上且超过一半时，会等你确认。没有检出任何内容，也没有推送任何内容。查看列表后，可以在这里也删除它们，或把它们恢复。",
-      "reviewDeletions": "查看删除",
       "reviewChanges": "查看改动"
     },
     "areas": {
@@ -4780,8 +4743,6 @@
         "pulledPushFailed": "已拉取，推送失败",
         "stoppedOn_one": "因 {{count}} 处冲突停止",
         "stoppedOn_other": "因 {{count}} 处冲突停止",
-        "heldCount_one": "暂扣：{{count}} 项删除",
-        "heldCount_other": "暂扣：{{count}} 项删除",
         "rolledBackRound": "回滚了 {{time}} 那一轮"
       },
       "detail": {
@@ -4822,12 +4783,7 @@
       "viewActivity": "在活动中查看",
       "stop": {
         "title": "为什么停下",
-        "heldOutgoing_one": "这台 Mac 的改动会从远端删除 {{count}} 个文件，超过了不经确认就能删除的量，所以停下等你确认。",
-        "heldOutgoing_other": "这台 Mac 的改动会从远端删除 {{count}} 个文件，超过了不经确认就能删除的量，所以停下等你确认。",
-        "heldIncoming_one": "其他机器的改动会在这里删除 {{count}} 个文件，超过了不经确认就能删除的量，所以停下等你确认。",
-        "heldIncoming_other": "其他机器的改动会在这里删除 {{count}} 个文件，超过了不经确认就能删除的量，所以停下等你确认。",
-        "held_one": "这一轮会删除 {{count}} 个文件，超过了不经确认就能删除的量，所以停下等你确认。",
-        "held_other": "这一轮会删除 {{count}} 个文件，超过了不经确认就能删除的量，所以停下等你确认。",
+        "held": "旧版本的 Coffer 曾在删除文件前暂扣这一轮并等你确认。当时没有检出任何内容，也没有推送任何内容。",
         "conflicts_one": "{{count}} 个文件两边都改了且无法自动合并，所以停下等你选择。",
         "conflicts_other": "{{count}} 个文件两边都改了且无法自动合并，所以停下等你选择。",
         "plaintext_one": "要推送的文件里有明文密钥（{{count}} 处），所以没有推送任何内容。",
@@ -4850,6 +4806,8 @@
       "title": "查看待推送的改动",
       "subline": "这台 Mac 上有 {{files}}远端还没有 · 下一轮会推送出去。",
       "sublineAt": "这台 Mac 上有 {{files}}远端还没有 · 会在 {{time}} 的下一轮推送出去。",
+      "files_one": "{{count}} 个文件",
+      "files_other": "{{count}} 个文件",
       "hint": "立即推送会马上跑一轮：先拉取，再推送这些改动。",
       "back": "返回同步",
       "pushNow": "立即推送",
@@ -4916,7 +4874,7 @@
       "repair": "修复偏移",
       "open": "打开",
       "reconnectChannel": "重新连接渠道",
-      "reviewHeld": "查看被暂缓的变更",
+      "reviewSync": "查看同步",
       "openSecrets": "打开密钥",
       "turn_on": "开启"
     },
@@ -5029,8 +4987,8 @@
       },
       "sync": {
         "ok": "已同步",
-        "warn_one": "{{count}} 轮被暂扣",
-        "warn_other": "{{count}} 轮被暂扣",
+        "warn_one": "{{count}} 个需要关注",
+        "warn_other": "{{count}} 个需要关注",
         "notSetUp": "未设置",
         "noRound": "尚未同步过",
         "lastRound": "上一轮",

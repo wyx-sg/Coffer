@@ -140,7 +140,7 @@ Explained in: [Vault sync](/architecture/vault-sync), [Security model](/architec
 | Decision | Record |
 | --- | --- |
 | Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person | [`sync-applies-clean-merges-and-stops-on-any-conflict`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-applies-clean-merges-and-stops-on-any-conflict.md) |
-| A Sync Round That Would Lose Too Much Is Held, in Both Directions, Counting Losses Not Moves | [`sync-deletion-breaker`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-deletion-breaker.md) |
+| Sync Applies a Mass Deletion Like Any Other Change; Snapshots and History Undo One Nobody Meant | [`sync-applies-mass-deletions-like-any-change`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-applies-mass-deletions-like-any-change.md) |
 | A Machine Is Identified by a Hash of Its Host's Own ID, and Owns One Descriptor in the Tree | [`sync-machine-identity`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-machine-identity.md) |
 | Sync Withholds Derived Output; Each Machine Renders Its Own | [`sync-withholds-derived-output`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-withholds-derived-output.md) |
 | The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault | [`master-key-lives-in-the-macos-keychain`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md) |

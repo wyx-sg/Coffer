@@ -1,7 +1,7 @@
 // frontend/src/pages/sync/syncConflictTestKit.ts — wire-shaped fixtures for
-// the conflict and held-deletion tests, typed against the generated contract
+// the conflict tests, typed against the generated contract
 // so a field renamed on the backend fails every test that builds one.
-import type { ConflictFile, FileVersions, StoppedRound, SyncHold } from "@/lib/api/sync";
+import type { ConflictFile, FileVersions, StoppedRound } from "@/lib/api/sync";
 
 export function makeConflict(path: string, over: Partial<ConflictFile> = {}): ConflictFile {
   return {
@@ -27,37 +27,14 @@ export function makeConflict(path: string, over: Partial<ConflictFile> = {}): Co
 
 export function makeStopped(files: ConflictFile[], over: Partial<StoppedRound> = {}): StoppedRound {
   return {
-    kind: "conflicts",
     raised_at: "2026-09-13T09:00:00Z",
     local: "aaa",
     remote: "bbb",
     join: null,
     files,
     unanswered: files.filter((f) => f.answer === null).length,
-    hold: null,
     ...over,
   };
-}
-
-export function makeHold(over: Partial<SyncHold> = {}): SyncHold {
-  const chat = Array.from({ length: 12 }, (_, i) => `knowledge/archive/chat-bot/n${i + 1}.md`);
-  const pdf = ["skills/pdf-tools-old/SKILL.md", "skills/pdf-tools-old/scripts/extract.py"];
-  return {
-    direction: "incoming",
-    breaches: [{ area: "knowledge", lost: 12, total: 20 }],
-    paths: [...chat, ...pdf],
-    groups: [
-      { folder: "knowledge/archive/chat-bot", paths: chat, total: 20 },
-      { folder: "skills/pdf-tools-old", paths: pdf, total: 2 },
-    ],
-    machines: ["Mac mini"],
-    confirmed: false,
-    ...over,
-  };
-}
-
-export function makeHeldRound(hold: SyncHold = makeHold()): StoppedRound {
-  return makeStopped([], { kind: "hold", hold, unanswered: 0 });
 }
 
 const TAKE_THEIRS_DIFF = [
