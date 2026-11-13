@@ -173,6 +173,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`tool-search-cuts-cjk-text-into-bigrams`](tool-search-cuts-cjk-text-into-bigrams.md) | Tool Search Cuts CJK Text Into Bigrams |
 | [`tool-search-indexes-parameter-text`](tool-search-indexes-parameter-text.md) | Tool Search Indexes Parameter Text |
 | [`tool-search-puts-an-exact-name-first`](tool-search-puts-an-exact-name-first.md) | Tool Search Puts an Exact Name First |
+| [`a-search-that-finds-nothing-names-the-unreached-server`](a-search-that-finds-nothing-names-the-unreached-server.md) | A Search Names the Server the Agent Is Not Reached By |
 | [`one-hand-off-per-server-or-group`](one-hand-off-per-server-or-group.md) | One Hand-Off per MCP Server or Custom Tool Group, Carrying the Real Error |
 | [`eval-capture-and-regression-gate`](eval-capture-and-regression-gate.md) | Evals: Opt-In Capture, Hand Curation, and a Deterministic Regression Gate |
 | [`record-tool-call-content-redacted-and-bounded`](record-tool-call-content-redacted-and-bounded.md) | Record Tool Call Content, Masked Where the Secrets Are Known and Cut at 16 KB |
@@ -265,6 +266,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`sync-memories-not-task-notes`](sync-memories-not-task-notes.md) | Sync Memories, Not Task Notes: Read Codex Only From Its v2 Summary |
 | [`a-memory-outlives-its-checkout`](a-memory-outlives-its-checkout.md) | A Memory Outlives Its Checkout |
 | [`claude-code-reads-other-agents-memories-as-text`](claude-code-reads-other-agents-memories-as-text.md) | Claude Code Reads Other Agents' Memories as Text It Loads |
+| [`a-skills-tool-is-checked-against-each-agent-that-gets-the-skill`](a-skills-tool-is-checked-against-each-agent-that-gets-the-skill.md) | A Skill's Tool Is Checked Against Each Agent That Gets the Skill |
 
 ### Sync & secrets
 
@@ -291,4 +293,3 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | ADR | Decision |
 | --- | --- |
 | [`docs-screenshots-are-generated-from-a-seeded-daemon`](docs-screenshots-are-generated-from-a-seeded-daemon.md) | Docs Screenshots Are Generated From a Seeded Daemon, Not Captured by Hand |
-| [`a-search-that-finds-nothing-names-the-unreached-server`](a-search-that-finds-nothing-names-the-unreached-server.md) | A Search That Finds Nothing Names the Server the Agent Is Not Reached By |

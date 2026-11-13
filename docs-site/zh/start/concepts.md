@@ -72,7 +72,7 @@ flowchart TB
 
 scope 适用于 MCP 服务器（哪些智能体能看到该服务器的工具）、技能（哪些智能体会收到该技能）、提供商（切换时写入哪些智能体的配置）和消息渠道（该渠道可以驱动哪些智能体）。知识集两者都没有：每一个都对所有智能体提供。生效范围是**本机专属**的：它在所作用的机器上设置，永不同步，所以你的每台机器各自决定生效范围。
 
-用 `coffer mcp|skill|channel reach <name> --data '{"scope":{"agents":["<agent uid>"]}}'` 设置 scope（`{"scope":null}` 表示所有智能体），任何类型都可以用 `coffer resource reach set <uid>`；自定义工具分组用 `coffer custom-tool group reach <group> --agent <agent>`（可重复）或 `--all`。Web 界面资源页面上的**生效范围**控件效果相同。指南：[MCP 服务器](/zh/guides/mcp-servers)、[技能](/zh/guides/skills)。架构：[资源框架](/zh/architecture/resource-framework)。
+用 `coffer mcp|skill|channel reach <name> --agent <agent>` 设置 scope（可重复；写出的智能体就是完整的范围），`--all` 表示所有智能体，任何类型都可以用 `coffer resource reach set <uid>`；自定义工具分组的 `coffer custom-tool group reach <group>` 用同样的参数。Web 界面资源页面上的**生效范围**控件效果相同。指南：[MCP 服务器](/zh/guides/mcp-servers)、[技能](/zh/guides/skills)。架构：[资源框架](/zh/architecture/resource-framework)。
 
 ## 智能体 {#agent}
 

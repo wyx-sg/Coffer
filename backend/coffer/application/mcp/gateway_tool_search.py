@@ -145,20 +145,27 @@ async def execute_tool_search(
 
     tools = [_result_entry(candidates[s.index], s.score, groups) for s in ranked]
     result: dict[str, Any] = {"tools": tools, "total_searched": len(candidates)}
-    if not tools:
-        matches = _out_of_reach_matches(query, out_of_reach)
-        if matches:
-            result["note"] = (
-                f"No tool in your reach matched. These servers match the query but are not "
-                f"in reach for this agent: {', '.join(matches)}. The developer can reach one "
-                f"with `coffer mcp reach <server> --agent <this agent>`."
-            )
+    matches = _out_of_reach_matches(query, out_of_reach, exact=bool(tools))
+    if matches:
+        result["note"] = (
+            f"{'Also' if tools else 'No tool in your reach matched, but'} enabled in Coffer "
+            f"and not in this agent's reach: {', '.join(matches)}. Only the developer can "
+            f"change that: the Reach control on the server's page, or `coffer mcp reach "
+            f"<server> --agent <agent>` naming every agent that should reach it."
+        )
     return result
 
 
-def _out_of_reach_matches(query: str, names: Sequence[str]) -> list[str]:
-    """The unreached server names that share a word with the query."""
+def _out_of_reach_matches(query: str, names: Sequence[str], *, exact: bool) -> list[str]:
+    """The unreached servers the query asks for.
+
+    A search that found nothing names every server sharing a word with the
+    query. One that found tools names only a server a query word spells
+    exactly, so an ordinary search is not annotated with look-alikes.
+    """
     words = {w for w in re.split(r"[^a-z0-9]+", query.lower()) if len(w) >= 3}
+    if exact:
+        return [n for n in names if n.lower() in words]
     return [n for n in names if any(w in n.lower() for w in words)]
 
 

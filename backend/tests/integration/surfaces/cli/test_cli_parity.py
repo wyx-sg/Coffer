@@ -196,3 +196,27 @@ def test_input_from_stdin_and_errors_as_json(
         "error": {"code": "RESOURCE_NOT_FOUND", "message": "gone", "details": {}},
         "exit_code": 4,
     }
+
+
+@pytest.mark.acceptance(
+    spec="resource-framework", scenario="a reach is set by naming agents on the command line"
+)
+def test_reach_takes_agents_or_all(monkeypatch: pytest.MonkeyPatch) -> None:
+    recorder = _Recorder()
+    monkeypatch.setattr(_client, "client_or_exit", lambda **_kw: (recorder, object()))
+    uid = "u" * 32
+    named = _runner.invoke(app, ["mcp", "reach", "grafana", "--agent", "claude-code", "--json"])
+    assert named.exit_code == 0, named.output
+    assert recorder.calls[-1] == (
+        "PUT",
+        f"/resources/{uid}/scope",
+        {},
+        {"scope": {"agents": [uid]}},
+    )
+    every = _runner.invoke(app, ["skill", "reach", "x", "--all", "--json"])
+    assert every.exit_code == 0, every.output
+    assert recorder.calls[-1][3] == {"scope": None}
+    for bad in (["mcp", "reach", "x"], ["mcp", "reach", "x", "--agent", "a", "--all"]):
+        refused = _runner.invoke(app, [*bad, "--json"])
+        assert refused.exit_code == 6, refused.output
+        assert json.loads(refused.stderr)["error"]["code"] == "CLI_INVALID_INPUT"

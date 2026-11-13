@@ -108,6 +108,7 @@ async def requires_view(
     states = get_skill_tool_states()
     if parsed.tools and states is not None:
         found, _unknown = resolve_tools(parsed.tools, await states.tool_states())
+        delivered = _live_agents(bindings)
         view.tools = [
             SkillToolRequirementOut(
                 name=t.state.name,
@@ -115,6 +116,10 @@ async def requires_view(
                 kind=t.state.kind.value,
                 status=t.state.status.value,
                 why=t.requirement.why,
+                missing_agent_names=[
+                    agents_by_uid[u].name if u in agents_by_uid else u
+                    for u in t.state.misses(delivered)
+                ],
             )
             for t in found
         ]

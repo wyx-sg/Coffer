@@ -4,11 +4,14 @@ requires").
 
 A custom-tool group and an MCP server are both ``mcp_server`` resources; they
 differ by transport. The state is the resource's own: off when it is switched
-off, failing when its last connection test failed, healthy otherwise."""
+off, failing when its last connection test failed, healthy otherwise. Its reach
+is carried beside the state, so a skill can say which of the agents it is
+delivered to cannot call it (ADR a-skills-tool-is-checked-against-each-agent-
+that-gets-the-skill)."""
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -32,6 +35,15 @@ class ToolState:
     name: str
     kind: ToolKind
     status: ToolStatus
+    #: The agents (uids) its reach names; ``None`` when it reaches every agent.
+    reach: frozenset[str] | None = None
+
+    def misses(self, agents: Collection[str]) -> list[str]:
+        """Which of ``agents`` it does not reach. A tool that is off is
+        reported as off, not as missing every agent."""
+        if self.reach is None or self.status is ToolStatus.OFF:
+            return []
+        return sorted(a for a in agents if a not in self.reach)
 
 
 @dataclass(frozen=True)

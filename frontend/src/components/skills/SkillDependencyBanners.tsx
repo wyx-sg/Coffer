@@ -93,6 +93,29 @@ export function SkillDependencyBanners({ skill, items }: Props) {
             </SkillBannerFrame>
           ));
         }
+        if (item.kind === "toolNotShared") {
+          return item.tools.map((tool) => (
+            <SkillBannerFrame
+              key={`tool-reach:${tool.uid}`}
+              tone="warning"
+              testId="skill-banner-tool-reach"
+              title={t("skills.banner.toolNotShared", {
+                tool: tool.name,
+                name: skill.name,
+                agents: (tool.missing_agent_names ?? []).map(agentTypeLabel).join(", "),
+              })}
+              actions={
+                <Button asChild variant="outline" size="sm">
+                  <Link to={toolHref(tool)}>
+                    {t("skills.banner.openTool", { tool: tool.name })}
+                  </Link>
+                </Button>
+              }
+            >
+              {t("skills.banner.toolNotSharedBody", { tool: tool.name, name: skill.name })}
+            </SkillBannerFrame>
+          ));
+        }
         if (item.kind === "skillNotShared") {
           return item.skills.map((dep) => (
             <SkillBannerFrame

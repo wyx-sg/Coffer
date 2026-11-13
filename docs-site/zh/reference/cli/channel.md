@@ -24,7 +24,7 @@ coffer channel [OPTIONS] COMMAND [ARGS]...
 | [`channel delete`](#channel-delete) | Delete a channel. |
 | [`channel enable`](#channel-enable) | Switch a channel on. |
 | [`channel disable`](#channel-disable) | Switch a channel off. |
-| [`channel reach`](#channel-reach) | Set the agents a channel reaches. |
+| [`channel reach`](#channel-reach) | Set the agents a channel reaches: --agent for each one (the whole list), or --all. |
 | [`channel add`](#channel-add) | Add a channel. |
 | [`channel status`](#channel-status) | Whether the channel is connected, and what waits. |
 | [`channel restart`](#channel-restart) | Reconnect the channel. |
@@ -141,7 +141,7 @@ coffer channel disable [OPTIONS] UID
 
 ## channel reach
 
-Set the agents a channel reaches. Body: scope ({agents: [uid…]} or null).
+Set the agents a channel reaches: --agent for each one (the whole list), or --all.
 
 <p class="cli-label">概要</p>
 
@@ -156,6 +156,8 @@ coffer channel reach [OPTIONS] UID
 | `UID` <span class="cli-chip">参数</span> | text | 必填 | The channel's name or uid |
 | `--data, -d` <span class="cli-chip">选项</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
 | `--set` <span class="cli-chip">选项</span> | text（可重复） |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
+| `--agent` <span class="cli-chip">选项</span> | text（可重复） |  | An agent (name or uid); repeat |
+| `--all` <span class="cli-chip">选项</span> | 开关 |  | Reach every agent |
 | `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
 
 ## channel add

@@ -20,6 +20,7 @@ from coffer.application.mcp.gateway import MCPGatewaySession
 from coffer.application.runtime.supervisor import spawn
 from coffer.application.runtime.wakeable import WakeableLoop
 from coffer.application.runtime.workers import WorkerMode
+from coffer.domain.reconcile import Changed
 
 _logger = logging.getLogger(__name__)
 
@@ -152,10 +153,36 @@ async def _drop_session(session_id: str) -> None:
     _SESSION_DISPOSE_LOCKS.pop(session_id, None)
 
 
+# How long a burst of server writes is gathered into one announcement.
+_ANNOUNCE_SETTLE_S = 0.3
+_announcing: asyncio.Task[None] | None = None
+
+
+def tools_changed_sink(loop: asyncio.AbstractEventLoop) -> Callable[[Changed], None]:
+    """A hint sink that tells live sessions to list their tools again after any
+    write to a server: its reach, its switch, a tool's switch, a deletion, and
+    equally a hand edit or a sync that brought one (spec mcp-gateway "Tell live
+    sessions when their tool list changes"). Hints may arrive off the loop."""
+
+    def start() -> None:
+        global _announcing
+        if _ACTIVE_SESSIONS and (_announcing is None or _announcing.done()):
+            _announcing = spawn(_announce_soon(), name="mcp-tools-changed")
+
+    def on_changed(changed: Changed) -> None:
+        if changed.kind == "mcp_server":
+            loop.call_soon_threadsafe(start)
+
+    return on_changed
+
+
+async def _announce_soon() -> None:
+    await asyncio.sleep(_ANNOUNCE_SETTLE_S)
+    await announce_tools_changed()
+
+
 async def announce_tools_changed() -> None:
-    """Send ``notifications/tools/list_changed`` to every live session, so an
-    agent re-lists after its reach, scope or enabled switch changed (spec
-    mcp-gateway "Tell live sessions when their tool list changes")."""
+    """Send ``notifications/tools/list_changed`` to every live session."""
     for session in list(_ACTIVE_SESSIONS.values()):
         with contextlib.suppress(Exception):
             await session.announce_tools_changed()

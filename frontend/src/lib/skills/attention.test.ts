@@ -21,6 +21,7 @@ const GITHUB_OFF = {
   kind: "mcp_server" as const,
   status: "off" as const,
   why: null,
+  missing_agent_names: [],
 };
 
 describe("skillAttention", () => {
@@ -33,6 +34,22 @@ describe("skillAttention", () => {
     });
     const items = skillAttention(skill, [], undefined);
     expect(items).toEqual([{ kind: "toolOff", tools: [GITHUB_OFF] }]);
+  });
+
+  test("a healthy tool that misses an agent the skill is delivered to is an item", () => {
+    const grafana = {
+      ...GITHUB_OFF,
+      uid: "t-3",
+      name: "grafana",
+      status: "healthy" as const,
+      missing_agent_names: ["claude_code"],
+    };
+    const skill = makeSkill({
+      requires_tools: [grafana, { ...grafana, uid: "t-4", name: "jira", missing_agent_names: [] }],
+    });
+    const items = skillAttention(skill, [], undefined);
+    expect(items).toEqual([{ kind: "toolNotShared", tools: [grafana] }]);
+    expect(skillStatus(skill, items)).toBe("toolNotShared");
   });
 
   test("most urgent first: master gone, then commands, then tools, then secrets", () => {

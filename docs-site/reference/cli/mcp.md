@@ -25,7 +25,7 @@ This page matches what `coffer mcp --help` prints. Add `--help` to any command b
 | [`mcp delete`](#mcp-delete) | Delete a server. |
 | [`mcp enable`](#mcp-enable) | Switch a server on. |
 | [`mcp disable`](#mcp-disable) | Switch a server off. |
-| [`mcp reach`](#mcp-reach) | Set the agents a server reaches. |
+| [`mcp reach`](#mcp-reach) | Set the agents a server reaches: --agent for each one (the whole list), or --all. |
 | [`mcp add`](#mcp-add) | Register a server. |
 | [`mcp test-config`](#mcp-test-config) | Test a config before adding it; nothing is saved. |
 | [`mcp status`](#mcp-status) | Why a server is in its state, and what to do. |
@@ -169,7 +169,7 @@ coffer mcp disable [OPTIONS] UID
 
 ## mcp reach
 
-Set the agents a server reaches. Body: scope ({agents: [uid…]} or null).
+Set the agents a server reaches: --agent for each one (the whole list), or --all.
 
 <p class="cli-label">Synopsis</p>
 
@@ -184,6 +184,8 @@ coffer mcp reach [OPTIONS] UID
 | `UID` <span class="cli-chip">argument</span> | text | required | The mcp_server's name or uid |
 | `--data, -d` <span class="cli-chip">option</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
 | `--set` <span class="cli-chip">option</span> | text (repeatable) |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
+| `--agent` <span class="cli-chip">option</span> | text (repeatable) |  | An agent (name or uid); repeat |
+| `--all` <span class="cli-chip">option</span> | flag |  | Reach every agent |
 | `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
 
 ## mcp add

@@ -2875,7 +2875,8 @@
         "toolOff": "Tool off",
         "secretMissing": "Secret missing",
         "sourceUnreachable": "Source unreachable",
-        "skillNotShared": "Skill not shared"
+        "skillNotShared": "Skill not shared",
+        "toolNotShared": "Tool not shared"
       }
     },
     "files": {
@@ -3039,7 +3040,8 @@
       "needsTool": "Needs {{name}} · {{state}}",
       "sourceUnreachable": "Git source unreachable",
       "updateAvailable": "Update available · Git",
-      "needsSkill": "Needs skill {{name}} · not on {{agents}}"
+      "needsSkill": "Needs skill {{name}} · not on {{agents}}",
+      "needsToolReach": "Needs {{name}} · not on {{agents}}"
     },
     "selection": {
       "title_one": "{{count}} skill selected",
@@ -3103,6 +3105,8 @@
       "unreachablePrompt": "Coffer can’t reach the Git repository {{url}} that the skill {{name}} was imported from. Last error: {{error}}\n\nCheck whether this machine’s network, VPN or git credentials can reach that repository (for example with `git ls-remote {{url}}`), fix what blocks it, and tell me what you changed. Don’t change the skill itself.",
       "skillNotShared": "{{name}} loads {{dep}}, which {{agents}} doesn’t get",
       "skillNotSharedBody": "Give {{dep}} the same reach as {{name}}, or narrow {{name}}’s reach.",
+      "toolNotShared": "{{name}} calls {{tool}}, which {{agents}} can’t reach",
+      "toolNotSharedBody": "Add them to {{tool}}’s reach, or narrow {{name}}’s reach.",
       "openSkill": "Open {{name}}"
     },
     "copy": {

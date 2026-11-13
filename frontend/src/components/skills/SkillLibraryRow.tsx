@@ -57,6 +57,12 @@ function useSublineText(item: SkillAttention, agents: readonly AgentOut[]): stri
         state: t(`skills.requires.toolState.${tool?.status ?? "off"}`).toLowerCase(),
       });
     }
+    case "toolNotShared": {
+      const tool = item.tools[0];
+      const missing = tool?.missing_agent_names ?? [];
+      const names = missing.map((n) => agents.find((a) => a.name === n)?.display_name ?? n);
+      return t("skills.row.needsToolReach", { name: tool?.name, agents: names.join(", ") });
+    }
     case "skillNotShared": {
       const dep = item.skills[0];
       const missing = dep?.missing_agent_names ?? [];

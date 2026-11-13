@@ -27,7 +27,7 @@ import builtins
 import inspect
 import logging
 import uuid
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
@@ -85,9 +85,6 @@ class ResourceService:
         self._bindings = bindings
         #: Who may release a secret, and what cites each one (composition root).
         self.secret_hooks = SecretHooks()
-        #: Called with each resource whose reach, scope or enabled switch changed
-        #: (composition root). Kind-agnostic: a listener decides what the change means.
-        self.after_switch_change: list[Callable[[Resource], Awaitable[None]]] = []
 
     def set_binding_settler(self, settler: BindingSettlerPort | None) -> None:
         """Install the post-register seam, once every kind has declared where
@@ -298,9 +295,7 @@ class ResourceService:
         """Flip a resource's enabled flag; see ``resource_enable_ops``."""
         from coffer.application.resource_enable_ops import set_enabled as _set_enabled
 
-        resource = await _set_enabled(self, uid, enabled, actor=actor)
-        await self._after_switch_change(resource)
-        return resource
+        return await _set_enabled(self, uid, enabled, actor=actor)
 
     async def update_scope(
         self,
@@ -316,13 +311,7 @@ class ResourceService:
         """
         from coffer.application.resource_scope_ops import update_scope as _update_scope
 
-        resource = await _update_scope(self, uid, scope, actor=actor)
-        await self._after_switch_change(resource)
-        return resource
-
-    async def _after_switch_change(self, resource: Resource) -> None:
-        for listener in list(self.after_switch_change):
-            await listener(resource)
+        return await _update_scope(self, uid, scope, actor=actor)
 
     async def rename(self, uid: str, new_name: str, actor: str) -> Resource:
         """Change a resource's LABEL — one column, since cross-resource

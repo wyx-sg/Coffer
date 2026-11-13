@@ -242,9 +242,9 @@ called over a recent window, with at least one tool per server. Unlisted tools s
 callable by name and are found with `coffer__search_tools`. The budget is set by
 environment variables on the daemon; see [Configuration](/reference/configuration).
 
-A search that finds nothing in the agent's reach says so. If a server matches the query but is not reached by this agent, the result carries a `note` naming it and the command that reaches it (`coffer mcp reach <server> --agent <agent>`). Server names are shown only in that case.
+A search tells the agent when the server it asked for exists but is not in its reach. If nothing matched and an enabled server outside the agent's reach has a query word in its name, the result carries a `note` naming it. If other tools matched, the note appears only for a server whose whole name is a query word. The note never includes that server's tools, and only you can change the reach: the **Reach** control on the server's page, or `coffer mcp reach <server> --agent <agent>` (name every agent that should reach it) or `--all`.
 
-When the agent's reach, scope or a server's enabled switch changes, a running session is told that its tool list changed, so the agent lists tools again without a restart.
+After any change to a server (its reach, its switch, a tool's switch, an edit, a deletion) Coffer sends running sessions `notifications/tools/list_changed`. Claude Code fetches the new list on that notification; a client that ignores it sees the change on its next session.
 
 | Setting | Default |
 | --- | --- |

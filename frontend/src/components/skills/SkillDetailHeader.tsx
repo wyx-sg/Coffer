@@ -49,6 +49,7 @@ const TONE: Record<SkillStatus, StatusTone> = {
   commandMissing: "warn",
   commandNotReady: "warn",
   toolOff: "warn",
+  toolNotShared: "warn",
   skillNotShared: "warn",
   secretMissing: "warn",
   sourceUnreachable: "warn",

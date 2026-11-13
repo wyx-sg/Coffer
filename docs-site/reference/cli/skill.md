@@ -21,7 +21,7 @@ This page matches what `coffer skill --help` prints. Add `--help` to any command
 | [`skill update`](#skill-update) | Change a skill. |
 | [`skill enable`](#skill-enable) | Switch a skill on. |
 | [`skill disable`](#skill-disable) | Switch a skill off. |
-| [`skill reach`](#skill-reach) | Set the agents a skill reaches. |
+| [`skill reach`](#skill-reach) | Set the agents a skill reaches: --agent for each one (the whole list), or --all. |
 | [`skill list`](#skill-list) | Every skill with its delivery and source state. |
 | [`skill show`](#skill-show) | One skill: its master path, requirements, delivery and source. |
 | [`skill files`](#skill-files) | The skill's files and its master path (edit them with your own tools). |
@@ -104,7 +104,7 @@ coffer skill disable [OPTIONS] UID
 
 ## skill reach
 
-Set the agents a skill reaches. Body: scope ({agents: [uid…]} or null).
+Set the agents a skill reaches: --agent for each one (the whole list), or --all.
 
 <p class="cli-label">Synopsis</p>
 
@@ -119,6 +119,8 @@ coffer skill reach [OPTIONS] UID
 | `UID` <span class="cli-chip">argument</span> | text | required | The skill's name or uid |
 | `--data, -d` <span class="cli-chip">option</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
 | `--set` <span class="cli-chip">option</span> | text (repeatable) |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
+| `--agent` <span class="cli-chip">option</span> | text (repeatable) |  | An agent (name or uid); repeat |
+| `--all` <span class="cli-chip">option</span> | flag |  | Reach every agent |
 | `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
 
 ## skill list

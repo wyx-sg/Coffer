@@ -27,7 +27,7 @@ This page matches what `coffer resource --help` prints. Add `--help` to any comm
 | [`resource disable`](#resource-disable) | Switch a resource off. |
 | [`resource reach`](#resource-reach) | Which agents a resource reaches. |
 | [`resource reach show`](#resource-reach-show) | Which agents a resource reaches. |
-| [`resource reach set`](#resource-reach-set) | Set the agents a resource reaches. |
+| [`resource reach set`](#resource-reach-set) | Set the agents a resource reaches: --agent for each one (the whole list), or --all. |
 
 ## resource list
 
@@ -183,7 +183,7 @@ coffer resource reach show [OPTIONS] UID
 
 ## resource reach set
 
-Set the agents a resource reaches. Body: scope ({agents: [uid…]} or null for every agent).
+Set the agents a resource reaches: --agent for each one (the whole list), or --all.
 
 <p class="cli-label">Synopsis</p>
 
@@ -198,4 +198,6 @@ coffer resource reach set [OPTIONS] UID
 | `UID` <span class="cli-chip">argument</span> | text | required | uid |
 | `--data, -d` <span class="cli-chip">option</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
 | `--set` <span class="cli-chip">option</span> | text (repeatable) |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
+| `--agent` <span class="cli-chip">option</span> | text (repeatable) |  | An agent (name or uid); repeat |
+| `--all` <span class="cli-chip">option</span> | flag |  | Reach every agent |
 | `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |

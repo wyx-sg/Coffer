@@ -96,6 +96,9 @@ class SkillToolRequirementOut(BaseModel):
     #: test failed, ``healthy`` otherwise.
     status: Literal["healthy", "off", "failing"]
     why: str | None
+    #: The agents this skill is delivered to that the tool's reach leaves out
+    #: (empty when it reaches them all, and when it is off).
+    missing_agent_names: list[str] = []
 
 
 class SkillSkillRequirementOut(BaseModel):

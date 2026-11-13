@@ -162,13 +162,21 @@ describe("SkillRequiresTab", () => {
     api.list.mockResolvedValue({ items: [], warnings: [] });
     renderTab("sk-tools", [], [], {
       requires_tools: [
-        { name: "github", uid: "t-1", kind: "mcp_server", status: "off", why: null },
+        {
+          name: "github",
+          uid: "t-1",
+          kind: "mcp_server",
+          status: "off",
+          why: null,
+          missing_agent_names: [],
+        },
         {
           name: "billing-api",
           uid: "t-2",
           kind: "custom_tools",
           status: "failing",
           why: "401",
+          missing_agent_names: [],
         },
         {
           name: "linear",
@@ -176,6 +184,7 @@ describe("SkillRequiresTab", () => {
           kind: "mcp_server",
           status: "healthy",
           why: null,
+          missing_agent_names: [],
         },
       ],
     });

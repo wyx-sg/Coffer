@@ -72,7 +72,7 @@ A resource's **reach** decides where it takes effect. Reach has two parts:
 
 Scope applies to MCP servers (which agents see the server's tools), skills (which agents receive the skill), providers (which agents' config a switch writes into) and channels (which agents the channel may drive). Knowledge collections have neither: each is served to every agent. Reach is **machine-local**: it is set on the machine it applies to and never syncs, so each of your machines decides reach for itself.
 
-Set scope with `coffer mcp|skill|channel reach <name> --data '{"scope":{"agents":["<agent uid>"]}}'` (`{"scope":null}` for every agent), or `coffer resource reach set <uid>` for any kind; a custom-tool group takes `coffer custom-tool group reach <group> --agent <agent>` (repeatable) or `--all`. The **Reach** control on the resource's page in the web UI does the same. Guide: [MCP servers](/guides/mcp-servers), [Skills](/guides/skills). Architecture: [Resource framework](/architecture/resource-framework).
+Set scope with `coffer mcp|skill|channel reach <name> --agent <agent>` (repeatable; the agents you name are the whole reach) or `--all` for every agent, or `coffer resource reach set <uid>` for any kind; a custom-tool group takes the same flags on `coffer custom-tool group reach <group>`. The **Reach** control on the resource's page in the web UI does the same. Guide: [MCP servers](/guides/mcp-servers), [Skills](/guides/skills). Architecture: [Resource framework](/architecture/resource-framework).
 
 ## Agent
 

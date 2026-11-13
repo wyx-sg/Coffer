@@ -2875,7 +2875,8 @@
         "toolOff": "工具已关闭",
         "secretMissing": "密钥缺失",
         "sourceUnreachable": "来源无法访问",
-        "skillNotShared": "依赖技能未送达"
+        "skillNotShared": "依赖技能未送达",
+        "toolNotShared": "依赖工具不可达"
       }
     },
     "files": {
@@ -3039,7 +3040,8 @@
       "needsTool": "需要 {{name}} · {{state}}",
       "sourceUnreachable": "Git 来源无法访问",
       "updateAvailable": "有可用更新 · Git",
-      "needsSkill": "需要技能 {{name}} · {{agents}} 没有"
+      "needsSkill": "需要技能 {{name}} · {{agents}} 没有",
+      "needsToolReach": "需要 {{name}} · {{agents}} 用不了"
     },
     "selection": {
       "title_one": "已选 {{count}} 个技能",
@@ -3103,6 +3105,8 @@
       "unreachablePrompt": "Coffer 连不上技能 {{name}} 导入时所用的 Git 仓库 {{url}}。最近一次错误：{{error}}\n\n请检查这台机器的网络、VPN 或 git 凭据能否访问该仓库（例如运行 `git ls-remote {{url}}`），修好阻碍访问的问题，并告诉我你改了什么。不要改动技能本身。",
       "skillNotShared": "{{name}} 会加载 {{dep}}，但 {{agents}} 拿不到它",
       "skillNotSharedBody": "把 {{dep}} 的可达范围设成和 {{name}} 一样，或者缩小 {{name}} 的范围。",
+      "toolNotShared": "{{name}} 会调用 {{tool}}，但 {{agents}} 不在它的可达范围内",
+      "toolNotSharedBody": "把它们加进 {{tool}} 的可达范围，或者缩小 {{name}} 的范围。",
       "openSkill": "打开 {{name}}"
     },
     "copy": {

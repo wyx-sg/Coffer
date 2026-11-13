@@ -88,9 +88,9 @@ SPECS: list[RouteCommand] = [
         "PUT",
         "/resources/{uid}/scope",
         "every page · set Reach",
-        "Set the agents a resource reaches. Body: scope ({agents: [uid…]} or null for "
-        "every agent).",
+        "Set the agents a resource reaches: --agent for each one (the whole list), or --all.",
         body=True,
+        reach=True,
     ),
 ]
 
@@ -165,9 +165,11 @@ for group, (kind, page, noun) in KINDS.items():
                 "PUT",
                 "/resources/{uid}/scope",
                 f"{page} · Reach",
-                f"Set the agents a {noun} reaches. Body: scope ({{agents: [uid…]}} or null).",
+                f"Set the agents a {noun} reaches: --agent for each one (the whole list), "
+                "or --all.",
                 names=named,
                 body=True,
+                reach=True,
             )
         )
     if kind in ("channel",):
