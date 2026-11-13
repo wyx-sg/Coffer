@@ -36,7 +36,9 @@ class McpToolStates:
                 row = await health.get(server.uid)
                 if row is not None and row[0] == "failing":
                     status = ToolStatus.FAILING
-            out[server.name] = ToolState(server.uid, server.name, kind, status)
+            agents = server.scope.agents if server.scope else None
+            reach = frozenset(agents) if agents is not None else None
+            out[server.name] = ToolState(server.uid, server.name, kind, status, reach)
         return out
 
 

@@ -2891,6 +2891,12 @@ components:
           - custom_tools
           title: Kind
           type: string
+        missing_agent_names:
+          default: []
+          items:
+            type: string
+          title: Missing Agent Names
+          type: array
         name:
           title: Name
           type: string
@@ -2915,6 +2921,7 @@ components:
       - kind
       - status
       - why
+      - missing_agent_names
       title: SkillToolRequirementOut
       type: object
     SkillUpdateCheckSettingBody:

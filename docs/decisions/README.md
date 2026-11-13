@@ -266,6 +266,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`sync-memories-not-task-notes`](sync-memories-not-task-notes.md) | Sync Memories, Not Task Notes: Read Codex Only From Its v2 Summary |
 | [`a-memory-outlives-its-checkout`](a-memory-outlives-its-checkout.md) | A Memory Outlives Its Checkout |
 | [`claude-code-reads-other-agents-memories-as-text`](claude-code-reads-other-agents-memories-as-text.md) | Claude Code Reads Other Agents' Memories as Text It Loads |
+| [`a-skills-tool-is-checked-against-each-agent-that-gets-the-skill`](a-skills-tool-is-checked-against-each-agent-that-gets-the-skill.md) | A Skill's Tool Is Checked Against Each Agent That Gets the Skill |
 
 ### Sync & secrets
 

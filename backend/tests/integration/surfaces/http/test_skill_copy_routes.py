@@ -274,6 +274,48 @@ def test_requires_tools_and_skills_reach_the_read_model(
 
 @pytest.mark.acceptance(
     spec="skill-manager",
+    scenario="a declared tool that misses one of the skill's agents says which",
+)
+def test_a_declared_tool_names_the_agents_it_does_not_reach(
+    c: TestClient, tmp_path: pathlib.Path
+) -> None:
+    claude, _dir = _agent(c, tmp_path, "claude_code")
+    codex, _dir2 = _agent(c, tmp_path, "codex")
+    stdio = {"transport": {"type": "stdio", "command": "echo"}}
+
+    def server(name: str) -> str:
+        made = c.post(
+            "/api/v1/resources", json={"kind": "mcp_server", "name": name, "config": stdio}
+        )
+        return str(made.json()["uid"])
+
+    grafana, _github, jira = server("grafana"), server("github"), server("jira")
+    c.put(f"/api/v1/resources/{grafana}/scope", json={"scope": {"agents": [codex]}})
+    c.put(f"/api/v1/resources/{jira}/scope", json={"scope": {"agents": [codex]}})
+    c.post(f"/api/v1/resources/{jira}/disable")
+    folder = tmp_path / "src" / "oncall"
+    _skill(folder, "oncall")
+    (folder / "SKILL.md").write_text(
+        "---\nname: oncall\ndescription: On call.\nrequires:\n"
+        "  tools: [grafana, github, jira]\n---\nx\n",
+        encoding="utf-8",
+    )
+    oncall = _import(c, folder)
+
+    def tools() -> dict[str, list[str]]:
+        got = c.get(f"/api/v1/skills/{oncall['uid']}").json()
+        return {t["name"]: t["missing_agent_names"] for t in got["requires_tools"]}
+
+    missing = tools()
+    assert len(missing["grafana"]) == 1 and missing["github"] == [] and missing["jira"] == []
+    # Narrowing the skill to the agent the tool reaches clears it.
+    c.put(f"/api/v1/resources/{oncall['uid']}/scope", json={"scope": {"agents": [codex]}})
+    assert tools()["grafana"] == []
+    assert claude != codex
+
+
+@pytest.mark.acceptance(
+    spec="skill-manager",
     scenario="a folder whose skill is one folder down names that folder when it cannot be added",
 )
 def test_staging_a_folder_names_its_one_sub_folder_candidate(

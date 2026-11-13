@@ -6,7 +6,8 @@
 //
 // Order, most urgent first: its master folder is gone, an agent's copy is a
 // folder Coffer did not put there, a command it needs is missing, a tool it
-// calls (an MCP server or a custom-tool group) is off or failing, a skill it
+// calls (an MCP server or a custom-tool group) is off or failing, or does not
+// reach an agent that gets this skill, a skill it
 // loads (`metadata.requires`) is in the library but not delivered to every
 // agent that gets this one, a secret it
 // needs is not set (the skill read model answers that from Coffer's secret
@@ -28,6 +29,7 @@ export type SkillAttention =
   | { kind: "folderInWay"; agentName: string; entry: SkillDriftEntry }
   | { kind: "requires"; missing: string[] }
   | { kind: "toolOff"; tools: SkillToolState[] }
+  | { kind: "toolNotShared"; tools: SkillToolState[] }
   | { kind: "skillNotShared"; skills: SkillSkillState[] }
   | { kind: "secrets"; missing: string[] }
   | { kind: "sourceUnreachable" }
@@ -71,6 +73,10 @@ export function skillAttention(
   if (missing.length > 0) out.push({ kind: "requires", missing });
   const sick = (skill.requires_tools ?? []).filter((tool) => tool.status !== "healthy");
   if (sick.length > 0) out.push({ kind: "toolOff", tools: sick });
+  const unreached = (skill.requires_tools ?? []).filter(
+    (tool) => (tool.missing_agent_names ?? []).length > 0,
+  );
+  if (unreached.length > 0) out.push({ kind: "toolNotShared", tools: unreached });
   // A skill it loads that is not in the library may be the agent's own, so
   // only one Coffer has but does not deliver alongside is a problem.
   const unshared = (skill.requires_skills ?? []).filter(
@@ -116,6 +122,7 @@ export type SkillStatus =
   | "commandMissing"
   | "commandNotReady"
   | "toolOff"
+  | "toolNotShared"
   | "skillNotShared"
   | "secretMissing"
   | "sourceUnreachable";
@@ -131,6 +138,8 @@ export function skillStatus(skill: SkillOut, items: readonly SkillAttention[]): 
       return first.missing.length > 0 ? "commandMissing" : "commandNotReady";
     case "toolOff":
       return "toolOff";
+    case "toolNotShared":
+      return "toolNotShared";
     case "skillNotShared":
       return "skillNotShared";
     case "secrets":

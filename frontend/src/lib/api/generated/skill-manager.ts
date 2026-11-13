@@ -1314,6 +1314,11 @@ export interface components {
              * @enum {string}
              */
             kind: "mcp_server" | "custom_tools";
+            /**
+             * Missing Agent Names
+             * @default []
+             */
+            missing_agent_names: string[];
             /** Name */
             name: string;
             /**
