@@ -21,6 +21,7 @@ const GITHUB_OFF = {
   kind: "mcp_server" as const,
   status: "off" as const,
   why: null,
+  missing_agent_names: [],
 };
 
 describe("skillAttention", () => {
