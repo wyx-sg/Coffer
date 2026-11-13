@@ -206,3 +206,10 @@ async def test_a_search_with_results_has_no_note():
     )
     assert out["tools"]
     assert "note" not in out
+
+
+@pytest.mark.acceptance(spec="mcp-gateway", scenario="An empty search names the server the agent is not reached by")
+async def test_scenario_empty_search_names_the_unreached_server():
+    out = await execute_tool_search({"query": "grafana"}, _agg(), out_of_reach=["grafana"])
+    assert out["tools"] == []
+    assert "grafana" in out["note"] and "coffer mcp reach" in out["note"]
