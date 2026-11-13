@@ -17,6 +17,7 @@ from coffer.application.mcp.call_content import call_content
 from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.gateway_aggregate_lists import EnsureSubscribed, list_tools_across
 from coffer.application.mcp.gateway_handlers import _safe_error_summary
+from coffer.application.mcp.gateway_scope import out_of_reach_servers
 from coffer.application.mcp.gateway_tool_search import (
     execute_tool_search,
     tool_search_descriptor,
@@ -336,7 +337,7 @@ async def run_tool_search(
     session_agent_uid: str | None = None,
     exposure: Mapping[str, str] | None = None,
     about: Mapping[str, str] | None = None,
-    out_of_reach: Sequence[str] = (),
+    resources: ResourceService | None = None,
 ) -> dict[str, Any]:
     """Aggregate the catalogue, then search it.
 
@@ -347,6 +348,7 @@ async def run_tool_search(
     path that owns the degraded-server retry.
     """
     outcome = await list_tools_across(discovery, ensure_subscribed, servers, hidden)
+    out_of_reach = await out_of_reach_servers(resources, session_agent_uid) if resources else []
     return await dispatch_tool_search(
         params=params,
         aggregated_tools=outcome.items,

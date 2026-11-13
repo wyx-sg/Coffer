@@ -42,3 +42,13 @@ async def visible_mcp_servers(
     config (``gateway_tool_gate``)."""
     resource_list = await resources.list(kind="mcp_server", enabled=True)
     return [r for r in resource_list if is_active(r.scope, session_agent_uid)]
+
+
+async def out_of_reach_servers(
+    resources: ResourceService,
+    session_agent_uid: str | None,
+) -> list[str]:
+    """Enabled servers this session is not reached by. A search that finds
+    nothing names them, so the agent can tell an unreached server from a missing one."""
+    resource_list = await resources.list(kind="mcp_server", enabled=True)
+    return [r.name for r in resource_list if not is_active(r.scope, session_agent_uid)]

@@ -68,7 +68,6 @@ from coffer.application.runtime.supervisor import spawn
 from coffer.application.turn_scope import TurnLivePort, turn_is_live
 from coffer.domain.errors import UpstreamUnavailable
 from coffer.domain.mcp.jsonrpc_errors import INVALID_REQUEST, METHOD_NOT_FOUND, JsonRpcError
-from coffer.domain.scope import is_active
 
 _logger = logging.getLogger(__name__)
 
@@ -156,9 +155,7 @@ class MCPGatewaySession:
         self._downstream_sink = sink
 
     async def announce_tools_changed(self) -> None:
-        """Tell the client its ``tools/list`` changed. The list is recomputed on
-        every request, but a client keeps the copy it fetched until told; a reach,
-        scope or enable change is the case this covers."""
+        """Tell the client its ``tools/list`` changed (reach, scope, enable)."""
         await self._send_downstream({"method": "notifications/tools/list_changed", "params": {}})
 
     # --- Initialize ---
@@ -234,13 +231,6 @@ class MCPGatewaySession:
 
     async def _enabled_mcp_servers(self) -> list[str]:
         return await enabled_mcp_servers(self._resources, self._session_agent_uid)
-
-    async def _out_of_reach_servers(self) -> list[str]:
-        """Enabled servers this agent is not reached by: a search that finds
-        nothing names them, so the agent can tell an unreached server from a
-        missing one."""
-        rows = await self._resources.list(kind="mcp_server", enabled=True)
-        return [r.name for r in rows if not is_active(r.scope, self._session_agent_uid)]
 
     async def _servers_and_hidden(
         self,
@@ -326,7 +316,7 @@ class MCPGatewaySession:
                 params,
                 exposure=exposure,
                 about=about,
-                out_of_reach=await self._out_of_reach_servers(),
+                resources=self._resources,
                 discovery=self._discovery,
                 ensure_subscribed=self._ensure_subscribed,
                 servers=servers,
