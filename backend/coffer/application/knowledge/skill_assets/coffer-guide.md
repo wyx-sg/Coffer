@@ -98,9 +98,7 @@ source, goes stale or is worth sharing. A fixed sequence of steps they repeat
 is a skill. Ask in that order: would it still hold for someone else (no:
 memory); is it about an outside system or does it need a source (yes:
 knowledge); is it a procedure (yes: skill). What the repository already says,
-and a one-off request, belong nowhere. Coffer keeps a memory you filed as task
-notes away from the developer's other agents until it is sorted, so write such
-a fact into knowledge instead.
+and a one-off request, belong nowhere.
 
 ### Bringing in a Confluence page
 

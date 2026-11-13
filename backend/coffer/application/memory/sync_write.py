@@ -9,9 +9,7 @@ target except:
 - a project's entry while the project is not checked out here ("Write a
   project's memories only where it is checked out");
 - a Claude Code entry for Codex while Codex imports Claude Code's memories
-  itself ("Defer to Codex's own import from Claude Code");
-- task material another agent filed, until it is sorted back into memory
-  ("Keep task material with its own agent until it is sorted").
+  itself ("Defer to Codex's own import from Claude Code").
 
 The copies are planned against the ledger by
 :func:`coffer.domain.memory.sync_plan.plan_copies` and applied here, each

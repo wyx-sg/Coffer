@@ -441,3 +441,12 @@ def test_the_guide_lists_a_linked_folder_with_its_own_path_and_rules() -> None:
     assert "- `Gateway.md` — **Payment gateway**" in text
     assert str(home) not in text
     assert "Work (My work notes)" in render_description([(entry, [note])])
+
+
+def test_a_chinese_readme_contributes_only_its_first_sentence() -> None:
+    """A README written in Chinese ends its sentences with a full-width stop;
+    the whole paragraph must not ride into the skill's description."""
+    catalogue = [_collection("payments", "支付系统的知识。包括对账、退款和各种坑。")]
+    description = render_description(catalogue)
+    assert "payments (支付系统的知识)" in description
+    assert "对账" not in description
