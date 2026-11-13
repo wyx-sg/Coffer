@@ -23,7 +23,7 @@ from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeServic
 from coffer.domain.errors import ResourceNotFound
 from coffer.domain.knowledge.entry import ACTOR_AGENT, ACTOR_USER
 from coffer.domain.resource import Resource
-from coffer.infrastructure.knowledge import fs, inbox, paths
+from coffer.infrastructure.knowledge import fs, paths
 from coffer.infrastructure.knowledge.history import KnowledgeHistory
 from coffer.infrastructure.vault.home import vault_root
 from coffer.infrastructure.vault.instance import vault_repository
@@ -303,5 +303,4 @@ async def test_without_git_writes_work_and_the_feed_says_so(
     assert "`git --version`" in prompt
     assert "brew" not in prompt and "xcode-select" not in prompt
     assert "install" not in str(refused.value).replace("not installed", "")
-    assert inbox.inbox_items("shopee") == ()
     assert KIND_KNOWLEDGE == "knowledge"

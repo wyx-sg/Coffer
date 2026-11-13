@@ -9,14 +9,9 @@ updated, because there is none (spec knowledge "Store each collection as one
 tree of Markdown files"). That is what lets a person's edit in their own
 editor and an agent's reach the same bytes with nothing in between.
 
-Two kinds of file live under a collection, and this module is where they meet:
-
-* **Sources and pages** — the visible tree. Coffer writes a source through
-  :func:`write_file` when material arrives; a person edits pages in their own
-  editor, an agent with its own file tools, and Coffer writes no page.
-* **Material** — the hidden ``.inbox/``, written and read by ``inbox.py``. A
-  file waits there only until the next sweep adopts it as a source (see
-  "Promote submitted material at once").
+Coffer writes a source through :func:`write_file` when an upload arrives
+(``sources.py``); a person edits pages in their own editor, an agent with its
+own file tools, and Coffer writes no page.
 """
 
 from __future__ import annotations

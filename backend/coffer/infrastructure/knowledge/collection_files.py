@@ -13,15 +13,13 @@ as it was.
 
 Restoring a deleted collection (spec knowledge "Undo a knowledge delete from its
 toast") puts back, byte for byte, every file the delete
-removed: its documents, its README and any inbox items.
-Documents go through the same guard every document write does; the README and
-an inbox item are the two non-document paths a collection holds, and each is
-resolved through the module that owns its shape.
+removed: its documents and its README.
+Documents go through the same guard every document write does; the README is
+the one non-document path a collection holds.
 """
 
 from __future__ import annotations
 
-from coffer.domain.knowledge.errors import UnsafeKnowledgePath
 from coffer.infrastructure.knowledge import paths
 from coffer.infrastructure.knowledge.assets import write_bytes
 from coffer.infrastructure.knowledge.frontmatter import split_frontmatter
@@ -98,22 +96,15 @@ def write_description(collection: str, description: str) -> None:
 
 def restore_file(relpath: str, raw: bytes) -> None:
     """Put back one file of a deleted collection exactly as it was: a document,
-    the README, a picture or other attachment, or an inbox item. Anything that
+    the README, or a picture or other attachment. Anything that
     is not Markdown — a picture, a diagram's source, a raw export — goes back
     byte for byte, never through a text decode."""
-    in_inbox = paths.inbox_parts(relpath)
-    if in_inbox is not None:
-        collection, item = in_inbox
-        if item is None:
-            raise UnsafeKnowledgePath(relpath, "the inbox itself is not a file")
-        target = paths.inbox_dir(collection) / item
+    segments = paths.split(relpath)
+    if len(segments) == 2 and segments[1] == paths.README_NAME:
+        target = paths.readme_path(segments[0])
     else:
-        segments = paths.split(relpath)
-        if len(segments) == 2 and segments[1] == paths.README_NAME:
-            target = paths.readme_path(segments[0])
-        else:
-            paths.require_document(relpath)
-            target = paths.resolve(relpath)
+        paths.require_document(relpath)
+        target = paths.resolve(relpath)
     if not target.name.endswith(".md"):
         write_bytes(paths.relative_of(target), raw)
         return

@@ -16,8 +16,8 @@ language the collection is already written in.
   delete a page.
 - `pages/` holds the **pages**: the wiki itself, compiled from the sources and
   kept up to date. This is what you read first and what you write.
-- `sources/` holds the **sources**: material as it arrived (an upload, a file
-  dropped into the inbox, an imported Confluence page), converted to Markdown.
+- `sources/` holds the **sources**: material as it arrived (an upload, an
+  imported Confluence page), converted to Markdown.
   A source is the record of what arrived and is never edited, beyond the few
   keys rule 6 allows.
 - An upload with pictures is a folder of its own in `sources/`: the source

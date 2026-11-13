@@ -30,7 +30,7 @@ def get_event_broker() -> EventBroker:
 def announce_change(kind: str, uid: str | None) -> None:
     """Announce that something under ``kind`` changed outside a resource write.
 
-    For the files a kind owns — a collection's inbox and documents, a partition's
+    For the files a kind owns — a collection's documents, a partition's
     notes — which change without touching the resource row, so the resource hint
     never fires for them. An invalidation only (the page refetches); a daemon whose
     stream is not up yet, or a failure, announces nothing and costs the page one

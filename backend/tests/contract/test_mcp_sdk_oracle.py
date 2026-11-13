@@ -42,7 +42,7 @@ _HEADERS = {"X-Coffer-Token": _TOKEN}
 
 #: The gateway exposes NO built-in knowledge tool: an agent reads the files with
 #: its own tools at the paths its delivered skill carries, and adds knowledge by
-#: writing a file into a collection's inbox (spec knowledge "Expose no
+#: writing a file into a collection (spec knowledge "Expose no
 #: knowledge tool").
 _KNOWLEDGE_TOOLS: frozenset[str] = frozenset()
 

@@ -137,9 +137,7 @@ level down. A detail page's tab lives in the path — `/<kind>/<id>` for the
 default tab, `/<kind>/<id>/<tab>` otherwise — through `useDetailTab`
 (`lib/detailTabs.ts`), which sends an unknown `:tab` to the bare address; skills and MCP
 servers are keyed by their fixed name, agents by their type, renamable kinds
-by uid. Skills, MCP servers, agents, knowledge
-(`/knowledge/<uid>/inbox`) and memory partitions
-(`/memory/<uid>/delivered`) follow it; the tabs of a list page that has no
+by uid. Skills, MCP servers and agents follow it; the tabs of a list page that has no
 detail to nest under (Sync, Activity) are `?tab=`, and the open file in a tree is always `?file=`. The default tab is never spelled out (`/overview`, `?tab=overview`).
 
 There is no global store. Cross-component server data is shared through the

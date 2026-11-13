@@ -11,15 +11,12 @@ folder of its own. The
 collection's ``README.md`` sits at its root and describes the collection rather
 than being content in it (see "Keep the collection README out of the corpus").
 
-There is exactly one hidden directory, and it is Coffer's: ``.inbox/``, the drop
-zone where material lands before it is a document — an upload's extracted
-text, a file an agent wrote there. It is hidden because it is not knowledge
-yet: no count, listing or catalogue names it, and the next sweep promotes each
-item into a document (see "Hide dot-prefixed entries except the inbox").
-:func:`resolve` and :func:`require_document` refuse every hidden segment, so no
-read, write or delete reaches the inbox through them. The one exception is
-:func:`inbox_parts`, which lets a restore put back an inbox file a deleted
-collection held. Every other hidden entry is never addressable.
+No hidden entry is knowledge. A dot-prefixed file or directory is never
+counted, listed, catalogued or committed, and :func:`resolve` and
+:func:`require_document` refuse every hidden segment, so no read, write or
+delete reaches one (see "Hide every dot-prefixed entry"). :func:`is_hidden` says
+whether a path names one, for a history that still holds the ``.inbox/``
+files an earlier build tracked.
 
 There is no override: the root is resolved from ``HOME`` at every call, and a
 tree outside the vault would be a tree its history cannot see. Every segment
@@ -40,9 +37,6 @@ README_NAME = "README.md"
 
 #: The knowledge root's path inside the vault repository.
 VAULT_PREFIX = "knowledge"
-
-#: Where material lands before it is adopted as a collection's source.
-INBOX_DIR_NAME = ".inbox"
 
 _DOTS_ONLY = re.compile(r"^\.+$")
 #: Characters no path segment may hold: separators and control characters. Any
@@ -149,8 +143,8 @@ def require_document(relpath: str) -> None:
 
     A document lives *inside* a collection — never the collection itself, and
     never its ``README.md``, which describes the collection rather than being
-    knowledge in it. The hidden inbox is out of reach already: ``split``
-    refuses every dot-prefixed segment.
+    knowledge in it. A hidden path is out of reach already: ``split`` refuses
+    every dot-prefixed segment.
     """
     segments = split(relpath)
     if len(segments) < 2:
@@ -173,34 +167,13 @@ def readme_path(collection: str) -> pathlib.Path:
     return collection_dir(collection) / README_NAME
 
 
-def inbox_dir(collection: str) -> pathlib.Path:
-    """Where a collection's unpromoted material lands."""
-    return collection_dir(collection) / INBOX_DIR_NAME
-
-
-def inbox_parts(relpath: str) -> tuple[str, str | None] | None:
-    """``(collection, item)`` when ``relpath`` names a collection's inbox, else ``None``.
-
-    ``<collection>/.inbox`` gives ``item`` ``None``; ``<collection>/.inbox/<name>``
-    gives the item's file name. Only a restore addresses this path: the other
-    segments go through the same guard as any path, and the inbox holds no
-    folders, so anything deeper is refused.
-    """
-    cleaned = (relpath or "").strip().strip("/")
-    segments = [s for s in cleaned.split("/") if s]
-    if len(segments) < 2 or segments[1] != INBOX_DIR_NAME:
-        return None
-    if len(segments) > 3:
-        raise UnsafeKnowledgePath(relpath, "the inbox holds no folders")
-    check_segment(segments[0], relpath)
-    if len(segments) == 2:
-        return segments[0], None
-    check_segment(segments[2], relpath)
-    return segments[0], segments[2]
+def is_hidden(relpath: str) -> bool:
+    """Whether any segment of ``relpath`` is dot-prefixed."""
+    return any(segment.startswith(".") for segment in relpath.split("/"))
 
 
 def uploads_dir(collection: str) -> pathlib.Path:
-    """Where Coffer writes a collection's uploads and dropped files: the folder
+    """Where Coffer writes a collection's uploads: the folder
     its README declares as ``uploads``, ``sources/`` by default."""
     folder = collection_settings.read(collection_dir(collection)).uploads
     return collection_dir(collection).joinpath(*folder.split("/"))

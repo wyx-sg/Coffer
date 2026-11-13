@@ -46,7 +46,7 @@ MUST NOT stop the next start, and that start MUST write it again. The reasoning 
 with a first commit, whether or not a sync remote is configured; configuring
 sync SHALL only add a remote. The repository's own `.git/info/exclude` — never
 a tracked `.gitignore` — SHALL keep out editor and system litter, hidden
-entries inside knowledge collections other than the inbox, and
+entries inside knowledge collections, and
 `secret/` unless the sync remote carries secrets, which the daemon reads from this machine's stored
 remote when it opens the vault, not only once a sync round has run. A path the exclude
 file ignores MUST never be staged, neither as a change nor as a deletion, and

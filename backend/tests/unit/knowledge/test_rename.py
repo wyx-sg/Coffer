@@ -24,7 +24,7 @@ from coffer.application.knowledge.kind import make_knowledge_kind
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
 from coffer.domain.errors import ResourceAlreadyExists
 from coffer.domain.resource import Kind, Resource
-from coffer.infrastructure.knowledge import fs, inbox, paths
+from coffer.infrastructure.knowledge import fs, paths
 from coffer.infrastructure.knowledge.paths import knowledge_root as _knowledge_root
 
 
@@ -65,7 +65,7 @@ def knowledge_root(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
 
 @pytest.fixture
 def collection() -> Resource:
-    """One collection on disk with two documents, an inbox item and a README."""
+    """One collection on disk with two documents and a README."""
     row = _row("shopee")
     fs.create_collection_dir(row.name)
     paths.readme_path(row.name).write_text("# shopee\n\nThe account system.\n", encoding="utf-8")
@@ -82,7 +82,6 @@ def collection() -> Resource:
         description="Which service issues a login token.",
         body="account.session.",
     )
-    inbox.submit_material(row.name, title="Waiting", description="d", body="not promoted yet")
     return row
 
 
@@ -121,7 +120,7 @@ async def test_the_files_inside_are_still_readable_under_the_new_name(
 ) -> None:
     """The point of moving the directory rather than recreating it.
 
-    The documents, the inbox and the README travel, with their bytes intact — a rename is a
+    The documents and the README travel, with their bytes intact — a rename is a
     relabelling, and a person who renames a collection has not asked for any of
     their writing to change.
     """
@@ -134,7 +133,6 @@ async def test_the_files_inside_are_still_readable_under_the_new_name(
         moved = old_path.replace("shopee/", "account/", 1)
         assert fs.read_file(moved).body == body
     assert paths.readme_path("account").read_text(encoding="utf-8").startswith("# shopee")
-    assert (paths.inbox_dir("account") / "waiting.md").is_file()
 
 
 def _walk(relpath: str) -> tuple:

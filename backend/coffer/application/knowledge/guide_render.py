@@ -196,33 +196,24 @@ def _manual(root: str, *, knowledge: bool) -> str:
     return _select_spans(_static_body(), enabled).replace(_ROOT_PLACEHOLDER, root)
 
 
-#: The catalogue's budget in characters. Past it the catalogue drops every
-#: description, and past it again lists only each collection's counts and the
-#: directories to search (spec knowledge "Merge the manual and the catalogue in
-#: the skill body"): the body is paid for whenever an agent opens the skill.
-MAX_CATALOGUE_CHARS = 60_000
-
-#: The three levels of detail, most first.
-_FULL, _TITLES, _COUNTS = "full", "titles", "counts"
+def _count(files: Sequence[FileEntry]) -> str:
+    return "1 Markdown file" if len(files) == 1 else f"{len(files)} Markdown files"
 
 
-def _entry_line(file: FileEntry, *, describe: bool, base: str) -> str:
-    relative = file.path.split("/", 1)[-1]
-    shown = relative[len(base) + 1 :] if base and relative.startswith(base + "/") else relative
-    line = f"- `{shown}` — **{file.title}**"
-    description = " ".join(file.description.split()) if describe else ""
-    return line + (f": {description}" if description else "")
-
-
-def _by_folder(files: Sequence[FileEntry]) -> list[tuple[str, list[FileEntry]]]:
-    """Files grouped by the folder they sit in, inside the collection; the
-    root first."""
-    groups: dict[str, list[FileEntry]] = {}
+def _folder_counts(files: Sequence[FileEntry]) -> str:
+    """How many Markdown files each top-level folder of a collection holds,
+    folders by name and the root last: "`pages/` 120, `sources/` 80, 3 at the
+    root". A count per top-level folder is as long as a collection's layout,
+    not as long as its contents, so the catalogue needs no budget."""
+    counts: dict[str, int] = {}
     for file in files:
         relative = file.path.split("/", 1)[-1]
-        folder = relative.rsplit("/", 1)[0] if "/" in relative else ""
-        groups.setdefault(folder, []).append(file)
-    return sorted(groups.items(), key=lambda item: (item[0] != "", item[0]))
+        top = relative.split("/", 1)[0] if "/" in relative else ""
+        counts[top] = counts.get(top, 0) + 1
+    parts = [f"`{folder}/` {count}" for folder, count in sorted(counts.items()) if folder]
+    if "" in counts:
+        parts.append(f"{counts['']} at the root")
+    return ", ".join(parts)
 
 
 def _how_to_read(entry: CollectionEntry, where: str) -> str:
@@ -241,18 +232,18 @@ def _how_to_read(entry: CollectionEntry, where: str) -> str:
     return " ".join(parts)
 
 
-def _catalogue_lines(
-    root: str, entry: CollectionEntry, files: Sequence[FileEntry], detail: str
-) -> list[str]:
-    """One collection: its description, its rules file and entry page, and —
-    when it names no entry page — its files by folder (spec knowledge "Merge
-    the manual and the catalogue in the skill body")."""
+def _catalogue_lines(root: str, entry: CollectionEntry, files: Sequence[FileEntry]) -> list[str]:
+    """One collection: its description, its rules file and entry page, and how
+    many Markdown files it holds — by top-level folder when it names no entry
+    page (spec knowledge "Merge the manual and the catalogue in the skill
+    body"). No file is listed by name: an agent finds one from the entry page
+    or by searching the folder with its own tools."""
     if entry.linked:
         heading = f"### {entry.name} (linked folder)"
         where = _display(pathlib.Path(entry.folder_path), home=None)
         kept = (
             "A folder the developer keeps with their own tools; Coffer only shares it "
-            "with you, so do not tidy it, upload into it or drop files for its inbox."
+            "with you, so do not tidy it or upload into it."
         )
     else:
         heading = f"### {entry.name}"
@@ -264,45 +255,35 @@ def _catalogue_lines(
     lines += ["", " ".join(p for p in (_how_to_read(entry, where), kept) if p)]
     if not files:
         return [*lines, "", "_No Markdown files here yet._"]
-    if entry.entry_file or detail == _COUNTS:
-        return [*lines, "", f"{len(files)} Markdown files. Search the folder for the rest."]
-    describe = detail == _FULL
-    for folder, group in _by_folder(files):
-        lines += ["", f"**{folder}/**" if folder else "**(root)**", ""]
-        lines += [_entry_line(f, describe=describe, base=folder) for f in group]
-    return lines
+    if entry.entry_file:
+        return [*lines, "", f"{_count(files)}. Search the folder for the rest."]
+    return [
+        *lines,
+        "",
+        f"{_count(files)}: {_folder_counts(files)}. "
+        "It names no start page, so search the folder for what you need.",
+    ]
 
 
-def _render_catalogue_at(root: str, catalogue: Catalogue, detail: str) -> str:
+def render_catalogue(root: str, catalogue: Catalogue) -> str:
+    """The generated half: every collection with its rules file, its start
+    page and its file counts."""
     lines = [
         "## What is in this developer's knowledge",
         "",
         "Each collection, where its rules are and where to start reading it. A "
-        "collection that names no start page lists its files. Read any file at "
+        "collection that names no start page gives its file counts by folder: "
+        "search it with your own tools. Read any file at "
         f"`{root}/<collection>/<path>` with your own file tool; a linked folder lives "
         "where its own section says.",
         "",
     ]
-    if detail == _TITLES:
-        lines += ["_Shortened: descriptions are left out. Read a file for its own._", ""]
-    elif detail == _COUNTS:
-        lines += ["_Shortened: only counts are listed. Search each collection yourself._", ""]
     if not catalogue:
         lines.append("_No collections have been created yet._")
     for entry, files in catalogue:
-        lines += _catalogue_lines(root, entry, files, detail)
+        lines += _catalogue_lines(root, entry, files)
         lines.append("")
     return "\n".join(lines).rstrip()
-
-
-def render_catalogue(root: str, catalogue: Catalogue) -> str:
-    """The generated half: every collection with its rules file and start
-    page, shortened to fit :data:`MAX_CATALOGUE_CHARS`."""
-    for detail in (_FULL, _TITLES):
-        text = _render_catalogue_at(root, catalogue, detail)
-        if len(text) <= MAX_CATALOGUE_CHARS:
-            return text
-    return _render_catalogue_at(root, catalogue, _COUNTS)
 
 
 def render_body(root: str, catalogue: Catalogue | None) -> str:
@@ -354,7 +335,6 @@ def render(root: str, catalogue: Catalogue | None) -> str:
 
 __all__ = [
     "GUIDE_SKILL_NAME",
-    "MAX_CATALOGUE_CHARS",
     "MAX_DESCRIPTION_CHARS",
     "display_root",
     "render",

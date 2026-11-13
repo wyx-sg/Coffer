@@ -16,7 +16,6 @@ import yaml
 
 from coffer.application.knowledge.guide_render import (
     GUIDE_SKILL_NAME,
-    MAX_CATALOGUE_CHARS,
     MAX_DESCRIPTION_CHARS,
     display_root,
     render,
@@ -140,7 +139,7 @@ def test_the_body_carries_both_halves() -> None:
     assert "### Tidying a collection" in manual
     assert "Everything left out is\nstill callable" in manual  # the tiering contract
     assert "Nothing here waits on a human" in manual
-    assert "**pages/**\n\n- `doc0.md` — **Doc 0**" in catalogue
+    assert "1 Markdown file: `pages/` 1." in catalogue
     assert "~/.coffer/knowledge/shopee/" in catalogue
 
 
@@ -316,7 +315,9 @@ def test_the_guide_carries_the_writing_and_tidying_sections() -> None:
 @pytest.mark.acceptance(spec="knowledge", scenario="the guide sets no format of its own")
 def test_the_guide_sets_no_format_of_its_own() -> None:
     text = render("~/.coffer/knowledge", [_collection("ops", "Runbooks.")])
-    flat = " ".join(text.split())
+    # The manual, not the catalogue, which names the folders a collection has.
+    manual = text[: text.index("## What is in this developer's knowledge")]
+    flat = " ".join(manual.split())
     assert "Coffer sets no format for it" in flat
     assert "It wins over anything you would do by default" in flat
     assert "broken link" in flat
@@ -341,26 +342,25 @@ def _file(path: str, title: str, description: str = ""):  # type: ignore[no-unty
 @pytest.mark.acceptance(
     spec="knowledge", scenario="the skill body carries the catalogue and the absolute root"
 )
-def test_the_catalogue_lists_files_by_folder_with_the_rules_file() -> None:
+def test_the_catalogue_counts_files_by_top_folder_with_the_rules_file() -> None:
     entry = CollectionEntry(
-        uid="u", name="shopee", description="Accounts.", note_count=3, rules_file="AGENTS.md"
+        uid="u", name="shopee", description="Accounts.", note_count=4, rules_file="AGENTS.md"
     )
     files = [
         _file("shopee/AGENTS.md", "Rules for this collection"),
         _file("shopee/pages/sessions.md", "Sessions"),
+        _file("shopee/pages/login/otp.md", "OTP"),
         _file("shopee/sources/design.md", "Design doc"),
     ]
     text = render_catalogue("~/.coffer/vault/knowledge", [(entry, files)])
 
     assert "Its rules are in `AGENTS.md`" in text
-    root = text.index("**(root)**")
-    pages = text.index("**pages/**")
-    sources = text.index("**sources/**")
-    assert root < text.index("`AGENTS.md` — **Rules for this collection**") < pages
-    assert pages < text.index("`sessions.md` — **Sessions**: What Sessions answers.") < sources
-    assert sources < text.index("`design.md` — **Design doc**")
+    assert "4 Markdown files: `pages/` 2, `sources/` 1, 1 at the root." in text
+    assert "search the folder for what you need" in text
     assert "`~/.coffer/vault/knowledge/shopee/`" in text
-    assert "_Shortened" not in text
+    # No file is listed by name, title or description.
+    for absent in ("sessions.md", "Sessions", "What Sessions answers.", "login"):
+        assert absent not in text, absent
 
 
 @pytest.mark.acceptance(
@@ -390,25 +390,20 @@ def test_a_collection_with_no_rules_file_is_written_like_its_files() -> None:
     assert "write in it the way its existing files are written" in text
 
 
-@pytest.mark.acceptance(spec="knowledge", scenario="a catalogue past its budget shortens itself")
-def test_a_catalogue_past_its_budget_drops_descriptions_then_lists_counts() -> None:
-    long = "x" * 200
-    entry = CollectionEntry(uid="u", name="big", description="", note_count=400)
-    pages = [_file(f"big/pages/p{i}.md", f"Page {i}", long) for i in range(400)]
-    titles = render_catalogue("~/k", [(entry, pages)])
-    assert len(titles) <= MAX_CATALOGUE_CHARS
-    assert "_Shortened: descriptions are left out" in titles
-    assert "`p7.md` — **Page 7**\n" in titles and long not in titles
+@pytest.mark.acceptance(
+    spec="knowledge", scenario="the catalogue grows with a collection's folders, not its files"
+)
+def test_the_catalogue_is_as_long_for_two_thousand_files_as_for_two() -> None:
+    entry = CollectionEntry(uid="u", name="big", description="", note_count=2)
+    few = [_file(f"big/pages/p{i}.md", f"Page {i}") for i in range(2)]
+    many = [_file(f"big/pages/p{i}.md", f"Page {i}", "x" * 200) for i in range(2000)]
 
-    many = [
-        _file(f"big/pages/a-much-longer-page-name-{i}.md", f"A long title {i} " * 4)
-        for i in range(2000)
-    ]
-    counts = render_catalogue("~/k", [(entry, many)])
-    assert len(counts) <= MAX_CATALOGUE_CHARS
-    assert "_Shortened: only counts are listed" in counts
-    assert "2000 Markdown files." in counts
-    assert "a-much-longer-page-name-1.md" not in counts
+    small = render_catalogue("~/k", [(entry, few)])
+    large = render_catalogue("~/k", [(entry, many)])
+
+    assert "2000 Markdown files: `pages/` 2000." in large
+    assert "p7.md" not in large and "Page 7" not in large
+    assert len(large) - len(small) == len("2000") * 2 - len("2") * 2
 
 
 @pytest.mark.acceptance(
@@ -437,8 +432,8 @@ def test_the_guide_lists_a_linked_folder_with_its_own_path_and_rules() -> None:
     assert "### Work (linked folder)" in text
     assert "`~/Obsidian/Work/`" in text
     assert "Its rules are in `AGENTS.md`" in text
-    assert "**Projects/**" in text
-    assert "- `Gateway.md` — **Payment gateway**" in text
+    assert "1 Markdown file: `Projects/` 1." in text
+    assert "Gateway.md" not in text
     assert str(home) not in text
     assert "Work (My work notes)" in render_description([(entry, [note])])
 

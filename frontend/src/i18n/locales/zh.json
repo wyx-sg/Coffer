@@ -3534,7 +3534,7 @@
       "copiesIn_one": "{{agent}} 中的 {{count}} 份副本",
       "copiesIn_other": "{{agent}} 中的 {{count}} 份副本",
       "noCopies": "没有副本",
-      "files": "每个 MEMORY.md 中 Coffer 的区块、Claude Code 的 rules/coffer-memory.md 和 Codex 的 memories/extensions/coffer/",
+      "files": "每个 MEMORY.md 中 Coffer 的区块，以及 Codex 的 memories/extensions/coffer/",
       "turnsOff": "关闭",
       "automatic": "自动同步",
       "keeps": "保留",

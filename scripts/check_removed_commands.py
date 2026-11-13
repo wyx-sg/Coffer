@@ -127,7 +127,7 @@ REMOVED: tuple[tuple[str, str], ...] = (
     ("coffer__diagnose", "coffer log audit|mcp|daemon, coffer path logs"),
     # Removed by the OpenSpec change make-knowledge-and-memory-files-only: an
     # agent adds knowledge with its own file tools.
-    ("coffer__write", "write a file into <collection>/.inbox/"),
+    ("coffer__write", "write the file into the collection, by its rules"),
     # Removed by the OpenSpec change act-on-secret-approvals-where-they-show:
     # only the desktop app can sign the grant an install needs.
     ("coffer secret key-install", "coffer secret import-key"),

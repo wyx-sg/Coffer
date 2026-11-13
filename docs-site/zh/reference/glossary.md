@@ -101,13 +101,9 @@ Coffer 发送密钥明文的地方：MCP 服务器的环境变量或 HTTP 请求
 
 ### 中心库（Hub） {#hub}
 
-[保险库](#vault)里的 `memory/` 文件夹，保存你的智能体在任意一台机器上为自己写下的每条记忆：每条记忆一个 Markdown 文件，放在 `global/` 或某个项目（以仓库的远端命名）下。[保险库同步](#vault-sync)在机器之间传送它；只有记忆来源的那台机器会修改它的文件。见[记忆](/zh/guides/memory#the-hub)。
+[保险库](#vault)里的 `memory/` 文件夹，保存你的智能体在任意一台机器上为自己写下的每条记忆：每条记忆一个 Markdown 文件，放在它所属的项目（以仓库的远端命名）下。[保险库同步](#vault-sync)在机器之间传送它；只有记忆来源的那台机器会修改它的文件。见[记忆](/zh/guides/memory#the-hub)。
 
 ## I {#i}
-
-### 收件箱（Inbox） {#inbox}
-
-知识集中隐藏的 `.inbox/` 目录，一个投放区：智能体或另一台机器放在这里的文件，会被下一次[扫描](#upkeep-pass)移进知识集的[上传文件夹](#uploads-folder)。见[知识](/zh/architecture/knowledge)。
 
 ### 调用日志（Invocation log） {#invocation-log}
 
@@ -141,7 +137,7 @@ Coffer 发送密钥明文的地方：MCP 服务器的环境变量或 HTTP 请求
 
 ### 材料（Material） {#material}
 
-提交给知识集的新知识：上传内容，或留在[收件箱](#inbox)里的文件。它会转换成 Markdown，保存在知识集的[上传文件夹](#uploads-folder)里。见[知识](/zh/guides/knowledge)。
+提交给知识集的新知识：上传或导入的内容。它会转换成 Markdown，保存在知识集的[上传文件夹](#uploads-folder)里。见[知识](/zh/guides/knowledge)。
 
 ### MCP 网关（MCP gateway） {#mcp-gateway}
 
@@ -267,7 +263,7 @@ Coffer 保存的五类状态之一，每类在 `~/.coffer` 下有自己的位置
 
 ### 维护任务（Upkeep pass） {#upkeep-pass}
 
-Coffer 按定时器、无需要求就做的机械性工作：[记忆同步](#memory-sync)，以及知识的扫描（重新渲染指南、收编留在[收件箱](#inbox)的文件、提交磁盘上的编辑）。它们都不调用模型。记忆同步可以在记忆页面**立即同步**的 **▾** 里关闭或调整时间。见[记忆](/zh/architecture/memory#the-sync-pass)和[知识](/zh/architecture/knowledge#the-sweep)。
+Coffer 按定时器、无需要求就做的机械性工作：[记忆同步](#memory-sync)，以及知识的扫描（重新渲染指南、提交磁盘上的编辑）。它们都不调用模型。记忆同步可以在记忆页面**立即同步**的 **▾** 里关闭或调整时间。见[记忆](/zh/architecture/memory#the-sync-pass)和[知识](/zh/architecture/knowledge#the-sweep)。
 
 ### 上传文件夹（Uploads folder） {#uploads-folder}
 

@@ -11,7 +11,7 @@ from __future__ import annotations
 import pytest
 
 from coffer.application.knowledge.sweep import sweep_once
-from coffer.infrastructure.knowledge import fs, inbox, paths
+from coffer.infrastructure.knowledge import fs, paths
 
 from .conftest import _create_collection
 
@@ -39,7 +39,6 @@ def test_a_read_of_an_unknown_collection_is_a_404_and_creates_nothing(client, tm
 
 
 @pytest.mark.acceptance(spec="knowledge", scenario="an upload answers with the document it became")
-@pytest.mark.acceptance(spec="knowledge", scenario="a sweep promotes a file dropped into the inbox")
 def test_an_upload_and_an_agents_file_both_become_documents(client, tmp_path) -> None:  # type: ignore[no-untyped-def]
     from coffer.surfaces.http.knowledge.dependencies import get_knowledge_service
 
@@ -54,14 +53,12 @@ def test_an_upload_and_an_agents_file_both_become_documents(client, tmp_path) ->
     assert uploaded.json()["path"] == "shopee/sources/notes.md"
     assert "pending" not in uploaded.json()
 
-    # An agent writes with its own file tool; the next sweep promotes the file.
-    directory = paths.inbox_dir("shopee")
-    directory.mkdir(parents=True, exist_ok=True)
+    # An agent writes with its own file tool; the next sweep commits the file.
+    directory = paths.collection_dir("shopee") / "sources"
     (directory / "agent-note.md").write_text("# Agent note\n\nFound in a repo.\n", encoding="utf-8")
     service = get_knowledge_service()
     client.portal.call(sweep_once, service, _no_refresh)  # type: ignore[union-attr]
 
-    assert inbox.inbox_items("shopee") == ()
     level = client.get("/api/v1/knowledge/tree", params={"path": "shopee/sources"}).json()
     assert [f["path"] for f in level["files"]] == [
         "shopee/sources/agent-note.md",

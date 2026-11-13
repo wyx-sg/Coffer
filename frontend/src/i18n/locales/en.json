@@ -3534,7 +3534,7 @@
       "copiesIn_one": "{{count}} copy in {{agent}}",
       "copiesIn_other": "{{count}} copies in {{agent}}",
       "noCopies": "No copies",
-      "files": "Coffer’s block in each MEMORY.md, Claude Code’s rules/coffer-memory.md and Codex’s memories/extensions/coffer/",
+      "files": "Coffer’s block in each MEMORY.md and Codex’s memories/extensions/coffer/",
       "turnsOff": "Turns off",
       "automatic": "Automatic sync",
       "keeps": "Keeps",

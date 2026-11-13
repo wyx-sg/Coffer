@@ -6,11 +6,9 @@ Real filesystem under the test's own knowledge root (the conftest points
 
 from __future__ import annotations
 
-import os
-
 import pytest
 
-from coffer.infrastructure.knowledge import catalogue, fs, inbox, paths
+from coffer.infrastructure.knowledge import catalogue, fs, paths
 from coffer.infrastructure.knowledge.paths import knowledge_root
 
 
@@ -64,30 +62,6 @@ def test_a_nested_readme_is_a_document_and_only_the_collection_readme_is_not() -
     paths.require_document("shopee/guide/README.md")
     with pytest.raises(Exception, match="README"):
         paths.require_document("shopee/README.md")
-
-
-def test_inbox_items_are_ordered_by_when_they_were_submitted_not_by_file_time() -> None:
-    first = inbox.submit_material("shopee", title="First", description="d", body="a", actor="user")
-    second = inbox.submit_material(
-        "shopee", title="Second", description="d", body="b", actor="user"
-    )
-    # A checkout or a sync round rewrites file times and reverses them.
-    base = paths.inbox_dir("shopee")
-    os.utime(base / first, (2_000_000_000, 2_000_000_000))
-    os.utime(base / second, (1_000_000_000, 1_000_000_000))
-    # Same-second submissions: pin created_at explicitly.
-    (base / first).write_text(
-        (base / first)
-        .read_text()
-        .replace(_created(base / first), "created_at: '2026-01-01T00:00:00+00:00'")
-    )
-    (base / second).write_text(
-        (base / second)
-        .read_text()
-        .replace(_created(base / second), "created_at: '2026-02-01T00:00:00+00:00'")
-    )
-
-    assert inbox.inbox_items("shopee") == (first, second)
 
 
 def _created(path) -> str:  # type: ignore[no-untyped-def]

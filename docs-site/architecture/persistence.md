@@ -68,7 +68,7 @@ Which class a resource belongs to is declared by its kind, with a per-row refine
 ├── state/settings/internal-engine.json upkeep and speech-to-text model settings (absent = defaults)
 ├── state/secret-notes/notes.json       each secret's label and description
 ├── state/cli-tools/tools.json          the command-line tools you added by hand, and your edits to required ones
-├── knowledge/<collection>/…            Markdown documents, hidden .inbox/ for new material
+├── knowledge/<collection>/…            Markdown documents and the pictures kept with uploads
 ├── skills/<name>/…                     skill master folders
 ├── memory/global/, memory/projects/<project>/  the memory hub: one Markdown file per memory
 ├── secret/<ref>.enc                    Fernet ciphertext, one file per secret
@@ -101,7 +101,7 @@ A resource file carries its identity, format version, name, description and conf
 - **Reach is not in the file.** Whether a resource is enabled here, and for which agents, is in `local/reach.json`.
 - **`updated_at` is not in the file.** It is the file's modification time on this machine; no revision counter or index is kept.
 
-What Coffer ignores in the repository is written into `.git/info/exclude`, never into a tracked `.gitignore` another machine could change: editor and system litter, what a skill's scripts generate when they run (bytecode, `*.log`, `node_modules/`, `.venv/` and tool caches), hidden entries inside collections (except `.inbox/`), and `secret/` unless your sync remote carries secrets.
+What Coffer ignores in the repository is written into `.git/info/exclude`, never into a tracked `.gitignore` another machine could change: editor and system litter, what a skill's scripts generate when they run (bytecode, `*.log`, `node_modules/`, `.venv/` and tool caches), hidden entries inside collections, and `secret/` unless your sync remote carries secrets.
 
 ### Local
 

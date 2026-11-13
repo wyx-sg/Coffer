@@ -1,13 +1,13 @@
 """The knowledge layer is a directory, so these are filesystem tests.
 
 Nothing here goes through a service or a route: the substrate is
-``infrastructure/knowledge``, and if the one tree, the inbox and the walk over
+``infrastructure/knowledge``, and if the one tree and the walk over
 them are right, every surface above is reading the truth (spec knowledge "Store
 each collection as one tree of Markdown files").
 
 What these pin: a collection is one tree of documents with a README beside
-them, and material dropped in the hidden inbox is listed by nothing and becomes
-a document when promoted.
+them, a hidden folder is listed by nothing, and an upload is written straight
+into the uploads folder.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ import pathlib
 import pytest
 
 from coffer.domain.knowledge.errors import UnsafeKnowledgePath
-from coffer.infrastructure.knowledge import catalogue, fs, inbox, paths
+from coffer.infrastructure.knowledge import catalogue, fs, paths, sources
 from coffer.infrastructure.knowledge.frontmatter import render_frontmatter, split_frontmatter
 from coffer.infrastructure.knowledge.paths import knowledge_root as _knowledge_root
 
@@ -87,11 +87,18 @@ def test_traversal_and_hidden_entries_are_refused(bad: str) -> None:
         paths.resolve(bad)
 
 
-def test_collections_count_markdown_files_and_not_the_inbox(knowledge_root) -> None:  # type: ignore[no-untyped-def]
+def _hidden_file(knowledge_root) -> None:  # type: ignore[no-untyped-def]
+    """A file in a hidden folder, as an earlier build's ``.inbox/`` left one."""
+    hidden = knowledge_root / "shopee" / ".inbox"
+    hidden.mkdir(parents=True, exist_ok=True)
+    (hidden / "waiting.md").write_text("# Waiting\n", encoding="utf-8")
+
+
+def test_collections_count_markdown_files_and_nothing_hidden(knowledge_root) -> None:  # type: ignore[no-untyped-def]
     fs.write_file(directory="shopee/pages", title="One", description="d", body="b")
     fs.write_file(directory="shopee/pages", title="Two", description="d", body="b")
     fs.write_file(directory="shopee/sources", title="Src", description="d", body="b")
-    inbox.submit_material("shopee", title="Waiting", description="d", body="b")
+    _hidden_file(knowledge_root)
     entry = next(c for c in catalogue.list_collections() if c.name == "shopee")
     assert entry.note_count == 3
 
@@ -104,46 +111,40 @@ def test_readme_stays_out_of_the_documents_and_the_counts(knowledge_root) -> Non
     assert catalogue.walk_files(paths.collection_dir("shopee")) == ()
 
 
-def test_walk_files_returns_the_whole_tree_and_never_the_inbox(knowledge_root) -> None:  # type: ignore[no-untyped-def]
+def test_walk_files_returns_the_whole_tree_and_nothing_hidden(knowledge_root) -> None:  # type: ignore[no-untyped-def]
     fs.write_file(directory="shopee", title="Top", description="d", body="b")
     fs.write_file(directory="shopee/account", title="Nested", description="d", body="b")
-    inbox.submit_material("shopee", title="Waiting", description="d", body="b")
+    _hidden_file(knowledge_root)
     found = catalogue.walk_files(paths.collection_dir("shopee"))
     assert [f.path for f in found] == ["shopee/account/nested.md", "shopee/top.md"]
-    # A person browsing the collection never sees the inbox.
+    # A person browsing the collection never sees a hidden folder.
     level = catalogue.list_level("shopee")
     assert [(d.name, d.file_count) for d in level.directories] == [("account", 1)]
     assert [f.path for f in level.files] == ["shopee/top.md"]
 
 
-# ----- the inbox -----------------------------------------------------------
+# ----- an upload ----------------------------------------------------------
 
 
-def test_material_waits_in_a_hidden_inbox(knowledge_root) -> None:  # type: ignore[no-untyped-def]
-    name = inbox.submit_material("shopee", title="Gateway", description="d", body="b")
-    assert name == "gateway.md"
-    assert (knowledge_root / "shopee" / ".inbox" / "gateway.md").is_file()
-    # Two submissions of one title are two pieces of material.
-    assert inbox.submit_material("shopee", title="Gateway", description="d", body="c") != name
-    assert len(inbox.inbox_items("shopee")) == 2
-
-
-def test_promoting_material_makes_it_a_source(knowledge_root) -> None:  # type: ignore[no-untyped-def]
-    name = inbox.submit_material("shopee", title="Gateway", description="what it does", body="b")
-    promoted = inbox.promote("shopee", name)
-    assert promoted.path == "shopee/sources/gateway.md"
-    assert (promoted.title, promoted.description, promoted.body.strip()) == (
+def test_an_upload_is_written_straight_into_the_uploads_folder(knowledge_root) -> None:  # type: ignore[no-untyped-def]
+    written = sources.write_source("shopee", title="Gateway", description="what it does", body="b")
+    assert written.path == "shopee/sources/gateway.md"
+    assert (written.title, written.description, written.body.strip()) == (
         "Gateway",
         "what it does",
         "b",
     )
-    assert inbox.inbox_items("shopee") == ()
+    assert not (knowledge_root / "shopee" / ".inbox").exists()
+    # Two uploads of one title are two sources.
+    again = sources.write_source("shopee", title="Gateway", description="d", body="c")
+    assert again.path != written.path
 
 
-@pytest.mark.parametrize("bad", ["../x.md", ".hidden.md", "a/b.md"])
-def test_an_inbox_item_is_named_by_its_file_name_alone(bad: str) -> None:
-    with pytest.raises(UnsafeKnowledgePath):
-        inbox.promote("shopee", bad)
+def test_an_upload_with_pictures_lands_in_a_folder_of_its_own(knowledge_root) -> None:  # type: ignore[no-untyped-def]
+    written = sources.write_source(
+        "shopee", title="Gateway", description="d", body="b", folder="gateway"
+    )
+    assert written.path == "shopee/sources/gateway/gateway.md"
 
 
 def test_a_description_containing_a_rule_does_not_end_the_frontmatter() -> None:

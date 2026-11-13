@@ -91,8 +91,8 @@ def start_background_workers(
 
     # Every experimental feature's pass reads its switch at the top of each
     # round and skips it while off (spec experimental-features).
-    # The knowledge sweep: refresh the guide, promote what landed in a
-    # collection's inbox, and commit edits found on disk; woken by file events
+    # The knowledge sweep: refresh the guide and commit edits found on disk;
+    # woken by file events
     # under knowledge/ and otherwise a 10-minute fallback.
     knowledge_sweep_task = start_knowledge_sweep(
         knowledge_service, guide, resource_svc, features, watch_knowledge

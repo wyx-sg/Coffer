@@ -105,7 +105,7 @@ def _on_disk(collection: str = "shopee") -> list[str]:
 
     Deliberately not ``catalogue.list_level``: that answers what the tree
     SHOWS, and an assertion that nothing landed has to look at the directory
-    itself or a stray inbox item or original would slip past it.
+    itself or a stray staged file or original would slip past it.
     """
     directory = paths.collection_dir(collection)
     if not directory.is_dir():
@@ -133,7 +133,7 @@ async def test_an_upload_becomes_a_document_and_nothing_else(knowledge) -> None:
     assert result.converter == "passthrough"
     assert result.description == "Discussed the launch plan and open risks."
 
-    # One source, carrying the text, and no inbox item left beside it.
+    # One source, carrying the text, and nothing staged beside it.
     assert _on_disk() == ["sources/meeting-notes.md"]
     document = fs.read_file(result.path)
     assert document.actor == ACTOR_USER

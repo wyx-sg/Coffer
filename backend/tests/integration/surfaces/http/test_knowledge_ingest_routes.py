@@ -24,11 +24,11 @@ from .conftest import _create_collection
 
 
 def _files_on_disk(tmp_path, collection: str = "shopee") -> list[str]:  # type: ignore[no-untyped-def]
-    """Every file in the collection as the FILESYSTEM has it — hidden inbox,
+    """Every file in the collection as the FILESYSTEM has it — hidden folders,
     Markdown or not, README excluded.
 
     The tree route lists visible documents only, so asserting "nothing landed"
-    through it would pass with a stray original, or an item in the inbox.
+    through it would pass with a stray original, or a file staged in a hidden folder.
     """
     directory = tmp_path / ".coffer" / "vault" / "knowledge" / collection
     if not directory.is_dir():
@@ -147,7 +147,7 @@ def test_upload_of_a_pdf_with_no_text_layer_is_refused_as_scanned(  # type: igno
     assert body["error"]["details"]["reason"] == "scanned_pdf"
     assert body["error"]["details"]["doc_type"] == "pdf"
 
-    # Nothing — no document, no inbox item, no original ("Bound uploads and leave
+    # Nothing — no document, no staged file, no original ("Bound uploads and leave
     # nothing behind on failure").
     assert _files_on_disk(tmp_path) == []
 
