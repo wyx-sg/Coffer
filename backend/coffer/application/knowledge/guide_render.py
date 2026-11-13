@@ -70,6 +70,9 @@ _SPAN_CLOSE = re.compile(r"^<!-- end:([a-z_]+) -->$")
 
 _ASSET = "coffer-guide.md"
 
+# Where a README description's first sentence ends, in English or Chinese.
+_SENTENCE_END = re.compile(r"\.\s|。")
+
 _LEAD_WITH_KNOWLEDGE = (
     "Coffer, this machine's local vault — how to use it, and what it already holds"
 )
@@ -123,7 +126,7 @@ def _subject(entry: CollectionEntry) -> str:
     description = " ".join(entry.description.split())
     if not description:
         return entry.name
-    first = description.split(". ")[0].rstrip(".")
+    first = _SENTENCE_END.split(description, maxsplit=1)[0].rstrip(".")
     return f"{entry.name} ({first})"
 
 
