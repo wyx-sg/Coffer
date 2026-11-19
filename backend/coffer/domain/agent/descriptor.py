@@ -30,12 +30,12 @@ from typing import TYPE_CHECKING, Any
 from coffer.domain.agent.allowlists import _claude_code_files, _codex_files, _home
 from coffer.domain.agent.config_files import ConfigFileFormat, ConfigFileSpec
 from coffer.domain.agent.mcp_injection import McpEntryStyle, McpInjectionSpec
-from coffer.domain.agent.session_hook import SessionHookSpec
 from coffer.domain.agent.plugin_capability import (
     PluginCapability,
     PluginModel,
     UninstallStrategy,
 )
+from coffer.domain.agent.session_hook import SessionHookSpec
 from coffer.domain.agent.types import AgentType
 from coffer.domain.channel_turn import TURN_TOKEN_ENV
 

@@ -95,17 +95,18 @@ class AuditEventType(StrEnum):
     KNOWLEDGE_EDITED = "knowledge_edited"
     # No longer emitted: kept so a row written by an earlier build keeps its name.
     KNOWLEDGE_CURATED = "knowledge_curated"
-    # spec memory: the sync into each agent's own memory
+    # spec memory: Coffer's session-start hook in an agent
+    MEMORY_HOOK_INSTALLED = "memory_hook_installed"
+    MEMORY_HOOK_REMOVED = "memory_hook_removed"
+    # No longer emitted (Coffer copies no memory into an agent, neither shows
+    # nor starts an agent's own curation and sorts no task notes): kept so a
+    # row written by an earlier build keeps its name.
     MEMORY_SYNCED = "memory_synced"
     MEMORY_SYNC_UNDONE = "memory_sync_undone"
-    # No longer emitted (Coffer neither shows nor starts an agent's own
-    # curation, sorts no task notes and has no hook to remove): kept so a row
-    # written by an earlier build keeps its name.
     MEMORY_CURATION_REQUESTED = "memory_curation_requested"
     MEMORY_CURATION_ENABLED = "memory_curation_enabled"
     MEMORY_SORT_REQUESTED = "memory_sort_requested"
     MEMORY_SORTED = "memory_sorted"
-    MEMORY_HOOK_REMOVED = "memory_hook_removed"
     # The retired memory layer's: no longer emitted, kept so a row written by
     # an earlier build keeps its name.
     MEMORY_AGGREGATED = "memory_aggregated"

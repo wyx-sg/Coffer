@@ -70,7 +70,7 @@ SPECS = [
         "GET",
         "/internal-engine-config",
         _UI + "Engine",
-        "The engine's transcription model and upkeep passes.",
+        "The engine's transcription model.",
     ),
     RouteCommand(
         "settings engine transcribe-model",
@@ -78,14 +78,6 @@ SPECS = [
         "/internal-engine-config/transcribe-model",
         _UI + "Engine · transcription",
         "Choose the transcription model. Body: model.",
-        body=True,
-    ),
-    RouteCommand(
-        "settings engine upkeep",
-        "PUT",
-        "/internal-engine-config/upkeep",
-        _UI + "Engine · upkeep",
-        "Switch or schedule an upkeep pass. Body: pass, enabled, interval_s, use_default_interval.",
         body=True,
     ),
     RouteCommand(

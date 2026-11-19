@@ -25,9 +25,6 @@ from coffer.surfaces.http.agent_config_routes import router as agent_config_rout
 from coffer.surfaces.http.agent_connection_routes import router as agent_connection_router
 from coffer.surfaces.http.agent_hooks_routes import router as agent_hooks_router
 from coffer.surfaces.http.agent_mcp_import_routes import router as agent_mcp_import_router
-from coffer.surfaces.http.agent_native_memory_routes import (
-    router as agent_native_memory_router,
-)
 from coffer.surfaces.http.agent_plugin_part_routes import router as agent_plugin_part_router
 from coffer.surfaces.http.agent_routes import router as agent_router
 from coffer.surfaces.http.agent_session_routes import all_router as agent_sessions_all_router
@@ -94,7 +91,6 @@ from coffer.surfaces.http.skill_routes import router as skill_router
 from coffer.surfaces.http.skill_source_routes import router as skill_source_router
 from coffer.surfaces.http.storage_routes import router as storage_router
 from coffer.surfaces.http.sync_routes import router as sync_router
-from coffer.surfaces.http.upkeep_routes import router as upkeep_router
 from coffer.surfaces.http.usage_routes import router as usage_router
 from coffer.surfaces.http.vault_routes import router as vault_router
 
@@ -115,7 +111,6 @@ def include_all_routers(app: FastAPI) -> None:
         resource_router,
         audit_router,
         retention_router,
-        upkeep_router,  # what this daemon is rewriting right now (cross-kind)
         reconcile_router,  # the unified reconciler's plan + apply (cross-kind)
         attention_router,  # the Overview's "needs you" list (cross-kind)
         event_router,  # the daemon-wide change feed (cross-kind)
@@ -139,7 +134,6 @@ def include_all_routers(app: FastAPI) -> None:
         agent_hooks_router,
         agent_workspace_router,
         agent_plugin_part_router,
-        agent_native_memory_router,
         agent_session_router,
         agent_sessions_all_router,  # spec agent-registry: every agent's sessions in one list
         agent_unmanaged_skill_router,

@@ -176,7 +176,9 @@ class VaultWriter:
     def held(self) -> frozenset[str]:
         return frozenset(self._held())
 
-    def set_paused(self, provider: Callable[[], Iterable[str]], *, owner: str = "knowledge") -> None:
+    def set_paused(
+        self, provider: Callable[[], Iterable[str]], *, owner: str = "knowledge"
+    ) -> None:
         """Path prefixes whose edits are left in the working tree for now — a
         knowledge collection or the memory hub an agent is tidying, committed
         as one change when the tidy closes (spec knowledge "Record a tidy as one

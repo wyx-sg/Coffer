@@ -921,7 +921,6 @@ forbidden_modules = [
 ]
 ignore_imports = [
     "coffer.application.memory.* -> coffer.domain.agent.*",
-    "coffer.infrastructure.memory.* -> coffer.domain.agent.*",
 ]
 
 # Vault convergence with a git remote.

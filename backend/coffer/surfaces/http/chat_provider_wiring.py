@@ -12,18 +12,23 @@ registered (``availability()``).
 
 from __future__ import annotations
 
+import asyncio
+import logging
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING
 
 from coffer.application.agent.answering import AgentLister, answering_agent_config
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.application.engine.resolve import resolve_transcribe_connection
+from coffer.application.memory.context import session_context
 from coffer.domain.agent.facets import AgentCatalog
+from coffer.domain.features import MEMORY
 from coffer.infrastructure.chat.adapter_support import (
     ChannelNoteResolver,
 )
 from coffer.infrastructure.chat.drivers import DriverDeps
 from coffer.infrastructure.llm.transcription import remote_transcriber_factory
+from coffer.infrastructure.vault.home import vault_root
 from coffer.surfaces.http.agent_dependencies import (
     get_agent_model_catalogue,
     get_agent_service,
@@ -31,10 +36,13 @@ from coffer.surfaces.http.agent_dependencies import (
 from coffer.surfaces.http.engine_config_composition import (
     read_transcribe_model,
 )
+from coffer.surfaces.http.feature_dependencies import get_feature_service_optional
 from coffer.surfaces.http.provider_dependencies import get_provider_service
 
 if TYPE_CHECKING:
     from coffer.infrastructure.chat.persistence import ConversationRepo
+
+_log = logging.getLogger(__name__)
 
 
 def agent_home_env_resolver(
@@ -71,6 +79,20 @@ def agent_is_managed(
         return await answering_agent_config(agents(), agent_key) is not None
 
     return _managed
+
+
+async def memory_for(cwd: str) -> str:
+    """The project memories a turn started in ``cwd`` is handed: the text the
+    session-start hook prints, or ``""`` while the memory feature is off (spec
+    memory "Hand a session its project's memories at start")."""
+    features = get_feature_service_optional()
+    if features is None or not features.is_enabled(MEMORY):
+        return ""
+    try:
+        return await asyncio.to_thread(session_context, cwd, vault=vault_root())
+    except Exception:
+        _log.warning("chat.memory_context_failed", exc_info=True)
+        return ""
 
 
 def build_agent_provider_registry(
@@ -132,6 +154,7 @@ def build_agent_provider_registry(
         resolve_channel=resolve_channel,
         resolve_home_env=agent_home_env_resolver,
         is_managed=agent_is_managed,
+        resolve_memory=memory_for,
     )
     # Every agent with a driver facet, in agent-type order.
     for driver in agent_catalog.drivers():

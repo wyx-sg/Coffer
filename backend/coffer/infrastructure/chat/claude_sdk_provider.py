@@ -20,9 +20,11 @@ from coffer.application.chat.service import ConversationRepo
 from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.errors import AgentConfigRejected, ConversationNotFound
 from coffer.infrastructure.chat.adapter_support import (
+    MEMORY_IN_PROMPT_ENV,
     ChannelNoteResolver,
     HomeEnvResolver,
     ManagedCheck,
+    MemoryResolver,
     ModelLister,
     compose_system_context,
     require_managed,
@@ -69,6 +71,7 @@ class ClaudeSdkProvider:
         resolve_channel: ChannelNoteResolver | None = None,
         resolve_home_env: HomeEnvResolver | None = None,
         is_managed: ManagedCheck | None = None,
+        resolve_memory: MemoryResolver | None = None,
     ) -> None:
         self._conversations = conversations
         self._session_factory: SdkSessionFactory = session_factory or default_session_factory
@@ -92,6 +95,10 @@ class ClaudeSdkProvider:
         # Whether an enabled agent of this type is managed by Coffer; chat offers
         # and runs managed agents only. ``None`` ⇒ not asked.
         self._is_managed = is_managed
+        # The project memories a turn's working directory is handed, put in
+        # the system prompt (spec memory "Hand a session its project's
+        # memories at start"). ``None`` ⇒ none.
+        self._resolve_memory = resolve_memory
 
     async def init_conversation(self, conversation_id: str, agent_config: dict[str, Any]) -> None:
         cwd = agent_config.get("cwd")
@@ -133,6 +140,7 @@ class ClaudeSdkProvider:
                 conversation_id, replace(latest, session_id=session_id)
             )
 
+        memory = await self._resolve_memory(config.cwd) if self._resolve_memory else ""
         system_context = await compose_system_context(
             agent_key=self.agent_key,
             channel_uid=conv.channel_uid or "",
@@ -140,6 +148,7 @@ class ClaudeSdkProvider:
             list_models=self._list_models,
             resolve_channel=self._resolve_channel,
             conversation_id=conversation_id,
+            memory=memory,
         )
 
         # Overrides only: the SDK merges ``options.env`` over the daemon's own
@@ -151,6 +160,10 @@ class ClaudeSdkProvider:
         # The turn's token: the shim in the agent's MCP entry forwards it, so the
         # gateway offers this turn's turn-scoped tools.
         home_env.update(turn_tokens.turn_env(conversation_id))
+        if memory:
+            # The memories are in the system prompt: Coffer's own
+            # session-start hook in Claude Code must not hand them again.
+            home_env[MEMORY_IN_PROMPT_ENV] = "1"
         if conv.channel_uid:
             # A chat has no use for work that outlives the turn: nobody sees it
             # run and its result only arrives after the reply. The agent can

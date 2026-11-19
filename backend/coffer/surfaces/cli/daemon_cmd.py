@@ -258,9 +258,7 @@ def status(
 
     \f
     3 is both this CLI's "daemon unreachable" code and the LSB ``status`` code
-    for "not running". The passes in flight are ``GET /upkeep/runs`` (spec
-    resource-framework "Report the passes in flight in one cross-kind read"),
-    oldest first, carried under ``passes_in_flight`` in ``--json``.
+    for "not running".
     """
     verbose = (ctx.obj or {}).get("verbose", False)
     # Probe first: client_or_exit() alone would spawn a daemon, and a status
@@ -280,12 +278,6 @@ def status(
         _cli_client.check(r, verbose=verbose, as_json=output_json)
         data = r.json()
         setup = _cli_client.waiting_for_git(data)
-        runs: list[dict[str, Any]] = []
-        # A daemon waiting for git runs no passes and refuses the route.
-        if setup is None:
-            r = c.get("/upkeep/runs")
-            _cli_client.check(r, verbose=verbose, as_json=output_json)
-            runs = r.json()["runs"]
     others = other_daemons_of_our_vault(info.pid)
     if output_json:
         typer.echo(
@@ -294,7 +286,6 @@ def status(
                     **data,
                     "port": info.port,
                     "pid": info.pid,
-                    "passes_in_flight": runs,
                     "other_daemon_pids": others,
                 }
             )
@@ -320,13 +311,6 @@ def status(
     if setup is not None:
         typer.echo("")
         _cli_client.print_waiting_for_git(setup)
-        return
-    typer.echo("")
-    typer.echo("passes in flight:")
-    if not runs:
-        typer.echo("  no pass is running")
-    for run in runs:
-        typer.echo(f"  {run['kind']:<10} {run['name']}  (started {run['started_at']})")
 
 
 def _task_lines(runtime: dict[str, Any] | None) -> list[str]:

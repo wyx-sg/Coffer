@@ -37,7 +37,6 @@ from coffer.domain.vault.writers import (
     WRITER_USER,
     CommitMeta,
 )
-from coffer.domain.vault.writes import Expect
 from coffer.infrastructure.memory.frontmatter import render_frontmatter, split_frontmatter
 from coffer.infrastructure.vault import git
 from coffer.infrastructure.vault.instance import vault_writer
@@ -86,19 +85,8 @@ class HubStore:
         )
 
     def topics(self, project: str) -> list[Topic]:
-        """Every topic of ``project``, in file-name order. A file that cannot
-        be read is skipped and logged."""
-        folder = self.projects_root() / check_segment(project)
-        out: list[Topic] = []
-        for path in _md_files(folder):
-            try:
-                text = path.read_bytes().decode("utf-8")
-            except (OSError, UnicodeDecodeError):
-                logger.warning("memory.hub.unreadable path=%s", path)
-                continue
-            fm, body = split_frontmatter(text)
-            out.append(read_topic(project, path.name, fm, body))
-        return out
+        """Every topic of ``project``, in file-name order."""
+        return read_topics(self.projects_root() / check_segment(project), project)
 
     def read(self, project: str, name: str) -> TopicFile:
         path = self._path(project, name)
@@ -229,6 +217,22 @@ class HubStore:
         return f"{PREFIX}{PROJECTS}/{check_segment(project)}/{check_file_name(name)}"
 
 
+def read_topics(folder: pathlib.Path, project: str) -> list[Topic]:
+    """Every topic file in ``folder``, in file-name order. A file that cannot
+    be read is skipped and logged. Needs no vault writer, so the session-start
+    hook can call it without a daemon."""
+    out: list[Topic] = []
+    for path in _md_files(folder):
+        try:
+            text = path.read_bytes().decode("utf-8")
+        except (OSError, UnicodeDecodeError):
+            logger.warning("memory.hub.unreadable path=%s", path)
+            continue
+        fm, body = split_frontmatter(text)
+        out.append(read_topic(project, path.name, fm, body))
+    return out
+
+
 def _converted(text: str) -> str | None:
     """An older build's entry in the topic format, or ``None`` when ``text``
     is not one."""
@@ -237,7 +241,7 @@ def _converted(text: str) -> str | None:
         return None
     kind = str(fm.get("type") or "")
     updated = str(fm.get("updated_at") or fm.get("created_at") or "")[:10]
-    lines = [line for line in body.strip("\n").splitlines()]
+    lines = body.strip("\n").splitlines()
     return render_frontmatter(
         {
             "title": str(fm.get("title") or fm.get("id")),
@@ -253,7 +257,9 @@ def _md_files(folder: pathlib.Path, *, recursive: bool = False) -> list[pathlib.
         return []
     if not recursive:
         return sorted(
-            p for p in folder.iterdir() if p.is_file() and p.suffix == ".md" and not p.name.startswith(".")
+            p
+            for p in folder.iterdir()
+            if p.is_file() and p.suffix == ".md" and not p.name.startswith(".")
         )
     found: list[pathlib.Path] = []
     for here, dirs, files in os.walk(folder):
@@ -264,4 +270,4 @@ def _md_files(folder: pathlib.Path, *, recursive: bool = False) -> list[pathlib.
     return sorted(found)
 
 
-__all__ = ["PREFIX", "HubStore", "TopicFile"]
+__all__ = ["PREFIX", "HubStore", "TopicFile", "read_topics"]
