@@ -1,7 +1,7 @@
 // src/components/agents/detail/AgentDetailTabs.tsx — the agent page's tabs, each at its own path.
 //
 // Overview · Skills · MCP servers · Hooks · Config files · Sessions, then More
-// (Plugins · Memory, the least used) — no counts. The open tab is the path
+// (Plugins, the least used) — no counts. The open tab is the path
 // segment (`useDetailTab`); only the open tab is mounted, so a tab reads its
 // data when it is opened. A tab inside More that needs attention (a plugin
 // whose files are gone) puts a dot on More,
@@ -15,7 +15,6 @@ import { AgentConfigFilesTab } from "@/components/agents/AgentConfigFilesTab";
 import { AgentHooksTab } from "@/components/agents/AgentHooksTab";
 import { AgentPluginsTab } from "@/components/agents/AgentPluginsTab";
 import { AgentMcpServersTab } from "@/components/agents/AgentMcpServersTab";
-import { AgentMemoryTab } from "@/components/agents/AgentMemoryTab";
 import { AgentOverviewTab } from "@/components/agents/AgentOverviewTab";
 import { AgentSkillsTab } from "@/components/agents/AgentSkillsTab";
 import type { useAgentRowActions } from "@/components/agents/list/useAgentRowActions";
@@ -47,7 +46,6 @@ const LABEL_KEY: Record<AgentTab, string> = {
   plugins: "agents.tabs.plugins",
   hooks: "agents.tabs.hooks",
   config: "agents.tabs.config",
-  memory: "agents.tabs.memory",
   sessions: "agents.tabs.sessions",
 };
 
@@ -92,7 +90,6 @@ export function AgentDetailTabs({ agent, typeRow, rowActions }: Props) {
         {tab === "plugins" && <AgentPluginsTab agent={agent} />}
         {tab === "hooks" && <AgentHooksTab agent={agent} />}
         {tab === "config" && <AgentConfigFilesTab agent={agent} />}
-        {tab === "memory" && <AgentMemoryTab agent={agent} />}
         {tab === "sessions" && <AgentSessionsTab agent={agent} />}
       </TabsContent>
     </Tabs>

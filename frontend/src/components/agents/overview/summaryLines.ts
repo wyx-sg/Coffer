@@ -94,14 +94,6 @@ export function hooksLine(
   };
 }
 
-export function memoryLine(t: TFunction, stores: number | undefined): SummaryLine | undefined {
-  if (stores === undefined) return undefined;
-  return {
-    count: stores,
-    line: t(`${K}.memory.${stores === 0 ? "none" : "line"}`, { count: stores }),
-  };
-}
-
 export function configLine(t: TFunction, names: string[] | undefined): SummaryLine | undefined {
   if (names === undefined) return undefined;
   return {

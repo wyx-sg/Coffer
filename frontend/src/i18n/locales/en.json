@@ -995,8 +995,8 @@
       "attention_unignored": "Stopped ignoring an item on Overview",
       "secret_revealed": "Revealed a secret in the Coffer app",
       "secret_revealed_secret": "Revealed {{secret}} in the Coffer app",
-      "memory_hook_removed": "Removed the retired memory hook from an agent",
-      "memory_hook_removed_agent": "Removed the retired memory hook from {{agent}}",
+      "memory_hook_removed": "Removed Coffer's memory hook from an agent",
+      "memory_hook_removed_agent": "Removed Coffer's memory hook from {{agent}}",
       "memory_synced": "Synced memory between the agents",
       "memory_synced_count_one": "Synced {{count}} memory between the agents",
       "memory_synced_count_other": "Synced {{count}} memories between the agents",
@@ -1012,7 +1012,9 @@
       "memory_sort_requested_count_other": "Asked Claude Code to sort {{count}} task notes out of memory",
       "memory_sorted": "Recorded memories as sorted",
       "memory_sorted_count_one": "Recorded {{count}} memory as sorted into {{outcome}}",
-      "memory_sorted_count_other": "Recorded {{count}} memories as sorted into {{outcome}}"
+      "memory_sorted_count_other": "Recorded {{count}} memories as sorted into {{outcome}}",
+      "memory_hook_installed": "Installed Coffer's memory hook in an agent",
+      "memory_hook_installed_agent": "Installed Coffer's memory hook in {{agent}}"
     },
     "capType": {
       "tool": "tool",
@@ -1984,7 +1986,6 @@
     "MCP_SSE_NOT_SUPPORTED": "This entry uses the old SSE transport, which Coffer doesn't support. Keep it in the agent, or switch it to the server's Streamable HTTP URL.",
     "MCP_ENTRY_SOURCE_AMBIGUOUS": "The MCP entry's source is ambiguous — specify which one",
     "MCP_INSTALL_UNSUPPORTED": "This agent does not support installing Coffer's MCP entry",
-    "MEMORY_UNREADABLE": "That memory file could not be read",
     "MEMORY_UNSAFE_PATH": "That path isn't allowed in the memory store",
     "NAME_IMMUTABLE": "This name is fixed once added, because agents quote it. Delete it and add it again under the new name",
     "NOT_FOUND": "Not found.",
@@ -2008,7 +2009,6 @@
     "SYNC_CANNOT_RETIRE_SELF": "A machine cannot retire itself",
     "SYNC_NOTHING_TO_ROLL_BACK": "There is no round to roll back to",
     "TOOL_DISABLED": "This capability is turned off — turn it on on the server's page",
-    "UPKEEP_ALREADY_RUNNING": "A pass over this one is already running",
     "UNAUTHENTICATED": "This page was opened by an earlier Coffer. Reload the page — it picks up the running one. If that does not help, restart Coffer.",
     "UNKNOWN_AGENT": "Unknown agent",
     "UNKNOWN_KIND": "Unknown resource kind",
@@ -2088,12 +2088,12 @@
     "INVOCATION_NOT_FOUND": "That tool call isn't in the log. It may have been cleared by retention.",
     "CUSTOM_TOOL_LAST_ENVIRONMENT": "A group needs at least one environment, so its last one can't be deleted.",
     "DESKTOP_REQUEST_NOT_FOUND": "That request to the Coffer app has expired or was already handled.",
-    "MEMORY_SYNC_RUNNING": "A memory sync is already running",
-    "MEMORY_SYNC_NO_PREVIEW": "There is no memory sync preview waiting",
     "KNOWLEDGE_UNDO_CONFLICT": "Not undone: files were edited since. Undo anyway to discard those edits.",
     "KNOWLEDGE_NOT_A_CHANGE": "That change touched no knowledge file, so there is nothing to undo.",
     "KNOWLEDGE_COLLECTION_LINKED": "This is a linked folder. Coffer only shares it with agents and doesn't change it.",
-    "KNOWLEDGE_FOLDER_REFUSED": "This folder can't be linked. Pick an existing folder outside Coffer's own folder."
+    "KNOWLEDGE_FOLDER_REFUSED": "This folder can't be linked. Pick an existing folder outside Coffer's own folder.",
+    "MEMORY_FILE_NOT_FOUND": "That memory file is not there any more",
+    "MEMORY_FILE_STALE": "That memory file changed since you opened it. Close it and open it again."
   },
   "pagination": {
     "showing": "Showing {{shown}} of {{total}}",
@@ -2253,28 +2253,6 @@
         "detail": {
           "loadFailed": "Couldn't load this MCP server"
         }
-      }
-    },
-    "memoryTab": {
-      "search": "Search projects",
-      "noMatch": "No project matches.",
-      "files_one": "{{count}} file",
-      "files_other": "{{count}} files",
-      "emptyTitle": "No memory files from {{agent}} yet",
-      "emptyBody": "{{agent}} writes {{path}} as it learns. It shows here once it exists.",
-      "own": {
-        "title": "{{agent}}’s own memory",
-        "descriptionClaude": "One store per project, written by {{agent}}, with the copies Coffer syncs in from your other agents. Read-only here.",
-        "descriptionCodex": "Written by {{agent}}; Coffer adds its copies under memories/extensions/coffer/. Read-only here."
-      },
-      "cols": {
-        "project": "Project",
-        "folder": "Memory folder",
-        "files": "Files"
-      },
-      "sync": {
-        "title": "Memory sync",
-        "open": "Open Memory"
       }
     },
     "config": {
@@ -2481,19 +2459,6 @@
         "state": "Status"
       }
     },
-    "memoryStore": {
-      "tree": "Files",
-      "selectFile": "Select a file to view.",
-      "missingDir": "No memory store was named — open one from the agent's Memory tab.",
-      "subtitle_one": "{{agent}} memory · {{count}} file · read-only",
-      "subtitle_other": "{{agent}} memory · {{count}} files · read-only",
-      "subtitleNoCount": "{{agent}} memory · read-only",
-      "unavailable": "This memory store can’t be shown",
-      "notAdded": "{{agent}} isn’t added to Coffer.",
-      "moreFor": "More for {{name}}",
-      "copyPath": "Copy path",
-      "copyFailed": "Couldn’t copy the path."
-    },
     "fromCoffer": {
       "title": "From Coffer",
       "more": "+{{count}} more"
@@ -2522,7 +2487,6 @@
       "skills": "Skills",
       "mcpServers": "MCP servers",
       "config": "Config files",
-      "memory": "Memory",
       "sessions": "Sessions"
     },
     "overviewTab": {
@@ -2589,11 +2553,6 @@
           "none": "No hooks",
           "inFile": "In {{file}}",
           "inPlaces": "In {{places}} places"
-        },
-        "memory": {
-          "none": "No native stores",
-          "line_one": "Native store · read-only",
-          "line_other": "Native stores · read-only"
         },
         "config": {
           "none": "No config files yet"
@@ -3451,174 +3410,78 @@
   },
   "memory": {
     "title": "Memory",
-    "subtitle": "What your agents remember, kept in sync between them.",
-    "loadFailed": "Couldn't load memory sync",
+    "subtitle": "What your agents remember about you and your projects, one file per topic.",
+    "loadFailed": "Couldn't read memory",
     "moreActions": "More memory actions",
-    "syncNow": "Sync now",
-    "syncing": "Syncing…",
-    "clock": {
-      "last": "Last synced {{when}}",
-      "never": "Not synced yet on this machine",
-      "running": "Syncing…",
-      "off": "Automatic sync is off"
+    "folder": "Kept in {{path}}",
+    "tidy": {
+      "button": "Tidy",
+      "running": "An agent is tidying memory. Its edits show in History as one change when it finishes.",
+      "periodic": "Set up periodic tidy…",
+      "periodicDescription": "A scheduled task that hands the Tidy prompt to an agent",
+      "taskName": "Tidy memory"
     },
-    "automatic": {
-      "title": "Sync memory automatically",
-      "description": "Publishes what each agent learned to your vault and writes it into your other agents' own memory.",
-      "last": "Last synced {{when}}",
-      "never": "Not synced yet"
+    "history": {
+      "menu": "History",
+      "menuDescription": "Every change to memory, and restore",
+      "title": "History",
+      "label": "History of memory",
+      "close": "Close history"
     },
-    "toast": {
-      "synced": "Memory synced",
-      "syncedDetail": "{{published}} published · {{written}} copies written · {{removed}} removed",
-      "nothingChanged": "Memory is already in sync",
-      "previewWaiting": "Review the copies below, then choose Write"
+    "empty": {
+      "title": "No memories yet",
+      "body": "Agents write memories here as they learn about you and your projects. Start a session in a repository and tell the agent something worth remembering."
     },
-    "noAgents": {
-      "title": "No agent to sync",
-      "body": "Memory is synced between Claude Code and Codex. Add one of them on the Agents page.",
-      "open": "Open Agents"
+    "scopes": {
+      "label": "Projects",
+      "search": "Search projects",
+      "problems_one": "{{count}} file breaks the format",
+      "problems_other": "{{count}} files break the format"
     },
-    "problems": {
-      "failed_one": "Couldn't read {{count}} memory source",
-      "failed_other": "Couldn't read {{count}} memory sources",
-      "failedKept": "Nothing was published from it this time; what it published before stays in the hub.",
-      "withheld_one": "{{count}} memory looks like it holds a secret and was not published",
-      "withheld_other": "{{count}} memories look like they hold a secret and were not published",
-      "withheldBody": "They were not published. Remove the secret from the memory and it is published on the next sync."
-    },
-    "preview": {
-      "title_one": "Review {{count}} copy before it is written",
-      "title_other": "Review {{count}} copies before they are written",
-      "description": "A first or large sync waits for you. Nothing is written into your agents until you choose Write.",
-      "cancel": "Cancel",
-      "write_one": "Write {{count}} copy",
-      "write_other": "Write {{count}} copies",
-      "action": {
-        "write": "New",
-        "update": "Update",
-        "remove": "Remove"
-      },
-      "count": {
-        "write": "{{count}} new",
-        "update": "{{count}} updated",
-        "remove": "{{count}} removed"
-      }
-    },
-    "agents": {
-      "copies": "Copies Coffer wrote here",
-      "written_one": "{{count}} copy",
-      "written_other": "{{count}} copies",
-      "edited_one": "{{count}} edited by the agent",
-      "edited_other": "{{count}} edited by the agent",
-      "removed_one": "{{count}} removed by the agent",
-      "removed_other": "{{count}} removed by the agent",
-      "asText": "As text in each project's MEMORY.md",
-      "writer": {
-        "off": "Nothing written: its memory is off",
-        "blocked": "Nothing written"
-      },
-      "turnOn": {
-        "claude_code": "Turn auto memory on in Claude Code’s /memory.",
-        "codex": "Turn memories on in Codex: memories = true under [features] in config.toml.",
-        "other": "Turn the agent’s own memory on."
-      }
-    },
-    "codexImport": {
-      "label": "Codex imports Claude Code’s memories itself",
-      "description": "Turn on when Codex’s own import from Claude Code runs with automatic updates. Coffer then writes no Claude Code memory into Codex; Codex’s memories still reach Claude Code.",
-      "on": "Codex imports them itself"
-    },
-    "undo": {
-      "menu": "Undo sync…",
-      "menuDescription": "Remove Coffer’s copies from this machine’s agents",
-      "title": "Undo memory sync on this machine?",
-      "description": "Coffer removes what it wrote into your agents here and stops syncing on its own.",
-      "removes": "Removes",
-      "copiesIn_one": "{{count}} copy in {{agent}}",
-      "copiesIn_other": "{{count}} copies in {{agent}}",
-      "noCopies": "No copies",
-      "files": "Coffer’s block in each MEMORY.md and Codex’s memories/extensions/coffer/",
-      "turnsOff": "Turns off",
-      "automatic": "Automatic sync",
-      "keeps": "Keeps",
-      "kept": "The hub in your vault, every memory an agent wrote itself, and every copy an agent edited",
-      "confirm": "Undo sync",
-      "pending": "Undoing…",
-      "failed": "Couldn't undo the sync",
-      "done_one": "Removed {{count}} copy. Automatic sync is off.",
-      "done_other": "Removed {{count}} copies. Automatic sync is off."
-    },
-    "detail": {
-      "notHere": "Not checked out on this machine: written here once it is",
-      "memories_one": "{{count}} memory",
-      "memories_other": "{{count}} memories"
-    },
-    "entries": {
+    "topics": {
+      "files_one": "{{count}} file",
+      "files_other": "{{count}} files",
       "search": "Search memories",
-      "empty": "No memories in this project.",
-      "thisMachine": "This machine",
+      "empty": "No memory files in this project.",
       "cols": {
-        "memory": "Memory",
+        "topic": "Topic",
         "type": "Type",
-        "origin": "From",
         "updated": "Updated"
       },
       "filters": {
-        "source": "From"
+        "type": "Type"
       }
     },
-    "copy": {
-      "origin": "Its own",
-      "written": "Written",
-      "pending": "Next sync",
-      "held_back": "Held back",
-      "deferred": "Codex imports it",
-      "edited": "Edited by agent",
-      "removed": "Removed by agent",
-      "block": "In project memory",
-      "over_limit": "Did not fit"
+    "type": {
+      "user": "About you",
+      "feedback": "How to work",
+      "project": "Project",
+      "none": "No type"
     },
-    "scopes": {
-      "label": "Memory scopes",
-      "search": "Search projects",
-      "here": "Projects on this machine",
-      "elsewhere": "Not checked out here"
-    },
-    "note": {
-      "pending": "Not in {{agent}} yet",
-      "edited": "Edited in {{agent}}",
-      "removed": "Removed by {{agent}}",
-      "over_limit": "Did not fit in {{agent}}"
+    "problem": {
+      "title": "Doesn't follow the memory format",
+      "hint": "The next tidy fixes it, or edit it yourself.",
+      "no_title": "No title",
+      "bad_type": "The type is not user, feedback or project",
+      "no_updated": "No updated date",
+      "no_memories": "No memories in it",
+      "long_line": "A line longer than 400 characters"
     },
     "drawer": {
-      "updated": "updated {{when}}",
-      "editHint": "To change a memory, edit it in the agent's own memory.",
-      "inAgents": "In your agents on this machine",
-      "more_one": "{{count}} more agent",
-      "more_other": "{{count}} more agents"
+      "edit": "Edit",
+      "delete": "Delete",
+      "lines_one": "{{count}} memory",
+      "lines_other": "{{count}} memories"
     },
-    "needsYou": {
-      "title_one": "{{count}} thing needs you",
-      "title_other": "{{count}} things need you",
-      "preview_one": "{{count}} copy waits for you to write it",
-      "preview_other": "{{count}} copies wait for you to write them",
-      "failed_one": "{{count}} source could not be read",
-      "failed_other": "{{count}} sources could not be read",
-      "withheld_one": "{{count}} memory looked like a secret",
-      "withheld_other": "{{count}} memories looked like a secret",
-      "review": "Review",
-      "agentOff": "{{agent}}'s own memory is off, so nothing is written into it",
-      "agentOffTitle": "Agents Coffer cannot write into",
-      "openAgent": "Open {{agent}}'s memory",
-      "blocked_one": "{{count}} agent cannot be written into",
-      "blocked_other": "{{count}} agents cannot be written into"
+    "edit": {
+      "title": "Edit {{name}}",
+      "body": "The whole file, its frontmatter included. Keep one memory per line.",
+      "failed": "Couldn't save {{name}}"
     },
-    "sortOutcome": {
-      "knowledge": "knowledge",
-      "skill": "a skill",
-      "memory": "memory",
-      "drop": "nothing"
+    "delete": {
+      "title": "Delete {{name}}?",
+      "body": "Every memory in this file goes. You can bring it back from History.",
+      "failed": "Couldn't delete {{name}}"
     }
   },
   "conversations": {
@@ -4917,9 +4780,10 @@
         "ok": "Up to date",
         "warn_one": "{{count}} needs attention",
         "warn_other": "{{count}} need attention",
-        "unit_one": "memory",
-        "unit_other": "memories",
-        "lastUpdate": "Last synced {{ago}}"
+        "unit_one": "file",
+        "unit_other": "files",
+        "projects_one": "{{count}} project",
+        "projects_other": "{{count}} projects"
       },
       "sync": {
         "ok": "In sync",
@@ -6454,19 +6318,6 @@
     "handoffTo": "Hand off to {{agent}}",
     "handoffToHint": "Starts it in {{terminal}}",
     "tooltip": "Start {{agent}} in {{terminal}} to handle this"
-  },
-  "upkeep": {
-    "every": "Every",
-    "next": "next {{when}}",
-    "interval": {
-      "minutes_one": "{{count}} minute",
-      "minutes_other": "{{count}} minutes",
-      "hours_one": "{{count}} hour",
-      "hours_other": "{{count}} hours",
-      "days_one": "{{count}} day",
-      "days_other": "{{count}} days",
-      "default": "Default ({{interval}})"
-    }
   },
   "drawer": {
     "previous": "Previous",

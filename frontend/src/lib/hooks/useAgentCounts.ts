@@ -14,7 +14,6 @@ import {
   skillCounts,
   type AgentCounts,
 } from "@/lib/agents/counts";
-import { useAgentNativeMemory } from "@/lib/hooks/useAgentNativeMemory";
 import {
   useAgentConfigFiles,
   useAgentHooks,
@@ -33,7 +32,6 @@ export function useAgentCounts(uid: string): AgentCounts {
   const entries = useAgentMcpEntries(uid);
   const plugins = useAgentPlugins(uid);
   const hooks = useAgentHooks(uid);
-  const memory = useAgentNativeMemory(uid);
   const configFiles = useAgentConfigFiles(uid);
 
   return useMemo<AgentCounts>(() => {
@@ -49,7 +47,6 @@ export function useAgentCounts(uid: string): AgentCounts {
       mcp: servers.data ? mcpCounts(cofferServers, entries.data?.items) : undefined,
       plugins: pluginCounts(plugins.data?.items),
       hooks: hookCounts(hooks.data),
-      memoryStores: memory.data?.items.length,
       configFiles: configFiles.data?.filter((f) => f.exists).length,
     };
   }, [
@@ -60,7 +57,6 @@ export function useAgentCounts(uid: string): AgentCounts {
     entries.data,
     plugins.data,
     hooks.data,
-    memory.data,
     configFiles.data,
   ]);
 }

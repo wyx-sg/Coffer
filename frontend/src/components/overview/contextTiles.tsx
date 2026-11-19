@@ -6,9 +6,9 @@
 import { useTranslation } from "react-i18next";
 
 import { useKnowledgeCollections } from "@/lib/hooks/useKnowledge";
-import { useMemorySyncState } from "@/lib/hooks/useMemory";
+import { useMemoryState } from "@/lib/hooks/useMemory";
 import { useSyncStatus } from "@/lib/hooks/useSync";
-import { totalMemories } from "@/lib/memory/syncFacts";
+import { totalTopics } from "@/lib/memory/projects";
 import { tileStatus } from "@/lib/overview/health";
 import { agoText, editedText, latest } from "@/lib/overview/tileText";
 import type { AreaProps } from "./areaTiles";
@@ -39,19 +39,23 @@ export function KnowledgeTile({ area, items }: AreaProps) {
 }
 
 export function MemoryTile({ area, items }: AreaProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   return (
     <QueryTile
       area={area}
-      query={useMemorySyncState()}
+      query={useMemoryState()}
       content={(state) => {
-        const count = totalMemories(state);
-        const synced = agoText(t, state.last_synced_at || null);
+        const count = totalTopics(state.projects);
         return {
           status: tileStatus(t, area, items, count > 0),
           value: count,
           unit: t("overview.health.memory.unit", { count }),
-          summary: synced ? t("overview.health.memory.lastUpdate", { ago: synced }) : null,
+          summary: [
+            t("overview.health.memory.projects", { count: state.projects.length }),
+            editedText(t, i18n.language, latest(state.projects.map((p) => p.updated || null))),
+          ]
+            .filter(Boolean)
+            .join(" · "),
         };
       }}
     />

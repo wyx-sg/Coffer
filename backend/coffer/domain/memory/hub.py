@@ -29,6 +29,14 @@ TYPES = (TYPE_USER, TYPE_FEEDBACK, TYPE_PROJECT)
 #: The longest line a topic keeps: a memory is a sentence or two.
 MAX_LINE = 400
 
+#: What can break the format, as the page and the CLI name it.
+NO_TITLE = "no_title"
+BAD_TYPE = "bad_type"
+NO_UPDATED = "no_updated"
+NO_MEMORIES = "no_memories"
+LONG_LINE = "long_line"
+PROBLEMS = (NO_TITLE, BAD_TYPE, NO_UPDATED, NO_MEMORIES, LONG_LINE)
+
 _UNSAFE_FOLDER_CHARS = re.compile(r"[^A-Za-z0-9._-]+")
 _DOTS_ONLY = re.compile(r"^\.+$")
 _DATE = re.compile(r"^\d{4}-\d{2}-\d{2}")
@@ -47,7 +55,7 @@ class Topic:
     #: ``YYYY-MM-DD``, or ``""`` when the file names none.
     updated: str
     body: str
-    #: What breaks the format, in plain words; empty when the file follows it.
+    #: What breaks the format (:data:`PROBLEMS`); empty when the file follows it.
     problems: tuple[str, ...] = ()
 
     @property
@@ -69,15 +77,15 @@ def read_topic(project: str, name: str, frontmatter: dict[str, object], body: st
     text = body.strip("\n")
     problems: list[str] = []
     if not title:
-        problems.append("no title")
+        problems.append(NO_TITLE)
     if kind not in TYPES:
-        problems.append("type is not user, feedback or project")
+        problems.append(BAD_TYPE)
     if not updated:
-        problems.append("no updated date")
+        problems.append(NO_UPDATED)
     if not text.strip():
-        problems.append("no memories")
+        problems.append(NO_MEMORIES)
     elif any(len(line) > MAX_LINE for line in text.splitlines()):
-        problems.append(f"a line longer than {MAX_LINE} characters")
+        problems.append(LONG_LINE)
     return Topic(
         project=project,
         name=name,
@@ -138,7 +146,13 @@ def check_file_name(name: str) -> str:
 
 
 __all__ = [
+    "BAD_TYPE",
+    "LONG_LINE",
     "MAX_LINE",
+    "NO_MEMORIES",
+    "NO_TITLE",
+    "NO_UPDATED",
+    "PROBLEMS",
     "PROJECTS",
     "TYPES",
     "TYPE_FEEDBACK",

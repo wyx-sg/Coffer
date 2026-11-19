@@ -96,59 +96,6 @@ paths:
       summary: Update Transcribe Model
       tags:
       - internal-engine
-  /api/v1/internal-engine-config/upkeep:
-    put:
-      description: |-
-        Change one pass's switch or timer.
-
-        Each half is left alone when the client does not send it, so a settings
-        page can flip a switch without restating a timer it never looked at.
-      operationId: update_upkeep_api_v1_internal_engine_config_upkeep_put
-      parameters:
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      - in: header
-        name: x-coffer-actor
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Actor
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UpkeepUpdate'
-        required: true
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/InternalEngineConfigOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Update Upkeep
-      tags:
-      - internal-engine
 components:
   schemas:
     ErrorDetail:
@@ -182,7 +129,7 @@ components:
       title: ErrorResponse
       type: object
     InternalEngineConfigOut:
-      description: 'Coffer''s own operating settings: its unattended work and its speech-to-text.'
+      description: 'Coffer''s own operating settings: its speech-to-text.'
       properties:
         transcribe_model:
           anyOf:
@@ -195,14 +142,8 @@ components:
             type: string
           - type: 'null'
           title: Updated At
-        upkeep:
-          additionalProperties:
-            $ref: '#/components/schemas/UpkeepSettingOut'
-          title: Upkeep
-          type: object
       required:
       - updated_at
-      - upkeep
       - transcribe_model
       title: InternalEngineConfigOut
       type: object
@@ -220,79 +161,4 @@ components:
           - type: 'null'
           title: Model
       title: TranscribeModelUpdate
-      type: object
-    UpkeepSettingOut:
-      description: |-
-        One unattended pass's switch and timer, as a surface needs to show them.
-
-        ``interval_s`` is ``null`` while the operator has chosen none;
-        ``default_interval_s`` is what runs in that case, reported so a settings
-        page can name the default instead of showing a blank where a number
-        belongs.
-      properties:
-        default_interval_s:
-          title: Default Interval S
-          type: integer
-        enabled:
-          title: Enabled
-          type: boolean
-        interval_s:
-          anyOf:
-          - type: integer
-          - type: 'null'
-          title: Interval S
-        last_pass_at:
-          anyOf:
-          - format: date-time
-            type: string
-          - type: 'null'
-          title: Last Pass At
-        next_pass_at:
-          anyOf:
-          - format: date-time
-            type: string
-          - type: 'null'
-          title: Next Pass At
-      required:
-      - enabled
-      - interval_s
-      - default_interval_s
-      - last_pass_at
-      - next_pass_at
-      title: UpkeepSettingOut
-      type: object
-    UpkeepUpdate:
-      description: |-
-        Change ONE unattended pass, leaving the others exactly as they stand.
-
-        One pass at a time on purpose: a settings page toggles one row, and a body
-        carrying both would make every toggle a chance to write back a stale
-        copy of the other — on settings the operator may also be changing on
-        another machine, since they converge through vault sync.
-
-        Omitting a field leaves that half of the pass alone, so a switch and a
-        timer can be changed independently.
-      properties:
-        enabled:
-          anyOf:
-          - type: boolean
-          - type: 'null'
-          title: Enabled
-        interval_s:
-          anyOf:
-          - minimum: 60.0
-            type: integer
-          - type: 'null'
-          title: Interval S
-        pass:
-          const: memory_sync
-          title: Pass
-          type: string
-        use_default_interval:
-          default: false
-          title: Use Default Interval
-          type: boolean
-      required:
-      - pass
-      title: UpkeepUpdate
       type: object

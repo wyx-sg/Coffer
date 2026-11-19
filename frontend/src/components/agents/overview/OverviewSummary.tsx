@@ -9,7 +9,6 @@ import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   Anchor,
-  Brain,
   ChevronRight,
   FileCog,
   Plug,
@@ -33,7 +32,6 @@ import {
   configLine,
   hooksLine,
   mcpLine,
-  memoryLine,
   pluginsLine,
   skillsLine,
   type SummaryLine,
@@ -71,7 +69,6 @@ export function OverviewSummary({ agent, typeRow, notConnected = false }: Props)
     { tab: "config", icon: FileCog, summary: configLine(t, configNames) },
     { tab: "plugins", icon: Plug, summary: pluginsLine(t, counts.plugins) },
     { tab: "hooks", icon: Anchor, summary: hooksLine(t, counts.hooks, ctx) },
-    { tab: "memory", icon: Brain, summary: memoryLine(t, counts.memoryStores) },
   ];
 
   return (

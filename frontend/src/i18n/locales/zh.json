@@ -995,8 +995,8 @@
       "attention_unignored": "在总览中不再忽略一项",
       "secret_revealed": "在 Coffer 应用中查看了密钥",
       "secret_revealed_secret": "在 Coffer 应用中查看了{{secret}}",
-      "memory_hook_removed": "从智能体中移除了已停用的记忆 Hook",
-      "memory_hook_removed_agent": "从 {{agent}} 中移除了已停用的记忆 Hook",
+      "memory_hook_removed": "从智能体中移除了 Coffer 的记忆 Hook",
+      "memory_hook_removed_agent": "从 {{agent}} 中移除了 Coffer 的记忆 Hook",
       "memory_synced": "在各智能体之间同步了记忆",
       "memory_synced_count_one": "在各智能体之间同步了 {{count}} 条记忆",
       "memory_synced_count_other": "在各智能体之间同步了 {{count}} 条记忆",
@@ -1012,7 +1012,9 @@
       "memory_sort_requested_count_other": "请 Claude Code 整理 {{count}} 条任务笔记",
       "memory_sorted": "记录了记忆的整理结果",
       "memory_sorted_count_one": "记录了 {{count}} 条记忆整理到{{outcome}}",
-      "memory_sorted_count_other": "记录了 {{count}} 条记忆整理到{{outcome}}"
+      "memory_sorted_count_other": "记录了 {{count}} 条记忆整理到{{outcome}}",
+      "memory_hook_installed": "在智能体中安装了 Coffer 的记忆 Hook",
+      "memory_hook_installed_agent": "在 {{agent}} 中安装了 Coffer 的记忆 Hook"
     },
     "capType": {
       "tool": "工具",
@@ -1984,7 +1986,6 @@
     "MCP_SSE_NOT_SUPPORTED": "该条目使用旧版 SSE 传输，Coffer 不支持。请把它留在智能体里，或改用服务器的 Streamable HTTP 地址。",
     "MCP_ENTRY_SOURCE_AMBIGUOUS": "该 MCP 条目的来源存在歧义，请指定具体来源",
     "MCP_INSTALL_UNSUPPORTED": "该智能体不支持安装 Coffer 的 MCP 条目",
-    "MEMORY_UNREADABLE": "该记忆文件无法读取",
     "MEMORY_UNSAFE_PATH": "该路径在记忆库中不被允许",
     "NAME_IMMUTABLE": "添加后名称不能再改，因为智能体会引用它。要换名称请删除后以新名称重新添加",
     "NOT_FOUND": "未找到。",
@@ -2008,7 +2009,6 @@
     "SYNC_CANNOT_RETIRE_SELF": "机器不能把自己下线",
     "SYNC_NOTHING_TO_ROLL_BACK": "没有可以回滚到的轮次",
     "TOOL_DISABLED": "该功能已关闭——请在该服务器页面开启它",
-    "UPKEEP_ALREADY_RUNNING": "这一项已经在整理中了",
     "UNAUTHENTICATED": "本页面是由上一个 Coffer 打开的。刷新页面即可接上正在运行的那个；若仍无效，请重启 Coffer。",
     "UNKNOWN_AGENT": "未知的智能体",
     "UNKNOWN_KIND": "未知资源类型",
@@ -2088,12 +2088,12 @@
     "INVOCATION_NOT_FOUND": "日志里没有这次工具调用，可能已按保留期清理。",
     "CUSTOM_TOOL_LAST_ENVIRONMENT": "分组至少需要一个环境，最后一个不能删除。",
     "DESKTOP_REQUEST_NOT_FOUND": "这个发给 Coffer 应用的请求已过期或已处理。",
-    "MEMORY_SYNC_RUNNING": "已有一次记忆同步在运行",
-    "MEMORY_SYNC_NO_PREVIEW": "没有等待写入的记忆同步预览",
     "KNOWLEDGE_UNDO_CONFLICT": "没有撤销：之后有文件被编辑过。选择“仍然撤销”会丢掉那些编辑。",
     "KNOWLEDGE_NOT_A_CHANGE": "这次改动没有涉及任何知识文件，没有可撤销的内容。",
     "KNOWLEDGE_COLLECTION_LINKED": "这是接入的外部文件夹。Coffer 只把它共享给智能体，不会修改它。",
-    "KNOWLEDGE_FOLDER_REFUSED": "无法接入这个文件夹。请选一个已存在、且不在 Coffer 自己目录里的文件夹。"
+    "KNOWLEDGE_FOLDER_REFUSED": "无法接入这个文件夹。请选一个已存在、且不在 Coffer 自己目录里的文件夹。",
+    "MEMORY_FILE_NOT_FOUND": "这个记忆文件已经不在了",
+    "MEMORY_FILE_STALE": "这个记忆文件在你打开后被修改过。请关闭后重新打开。"
   },
   "pagination": {
     "showing": "显示 {{shown}} / {{total}} 条",
@@ -2253,28 +2253,6 @@
         "detail": {
           "loadFailed": "无法加载该 MCP 服务器"
         }
-      }
-    },
-    "memoryTab": {
-      "search": "搜索项目",
-      "noMatch": "没有匹配的项目。",
-      "files_one": "{{count}} 个文件",
-      "files_other": "{{count}} 个文件",
-      "emptyTitle": "{{agent}} 还没有记忆文件",
-      "emptyBody": "{{agent}} 在学习过程中会写入 {{path}}。文件出现后会显示在这里。",
-      "own": {
-        "title": "{{agent}} 自己的记忆",
-        "descriptionClaude": "每个项目一个记忆库，由 {{agent}} 写入，另有 Coffer 从你其他智能体同步来的副本。这里只读。",
-        "descriptionCodex": "由 {{agent}} 写入；Coffer 把副本放在 memories/extensions/coffer/ 下。这里只读。"
-      },
-      "cols": {
-        "project": "项目",
-        "folder": "记忆目录",
-        "files": "文件数"
-      },
-      "sync": {
-        "title": "记忆同步",
-        "open": "打开记忆页"
       }
     },
     "config": {
@@ -2481,19 +2459,6 @@
         "state": "状态"
       }
     },
-    "memoryStore": {
-      "tree": "文件",
-      "selectFile": "选择一个文件查看。",
-      "missingDir": "没有指定记忆存储——请从该智能体的「记忆」标签页进入。",
-      "subtitle_one": "{{agent}} 记忆 · {{count}} 个文件 · 只读",
-      "subtitle_other": "{{agent}} 记忆 · {{count}} 个文件 · 只读",
-      "subtitleNoCount": "{{agent}} 记忆 · 只读",
-      "unavailable": "无法显示这个记忆库",
-      "notAdded": "{{agent}} 尚未添加到 Coffer。",
-      "moreFor": "{{name}} 的更多操作",
-      "copyPath": "复制路径",
-      "copyFailed": "无法复制路径。"
-    },
     "fromCoffer": {
       "title": "来自 Coffer",
       "more": "另有 {{count}} 个"
@@ -2522,7 +2487,6 @@
       "skills": "技能",
       "mcpServers": "MCP 服务器",
       "config": "配置文件",
-      "memory": "记忆",
       "sessions": "会话"
     },
     "overviewTab": {
@@ -2589,11 +2553,6 @@
           "none": "没有 hook",
           "inFile": "在 {{file}} 里",
           "inPlaces": "分布在 {{places}} 处"
-        },
-        "memory": {
-          "none": "没有原生记忆库",
-          "line_one": "原生记忆库 · 只读",
-          "line_other": "原生记忆库 · 只读"
         },
         "config": {
           "none": "还没有配置文件"
@@ -3451,174 +3410,78 @@
   },
   "memory": {
     "title": "记忆",
-    "subtitle": "你的智能体记住的东西，在它们之间保持同步。",
-    "loadFailed": "无法读取记忆同步",
+    "subtitle": "智能体记住的关于你和项目的事，每个主题一个文件。",
+    "loadFailed": "无法读取记忆",
     "moreActions": "更多记忆操作",
-    "syncNow": "立即同步",
-    "syncing": "正在同步…",
-    "clock": {
-      "last": "上次同步 {{when}}",
-      "never": "这台机器还没有同步过",
-      "running": "正在同步…",
-      "off": "自动同步已关闭"
+    "folder": "保存在 {{path}}",
+    "tidy": {
+      "button": "整理",
+      "running": "有智能体正在整理记忆。整理完成后，它的修改会作为一次变更出现在历史中。",
+      "periodic": "设置定期整理…",
+      "periodicDescription": "创建一个定时任务，把整理提示交给智能体",
+      "taskName": "整理记忆"
     },
-    "automatic": {
-      "title": "自动同步记忆",
-      "description": "把每个智能体学到的东西发布到你的保险库，并写入你其他智能体自己的记忆。",
-      "last": "上次同步 {{when}}",
-      "never": "还没有同步过"
+    "history": {
+      "menu": "历史",
+      "menuDescription": "记忆的每一次变更，可以恢复",
+      "title": "历史",
+      "label": "记忆的历史",
+      "close": "关闭历史"
     },
-    "toast": {
-      "synced": "记忆已同步",
-      "syncedDetail": "发布 {{published}} 条 · 写入 {{written}} 份副本 · 移除 {{removed}} 份",
-      "nothingChanged": "记忆已是最新",
-      "previewWaiting": "请查看下面的副本，然后选择写入"
-    },
-    "noAgents": {
-      "title": "没有可同步的智能体",
-      "body": "记忆在 Claude Code 和 Codex 之间同步。请在智能体页面添加其中一个。",
-      "open": "打开智能体"
-    },
-    "problems": {
-      "failed_one": "有 {{count}} 个记忆来源无法读取",
-      "failed_other": "有 {{count}} 个记忆来源无法读取",
-      "failedKept": "这次没有从它发布任何内容；它之前发布的内容仍留在中心库里。",
-      "withheld_one": "有 {{count}} 条记忆看起来含有密钥，未发布",
-      "withheld_other": "有 {{count}} 条记忆看起来含有密钥，未发布",
-      "withheldBody": "这些记忆没有发布。把密钥从记忆里去掉，下次同步就会发布。"
-    },
-    "preview": {
-      "title_one": "写入前请查看 {{count}} 份副本",
-      "title_other": "写入前请查看 {{count}} 份副本",
-      "description": "首次或大量同步会先等你确认。在你选择写入之前，不会写入任何智能体。",
-      "cancel": "取消",
-      "write_one": "写入 {{count}} 份副本",
-      "write_other": "写入 {{count}} 份副本",
-      "action": {
-        "write": "新写入",
-        "update": "更新",
-        "remove": "移除"
-      },
-      "count": {
-        "write": "新写入 {{count}}",
-        "update": "更新 {{count}}",
-        "remove": "移除 {{count}}"
-      }
-    },
-    "agents": {
-      "copies": "Coffer 在此写入的副本",
-      "written_one": "{{count}} 份副本",
-      "written_other": "{{count}} 份副本",
-      "edited_one": "{{count}} 份被智能体修改",
-      "edited_other": "{{count}} 份被智能体修改",
-      "removed_one": "{{count}} 份被智能体移除",
-      "removed_other": "{{count}} 份被智能体移除",
-      "asText": "以原文写进各项目的 MEMORY.md",
-      "writer": {
-        "off": "未写入：它的记忆已关闭",
-        "blocked": "未写入"
-      },
-      "turnOn": {
-        "claude_code": "在 Claude Code 的 /memory 中开启自动记忆。",
-        "codex": "在 Codex 中开启记忆：在 config.toml 的 [features] 下设置 memories = true。",
-        "other": "开启该智能体自己的记忆。"
-      }
-    },
-    "codexImport": {
-      "label": "Codex 自己导入 Claude Code 的记忆",
-      "description": "当 Codex 自己从 Claude Code 导入并开启自动更新时打开。这样 Coffer 不再把 Claude Code 的记忆写入 Codex；Codex 的记忆仍会写入 Claude Code。",
-      "on": "由 Codex 自己导入"
-    },
-    "undo": {
-      "menu": "撤销同步…",
-      "menuDescription": "从这台机器的智能体中移除 Coffer 的副本",
-      "title": "撤销这台机器上的记忆同步？",
-      "description": "Coffer 会移除它在这里写入你智能体的内容，并停止自动同步。",
-      "removes": "移除",
-      "copiesIn_one": "{{agent}} 中的 {{count}} 份副本",
-      "copiesIn_other": "{{agent}} 中的 {{count}} 份副本",
-      "noCopies": "没有副本",
-      "files": "每个 MEMORY.md 中 Coffer 的区块，以及 Codex 的 memories/extensions/coffer/",
-      "turnsOff": "关闭",
-      "automatic": "自动同步",
-      "keeps": "保留",
-      "kept": "保险库中的中心库、智能体自己写下的每条记忆，以及智能体修改过的每份副本",
-      "confirm": "撤销同步",
-      "pending": "正在撤销…",
-      "failed": "无法撤销同步",
-      "done_one": "已移除 {{count}} 份副本。自动同步已关闭。",
-      "done_other": "已移除 {{count}} 份副本。自动同步已关闭。"
-    },
-    "detail": {
-      "notHere": "这台机器上没有检出：检出后才会写入",
-      "memories_one": "{{count}} 条记忆",
-      "memories_other": "{{count}} 条记忆"
-    },
-    "entries": {
-      "search": "搜索记忆",
-      "empty": "这个项目里没有记忆。",
-      "thisMachine": "这台机器",
-      "cols": {
-        "memory": "记忆",
-        "type": "类型",
-        "origin": "来自",
-        "updated": "更新时间"
-      },
-      "filters": {
-        "source": "来自"
-      }
-    },
-    "copy": {
-      "origin": "它自己的",
-      "written": "已写入",
-      "pending": "下次同步",
-      "held_back": "暂缓",
-      "deferred": "由 Codex 导入",
-      "edited": "被智能体修改",
-      "removed": "被智能体移除",
-      "block": "在项目记忆中",
-      "over_limit": "放不下"
+    "empty": {
+      "title": "还没有记忆",
+      "body": "智能体了解到关于你和项目的事时，会把记忆写在这里。在某个仓库里开始一个会话，告诉智能体值得记住的事吧。"
     },
     "scopes": {
-      "label": "记忆范围",
+      "label": "项目",
       "search": "搜索项目",
-      "here": "这台机器上的项目",
-      "elsewhere": "这台机器上没有检出"
+      "problems_one": "{{count}} 个文件不符合格式",
+      "problems_other": "{{count}} 个文件不符合格式"
     },
-    "note": {
-      "pending": "还没写入 {{agent}}",
-      "edited": "{{agent}} 改过",
-      "removed": "{{agent}} 已移除",
-      "over_limit": "{{agent}} 里放不下"
+    "topics": {
+      "files_one": "{{count}} 个文件",
+      "files_other": "{{count}} 个文件",
+      "search": "搜索记忆",
+      "empty": "这个项目没有记忆文件。",
+      "cols": {
+        "topic": "主题",
+        "type": "类型",
+        "updated": "更新于"
+      },
+      "filters": {
+        "type": "类型"
+      }
+    },
+    "type": {
+      "user": "关于你",
+      "feedback": "工作方式",
+      "project": "项目",
+      "none": "无类型"
+    },
+    "problem": {
+      "title": "不符合记忆格式",
+      "hint": "下次整理会修正，你也可以自己编辑。",
+      "no_title": "没有标题",
+      "bad_type": "类型不是 user、feedback 或 project",
+      "no_updated": "没有更新日期",
+      "no_memories": "里面没有记忆",
+      "long_line": "有一行超过 400 个字符"
     },
     "drawer": {
-      "updated": "{{when}}更新",
-      "editHint": "要修改记忆，请在智能体自己的记忆里改。",
-      "inAgents": "在这台机器的智能体里",
-      "more_one": "还有 {{count}} 个智能体",
-      "more_other": "还有 {{count}} 个智能体"
+      "edit": "编辑",
+      "delete": "删除",
+      "lines_one": "{{count}} 条记忆",
+      "lines_other": "{{count}} 条记忆"
     },
-    "needsYou": {
-      "title_one": "{{count}} 件事需要你处理",
-      "title_other": "{{count}} 件事需要你处理",
-      "preview_one": "{{count}} 份副本等你确认写入",
-      "preview_other": "{{count}} 份副本等你确认写入",
-      "failed_one": "{{count}} 个来源无法读取",
-      "failed_other": "{{count}} 个来源无法读取",
-      "withheld_one": "{{count}} 条记忆疑似含密钥",
-      "withheld_other": "{{count}} 条记忆疑似含密钥",
-      "review": "查看",
-      "agentOff": "{{agent}} 自己的记忆关着，Coffer 没法写入",
-      "agentOffTitle": "Coffer 没法写入的智能体",
-      "openAgent": "打开 {{agent}} 的记忆设置",
-      "blocked_one": "{{count}} 个智能体没法写入",
-      "blocked_other": "{{count}} 个智能体没法写入"
+    "edit": {
+      "title": "编辑 {{name}}",
+      "body": "整个文件，包括 frontmatter。每行一条记忆。",
+      "failed": "无法保存 {{name}}"
     },
-    "sortOutcome": {
-      "knowledge": "知识库",
-      "skill": "技能",
-      "memory": "记忆",
-      "drop": "不保留"
+    "delete": {
+      "title": "删除 {{name}}？",
+      "body": "这个文件里的所有记忆都会删除。可以在历史中恢复。",
+      "failed": "无法删除 {{name}}"
     }
   },
   "conversations": {
@@ -4917,9 +4780,10 @@
         "ok": "已是最新",
         "warn_one": "{{count}} 个需要关注",
         "warn_other": "{{count}} 个需要关注",
-        "unit_one": "条记忆",
-        "unit_other": "条记忆",
-        "lastUpdate": "上次同步 {{ago}}"
+        "unit_one": "个文件",
+        "unit_other": "个文件",
+        "projects_one": "{{count}} 个项目",
+        "projects_other": "{{count}} 个项目"
       },
       "sync": {
         "ok": "已同步",
@@ -6454,19 +6318,6 @@
     "handoffTo": "交给 {{agent}}",
     "handoffToHint": "在 {{terminal}} 中启动",
     "tooltip": "在 {{terminal}} 中启动 {{agent}} 来处理"
-  },
-  "upkeep": {
-    "every": "每隔",
-    "next": "下次 {{when}}",
-    "interval": {
-      "minutes_one": "{{count}} 分钟",
-      "minutes_other": "{{count}} 分钟",
-      "hours_one": "{{count}} 小时",
-      "hours_other": "{{count}} 小时",
-      "days_one": "{{count}} 天",
-      "days_other": "{{count}} 天",
-      "default": "默认（{{interval}}）"
-    }
   },
   "drawer": {
     "previous": "上一条",

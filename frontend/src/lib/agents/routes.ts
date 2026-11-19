@@ -22,7 +22,7 @@ export const AGENT_PRIMARY_TABS = [
   "config",
   "sessions",
 ] as const;
-export const AGENT_MORE_TABS = ["plugins", "memory"] as const;
+export const AGENT_MORE_TABS = ["plugins"] as const;
 export const AGENT_TABS = [...AGENT_PRIMARY_TABS, ...AGENT_MORE_TABS] as const;
 export type AgentTab = (typeof AGENT_TABS)[number];
 export const DEFAULT_AGENT_TAB: AgentTab = "overview";
@@ -43,11 +43,4 @@ export function agentBasePath(type: string): string {
 /** The canonical address of one tab (`/agents/<type>` for Overview). */
 export function agentTabPath(type: string, tab: AgentTab, search = ""): string {
   return detailTabPath(agentBasePath(type), tab, AGENT_TABS, DEFAULT_AGENT_TAB, search);
-}
-
-/** One native memory store, addressed by its directory (its identity), under Memory. */
-export function agentMemoryStorePath(type: string, dir: string, project?: string | null): string {
-  const params = new URLSearchParams({ dir });
-  if (project) params.set("project", project);
-  return `${agentBasePath(type)}/memory/store?${params.toString()}`;
 }

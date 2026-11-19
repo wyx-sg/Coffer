@@ -1,160 +1,99 @@
 // frontend/src/components/memory/MemoryList.tsx
 //
-// The open scope's memories, beside the scope list (spec memory "Manage memory
-// sync in the web UI and on the command line"). The header names the project
-// with its full key and where it is checked out here (or that it is not, so
-// its memories wait in the hub) — and the list
-// below shows each memory: its title and one-line description, its type, the
-// agent and machine it came from, and when it last changed. A copy state shows
-// on a row only when it is worth a look (waiting for the next sync, left out of
-// Claude Code's full block, edited or removed by the agent); a written copy
-// says nothing. Search
-// and source filter the list (the table's own toolbar). A row opens the memory in the drawer.
-import { useMemo } from "react";
+// The open project's topic files, beside the project list (spec memory "Show
+// and edit memory on the Memory page"). The header names the project folder
+// and how many files it holds; each row shows the topic's title and its first
+// memory, its type and when it was last updated, and a warning when the file
+// breaks the format. Search and the type filter narrow the list; a row opens
+// the file in the drawer.
 import { useTranslation } from "react-i18next";
+import { AlertTriangle } from "lucide-react";
 
-import { AgentBadge } from "@/components/agent/AgentBadge";
-import { sortAgents } from "@/components/agent/agentOrder";
-import { formatRelativeTime } from "@/components/agents/list/relativeTime";
 import { DataTable, type Column } from "@/components/DataTable";
-import { StatusWord } from "@/components/status/StatusWord";
 import { TruncatedText } from "@/components/ui/truncated-text";
-import { abbreviateHomePath, agentTypeLabel } from "@/lib/agents/display";
-import type { HubEntry, SyncProject } from "@/lib/api/memoryTypes";
-import { notableCopies, projectName } from "@/lib/memory/syncFacts";
+import type { MemoryProject, MemoryTopic } from "@/lib/api/memoryTypes";
+import { projectName } from "@/lib/memory/projects";
 
 interface Props {
-  /** The open project. */
-  project: SyncProject;
-  count: number;
-  entries: HubEntry[];
-  /** This machine's id, so its own memories read "this machine". */
-  machine: string;
+  project: MemoryProject;
+  topics: MemoryTopic[];
   isLoading?: boolean;
-  onOpen: (entry: HubEntry) => void;
-  /** The source filter the list opens with (`?source=`, from an agent's Memory tab). */
-  source?: string | null;
+  onOpen: (topic: MemoryTopic) => void;
 }
 
-/** What a row calls out about its copies: one quiet word per agent. */
-function Notes({ copies }: { copies: Record<string, string> }) {
+const TYPES = ["user", "feedback", "project"] as const;
+
+export function MemoryList({ project, topics, isLoading = false, onOpen }: Props) {
   const { t } = useTranslation();
-  const notes = notableCopies(copies);
-  if (notes.length === 0) return null;
-  return (
-    <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-0.5">
-      {notes.map(([agent, state]) => (
-        <StatusWord key={agent} tone={state === "pending" || state === "over_limit" ? "off" : "warn"} className="text-2xs">
-          {t(`memory.note.${state}`, { agent: agentTypeLabel(agent) })}
-        </StatusWord>
-      ))}
-    </span>
-  );
-}
+  const typeLabel = (type: string) =>
+    t(`memory.type.${(TYPES as readonly string[]).includes(type) ? type : "none"}`);
 
-export function MemoryList({
-  project,
-  count,
-  entries,
-  machine,
-  isLoading = false,
-  onOpen,
-  source = null,
-}: Props) {
-  const { t, i18n } = useTranslation();
-  const sources = useMemo(
-    () =>
-      sortAgents([...new Set(entries.map((e) => e.origin_agent))].map((type) => ({ type }))).map(
-        (a) => a.type,
-      ),
-    [entries],
-  );
-
-  const columns: Column<HubEntry>[] = [
+  const columns: Column<MemoryTopic>[] = [
     {
-      key: "memory",
-      header: t("memory.entries.cols.memory"),
-      cell: (e) => (
+      key: "topic",
+      header: t("memory.topics.cols.topic"),
+      cell: (m) => (
         <div className="flex min-w-0 flex-col gap-0.5">
-          <TruncatedText text={e.title} className="text-sm font-medium" />
-          {e.description ? (
-            <TruncatedText text={e.description} className="text-xs text-text-muted" />
-          ) : null}
-          <Notes copies={e.copies} />
+          <span className="inline-flex min-w-0 items-center gap-1.5">
+            <TruncatedText text={m.title} className="text-sm font-medium" />
+            {m.problems.length > 0 ? (
+              <AlertTriangle
+                className="size-3.5 shrink-0 text-warning"
+                aria-label={t("memory.problem.title")}
+              />
+            ) : null}
+          </span>
+          <TruncatedText
+            text={m.body.split("\n").find((l) => l.trim()) ?? ""}
+            className="text-xs text-text-muted"
+          />
         </div>
       ),
     },
     {
       key: "type",
-      header: t("memory.entries.cols.type"),
-      className: "w-[96px]",
-      cell: (e) => <span className="text-xs text-text-muted">{e.type}</span>,
-    },
-    {
-      key: "origin",
-      header: t("memory.entries.cols.origin"),
-      className: "w-[170px]",
-      cell: (e) => (
-        <span className="inline-flex min-w-0 items-center gap-1.5">
-          <AgentBadge type={e.origin_agent} name={agentTypeLabel(e.origin_agent)} size="sm" />
-          <TruncatedText
-            text={e.origin_machine === machine ? t("memory.entries.thisMachine") : e.origin_machine}
-            className="text-xs text-text-muted"
-          />
-        </span>
-      ),
+      header: t("memory.topics.cols.type"),
+      className: "w-[110px]",
+      cell: (m) => <span className="text-xs text-text-muted">{typeLabel(m.type)}</span>,
     },
     {
       key: "updated",
-      header: t("memory.entries.cols.updated"),
-      className: "w-[96px] whitespace-nowrap",
-      cell: (e) => (
-        <span className="text-xs text-text-muted">
-          {e.updated_at ? formatRelativeTime(e.updated_at, i18n.language) : null}
-        </span>
-      ),
+      header: t("memory.topics.cols.updated"),
+      className: "w-[100px] whitespace-nowrap",
+      cell: (m) => <span className="font-mono text-xs text-text-muted">{m.updated}</span>,
     },
   ];
-
-  const where = project.checked_out ? (
-    <span className="font-mono text-xs">{abbreviateHomePath(project.checked_out)}</span>
-  ) : (
-    t("memory.detail.notHere")
-  );
 
   return (
     <div className="flex flex-col gap-4" data-testid="memory-list">
       <header className="flex min-w-0 flex-col gap-1">
-        <h2 className="text-lg font-semibold">{projectName(project.key)}</h2>
+        <h2 className="text-lg font-semibold">{projectName(project.folder)}</h2>
         <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-xs text-text-muted">
-          <span className="font-mono">{project.key}</span>
+          <span className="font-mono">{project.folder}</span>
           <span aria-hidden>·</span>
-          <span>{where}</span>
-          <span aria-hidden>·</span>
-          <span>{t("memory.detail.memories", { count })}</span>
+          <span>{t("memory.topics.files", { count: project.topics })}</span>
         </p>
       </header>
       <DataTable
         fixed
-        rows={entries}
+        rows={topics}
         isLoading={isLoading}
         columns={columns}
         search={{
-          accessor: (e) => `${e.title} ${e.description}`,
-          placeholder: t("memory.entries.search"),
+          accessor: (m) => `${m.title} ${m.body}`,
+          placeholder: t("memory.topics.search"),
         }}
-        initialFilters={source ? { source } : undefined}
         filters={[
           {
-            key: "source",
-            label: t("memory.entries.filters.source"),
-            options: sources.map((v) => ({ value: v, label: agentTypeLabel(v) })),
-            accessor: (e) => e.origin_agent,
+            key: "type",
+            label: t("memory.topics.filters.type"),
+            options: TYPES.map((v) => ({ value: v, label: typeLabel(v) })),
+            accessor: (m) => m.type,
           },
         ]}
-        rowKey={(e) => e.id}
+        rowKey={(m) => m.name}
         onRowClick={onOpen}
-        emptyMessage={t("memory.entries.empty")}
+        emptyMessage={t("memory.topics.empty")}
       />
     </div>
   );

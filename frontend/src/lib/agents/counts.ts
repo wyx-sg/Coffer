@@ -25,8 +25,6 @@ export interface AgentCounts {
     total: number;
     files: number;
   };
-  /** Native memory stores. */
-  memoryStores?: number;
   /** Config files and folders the agent has on disk (the ones that exist). */
   configFiles?: number;
 }

@@ -57,7 +57,6 @@ export const agentUnmanagedSkillsKey = (uid: string) =>
  *  deleting (which invalidate the list) also drops it. */
 export const agentUnmanagedSkillFilesKey = (uid: string, location: string, name: string) =>
   ["agents", uid, "unmanaged-skills", location, name, "files"] as const;
-export const agentNativeMemoryKey = (uid: string) => ["agents", uid, "native-memory"] as const;
 /** An agent's native sessions: `q` omitted = the whole subtree, for invalidation. */
 export const agentSessionsKey = (uid: string, q?: string) =>
   q === undefined
@@ -181,15 +180,16 @@ export const knowledgeFilesKey = (uid: string) => ["knowledge", "files", uid] as
 export const knowledgeChangesKey = (collection: string) =>
   ["knowledge", "changes", collection] as const;
 
-// --- memory — the sync between the agents' own memories (spec memory) -------
+// --- memory — one Markdown file per topic in the vault (spec memory) -------
 
 export const memoryKey = ["memory"] as const;
-/** The sync's state: switch-independent facts, the pending preview, projects, agents. */
-export const memorySyncStateKey = ["memory", "sync"] as const;
-/** One project's hub entries with their copy state here (`""` for global memories). */
-export const memoryEntriesKey = (project: string) => ["memory", "entries", project] as const;
-/** One memory with its text and where each agent holds it. */
-export const memoryEntryKey = (id: string) => ["memory", "entry", id] as const;
+/** The projects, whether a tidy is open, and the Tidy prompt. */
+export const memoryStateKey = ["memory", "state"] as const;
+/** One project's topic files. */
+export const memoryTopicsKey = (project: string) => ["memory", "topics", project] as const;
+/** One topic file's text and digest. */
+export const memoryFileKey = (project: string, name: string) =>
+  ["memory", "file", project, name] as const;
 
 // --- agent sessions — every agent's sessions in one list (the Conversations page) ---
 

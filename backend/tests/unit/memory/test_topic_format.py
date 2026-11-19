@@ -46,15 +46,10 @@ def test_a_file_that_breaks_the_format_is_read_and_flagged() -> None:
     # Still read, so nothing an agent wrote is lost; the title falls back to the name.
     assert bad.title == "notes"
     assert bad.type == ""
-    assert set(bad.problems) == {
-        "no title",
-        "type is not user, feedback or project",
-        "no updated date",
-        f"a line longer than {MAX_LINE} characters",
-    }
+    assert set(bad.problems) == {"no_title", "bad_type", "no_updated", "long_line"}
     assert read_topic("acme", "e.md", {"title": "E", "type": "user"}, "").problems == (
-        "no updated date",
-        "no memories",
+        "no_updated",
+        "no_memories",
     )
 
 

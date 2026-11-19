@@ -1,85 +1,46 @@
 // frontend/src/components/memory/MemoryScopeList.tsx
 //
-// The Memory page's list pane (spec memory "Manage memory sync in the web UI
-// and on the command line"): the hub's projects, each by its short name with how
-// many memories it holds. A project not checked out on this machine is dimmed:
-// its memories wait in the hub. A row opens its memories beside the list
-// (`?scope=`); the full project key is the row's tooltip.
+// The Memory page's list pane (spec memory "Show and edit memory on the Memory
+// page"): one row per project folder in the hub, with how many topic files it
+// holds and a warning when some break the format. A row opens its topics beside
+// the list (`?scope=`).
 import { useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { FolderGit2 } from "lucide-react";
+import { AlertTriangle, FolderGit2 } from "lucide-react";
 
 import { ListLoadingRows } from "@/components/ListPaneStates";
 import { SearchInput } from "@/components/SearchInput";
 import { NAV_ICON, NAV_ROW_ACTIVE, NAV_ROW_IDLE } from "@/components/knowledge/navRow";
-import type { SyncProject } from "@/lib/api/memoryTypes";
-import { projectName } from "@/lib/memory/syncFacts";
+import type { MemoryProject } from "@/lib/api/memoryTypes";
+import { projectName } from "@/lib/memory/projects";
 import { cn } from "@/lib/utils";
 
 /** More projects than this and a search appears. */
 const SEARCH_FROM = 8;
 
 interface Props {
-  projects: readonly SyncProject[];
-  /** The open scope: a project's hub folder. */
+  projects: readonly MemoryProject[];
+  /** The open project's folder. */
   selected: string | null;
   isLoading?: boolean;
-}
-
-function ScopeRow({
-  to,
-  current,
-  icon: Icon,
-  name,
-  title,
-  count,
-  dimmed = false,
-}: {
-  to: string;
-  current: boolean;
-  icon: typeof FolderGit2;
-  name: string;
-  title?: string;
-  count: number;
-  dimmed?: boolean;
-}) {
-  return (
-    <li>
-      <Link
-        to={to}
-        title={title}
-        aria-current={current ? "page" : undefined}
-        className={cn(
-          "flex h-8 w-full min-w-0 items-center gap-2 rounded-item px-2.5 text-left text-sm text-text transition-colors",
-          current ? NAV_ROW_ACTIVE : NAV_ROW_IDLE,
-          dimmed && "text-text-muted",
-        )}
-      >
-        <Icon className={NAV_ICON} aria-hidden />
-        <span className="min-w-0 flex-1 truncate">{name}</span>
-        <span className="shrink-0 text-xs tabular-nums text-text-muted">{count}</span>
-      </Link>
-    </li>
-  );
 }
 
 export function MemoryScopeList({ projects, selected, isLoading = false }: Props) {
   const { t } = useTranslation();
   const { search } = useLocation();
   const [query, setQuery] = useState("");
-  const to = (scope: string) => {
+  const to = (folder: string) => {
     const params = new URLSearchParams(search);
-    params.set("scope", scope);
-    params.delete("memory");
+    params.set("scope", folder);
+    params.delete("file");
+    params.delete("history");
     return `/memory?${params.toString()}`;
   };
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return q ? projects.filter((p) => p.key.toLowerCase().includes(q)) : projects;
+    return q ? projects.filter((p) => p.folder.toLowerCase().includes(q)) : projects;
   }, [projects, query]);
-  const here = shown.filter((p) => p.checked_out);
-  const elsewhere = shown.filter((p) => !p.checked_out);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -100,34 +61,31 @@ export function MemoryScopeList({ projects, selected, isLoading = false }: Props
         {isLoading ? (
           <ListLoadingRows />
         ) : (
-          <>
-            {[
-              ["here", here],
-              ["elsewhere", elsewhere],
-            ].map(([group, rows]) =>
-              (rows as SyncProject[]).length === 0 ? null : (
-                <section key={group as string} className="mb-3">
-                  <h2 className="px-2.5 pb-1 text-2xs font-semibold text-text-muted">
-                    {t(`memory.scopes.${group as string}`)}
-                  </h2>
-                  <ul className="flex flex-col gap-0.5">
-                    {(rows as SyncProject[]).map((p) => (
-                      <ScopeRow
-                        key={p.key}
-                        to={to(p.folder)}
-                        current={selected === p.folder}
-                        icon={FolderGit2}
-                        name={projectName(p.key)}
-                        title={p.key}
-                        count={p.memories}
-                        dimmed={!p.checked_out}
-                      />
-                    ))}
-                  </ul>
-                </section>
-              ),
-            )}
-          </>
+          <ul className="flex flex-col gap-0.5">
+            {shown.map((p) => (
+              <li key={p.folder}>
+                <Link
+                  to={to(p.folder)}
+                  title={p.folder}
+                  aria-current={selected === p.folder ? "page" : undefined}
+                  className={cn(
+                    "flex h-8 w-full min-w-0 items-center gap-2 rounded-item px-2.5 text-left text-sm text-text transition-colors",
+                    selected === p.folder ? NAV_ROW_ACTIVE : NAV_ROW_IDLE,
+                  )}
+                >
+                  <FolderGit2 className={NAV_ICON} aria-hidden />
+                  <span className="min-w-0 flex-1 truncate">{projectName(p.folder)}</span>
+                  {p.problems > 0 ? (
+                    <AlertTriangle
+                      className="size-3.5 shrink-0 text-warning"
+                      aria-label={t("memory.scopes.problems", { count: p.problems })}
+                    />
+                  ) : null}
+                  <span className="shrink-0 text-xs tabular-nums text-text-muted">{p.topics}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
         )}
       </nav>
     </div>

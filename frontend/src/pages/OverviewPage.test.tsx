@@ -332,24 +332,13 @@ function install(setup: Setup = {}) {
             },
           ],
         };
-      case "/memory/sync/state":
+      case "/memory":
         return {
-          projects: [
-            {
-              key: "github.com/me/coffer",
-              folder: "c",
-              checked_out: null,
-              memories: 7,
-              agents: {},
-            },
-          ],
-          last_synced_at: "",
-          agents: [],
-          preview: null,
-          running: false,
-          last_report: {},
-          machine: "m",
-          codex_imports_claude: null,
+          folder_path: "~/.coffer/vault/memory/projects",
+          projects: [{ folder: "c", topics: 7, problems: 0, updated: "" }],
+          tidy_running: false,
+          tidy_started_at: null,
+          tidy_handoff: { prompt: "" },
         };
       case "/sync/status":
         return {
@@ -599,24 +588,13 @@ describe("each health tile carries the numbers and lines the board shows", () =>
           collections: [{ uid: "k1", name: "shopee", page_count: 142, updated_at: minutes(1) }],
         };
       }
-      if (path === "/memory/sync/state") {
+      if (path === "/memory") {
         return {
-          projects: [
-            {
-              key: "github.com/me/coffer",
-              folder: "c",
-              checked_out: null,
-              memories: 7,
-              agents: {},
-            },
-          ],
-          last_synced_at: minutes(14),
-          agents: [],
-          preview: null,
-          running: false,
-          last_report: {},
-          machine: "m",
-          codex_imports_claude: null,
+          folder_path: "~/.coffer/vault/memory/projects",
+          projects: [{ folder: "c", topics: 7, problems: 0, updated: "2026-11-19" }],
+          tidy_running: false,
+          tidy_started_at: null,
+          tidy_handoff: { prompt: "" },
         };
       }
       if (path === "/sync/status") {
@@ -653,7 +631,7 @@ describe("each health tile carries the numbers and lines the board shows", () =>
       expect(await tile("Knowledge")).toHaveTextContent(/1 collection · edited (today )?\d/),
     );
     await waitFor(async () =>
-      expect(await tile("Memory")).toHaveTextContent(/7memories.*Last synced 14 min ago/),
+      expect(await tile("Memory")).toHaveTextContent(/7files.*1 project · edited/),
     );
     const sync = await tile("Sync");
     await waitFor(() => expect(sync).toHaveTextContent("4 min ago"));

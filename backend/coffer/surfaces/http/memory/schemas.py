@@ -31,7 +31,12 @@ class MemoryTopicOut(BaseModel):
     type: str = Field(description="user, feedback, project, or empty when the file names none.")
     updated: str
     body: str
-    problems: list[str]
+    problems: list[str] = Field(
+        description=(
+            "What breaks the format: no_title, bad_type (type is not user, feedback or "
+            "project), no_updated, no_memories, long_line (a line over 400 characters)."
+        )
+    )
 
 
 class MemoryTopicListOut(BaseModel):

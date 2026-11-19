@@ -1091,40 +1091,6 @@ paths:
       summary: Prune Now
       tags:
       - retention
-  /api/v1/upkeep/runs:
-    get:
-      operationId: list_runs_api_v1_upkeep_runs_get
-      parameters:
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/UpkeepRunListOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: List Runs
-      tags:
-      - upkeep
 components:
   schemas:
     AttentionActionOut:
@@ -2003,52 +1969,4 @@ components:
       required:
       - agents
       title: ScopeOut
-      type: object
-    UpkeepRunListOut:
-      description: Every pass in flight, oldest first. Empty means nothing is running.
-      properties:
-        runs:
-          items:
-            $ref: '#/components/schemas/UpkeepRunOut'
-          title: Runs
-          type: array
-      required:
-      - runs
-      title: UpkeepRunListOut
-      type: object
-    UpkeepRunOut:
-      description: One pass in flight.
-      properties:
-        done:
-          anyOf:
-          - type: integer
-          - type: 'null'
-          description: 'For a run that works through several items one pass at a time (memory''s Update memory): the items finished so far. Null for a single pass, and for Update memory while it is still reading.'
-          title: Done
-        kind:
-          description: 'The kind whose pass this is: `memory`.'
-          title: Kind
-          type: string
-        name:
-          description: The uid of the partition or collection being rewritten, or `update` for a memory Update memory action as a whole.
-          title: Name
-          type: string
-        started_at:
-          description: When this daemon started the pass.
-          format: date-time
-          title: Started At
-          type: string
-        total:
-          anyOf:
-          - type: integer
-          - type: 'null'
-          description: 'For such a run: how many items were pending when it started.'
-          title: Total
-      required:
-      - kind
-      - name
-      - started_at
-      - done
-      - total
-      title: UpkeepRunOut
       type: object
