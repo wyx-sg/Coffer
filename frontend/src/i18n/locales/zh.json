@@ -1982,6 +1982,7 @@
     "MCP_ENTRY_NOT_FOUND": "未找到该 MCP 条目",
     "MCP_ENTRY_PROTECTED": "该 MCP 条目受保护，无法修改",
     "MCP_SSE_NOT_SUPPORTED": "该条目使用旧版 SSE 传输，Coffer 不支持。请把它留在智能体里，或改用服务器的 Streamable HTTP 地址。",
+    "MCP_ENTRY_NOT_EDITABLE": "该条目所在的文件 Coffer 只读取、不改写。请在智能体自己的文件里编辑或删除它。",
     "MCP_ENTRY_SOURCE_AMBIGUOUS": "该 MCP 条目的来源存在歧义，请指定具体来源",
     "MCP_INSTALL_UNSUPPORTED": "该智能体不支持安装 Coffer 的 MCP 条目",
     "MEMORY_UNREADABLE": "该记忆文件无法读取",

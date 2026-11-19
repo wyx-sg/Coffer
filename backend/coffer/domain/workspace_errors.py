@@ -53,6 +53,21 @@ class AdoptSecretUnresolved(CofferError):  # noqa: N818
         super().__init__("secret-like env keys need a keychain mapping: " + ", ".join(self.keys))
 
 
+class McpEntryNotEditable(CofferError):  # noqa: N818
+    """The entry lives in a file Coffer reads but does not rewrite (a DeepSeek
+    Harness Cordis patch, which may hold expressions no serialiser keeps).
+    Maps to 422."""
+
+    code = "MCP_ENTRY_NOT_EDITABLE"
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+        super().__init__(
+            f"{name!r} is kept in a file Coffer does not rewrite: edit or remove it in the "
+            "agent's own file"
+        )
+
+
 class McpSseNotSupported(CofferError):  # noqa: N818
     """The entry uses the old SSE transport, which Coffer's gateway does not
     serve (ADR upstreams-speak-stdio-or-streamable-http). Maps to 422."""

@@ -50,7 +50,7 @@ from coffer.domain.agent.config_diff import (
     normalise_server_name,
     server_name_usable,
 )
-from coffer.domain.agent.config_files import ConfigFileSpec
+from coffer.domain.agent.config_files import ConfigFileFormat, ConfigFileSpec
 from coffer.domain.agent.mcp_entries import (
     McpEntry,
     matches_transport,
@@ -72,7 +72,7 @@ from coffer.domain.reconcile import (
     Subject,
 )
 from coffer.domain.resource import Resource
-from coffer.domain.workspace_errors import McpSseNotSupported
+from coffer.domain.workspace_errors import McpEntryNotEditable, McpSseNotSupported
 
 
 class _Resources(Protocol):
@@ -127,8 +127,15 @@ class McpImportPlanner:
                 agent.uid, agent.name, choice.name, choice.source, None, "unavailable",
                 error_code=e.code, error=str(e),
             ), None  # fmt: skip
+        refused_by: CofferError | None = None
         if parsed.legacy_sse:
-            refused = McpSseNotSupported(parsed.name)
+            refused_by = McpSseNotSupported(parsed.name)
+        elif spec.format is ConfigFileFormat.YAML:
+            # A Cordis patch is read, never rewritten (mcp_cordis): the entry
+            # cannot be taken out of it.
+            refused_by = McpEntryNotEditable(parsed.name)
+        if refused_by is not None:
+            refused = refused_by
             return PlannedEntry(
                 agent.uid, agent.name, parsed.name, spec.key, str(spec.path), "unavailable",
                 error_code=refused.code, error=str(refused),

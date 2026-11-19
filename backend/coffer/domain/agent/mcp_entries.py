@@ -23,11 +23,16 @@ from typing import Any, Literal
 
 import tomlkit
 
+from coffer.domain.agent import mcp_cordis
 from coffer.domain.agent.config_files import ConfigFileFormat
 from coffer.domain.agent.mcp_injection import default_container_key
 from coffer.domain.auth_scheme import split_scheme
 from coffer.domain.errors import ConfigFileFormatInvalid
-from coffer.domain.workspace_errors import AgentConfigParseError, McpEntryNotFound
+from coffer.domain.workspace_errors import (
+    AgentConfigParseError,
+    McpEntryNotEditable,
+    McpEntryNotFound,
+)
 
 COFFER_SERVER_KEY = "coffer"
 _SECRET_KEY_RE = re.compile(
@@ -141,6 +146,22 @@ def _json_container(data: MutableMapping[str, Any], dotted_key: str) -> Any:
     return node
 
 
+#: The key OpenCode 2.x nests its servers map under, inside ``mcp``. A 1.x
+#: file keeps its servers directly in ``mcp``; 2.x still loads that shape, so a
+#: file may hold both, and both are listed.
+_NESTED_SERVERS_KEY = "servers"
+
+
+def _is_nested_servers(raw: Any) -> bool:
+    """Whether ``raw`` is OpenCode 2.x's ``mcp.servers`` map rather than a server
+    entry: a mapping with no entry keys whose every value is a mapping."""
+    if not isinstance(raw, MutableMapping) or not raw:
+        return False
+    if any(k in raw for k in ("command", "url", "type")):
+        return False
+    return all(isinstance(v, MutableMapping) for v in raw.values())
+
+
 def _servers_map(
     fmt: ConfigFileFormat, text: str, container_key: str | None = None
 ) -> MutableMapping[str, Any]:
@@ -148,11 +169,35 @@ def _servers_map(
     try:
         if fmt is ConfigFileFormat.JSON:
             servers = _json_container(_parse_json(text), ck)
+        elif fmt is ConfigFileFormat.YAML:
+            servers = {mcp_cordis.row_server_name(r): r for r in mcp_cordis.mcp_rows(text)}
         else:  # TOML
             servers = _parse_toml_readonly(text).get(ck)
     except ConfigFileFormatInvalid as e:
         raise AgentConfigParseError("<config>", str(e)) from e
-    return servers if isinstance(servers, MutableMapping) else {}
+    if not isinstance(servers, MutableMapping):
+        return {}
+    nested = servers.get(_NESTED_SERVERS_KEY)
+    if fmt is ConfigFileFormat.JSON and _is_nested_servers(nested):
+        flat = {k: v for k, v in servers.items() if k != _NESTED_SERVERS_KEY}
+        flat.update(nested)
+        return flat
+    return servers
+
+
+def _cordis_entry(row: MutableMapping[str, Any]) -> dict[str, Any]:
+    """A DeepSeek Harness MCP row as the plain entry shape the parser reads:
+    its ``config`` fields, ``streamable-http`` as a remote type, and ``enabled``
+    from the row's ``disabled`` flag."""
+    config = row.get("config")
+    entry: dict[str, Any] = dict(config) if isinstance(config, MutableMapping) else {}
+    entry.pop("serverName", None)
+    transport = str(entry.pop("transport", "stdio")).lower()
+    if transport != "stdio":
+        entry["type"] = "http"
+    if "disabled" in row:
+        entry["enabled"] = not bool(row.get("disabled"))
+    return entry
 
 
 def _split_command(raw: MutableMapping[str, Any]) -> tuple[str | None, tuple[str, ...]]:
@@ -186,9 +231,10 @@ def parse_entries(
     ``AgentConfigParseError`` on malformed input.
     """
     out: list[McpEntry] = []
-    for name, raw in _servers_map(fmt, text, container_key).items():
-        if not isinstance(raw, MutableMapping):
+    for name, found in _servers_map(fmt, text, container_key).items():
+        if not isinstance(found, MutableMapping):
             continue
+        raw = _cordis_entry(found) if fmt is ConfigFileFormat.YAML else found
         url = raw.get("url")
         headers = raw.get("http_headers") if fmt is ConfigFileFormat.TOML else raw.get("headers")
         # `enabled`: honour an explicit per-entry flag wherever it appears.
@@ -245,10 +291,26 @@ def remove_entry(
         except ConfigFileFormatInvalid as e:
             raise AgentConfigParseError("<config>", str(e)) from e
         servers = _json_container(data, ck)
-        if not isinstance(servers, MutableMapping) or name not in servers:
+        if not isinstance(servers, MutableMapping):
+            raise McpEntryNotFound(name)
+        nested = servers.get(_NESTED_SERVERS_KEY)
+        if name not in servers and _is_nested_servers(nested) and name in nested:
+            servers = nested
+        if name not in servers:
             raise McpEntryNotFound(name)
         del servers[name]
         return json.dumps(data, indent=2, ensure_ascii=False) + "\n"
+
+    if fmt is ConfigFileFormat.YAML:
+        # A Cordis patch is never re-serialised (mcp_cordis): its rows are the
+        # person's to edit in their own file.
+        try:
+            names = {mcp_cordis.row_server_name(r) for r in mcp_cordis.mcp_rows(text)}
+        except ConfigFileFormatInvalid as e:
+            raise AgentConfigParseError("<config>", str(e)) from e
+        if name not in names:
+            raise McpEntryNotFound(name)
+        raise McpEntryNotEditable(name)
 
     if fmt is ConfigFileFormat.TOML:
         try:

@@ -29,7 +29,7 @@ from coffer.application.agent.mcp_adopt_secrets import (
 )
 from coffer.application.audit_service import AuditService
 from coffer.domain.agent.config import AgentConfig
-from coffer.domain.agent.config_files import ConfigFileSpec, spec_for
+from coffer.domain.agent.config_files import ConfigFileFormat, ConfigFileSpec, spec_for
 from coffer.domain.agent.descriptor import descriptor_for
 from coffer.domain.agent.mcp_entries import (
     COFFER_SERVER_KEY,
@@ -50,6 +50,7 @@ from coffer.domain.secrets import mint_secret_name, secret_ref
 from coffer.domain.workspace_errors import (
     AdoptSecretUnresolved,
     AgentConfigParseError,
+    McpEntryNotEditable,
     McpEntryNotFound,
     McpEntryProtected,
     McpEntrySourceAmbiguous,
@@ -304,6 +305,10 @@ class AgentMcpEntryService:
         spec, _text, parsed_entry = await self.locate(uid, entry, source)
         if parsed_entry.legacy_sse:
             raise McpSseNotSupported(parsed_entry.name)
+        if spec.format is ConfigFileFormat.YAML:
+            # Adopting removes the entry from its file, and a Cordis patch is
+            # never rewritten (mcp_cordis): refuse before anything is written.
+            raise McpEntryNotEditable(parsed_entry.name)
 
         flagged = secret_env_keys({**parsed_entry.env, **parsed_entry.headers})
         unresolved = [k for k in flagged if k not in (secrets or {})]
