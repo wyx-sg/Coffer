@@ -135,10 +135,9 @@ def test_agent_get_one(tmp_path, monkeypatch):
         assert "skill_dir_override" not in r.json()
 
 
-def test_agent_out_has_no_capability_matrix(tmp_path, monkeypatch):
-    """Per "Support exactly the Claude Code and Codex agent types": with the
-    supported types narrowed to claude_code + codex, every agent supports every
-    facet — so AgentOut carries no capability matrix."""
+def test_agent_out_lists_its_features(tmp_path, monkeypatch):
+    """Per "Report what Coffer can do with each agent type": the agent row
+    carries ``features`` derived from its facets — every one for Codex."""
     app = _app(tmp_path, monkeypatch, 59608)
     config_dir = tmp_path / "cfg"
     config_dir.mkdir()
@@ -147,10 +146,11 @@ def test_agent_out_has_no_capability_matrix(tmp_path, monkeypatch):
         r = c.get(f"/api/v1/agents/{uid}")
         assert r.status_code == 200, r.text
         assert "capabilities" not in r.json()
+        assert {"mcp", "skills", "provider", "chat", "sessions"} <= set(r.json()["features"])
 
         r = c.get("/api/v1/agents")
         assert r.status_code == 200, r.text
-        assert all("capabilities" not in item for item in r.json()["items"])
+        assert all(item["features"] for item in r.json()["items"])
 
 
 def test_agent_list_after_register(tmp_path, monkeypatch):

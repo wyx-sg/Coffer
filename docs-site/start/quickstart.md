@@ -35,7 +35,7 @@ Then open `http://127.0.0.1:38470/` in your browser, or open the Coffer desktop 
 
 Coffer never registers an agent on its own; you choose it on the **Agents** page. There is one agent per type, and its name is its type, `claude-code`. It is registered at `~/.claude`; if your Claude Code config is somewhere else, change its config directory on the agent's page. Claude Code installed but never run is fine too: registering it creates `~/.claude`.
 
-**In the web UI:** open **Agents**. The page always lists Claude Code and Codex; on the Claude Code row choose **Connect**, review the lines Coffer will write, and apply them. With both agents installed and neither connected, **Connect both** does the two at once.
+**In the web UI:** open **Agents**. The page always lists every supported agent; on the Claude Code row choose **Connect**, review the lines Coffer will write, and apply them. With more than one agent installed and none connected, **Connect all** connects every installed one at once.
 
 ### Connect Claude Code to Coffer
 

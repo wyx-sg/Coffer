@@ -36,12 +36,12 @@ from coffer.domain.agent.mcp_entries import (
     McpEntry,
     matches_transport,
     parse_entries,
-    secret_env_keys,
     to_transport_config,
 )
 from coffer.domain.agent.mcp_entries import (
     remove_entry as remove_entry_text,
 )
+from coffer.domain.agent.mcp_entry_secrets import secret_env_keys
 from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import ConfigFileNotAllowed, ResourceAlreadyExists

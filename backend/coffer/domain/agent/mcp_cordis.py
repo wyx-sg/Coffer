@@ -51,8 +51,8 @@ def _tag_as_text(loader: yaml.SafeLoader, _suffix: str, node: yaml.Node) -> Any:
     return loader.construct_mapping(node, deep=True)  # type: ignore[arg-type]
 
 
-_TolerantLoader.add_multi_constructor("tag:yaml.org,2002:js", _tag_as_text)
-_TolerantLoader.add_multi_constructor("!", _tag_as_text)
+_TolerantLoader.add_multi_constructor("tag:yaml.org,2002:js", _tag_as_text)  # type: ignore[no-untyped-call]
+_TolerantLoader.add_multi_constructor("!", _tag_as_text)  # type: ignore[no-untyped-call]
 
 
 def load_patches(text: str) -> list[Any]:
@@ -63,7 +63,7 @@ def load_patches(text: str) -> list[Any]:
     if not text.strip():
         return []
     try:
-        data = yaml.load(text, Loader=_TolerantLoader)  # noqa: S506 - SafeLoader subclass
+        data = yaml.load(text, Loader=_TolerantLoader)
     except yaml.YAMLError as e:
         raise ConfigFileFormatInvalid("yaml", str(e)) from e
     if data is None:
@@ -102,6 +102,21 @@ def coffer_row(text: str) -> dict[str, Any] | None:
         if row.get("id") == COFFER_ROW_ID or row_server_name(row) == "coffer":
             return row
     return None
+
+
+def plain_entry(row: Mapping[str, Any]) -> dict[str, Any]:
+    """A DeepSeek Harness MCP row as the plain entry shape the parser reads:
+    its ``config`` fields, ``streamable-http`` as a remote type, and ``enabled``
+    from the row's ``disabled`` flag."""
+    config = row.get("config")
+    entry: dict[str, Any] = dict(config) if isinstance(config, Mapping) else {}
+    entry.pop("serverName", None)
+    transport = str(entry.pop("transport", "stdio")).lower()
+    if transport != "stdio":
+        entry["type"] = "http"
+    if "disabled" in row:
+        entry["enabled"] = not bool(row.get("disabled"))
+    return entry
 
 
 def _quote(value: str) -> str:

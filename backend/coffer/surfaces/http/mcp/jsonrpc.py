@@ -92,6 +92,10 @@ def _require(params: dict[str, Any], key: str, kind: type, *, optional: bool = F
 _KIND_NAMES: dict[type, str] = {str: "non-empty string", dict: "object"}
 
 
+#: The MCP pagination parameter of every ``*/list`` request.
+_PAGE_CURSOR = "cursor"
+
+
 def check_params(method: str, params: dict[str, Any]) -> None:
     """Refuse the params a method cannot work with (``-32602``)."""
     if "_meta" in params and not isinstance(params["_meta"], dict):
@@ -108,8 +112,8 @@ def check_params(method: str, params: dict[str, Any]) -> None:
         _require(params, "arguments", dict, optional=True)
     elif method == "resources/read":
         _require(params, "uri", str)
-    elif method.endswith("/list") and "cursor" in params:
-        _require(params, "cursor", str)
+    elif method.endswith("/list") and _PAGE_CURSOR in params:
+        _require(params, _PAGE_CURSOR, str)
 
 
 def error_for(exc: BaseException) -> tuple[int, str]:

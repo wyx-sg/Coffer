@@ -98,9 +98,7 @@ USER_PATCH = """\
 
 
 def _dsh_install(text: str, uid: str = "u1") -> str:
-    return apply_install(
-        YAML, text, SHIM, entry_style=McpEntryStyle.CORDIS_ROW, agent_uid=uid
-    )
+    return apply_install(YAML, text, SHIM, entry_style=McpEntryStyle.CORDIS_ROW, agent_uid=uid)
 
 
 def test_dsh_install_appends_a_managed_block_and_keeps_the_rest() -> None:

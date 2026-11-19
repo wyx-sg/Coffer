@@ -97,7 +97,7 @@ acceptance("agent-registry", "desktop app agents page", async ({ page }) => {
       page.getByRole("heading", { name: /^agents$/i }),
     ).toBeVisible();
 
-    // Exactly two rows, Claude Code then Codex — whatever is installed.
+    // Claude Code then Codex lead the rows — whatever is installed.
     const rows = page
       .locator("tbody tr")
       .filter({ hasText: /Claude Code|Codex/ });

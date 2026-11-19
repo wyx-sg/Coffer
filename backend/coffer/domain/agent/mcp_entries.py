@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import functools
 import json
-import re
 import tomllib
 from collections.abc import Mapping, MutableMapping
 from dataclasses import dataclass, field
@@ -35,9 +34,6 @@ from coffer.domain.workspace_errors import (
 )
 
 COFFER_SERVER_KEY = "coffer"
-_SECRET_KEY_RE = re.compile(
-    r"(TOKEN|SECRET|PASSWORD|PASSWD|API_?KEY|CREDENTIAL|AUTHORIZATION)", re.IGNORECASE
-)
 
 
 def _parse_json(text: str) -> dict[str, Any]:
@@ -178,26 +174,15 @@ def _servers_map(
     if not isinstance(servers, MutableMapping):
         return {}
     nested = servers.get(_NESTED_SERVERS_KEY)
-    if fmt is ConfigFileFormat.JSON and _is_nested_servers(nested):
+    if (
+        fmt is ConfigFileFormat.JSON
+        and isinstance(nested, MutableMapping)
+        and _is_nested_servers(nested)
+    ):
         flat = {k: v for k, v in servers.items() if k != _NESTED_SERVERS_KEY}
         flat.update(nested)
         return flat
     return servers
-
-
-def _cordis_entry(row: MutableMapping[str, Any]) -> dict[str, Any]:
-    """A DeepSeek Harness MCP row as the plain entry shape the parser reads:
-    its ``config`` fields, ``streamable-http`` as a remote type, and ``enabled``
-    from the row's ``disabled`` flag."""
-    config = row.get("config")
-    entry: dict[str, Any] = dict(config) if isinstance(config, MutableMapping) else {}
-    entry.pop("serverName", None)
-    transport = str(entry.pop("transport", "stdio")).lower()
-    if transport != "stdio":
-        entry["type"] = "http"
-    if "disabled" in row:
-        entry["enabled"] = not bool(row.get("disabled"))
-    return entry
 
 
 def _split_command(raw: MutableMapping[str, Any]) -> tuple[str | None, tuple[str, ...]]:
@@ -234,7 +219,7 @@ def parse_entries(
     for name, found in _servers_map(fmt, text, container_key).items():
         if not isinstance(found, MutableMapping):
             continue
-        raw = _cordis_entry(found) if fmt is ConfigFileFormat.YAML else found
+        raw = mcp_cordis.plain_entry(found) if fmt is ConfigFileFormat.YAML else found
         url = raw.get("url")
         headers = raw.get("http_headers") if fmt is ConfigFileFormat.TOML else raw.get("headers")
         # `enabled`: honour an explicit per-entry flag wherever it appears.
@@ -294,7 +279,12 @@ def remove_entry(
         if not isinstance(servers, MutableMapping):
             raise McpEntryNotFound(name)
         nested = servers.get(_NESTED_SERVERS_KEY)
-        if name not in servers and _is_nested_servers(nested) and name in nested:
+        if (
+            name not in servers
+            and isinstance(nested, MutableMapping)
+            and _is_nested_servers(nested)
+            and name in nested
+        ):
             servers = nested
         if name not in servers:
             raise McpEntryNotFound(name)
@@ -326,15 +316,6 @@ def remove_entry(
     raise AssertionError(f"remove_entry unsupported for format {fmt!r}")  # pragma: no cover
 
 
-def secret_env_keys(env: dict[str, str]) -> list[str]:
-    """Return sorted list of env keys whose names look like secrets.
-
-    A key is considered secret if its value is non-empty and its name matches
-    TOKEN|SECRET|PASSWORD|PASSWD|API_?KEY|CREDENTIAL|AUTHORIZATION (case-insensitive).
-    """
-    return sorted(k for k, v in env.items() if v and _SECRET_KEY_RE.search(k))
-
-
 def matches_transport(entry: McpEntry, transport: Mapping[str, Any]) -> bool:
     """Equivalence between a config-file entry and a registered resource's transport.
 
@@ -349,48 +330,6 @@ def matches_transport(entry: McpEntry, transport: Mapping[str, Any]) -> bool:
             and args == list(entry.args)
         )
     return bool(transport.get("type") == "http" and transport.get("url") == entry.url)
-
-
-def looks_secret(key: str) -> bool:
-    """Whether a key NAME looks like it holds a secret (the adopt-time pattern)."""
-    return bool(_SECRET_KEY_RE.search(key))
-
-
-def _holds_secret(value: Any) -> bool:
-    """Whether a nested mapping/list carries a secret-looking key anywhere in it."""
-    if isinstance(value, dict):
-        return any(looks_secret(k) or _holds_secret(v) for k, v in value.items())
-    if isinstance(value, list):
-        return any(_holds_secret(v) for v in value)
-    return False
-
-
-@dataclass(frozen=True)
-class ExtraField:
-    """One of an entry's other keys, ready to show: ``value`` is ``None`` when masked."""
-
-    key: str
-    value: str | None
-    masked: bool
-
-
-def masked_extra(extra: dict[str, Any]) -> list[ExtraField]:
-    """The entry's other keys, sorted, with anything secret-looking withheld.
-
-    A key whose own name looks secret (and whose value is non-empty), or whose
-    value nests a secret-looking key at any depth, is masked whole: its value
-    never leaves this function. Everything else is rendered as text — strings
-    as themselves, other values as compact JSON.
-    """
-    out: list[ExtraField] = []
-    for key in sorted(extra):
-        value = extra[key]
-        if (looks_secret(key) and value not in (None, "")) or _holds_secret(value):
-            out.append(ExtraField(key=key, value=None, masked=True))
-            continue
-        text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
-        out.append(ExtraField(key=key, value=text, masked=False))
-    return out
 
 
 def to_transport_config(entry: McpEntry, secret_refs: dict[str, str]) -> dict[str, Any]:

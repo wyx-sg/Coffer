@@ -1,5 +1,5 @@
 // frontend/src/lib/hooks/useAgents.ts — TanStack Query bindings for agents.
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { useToast } from "@/components/ui/toast";
@@ -121,6 +121,17 @@ export function useAgentConnection(uid: string) {
     queryKey: agentConnectionKey(uid),
     queryFn: () => agentsApi.connection(uid),
     enabled: !!uid,
+  });
+}
+
+/** The Coffer connection of each uid, in order (an empty uid reads nothing). */
+export function useAgentConnections(uids: readonly string[]) {
+  return useQueries({
+    queries: uids.map((uid) => ({
+      queryKey: agentConnectionKey(uid),
+      queryFn: () => agentsApi.connection(uid),
+      enabled: !!uid,
+    })),
   });
 }
 

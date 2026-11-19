@@ -67,7 +67,7 @@ def _env(home: pathlib.Path, **extra: str) -> dict[str, str]:
 
 
 def _run(argv: list[str], env: dict[str, str], timeout: float = 180) -> str:
-    done = subprocess.run(  # noqa: S603 - fixed argv
+    done = subprocess.run(
         argv, env=env, capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL
     )
     return done.stdout + done.stderr

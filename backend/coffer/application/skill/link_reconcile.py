@@ -94,9 +94,10 @@ class _World:
         for uid, skill_dir in self.skill_dirs.items():
             readers.setdefault(skill_dir, []).append(uid)
         for agent in sorted(self.agents.values(), key=lambda a: a.name):
-            skill_dir = self.skill_dirs.get(agent.uid)
-            if skill_dir is None:
+            agent_dir = self.skill_dirs.get(agent.uid)
+            if agent_dir is None:
                 continue
+            skill_dir = agent_dir
             sharing = readers.get(skill_dir, [agent.uid])
             for skill in skills:
                 if skill.enabled and any(is_active(skill.scope, uid) for uid in sharing):

@@ -5,7 +5,7 @@
 // reads back the list row, the detail header and the row menu, so they agree.
 import { agentRowState, type AgentRowState } from "@/lib/agents/rowState";
 import type { AgentTypeOut, CofferConnection } from "@/lib/api/agents";
-import { useAgentConnection } from "@/lib/hooks/useAgents";
+import { useAgentConnection, useAgentConnections } from "@/lib/hooks/useAgents";
 
 export interface AgentRowStateRead {
   /** Undefined while the type row itself is not read yet. */
@@ -20,4 +20,15 @@ export function useAgentRowState(row: AgentTypeOut | undefined): AgentRowStateRe
     state: row ? agentRowState(row, connection?.state) : undefined,
     connection,
   };
+}
+
+/** The same read for every row of the Agents page at once, in order. */
+export function useAgentRowStates(
+  rows: readonly (AgentTypeOut | undefined)[],
+): AgentRowStateRead[] {
+  const connections = useAgentConnections(rows.map((row) => row?.uid ?? ""));
+  return rows.map((row, i) => {
+    const connection = connections[i]?.data;
+    return { state: row ? agentRowState(row, connection?.state) : undefined, connection };
+  });
 }

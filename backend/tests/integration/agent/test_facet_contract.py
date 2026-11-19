@@ -6,7 +6,8 @@ projection entry lands inside the agent's own directory through the
 config-file allowlist; a provider projection round-trips (apply, detect,
 remove) and leaves the user's own keys alone; the memory reader reads an empty
 directory without failing; the driver and the probe name the agent they serve.
-A new agent passes this file before it ships.
+A facet an agent lacks is absent, and then nothing may claim it (no provider
+entry in the projection). A new agent passes this file before it ships.
 """
 
 from __future__ import annotations
@@ -67,7 +68,10 @@ def test_the_provider_projection_round_trips_and_keeps_user_keys(
     agent: FakeAgentDir, catalog: AgentCatalog
 ) -> None:
     facet = catalog.provider_projection(agent.agent_type)
-    assert facet is not None
+    if facet is None:
+        projection = catalog.projection(agent.agent_type)
+        assert projection is None or projection.entry(AssetType.PROVIDER) is None
+        return
     entry = catalog.projection(agent.agent_type).entry(AssetType.PROVIDER)  # type: ignore[union-attr]
     assert entry is not None and entry.config_key == facet.config_key
     path = agent.path(facet.config_key)
@@ -95,7 +99,8 @@ def test_the_memory_reader_reads_an_empty_directory(
     agent: FakeAgentDir, catalog: AgentCatalog
 ) -> None:
     reader = catalog.memory_reader(agent.agent_type)
-    assert reader is not None
+    if reader is None:
+        return
     assert reader.agent_type == agent.agent_type.value
     assert reader.sources(str(agent.config_dir)) == ()
 
@@ -104,8 +109,9 @@ def test_the_driver_and_probe_name_the_agent_they_serve(
     agent: FakeAgentDir, catalog: AgentCatalog
 ) -> None:
     driver = catalog.driver(agent.agent_type)
-    assert driver is not None and driver.agent_key == agent.agent_type.value
-    assert driver.display_name
+    if driver is not None:
+        assert driver.agent_key == agent.agent_type.value
+        assert driver.display_name
     probe = catalog.dependency_probe(agent.agent_type)
     assert probe is not None and probe.program == agent.descriptor.program
 

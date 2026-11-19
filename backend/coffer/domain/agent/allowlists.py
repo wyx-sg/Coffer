@@ -95,9 +95,11 @@ def _cursor_files(cfg: pathlib.Path) -> tuple[ConfigFileSpec, ...]:
     return (
         ConfigFileSpec("mcp", "MCP servers (mcp.json)", cfg / "mcp.json", ConfigFileFormat.JSON),
         ConfigFileSpec(
-            "cli_config", "CLI config (cli-config.json)", cfg / "cli-config.json",
+            "cli_config",
+            "CLI config (cli-config.json)",
+            cfg / "cli-config.json",
             ConfigFileFormat.JSON,
-        ),  # fmt: skip
+        ),
         ConfigFileSpec("hooks", "Hooks (hooks.json)", cfg / "hooks.json", ConfigFileFormat.JSON),
     )
 

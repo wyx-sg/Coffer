@@ -22,7 +22,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from coffer.domain.agent.mcp_entries import looks_secret
+from coffer.domain.agent.mcp_entry_secrets import looks_secret
 
 MASK = "••••••"
 

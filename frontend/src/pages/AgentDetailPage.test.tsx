@@ -10,6 +10,7 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
 import "@/i18n";
 import { acceptance } from "@/test/acceptance";
+import { FULL_AGENT_FEATURES } from "@/test/agentFeatures";
 import type { AgentRowState } from "@/lib/agents/rowState";
 import { AgentDetailPage } from "./AgentDetailPage";
 
@@ -74,6 +75,7 @@ const AGENT = {
   tier_models: null,
   state: "installed_active" as const,
   version: "2.1.281",
+  features: FULL_AGENT_FEATURES,
   created_at: "2026-06-12T00:00:00Z",
   updated_at: "2026-06-12T00:00:00Z",
 };

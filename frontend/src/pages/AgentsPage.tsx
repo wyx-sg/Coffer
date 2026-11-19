@@ -1,9 +1,10 @@
 // src/pages/AgentsPage.tsx — spec agent-registry "List the supported agents as fixed rows on the Agents page".
 //
-// Two fixed rows, Claude Code then Codex, found on their own (on load, when the
-// window regains focus, and every few minutes — useAgentTypes), so there is no
-// Detect and no Add-agent dialog. On first run, with neither connected and both
-// connectable, the header offers Connect both: one preview, one confirmation.
+// One fixed row per supported type, in AGENT_TYPES order, found on their own
+// (on load, when the window regains focus, and every few minutes —
+// useAgentTypes), so there is no Detect and no Add-agent dialog. On first run,
+// with none connected and every one connectable, the header offers Connect all:
+// one preview, one confirmation.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { RotateCcw } from "lucide-react";
@@ -13,7 +14,7 @@ import {
   type ConnectionChangeRequest,
 } from "@/components/agents/connect/AgentConnectionChangeDialog";
 import { AgentsTable, type AgentListRow } from "@/components/agents/list/AgentsTable";
-import { useAgentRowState } from "@/components/agents/list/useAgentRowState";
+import { useAgentRowStates } from "@/components/agents/list/useAgentRowState";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -28,17 +29,17 @@ export function AgentsPage() {
   const [change, setChange] = useState<ConnectionChangeRequest | null>(null);
   const byType = new Map((types.data ?? []).map((row) => [row.type, row]));
   // Exactly the supported types, in their fixed order.
-  const [claudeRow, codexRow] = AGENT_TYPES.map((type) => byType.get(type));
-  const claude = useAgentRowState(claudeRow);
-  const codex = useAgentRowState(codexRow);
-  const rows: AgentListRow[] = [
-    { row: claudeRow, state: claude.state },
-    { row: codexRow, state: codex.state },
-  ].filter((r): r is AgentListRow => !!r.row);
+  const typeRows = AGENT_TYPES.map((type) => byType.get(type));
+  const states = useAgentRowStates(typeRows);
+  const rows: AgentListRow[] = typeRows
+    .map((row, i) => ({ row, state: states[i].state }))
+    .filter((r): r is AgentListRow => !!r.row);
 
-  const firstRun =
-    rows.length === AGENT_TYPES.length &&
-    rows.every(({ row, state }) => !row.uid && row.addable && !!state && isAddableState(state));
+  // First run: nothing added yet and more than one agent ready to connect.
+  const connectable = rows.filter(
+    ({ row, state }) => row.addable && !!state && isAddableState(state),
+  );
+  const firstRun = rows.every(({ row }) => !row.uid) && connectable.length > 1;
 
   return (
     <div className="space-y-6">
@@ -47,8 +48,8 @@ export function AgentsPage() {
         subtitle={t("agents.list.subtitle")}
         actions={
           firstRun ? (
-            <Button onClick={() => setChange({ kind: "add", rows: rows.map((r) => r.row) })}>
-              {t("agents.list.connectBoth")}
+            <Button onClick={() => setChange({ kind: "add", rows: connectable.map((r) => r.row) })}>
+              {t("agents.list.connectAll")}
             </Button>
           ) : null
         }
