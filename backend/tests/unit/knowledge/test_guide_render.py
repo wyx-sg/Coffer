@@ -445,3 +445,21 @@ def test_a_chinese_readme_contributes_only_its_first_sentence() -> None:
     description = render_description(catalogue)
     assert "payments (支付系统的知识)" in description
     assert "对账" not in description
+
+
+@pytest.mark.acceptance(
+    spec="memory", scenario="the coffer-guide skill carries the memory rules while memory is on"
+)
+def test_the_memory_rules_follow_the_memory_switch() -> None:
+    from coffer.application.knowledge import guide_render as gr
+
+    on = gr.render("~/.coffer/vault/knowledge", None, memory_root="~/.coffer/vault/memory/projects")
+    assert "## Memory is files you write yourself" in on
+    assert "`~/.coffer/vault/memory/projects/<project>/`" in on
+    assert "Edit(~/.coffer/vault/memory/projects/**)" in on
+    assert "coffer memory tidy-start" in on
+    assert "<MEMORY_ROOT>" not in on and "<!-- when:memory -->" not in on
+
+    off = gr.render("~/.coffer/vault/knowledge", None)
+    assert "Memory is files you write yourself" not in off
+    assert "coffer memory" not in off

@@ -34,11 +34,14 @@ from coffer.application.knowledge.service import (
     KnowledgeService,
 )
 from coffer.application.knowledge.tidy_service import TidyService
-from coffer.domain.features import KNOWLEDGE
+from coffer.domain.features import KNOWLEDGE, MEMORY
+from coffer.domain.memory.hub import PROJECTS
+from coffer.domain.vault.layout import MEMORY as MEMORY_DIR
 from coffer.infrastructure.knowledge import paths
 from coffer.infrastructure.knowledge.converters.registry import default_registry
 from coffer.infrastructure.knowledge.history import KNOWLEDGE_HISTORY
 from coffer.infrastructure.platform.host import machine_label
+from coffer.infrastructure.vault.home import vault_root
 from coffer.surfaces.http.event_dependencies import announce_change
 from coffer.surfaces.http.guide_wiring import GuideRenderer
 from coffer.surfaces.http.knowledge.dependencies import (
@@ -113,9 +116,13 @@ def wire_knowledge_kind(
         # and documents no knowledge tool (spec experimental-features);
         # nothing the feature holds moves.
         on = features.is_enabled(KNOWLEDGE)
+        memory = features.is_enabled(MEMORY)
         return guide_render.render(
             guide_render.display_root(paths.knowledge_root()),
             await service.catalogue() if on else None,
+            memory_root=guide_render.display_root(vault_root() / MEMORY_DIR / PROJECTS)
+            if memory
+            else None,
         )
 
     # No tool: knowledge is plain files an agent reads and writes with its own

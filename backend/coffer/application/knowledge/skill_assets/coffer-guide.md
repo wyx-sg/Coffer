@@ -2,9 +2,8 @@
 
 Coffer is this machine's local vault. It stands between you and the MCP servers
 this developer registered, it holds what they have written down about their
-working environment, and it copies what each of their agents has learned into
-the others' own memory. This is the manual: what Coffer will do for you, and
-what it will not.
+working environment, and it keeps one memory for every agent they use. This is
+the manual: what Coffer will do for you, and what it will not.
 
 ## Coffer's own tools
 
@@ -91,7 +90,7 @@ into one.
 
 ### Memory, knowledge or a skill
 
-Your own memory is for the developer: who they are, how they want you to work
+Memory is for the developer: who they are, how they want you to work
 (preferences, corrections, what they approve), and a project's current state
 that the repository does not record. Knowledge is for the world: how an
 outside system, team or process works, its pitfalls, anything that needs a
@@ -136,6 +135,103 @@ Change nothing that does not need changing. When the developer asks only for a
 check or a review, report what you would do and change nothing.
 
 <!-- end:knowledge -->
+<!-- when:memory -->
+## Memory is files you write yourself
+
+Coffer keeps one memory for every agent this developer uses: Markdown files
+under `<MEMORY_ROOT>/<project>/`, one folder per repository. The folder is
+named after the repository's `origin` URL, every character other than a
+letter, a digit, `.`, `_` or `-` turned into `-` (`github.com-acme-payments`),
+or after the repository folder's own name when it has no remote. When a
+session starts in a repository, Coffer hands you that project's memories in a
+`<coffer-memory>` block, names its folder, and lists by path what did not fit:
+read one of those files when it is relevant. **There is no Coffer tool for
+memory.** Read and write the files with your own file tools.
+
+The rules below are Coffer's, the same for every agent and every project; the
+developer does not edit them.
+
+### The format
+
+- **One topic per file.** A topic is memories that belong together and are
+  used together: how this developer wants tests run, how a release works, a
+  project's open decisions. Name the file for its topic in lowercase words
+  joined by `-` (`testing.md`).
+- **Frontmatter**: `title` (the topic in a few words), `type`, and `updated`
+  (the day you last changed the file, `YYYY-MM-DD`). `type` is one of:
+  - `user`: who the developer is: role, expertise, how they like to be
+    talked to.
+  - `feedback`: how they want you to work: corrections, preferences, what they
+    approved. Add why when they gave a reason.
+  - `project`: a project's state the repository does not record: a goal, a
+    decision, a deadline, who owns what. Write absolute dates, never
+    "Thursday" or "next week".
+- **Body**: one memory per line, a sentence or two, at most 400 characters.
+  Write each line so it makes sense read on its own a month from now.
+
+```markdown
+---
+title: Testing
+type: feedback
+updated: 2026-11-19
+---
+Run only the failing tests while fixing them; the whole suite only before a push.
+Never mock the vault in integration tests: a mocked vault once hid a broken migration.
+```
+
+### Writing a memory
+
+Write one when the developer tells you about themselves or how they want you
+to work, corrects you, approves an approach that was not obvious, or tells you
+a fact about the project that the repository does not hold. Write it when you
+learn it, not at the end of the session.
+
+1. Look in the project's folder for a topic it belongs to and add a line there,
+   updating `updated`. Create a new file only when no topic fits.
+2. When the new line contradicts one already there, replace the old line
+   instead of keeping both.
+3. Tell the developer in one line what you remembered.
+
+Leave out what the repository already says, a one-off request, anything true
+only of this conversation, a procedure (that is a skill), and how an outside
+system works (that is knowledge). **Never write a secret** into memory: no
+key, token or password.
+
+Your agent may keep a memory of its own as well. Write what you learn about
+the developer and their projects here, so every agent they use has it.
+
+Every change to these files is kept in the vault's history, so the developer
+can read what you wrote and undo it on the Memory page. Never run git in the
+vault yourself.
+
+The folder is outside the repository you are working in. When writing there
+asks for permission or your sandbox blocks it, tell the developer how to allow
+it once: in Claude Code, an `Edit(<MEMORY_ROOT>/**)` rule under
+`permissions.allow` in `~/.claude/settings.json`; in Codex, the folder's
+absolute path in `writable_roots` under `[sandbox_workspace_write]` in
+`~/.codex/config.toml`.
+
+### Tidying memory
+
+When the developer asks you to tidy or clean up memory (整理记忆), or hands
+you the prompt from the Memory page's **Tidy** button:
+
+1. Run `coffer memory tidy-start` before you change anything. Until you finish,
+   Coffer keeps your edits together, so the developer sees the whole tidy as
+   one change and can undo it at once.
+2. Go through the projects one at a time (`coffer memory state` lists them;
+   `coffer memory topics <project>` names what breaks the format in each
+   file). Merge topics that belong together and split one that mixes subjects;
+   drop a line that is duplicated, stale, or contradicted by a newer one; move
+   a line about an outside system into knowledge; fix every file that breaks
+   the format.
+3. Leave alone what you are not sure about and put it in your report.
+4. Run `coffer memory tidy-finish --set summary="<report>"`. The report says
+   what you changed and what you left for the developer to decide.
+
+Change nothing that does not need changing.
+
+<!-- end:memory -->
 ## Nothing here waits on a human
 
 Every tool Coffer exposes runs immediately. There is no approval prompt, no
