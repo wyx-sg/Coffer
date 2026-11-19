@@ -2732,7 +2732,7 @@
       }
     },
     "list": {
-      "subtitle": "Claude Code and Codex on this Mac, and what reaches each through Coffer.",
+      "subtitle": "The coding agents on this Mac, and what reaches each through Coffer.",
       "connectAll": "Connect all",
       "countsHelp": "Counts are what reaches each agent through Coffer. Choose who gets a resource on its own page (<mcp>MCP servers</mcp>, <skills>Skills</skills>).",
       "empty": "No agents to show.",
