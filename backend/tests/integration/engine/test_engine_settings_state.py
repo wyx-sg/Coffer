@@ -123,4 +123,3 @@ async def test_a_deleted_document_resets_every_setting(machine: _Machine) -> Non
 
     held = await machine.service.get()
     assert held.transcribe_model is None
-
