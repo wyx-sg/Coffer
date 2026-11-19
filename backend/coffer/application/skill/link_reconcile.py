@@ -86,12 +86,20 @@ class _World:
         ordered by agent name then skill name (uids are random)."""
         out: dict[str, tuple[Resource, Resource, pathlib.Path]] = {}
         skills = sorted(self.skills.values(), key=lambda s: s.name)
+        # A skills directory several agents read (``~/.agents/skills``) holds
+        # one link for all of them: a skill in scope for any reader is wanted
+        # for every reader, so their records agree and none reclaims a link
+        # another still needs.
+        readers: dict[pathlib.Path, list[str]] = {}
+        for uid, skill_dir in self.skill_dirs.items():
+            readers.setdefault(skill_dir, []).append(uid)
         for agent in sorted(self.agents.values(), key=lambda a: a.name):
             skill_dir = self.skill_dirs.get(agent.uid)
             if skill_dir is None:
                 continue
+            sharing = readers.get(skill_dir, [agent.uid])
             for skill in skills:
-                if skill.enabled and is_active(skill.scope, agent.uid):
+                if skill.enabled and any(is_active(skill.scope, uid) for uid in sharing):
                     out[key_for(skill, agent)] = (skill, agent, skill_dir / skill.name)
         return out
 

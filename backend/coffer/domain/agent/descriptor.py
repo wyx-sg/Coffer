@@ -26,7 +26,14 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from coffer.domain.agent.allowlists import _claude_code_files, _codex_files, _home
+from coffer.domain.agent.allowlists import (
+    _claude_code_files,
+    _codex_files,
+    _cursor_files,
+    _deepseek_harness_files,
+    _home,
+    _opencode_files,
+)
 from coffer.domain.agent.config_files import ConfigFileFormat, ConfigFileSpec
 from coffer.domain.agent.mcp_injection import McpEntryStyle, McpInjectionSpec
 from coffer.domain.agent.plugin_capability import (
@@ -187,6 +194,63 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
             can_toggle=True,
             can_uninstall=True,
         ),
+    ),
+    AgentType.CURSOR: AgentDescriptor(
+        type=AgentType.CURSOR,
+        display_name="Cursor",
+        config_subpath=".cursor",
+        config_files=_cursor_files,
+        # Read by the CLI; the editor always uses ~/.cursor.
+        home_env_var="CURSOR_CONFIG_DIR",
+        # The CLI installs as `agent` with a `cursor-agent` link to the same
+        # launcher; the longer name cannot be mistaken for another program.
+        program="cursor-agent",
+        install_url="https://cursor.com/docs/cli/installation",
+        # Cursor reads ~/.agents/skills (and ~/.cursor/skills); Coffer
+        # delivers to the shared directory once for every agent reading it.
+        skill_home_subpath=".agents/skills",
+        mcp=McpInjectionSpec(
+            config_key="mcp",
+            container_key="mcpServers",
+            format=ConfigFileFormat.JSON,
+            entry_style=McpEntryStyle.COMMAND_MAP,
+        ),
+    ),
+    AgentType.OPENCODE: AgentDescriptor(
+        type=AgentType.OPENCODE,
+        display_name="OpenCode",
+        config_subpath=".config/opencode",
+        config_files=_opencode_files,
+        home_env_var="OPENCODE_CONFIG_DIR",
+        program="opencode",
+        install_url="https://opencode.ai/docs",
+        skill_home_subpath=".agents/skills",
+        mcp=McpInjectionSpec(
+            config_key="config",
+            # The 1.x shape (servers directly under `mcp`), which 2.x still
+            # loads; a 2.x file's `mcp.servers` is listed beside it.
+            container_key="mcp",
+            format=ConfigFileFormat.JSON,
+            entry_style=McpEntryStyle.COMMAND_ARRAY,
+        ),
+    ),
+    AgentType.DEEPSEEK_HARNESS: AgentDescriptor(
+        type=AgentType.DEEPSEEK_HARNESS,
+        display_name="DeepSeek Harness",
+        config_subpath=".dsh",
+        config_files=_deepseek_harness_files,
+        home_env_var="DSH_HOME",
+        program="dsh",
+        install_url="https://github.com/deepseek-ai/deepseek-harness",
+        skill_home_subpath=".agents/skills",
+        mcp=McpInjectionSpec(
+            # The home-level patch layer, applied over every profile.
+            config_key="patch",
+            container_key="insert",
+            format=ConfigFileFormat.YAML,
+            entry_style=McpEntryStyle.CORDIS_ROW,
+        ),
+        mcp_source_keys=("patch", "web_patch"),
     ),
 }
 

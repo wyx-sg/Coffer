@@ -23,6 +23,9 @@ class AgentType(StrEnum):
 
     CLAUDE_CODE = "claude_code"
     CODEX = "codex"
+    CURSOR = "cursor"
+    OPENCODE = "opencode"
+    DEEPSEEK_HARNESS = "deepseek_harness"
 
     @property
     def display_name(self) -> str:
