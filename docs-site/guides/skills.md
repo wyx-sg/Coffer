@@ -9,7 +9,7 @@ Coffer keeps one master library of skills on your machine and links each skill i
 
 ## What skills are for
 
-A skill is a folder an agent loads on demand: a `SKILL.md` with instructions, plus any scripts or reference files it needs. Claude Code reads skills from `~/.claude/skills/` and Codex from `~/.agents/skills/`. Without Coffer, the same skill ends up copied into both, and the copies drift apart.
+A skill is a folder an agent loads on demand: a `SKILL.md` with instructions, plus any scripts or reference files it needs. Claude Code reads skills from `~/.claude/skills/`; Codex, Cursor, OpenCode and DeepSeek Harness read the shared `~/.agents/skills/`. Without Coffer, the same skill ends up copied into both, and the copies drift apart.
 
 Coffer keeps a single master copy of each skill under `~/.coffer/vault/skills/<name>/` and places a directory link to it in each agent's skill folder. You edit the skill once and every agent reads the same bytes.
 
@@ -60,6 +60,8 @@ The AgentSkills specification caps `description` at 1024 characters, but neither
 | --- | --- |
 | `~/.coffer/vault/skills/<name>/` | The master folder. This is the only copy you edit. |
 | `~/.claude/skills/<name>` (Claude Code) and `~/.agents/skills/<name>` (Codex) | The delivered link in each agent's skill folder. It points at the master folder. A Claude Code agent with another config directory gets `<config_dir>/skills/<name>`. |
+
+`~/.agents/skills/` is shared by Codex, Cursor, OpenCode and DeepSeek Harness, so Coffer keeps one link per skill there and places it when the skill's reach includes any of the agents that read the folder. Reach cannot hide a skill from one of them while another sees it: a skill that reaches only Codex is also seen by Cursor, OpenCode and DeepSeek Harness.
 
 Codex still reads its old `~/.codex/skills/` folder but has deprecated it; Coffer delivers to `~/.agents/skills/`, the folder Codex documents, and moves any link it once made in the old folder on its next pass, so Codex never lists a skill twice.
 
