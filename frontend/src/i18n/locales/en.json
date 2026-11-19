@@ -2794,7 +2794,10 @@
         "creates": "Coffer creates {{dir}} for it, holding only these entries.",
         "keeps": {
           "claude_code": "Its own servers and hooks stay as they are.",
-          "codex": "Its own servers, hooks and provider stay as they are."
+          "codex": "Its own servers, hooks and provider stay as they are.",
+          "cursor": "Its own servers, hooks and rules stay as they are.",
+          "opencode": "Its own servers, agents and provider stay as they are.",
+          "deepseek_harness": "Its own patch rows stay as they are; Coffer only adds its marked block."
         },
         "loses": "Loses Coffer’s MCP servers and skills. Its own servers, hooks and settings stay as they are."
       },
@@ -2825,7 +2828,11 @@
         "skills": "Skill folders",
         "mcpAt": "MCP entries — Coffer writes its entry to {{path}}",
         "codexConfig": "Model, provider and MCP entries",
-        "hooks": "Hooks"
+        "hooks": "Hooks",
+        "mcp": "MCP entries",
+        "cliConfig": "Permissions and CLI settings",
+        "opencodeConfig": "Model, provider and MCP entries",
+        "dshPatch": "Plugin rows, MCP entries among them"
       }
     }
   },

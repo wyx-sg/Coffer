@@ -212,11 +212,17 @@ def wire_agent_and_skill_kinds(
     # Two-signal detection: the agents' dependency probe facets + the dirs.
     # An agent whose program is not found is handed to an agent to install,
     # with this machine and the PATH the probes look on (UserPath) as facts.
+    # The agent's own sessions, listed / renamed / deleted through the agent
+    # itself (Agent SDK for Claude Code, a short-lived app-server for Codex).
+    # Surfaces may import both kinds, so the chat package's app-server
+    # transport is handed to the agent adapter here.
+    session_sources = native_session_sources(default_app_server_session)
     auto_detect_svc = AutoDetectService(
         agent_service=agent_svc,
         catalog=agent_catalog,
         machine=cache(machine_label),
         lookup_path=UserPath(),
+        session_types=session_sources.keys(),
     )
     agent_config_file_svc = AgentConfigFileService(agent_service=agent_svc, store=config_file_store)
     agent_mcp_svc = AgentMcpService(agent_service=agent_svc, audit=audit, store=config_file_store)
@@ -280,14 +286,7 @@ def wire_agent_and_skill_kinds(
         scanner=FileNativeMemoryScanner(),
     )
 
-    # The agent's own sessions, listed / renamed / deleted through the agent
-    # itself (Agent SDK for Claude Code, a short-lived app-server for Codex).
-    # Surfaces may import both kinds, so the chat package's app-server
-    # transport is handed to the agent adapter here.
-    native_session_svc = NativeSessionService(
-        agent_service=agent_svc,
-        sources=native_session_sources(default_app_server_session),
-    )
+    native_session_svc = NativeSessionService(agent_service=agent_svc, sources=session_sources)
 
     async def _agent_on_delete(agent: Resource) -> None:
         # Awaited by ResourceService.delete BEFORE the agent row is removed,

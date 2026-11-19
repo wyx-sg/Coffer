@@ -7,6 +7,9 @@ import type { AgentType } from "@/lib/api/agents";
 const AGENT_TYPE_LABELS: Record<AgentType, string> = {
   claude_code: "Claude Code",
   codex: "Codex",
+  cursor: "Cursor",
+  opencode: "OpenCode",
+  deepseek_harness: "DeepSeek Harness",
 };
 
 /** Product name for an agent type key; unknown keys fall through unchanged. */
@@ -42,5 +45,13 @@ export function abbreviateHomePath(path: string): string {
 
 /** The program an agent type runs as, as it appears on PATH. */
 export function agentProgramName(type: AgentType): string {
-  return type === "claude_code" ? "claude" : "codex";
+  return AGENT_PROGRAMS[type];
 }
+
+const AGENT_PROGRAMS: Record<AgentType, string> = {
+  claude_code: "claude",
+  codex: "codex",
+  cursor: "cursor-agent",
+  opencode: "opencode",
+  deepseek_harness: "dsh",
+};

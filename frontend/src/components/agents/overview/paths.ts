@@ -4,15 +4,12 @@
 // directory when that directory is the standard `~/.claude` (so the file is
 // `~/.claude.json`), and inside the directory otherwise; its hooks sit in
 // `settings.json`. Codex keeps both in its directory: `config.toml` and
-// `hooks.json`. Paths come back home-relative, as the board prints them.
+// `hooks.json`. Cursor, OpenCode and DeepSeek Harness keep their MCP entries
+// in `mcp.json`, `opencode.json` and `cordis.patch.yml` inside their
+// directories. Paths come back home-relative, as the board prints them.
 import { abbreviateHomePath } from "@/lib/agents/display";
+import { connectionFiles } from "@/lib/agents/connectionPlan";
 import type { AgentOut, AgentTypeOut } from "@/lib/api/agents";
-
-function parentOf(path: string): string {
-  const trimmed = path.replace(/[\\/]+$/, "");
-  const i = trimmed.search(/[\\/][^\\/]*$/);
-  return i <= 0 ? trimmed : trimmed.slice(0, i);
-}
 
 function join(dir: string, file: string): string {
   return `${dir.replace(/[\\/]+$/, "")}/${file}`;
@@ -33,16 +30,25 @@ export function mcpConfigPath(
   agent: Pick<AgentOut, "type" | "config_dir">,
   typeRow: Pick<AgentTypeOut, "standard_config_dir">,
 ): string {
-  if (agent.type === "codex") return abbreviateHomePath(join(agent.config_dir, "config.toml"));
-  const dir =
-    agent.config_dir === typeRow.standard_config_dir
-      ? parentOf(agent.config_dir)
-      : agent.config_dir;
-  return abbreviateHomePath(join(dir, ".claude.json"));
+  return abbreviateHomePath(
+    connectionFiles({
+      type: agent.type,
+      config_dir: agent.config_dir,
+      standard_config_dir: typeRow.standard_config_dir,
+      state: "installed_active",
+    }).mcp,
+  );
 }
+
+const MAIN_FILE: Partial<Record<string, string>> = {
+  codex: "config.toml",
+  cursor: "cli-config.json",
+  opencode: "opencode.json",
+  deepseek_harness: "cordis.patch.yml",
+};
 
 /** The file whose absence means the agent is gone from its directory. */
 export function mainConfigPath(agent: Pick<AgentOut, "type" | "config_dir">): string {
-  const file = agent.type === "codex" ? "config.toml" : "settings.json";
+  const file = MAIN_FILE[agent.type] ?? "settings.json";
   return abbreviateHomePath(join(agent.config_dir, file));
 }

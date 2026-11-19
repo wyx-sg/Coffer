@@ -13,10 +13,12 @@ import type { AgentOut } from "@/lib/api/agents";
 import type { AgentModel } from "@/lib/api/agentModels";
 import type { Provider, ProviderModel } from "@/lib/api/providers";
 import { BUILTIN, useAgentConnectionDraft } from "./useAgentConnectionDraft";
+import { FULL_AGENT_FEATURES } from "@/test/agentFeatures";
 
 const call = fakeApi();
 
 const AGENT: AgentOut = {
+  features: FULL_AGENT_FEATURES,
   uid: "a-claude",
   name: "claude-code",
   type: "claude_code",

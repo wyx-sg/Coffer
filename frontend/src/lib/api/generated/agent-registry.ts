@@ -655,6 +655,11 @@ export interface components {
             created_at: string;
             /** Display Name */
             display_name: string;
+            /**
+             * Features
+             * @default []
+             */
+            features: string[];
             install_handoff: components["schemas"]["HandoffOut"] | null;
             /** Model */
             model: string | null;
@@ -762,7 +767,7 @@ export interface components {
          * @description Supported agent products.
          * @enum {string}
          */
-        AgentType: "claude_code" | "codex";
+        AgentType: "claude_code" | "codex" | "cursor" | "opencode" | "deepseek_harness";
         /**
          * AgentTypeOut
          * @description One supported type, registered or not — a row the Agents page always
@@ -778,6 +783,11 @@ export interface components {
             default_skill_dir: string;
             /** Display Name */
             display_name: string;
+            /**
+             * Features
+             * @default []
+             */
+            features: string[];
             install_handoff: components["schemas"]["HandoffOut"] | null;
             /**
              * Install Url
@@ -858,7 +868,7 @@ export interface components {
          * @description Format of an allowlisted config file.
          * @enum {string}
          */
-        ConfigFileFormat: "json" | "toml" | "markdown";
+        ConfigFileFormat: "json" | "toml" | "yaml" | "markdown";
         /** ConfigFileInfoOut */
         ConfigFileInfoOut: {
             /** Display Name */

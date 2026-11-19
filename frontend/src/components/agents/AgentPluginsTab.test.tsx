@@ -16,6 +16,7 @@ import { AgentPluginsTab } from "./AgentPluginsTab";
 import type { AgentOut } from "@/lib/api/agents";
 import type { PluginOut, PluginsResponse } from "@/lib/api/agents-workspace";
 import { acceptance } from "@/test/acceptance";
+import { FULL_AGENT_FEATURES } from "@/test/agentFeatures";
 
 vi.mock("@/lib/api/agents", () => ({
   agentsApi: {
@@ -32,6 +33,7 @@ const api = vi.mocked(agentsApi);
 
 function agent(type: AgentOut["type"]): AgentOut {
   return {
+    features: FULL_AGENT_FEATURES,
     uid: `u-${type}-agent`,
     name: type,
     type,

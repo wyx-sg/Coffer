@@ -14,6 +14,7 @@ import { AgentHooksTab } from "./AgentHooksTab";
 import { acceptance } from "@/test/acceptance";
 import { fsApi } from "@/lib/api/fs";
 import type { AgentHooksOut, AgentOut, NativeHook } from "@/lib/api/agents";
+import { FULL_AGENT_FEATURES } from "@/test/agentFeatures";
 
 vi.mock("@/lib/api/agents", () => ({ agentsApi: { hooks: vi.fn() } }));
 vi.mock("@/lib/api/fs", () => ({ fsApi: { open: vi.fn(), reveal: vi.fn() } }));
@@ -22,6 +23,7 @@ const api = vi.mocked(agentsApi);
 
 function agent(type: AgentOut["type"]): AgentOut {
   return {
+    features: FULL_AGENT_FEATURES,
     uid: `u-${type}`,
     name: type,
     type,

@@ -1291,6 +1291,9 @@ components:
       enum:
       - claude_code
       - codex
+      - cursor
+      - opencode
+      - deepseek_harness
       title: AgentType
       type: string
     CuratedPrice:
