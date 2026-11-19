@@ -34,6 +34,9 @@ export function mcpConfigPath(
   typeRow: Pick<AgentTypeOut, "standard_config_dir">,
 ): string {
   if (agent.type === "codex") return abbreviateHomePath(join(agent.config_dir, "config.toml"));
+  if (agent.type === "antigravity") {
+    return abbreviateHomePath(join(agent.config_dir, "mcp_config.json"));
+  }
   const dir =
     agent.config_dir === typeRow.standard_config_dir
       ? parentOf(agent.config_dir)
@@ -41,8 +44,14 @@ export function mcpConfigPath(
   return abbreviateHomePath(join(dir, ".claude.json"));
 }
 
+const MAIN_FILE: Record<AgentOut["type"], string> = {
+  claude_code: "settings.json",
+  codex: "config.toml",
+  antigravity: "mcp_config.json",
+};
+
 /** The file whose absence means the agent is gone from its directory. */
 export function mainConfigPath(agent: Pick<AgentOut, "type" | "config_dir">): string {
-  const file = agent.type === "codex" ? "config.toml" : "settings.json";
+  const file = MAIN_FILE[agent.type];
   return abbreviateHomePath(join(agent.config_dir, file));
 }

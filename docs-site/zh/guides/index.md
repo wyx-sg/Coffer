@@ -11,7 +11,7 @@ description: Coffer 的全部任务型指南集中在一页，按你要做的事
 
 <LinkList>
 
-- [智能体](/zh/guides/agents) 注册 Claude Code 和 Codex，并管理它们的配置。
+- [智能体](/zh/guides/agents) 注册 Claude Code、Codex 和 Antigravity，并管理它们的配置。
 - [连接客户端](/zh/guides/connect-a-client) 用一个条目把智能体接入 Coffer。
 - [MCP 服务器](/zh/guides/mcp-servers) 一次注册上游服务器，所有智能体共用。
 - [自定义工具](/zh/guides/custom-tools) 把 HTTP API 变成工具。

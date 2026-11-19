@@ -55,7 +55,9 @@ def test_binding_groups_implementations_by_the_agent_they_declare() -> None:
     assert catalog.memory_readers() == {"claude_code": _Reader("claude_code")}
     for d in catalog:
         provider = catalog.provider_projection(d.type)
-        assert provider is not None and provider.agent_type == d.type
+        assert provider is None or provider.agent_type == d.type
+    # Antigravity runs only Google-hosted models: no connection reaches it.
+    assert catalog.provider_projection(AgentType.ANTIGRAVITY) is None
 
 
 def test_two_implementations_for_one_agent_are_refused() -> None:
@@ -90,11 +92,11 @@ def test_the_registry_lists_every_asset_the_shipped_agent_receives(agent_type: A
     projection = agent_catalog().projection(agent_type)
     assert projection is not None
     assets = [e.asset for e in projection.entries]
-    assert assets == [
-        AssetType.MCP_SERVER,
-        AssetType.SKILL,
-        AssetType.PROVIDER,
-    ]
+    expected = [AssetType.MCP_SERVER, AssetType.SKILL, AssetType.PROVIDER]
+    if agent_type is AgentType.ANTIGRAVITY:
+        # No model setting to project a connection into.
+        expected = [AssetType.MCP_SERVER, AssetType.SKILL]
+    assert assets == expected
     # Every entry the shipped agents have lands in the agent's own directory,
     # in exactly one of a file or a directory.
     for entry in projection.entries:
@@ -139,6 +141,6 @@ def test_the_probe_is_built_from_the_record_program_name() -> None:
             return ProgramInfo()
 
     catalog = bind_facets(AGENT_DESCRIPTORS, probe_for=lambda d: _Probe(d.program))
-    assert sorted(seen) == ["claude", "codex"]
+    assert sorted(seen) == ["agy", "claude", "codex"]
     probe = catalog.dependency_probe(AgentType.CODEX)
     assert probe is not None and probe.program == "codex"

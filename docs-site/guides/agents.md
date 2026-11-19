@@ -1,11 +1,11 @@
 ---
 title: Agents
-description: Register Claude Code and Codex with Coffer, connect them to Coffer, and manage their config files, MCP entries, plugins, hooks, models, memory and sessions.
+description: Register Claude Code, Codex and Antigravity with Coffer, connect them to Coffer, and manage their config files, MCP entries, plugins, hooks, models, memory and sessions.
 ---
 
 # Agents
 
-An agent is a coding agent installed on your machine that Coffer delivers to: Claude Code or Codex. This page covers registering agents, installing Coffer's MCP entry into them, and everything Coffer lets you see and change in an agent's own files.
+An agent is a coding agent installed on your machine that Coffer delivers to: Claude Code, Codex or Antigravity. This page covers registering agents, installing Coffer's MCP entry into them, and everything Coffer lets you see and change in an agent's own files.
 
 ## What agents are for
 
@@ -16,20 +16,27 @@ Everything Coffer shares — MCP servers, skills, knowledge, memory, model provi
 - project a [model provider](/guides/providers) into its native config;
 - show you its config files, MCP entries, plugins, native memory and sessions in one place.
 
-Coffer supports two agent types:
+Coffer supports three agent types:
 
 | Type | Product | Default config directory | Program Coffer looks for |
 | --- | --- | --- | --- |
 | `claude_code` | Claude Code (CLI and IDE/desktop forms) | `~/.claude` | `claude` |
 | `codex` | OpenAI Codex (CLI and IDE forms) | `~/.codex` | `codex` |
+| `antigravity` | Google Antigravity (App, CLI and IDE) | `~/.gemini/config` | `agy`, or the `Antigravity.app` bundle |
 
 The CLI and IDE forms of each product read the same config directory, so one registered agent covers both. The Claude Desktop chat app has its own configuration and is not a supported agent.
 
+### What Antigravity gets
+
+Antigravity's App, its `agy` CLI and its IDE all read one personal config folder, `~/.gemini/config`. Coffer works only there: it writes the `coffer` entry into `mcp_config.json`, links skills into `skills/`, and shows `mcp_config.json`, `config.json`, `AGENTS.md`, `rules/` and `hooks.json` on the agent's **Files** tab. Coffer's entry sets `"timeoutSeconds": 86400`, because Antigravity otherwise ends a tool call after three minutes and a Coffer tool can wait on you. The first time Antigravity calls a Coffer tool it asks you; allowing it there is your choice, and Coffer writes no permission rule for it.
+
+Antigravity runs only Google's hosted models, keeps no store of learned memories, and does not document where it keeps conversations, so it has no [model provider](/guides/providers), no memory sync and no session list in Coffer. Google does not support running `agy` inside other tools on a personal plan, so Antigravity is not offered in [chat](/guides/chat), [channels](/guides/channels) or scheduled tasks. Coffer never reads Antigravity's own data folders (`~/.gemini/antigravity`, `antigravity-cli`, `antigravity-ide`), which hold its conversations and sign-ins. The [decision record](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/antigravity-joins-at-its-config-layer-only.md) explains why.
+
 ### One agent per type
 
-A machine has at most one registered agent of each type, and the agent's name **is** its type: `claude-code` or `codex`. You do not choose a name, and an agent has no title or description. Everywhere Coffer asks which agent you mean — the reach of a skill or MCP server, and every `/api/v1/agents/{uid}/…` route — you can give the type (`claude-code`; `claude_code` also reads) or the agent's uid.
+A machine has at most one registered agent of each type, and the agent's name **is** its type: `claude-code`, `codex` or `antigravity`. You do not choose a name, and an agent has no title or description. Everywhere Coffer asks which agent you mean — the reach of a skill or MCP server, and every `/api/v1/agents/{uid}/…` route — you can give the type (`claude-code`; `claude_code` also reads) or the agent's uid.
 
-Besides its type, the only setting an agent has is its **config directory**, plus the [model binding](#models). Registering uses the type's standard directory (`~/.claude`, `~/.codex`) unless you say otherwise. Pointing Coffer at a different directory moves the one agent there; it never adds a second one. Registering a type that is already registered is refused with `409 AGENT_TYPE_REGISTERED`.
+Besides its type, the only setting an agent has is its **config directory**, plus the [model binding](#models). Registering uses the type's standard directory (`~/.claude`, `~/.codex`, `~/.gemini/config`) unless you say otherwise. Pointing Coffer at a different directory moves the one agent there; it never adds a second one. Registering a type that is already registered is refused with `409 AGENT_TYPE_REGISTERED`.
 
 ::: info The agent's files are the source of truth
 Coffer never copies an agent's configuration into its own store. Config files, MCP entries, plugins and native memory are read from disk every time you look at them, and sessions are listed by the agent itself. The agent record itself holds only the type, the config directory and the model binding.
@@ -41,7 +48,7 @@ Coffer never copies an agent's configuration into its own store. Config files, M
 
 ### From detected agents
 
-Coffer detects an agent from two signals: its program on your `PATH` — the `PATH` your login shell gives you, so an agent installed with Homebrew or a Node version manager is found even when the daemon was started from the Dock — and its config directory. It reads the program's version (`claude --version`, `codex --version`) along the way. It never registers anything on its own, and the daemon does not auto-register agents at startup.
+Coffer detects an agent from two signals: its program on your `PATH` — the `PATH` your login shell gives you, so an agent installed with Homebrew or a Node version manager is found even when the daemon was started from the Dock — and its config directory. It reads the program's version (`claude --version`, `codex --version`, `agy --version`) along the way. Antigravity is often installed as the App alone, without `agy`: when `agy` is not on your `PATH`, Coffer looks for `Antigravity.app` in `/Applications` and `~/Applications` and reads the version from the app. It never registers anything on its own, and the daemon does not auto-register agents at startup.
 
 Coffer reports every supported type, registered or not, in one of these states:
 
@@ -54,7 +61,7 @@ Coffer reports every supported type, registered or not, in one of these states:
 
 For each type Coffer looks at its standard directory and, when the daemon's environment sets the type's own variable (`CLAUDE_CONFIG_DIR` for Claude Code, `CODEX_HOME` for Codex), at the directory that names. That second directory is never a second agent: when the standard one exists it is offered as **use a different config directory** for the one agent, and when only the named one exists it is the directory Connect registers. Coffer does not search the rest of your disk; to use any other directory, see [Use a different config directory](#use-a-different-config-directory). A type already registered is not offered again.
 
-**Web UI:** the **Agents** page always has exactly two rows, Claude Code then Codex, whether or not each is installed. Detection is automatic — when the page opens, when the window regains focus, and every few minutes — so there is no Detect button and no Add-agent dialog. Each row reads one state and offers the one action it calls for:
+**Web UI:** the **Agents** page always has exactly three rows, Claude Code, Codex, then Antigravity, whether or not each is installed. Detection is automatic — when the page opens, when the window regains focus, and every few minutes — so there is no Detect button and no Add-agent dialog. Each row reads one state and offers the one action it calls for:
 
 | Row reads | Meaning | Action |
 | --- | --- | --- |
@@ -68,7 +75,7 @@ A row whose agent is not installed shows no version, and says **Not on this Mac*
 
 Coffer does not install agents, and installing one depends on the machine, so a row whose program is not found hands the job to an agent instead of naming an install command. The row carries the hand-off split button, **Hand off to &lt;Agent&gt; ▾**, before its **⋯**. It works with a prompt the daemon writes: install (or reinstall) this agent on this machine, keep its existing config directory, make sure its program is found on the `PATH` Coffer looks on (the prompt lists it) and confirm with `claude --version` or `codex --version`, then come back and choose **Check again** — leaving the login to you. **Hand off to &lt;Agent&gt;** starts your hand-off agent in your preferred terminal with the prompt as its first message; behind the chevron, **Hand off to** the other agent (when it is available) and **Copy prompt**, which copies it for any assistant outside Coffer. While no managed agent is available to run it — the missing agent cannot run its own install — the row offers **Copy prompt** alone. The **⋯** menu never repeats it. The agent's page offers the same prompt on its Overview tab's problem states. You can still install the agent yourself the way its maker documents; the row updates on its own once the program is on your `PATH`.
 
-**Connect** on a newly found agent registers it at its standard directory and connects it. It first opens **Review changes** — every file it will write and the lines it adds — and writes nothing until you apply it. On a first run with both agents installed and neither connected, **Connect both** reviews and connects the two in one confirmation. A registered row also shows its provider — the Coffer connection it runs on, or its built-in login — its default model, read from the agent's own config (**Built-in default** when that names none, so the agent runs whatever its maker defaults to, with the model named in brackets when the agent reports it, as Codex does), and how many skills, MCP servers and plugins reach it, and opens the agent's page. A line under the table says what the counts mean.
+**Connect** on a newly found agent registers it at its standard directory and connects it. It first opens **Review changes** — every file it will write and the lines it adds — and writes nothing until you apply it. On a first run, when no agent is connected and at least two are installed, **Connect all** reviews and connects every installed agent in one confirmation. A registered row also shows its provider — the Coffer connection it runs on, or its built-in login — its default model, read from the agent's own config (**Built-in default** when that names none, so the agent runs whatever its maker defaults to, with the model named in brackets when the agent reports it, as Codex does), and how many skills, MCP servers and plugins reach it, and opens the agent's page. A line under the table says what the counts mean.
 
 ### Use a different config directory
 
@@ -84,7 +91,7 @@ When Coffer itself starts an agent registered on a directory other than the stan
 
 ### Edit and disconnect
 
-The **⋯** menu on an agent's row and on its page carries **Use a different config directory…**, **Reveal config directory**, **Copy uid**, and **Disconnect…** (while any part is installed). There is no **Remove**: the list always holds a row for both supported agents, and disconnecting is how you take Coffer's entry out of one.
+The **⋯** menu on an agent's row and on its page carries **Use a different config directory…**, **Reveal config directory**, **Copy uid**, and **Disconnect…** (while any part is installed). There is no **Remove**: the list always holds a row for each supported agent, and disconnecting is how you take Coffer's entry out of one.
 
 - **Edit** changes the config directory or the [model binding](#models). The name is the type and cannot change. Everything that refers to an agent — reach lists, a channel's default agent, the installed MCP entry — holds the agent's immutable `uid`.
 - **Disconnect…** removes Coffer's gateway entry from the agent and leaves everything else in its files as it was (see [Connect an agent to Coffer](#connect-an-agent-to-coffer)). The agent stays registered, so the skills [reach](/guides/skills) grants it keep being delivered.
@@ -193,6 +200,11 @@ Each type has a fixed allowlist:
 | `codex` | `config` | `<config_dir>/config.toml` |
 | | `instructions` | `<config_dir>/AGENTS.md` |
 | | `hooks` | `<config_dir>/hooks.json` |
+| `antigravity` | `mcp` | `<config_dir>/mcp_config.json` |
+| | `config` | `<config_dir>/config.json` |
+| | `instructions` | `<config_dir>/AGENTS.md` |
+| | `rules` | `<config_dir>/rules/` — a directory, one Markdown file per rule |
+| | `hooks` | `<config_dir>/hooks.json` |
 
 **Web UI:** open the agent and choose **Config files**. The tab is a file tree on the left and a read-only preview on the right, with a draggable divider between them. The tree lists the agent's config files; a directory entry such as `agents/` expands to the files inside it. Only files that exist are listed: one the agent has not created yet does not appear, because Coffer creates no config file. Choose a file to preview it as it is on disk — the first file is open when you arrive, and the open file is kept in the page address. The preview's toolbar shows the file's path and size, with **Open in editor** and **Reveal in Finder**; the icon at the top of the tree reveals the whole config folder. To change a file, use **Open in editor**. Coffer has no editor, **New file** or **Delete**: you change a config file in your own editor (the one chosen in **Settings › General**), or ask the agent to. Coffer's own changes to these files — connecting, repairing, a plugin switch, an MCP entry, a provider switch — go through **Review changes** first.
 
@@ -270,7 +282,7 @@ The agent record carries the model binding that provider projection writes into 
 
 ## The agent page in the web UI
 
-The agent page is addressed by the agent's type (`/agents/claude_code`, `/agents/codex`). Its header holds the agent's mark, its name, one status pill and a **⋯** menu — no line under the name — and it never turns into a fix button. Below it are eight tabs, none carrying a count. Six sit in the strip, each at its own address: **Overview** (`/agents/<type>`), **Skills**, **MCP servers**, **Hooks**, **Config files** and **Sessions** (`…/skills`, `…/mcp-servers`, `…/hooks`, `…/config`, `…/sessions`). **More** holds the two least used, **Plugins** and **Memory** (`…/plugins`, `…/memory`); while one of them is open, **More** reads its name and carries the underline, and a warning dot on **More** says a tab inside it needs a look. There is no Model tab.
+The agent page is addressed by the agent's type (`/agents/claude_code`, `/agents/codex`, `/agents/antigravity`). Its header holds the agent's mark, its name, one status pill and a **⋯** menu — no line under the name — and it never turns into a fix button. Below it are eight tabs, none carrying a count. Six sit in the strip, each at its own address: **Overview** (`/agents/<type>`), **Skills**, **MCP servers**, **Hooks**, **Config files** and **Sessions** (`…/skills`, `…/mcp-servers`, `…/hooks`, `…/config`, `…/sessions`). **More** holds the two least used, **Plugins** and **Memory** (`…/plugins`, `…/memory`); while one of them is open, **More** reads its name and carries the underline, and a warning dot on **More** says a tab inside it needs a look. There is no Model tab.
 
 **Overview** is one column, top to bottom:
 

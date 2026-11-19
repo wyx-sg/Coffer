@@ -18,6 +18,13 @@ const codex: PlanAgent["row"] = {
   state: "installed_active",
 };
 
+const antigravity: PlanAgent["row"] = {
+  type: "antigravity",
+  config_dir: "/Users/me/.gemini/config",
+  standard_config_dir: "/Users/me/.gemini/config",
+  state: "installed_active",
+};
+
 describe("connectionFiles", () => {
   test("Claude Code's entry sits in ~/.claude.json for the standard directory", () => {
     expect(connectionFiles(claude)).toEqual({ mcp: "/Users/me/.claude.json" });
@@ -30,6 +37,21 @@ describe("connectionFiles", () => {
 
   test("Codex writes config.toml in its directory", () => {
     expect(connectionFiles(codex)).toEqual({ mcp: "/Users/me/.codex/config.toml" });
+  });
+
+  test("Antigravity writes mcp_config.json in its shared config folder", () => {
+    expect(connectionFiles(antigravity)).toEqual({
+      mcp: "/Users/me/.gemini/config/mcp_config.json",
+    });
+  });
+});
+
+describe("planConnect for Antigravity", () => {
+  test("previews the JSON entry with its long tool timeout", () => {
+    const items = planConnect([{ row: antigravity }], OPTS);
+    const lines = JSON.stringify(items);
+    expect(lines).toContain("mcp_config.json");
+    expect(lines).toContain('\\"timeoutSeconds\\": 86400');
   });
 });
 

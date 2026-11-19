@@ -40,6 +40,7 @@ function join(dir: string, name: string): string {
 /** The absolute file each part of an agent's connection is written to. */
 export function connectionFiles(row: PlanAgent["row"]): Record<ConnectionPartKey, string> {
   if (row.type === "codex") return { mcp: join(row.config_dir, "config.toml") };
+  if (row.type === "antigravity") return { mcp: join(row.config_dir, "mcp_config.json") };
   // Claude Code keeps its MCP entries in ~/.claude.json beside the standard
   // directory, and in <dir>/.claude.json when pointed at another one.
   const mcpDir =
@@ -76,6 +77,18 @@ function entryLines(agent: PlanAgent, opts: PlanOptions): { hunk: string; lines:
     return {
       hunk: "mcp_servers.coffer",
       lines: ["[mcp_servers.coffer]", `command = "${shim}"`, `args = ["--agent-uid", "${uid}"]`],
+    };
+  }
+  if (agent.row.type === "antigravity") {
+    return {
+      hunk: "mcpServers",
+      lines: [
+        `"coffer": {`,
+        `  "command": "${shim}",`,
+        `  "args": ["--agent-uid", "${uid}"],`,
+        `  "timeoutSeconds": 86400`,
+        `},`,
+      ],
     };
   }
   return {

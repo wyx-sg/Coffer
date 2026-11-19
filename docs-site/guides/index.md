@@ -11,7 +11,7 @@ One page per task. Each guide shows the place in the app, and a command where an
 
 <LinkList>
 
-- [Agents](/guides/agents) Register Claude Code and Codex and look after their config.
+- [Agents](/guides/agents) Register Claude Code, Codex and Antigravity and look after their config.
 - [Connect a client](/guides/connect-a-client) Wire an agent to Coffer through one entry.
 - [MCP servers](/guides/mcp-servers) Register upstream servers once for every agent.
 - [Custom tools](/guides/custom-tools) Turn an HTTP API into tools.

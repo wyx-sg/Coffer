@@ -9,8 +9,11 @@ bounded timeout: a flag both shipped agents answer without a login, a network
 call or a config directory.
 
 Generic: one probe per agent, built from the descriptor's program name at the
-composition root. The per-OS parts — the login-shell lookup and the
-executable's file name — come from the platform package.
+composition root. A product that also ships as a desktop app names its bundle;
+when the program is not on the ``PATH`` the probe looks for that app instead,
+so an app-only install (the Antigravity App without ``agy``) reads installed.
+The per-OS parts — the login-shell lookup, the executable's file name and
+where apps live — come from the platform package.
 """
 
 from __future__ import annotations
@@ -25,6 +28,7 @@ from collections.abc import Callable
 
 from coffer.domain.agent.detection import ProgramInfo
 from coffer.domain.versions import parse_version
+from coffer.infrastructure.platform.apps import InstalledApp, find_app_bundle
 from coffer.infrastructure.platform.process import executable_name
 from coffer.infrastructure.platform.user_path import UserPath
 
@@ -51,10 +55,14 @@ class ProgramProbe:
         *,
         user_path: Callable[[], str],
         timeout: float = VERSION_TIMEOUT_SECONDS,
+        app_bundle: str = "",
+        find_app: Callable[[str], InstalledApp | None] = find_app_bundle,
     ) -> None:
         self._program = program
         self._user_path = user_path
         self._timeout = timeout
+        self._app_bundle = app_bundle
+        self._find_app = find_app
 
     @property
     def program(self) -> str:
@@ -63,7 +71,7 @@ class ProgramProbe:
     def probe(self) -> ProgramInfo:
         path = self.locate()
         if path is None:
-            return ProgramInfo()
+            return self._app()
         try:
             stat = path.stat()
         except OSError:
@@ -76,6 +84,15 @@ class ProgramProbe:
         with _VERSIONS_LOCK:
             _VERSIONS[key] = version
         return ProgramInfo(path=str(path), version=version)
+
+    def _app(self) -> ProgramInfo:
+        """The product's desktop app when it has one and it is installed."""
+        if not self._app_bundle:
+            return ProgramInfo()
+        app = self._find_app(self._app_bundle)
+        if app is None:
+            return ProgramInfo()
+        return ProgramInfo(path=str(app.path), version=app.version)
 
     def locate(self) -> pathlib.Path | None:
         """The program as the agent's ``PATH`` resolves it, symlinks followed."""

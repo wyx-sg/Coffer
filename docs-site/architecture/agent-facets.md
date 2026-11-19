@@ -5,7 +5,7 @@ description: How Coffer keeps everything that differs between coding agents in o
 
 # Agent facets
 
-Coffer manages coding agents it does not own: today Claude Code and Codex. Almost everything Coffer does ends in one of them — an MCP entry written into its config, a skill linked into its skills folder, a model provider projected into its settings, its memory read for memory sync, a chat turn driven through it. This page explains how Coffer keeps the differences between agents in one place, so that supporting another agent, or placing another kind of asset into the agents it has, is an addition rather than a search. Read it before writing anything that behaves differently per agent. The decision and the alternatives weighed are recorded in the ADR [Agent Mechanisms Are Optional Facets on the Descriptor](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/agent-mechanisms-are-optional-facets-on-the-descriptor.md).
+Coffer manages coding agents it does not own: today Claude Code, Codex and Antigravity. Almost everything Coffer does ends in one of them — an MCP entry written into its config, a skill linked into its skills folder, a model provider projected into its settings, its memory read for memory sync, a chat turn driven through it. This page explains how Coffer keeps the differences between agents in one place, so that supporting another agent, or placing another kind of asset into the agents it has, is an addition rather than a search. Read it before writing anything that behaves differently per agent. The decision and the alternatives weighed are recorded in the ADR [Agent Mechanisms Are Optional Facets on the Descriptor](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/agent-mechanisms-are-optional-facets-on-the-descriptor.md).
 
 ## The problem
 
@@ -78,7 +78,7 @@ There is one agent per type, named by it (spec agent-registry "Keep one agent pe
 
 ## Hooks are read, never written {#hooks-are-read}
 
-An agent runs hooks from its own settings files and from its plugins; Coffer installs none of its own. Coffer reads all of them, read only: each hook's event, matcher, command and the file that declares it. Both agents keep hooks in the same shape, so one reader serves both; which files carry hooks is a value on each agent's record, and each enabled plugin's hook file is found through the plugin listing. A project's own settings are not read, because Coffer does not know which repositories the agent is used in.
+An agent runs hooks from its own settings files and from its plugins; Coffer installs none of its own. Coffer reads all of them, read only: each hook's event, matcher, command and the file that declares it. Claude Code and Codex keep hooks in the same shape, so one reader serves both; which files carry hooks is a value on each agent's record, and each enabled plugin's hook file is found through the plugin listing. A project's own settings are not read, because Coffer does not know which repositories the agent is used in.
 
 ## How the rule is protected
 

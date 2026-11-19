@@ -83,3 +83,55 @@ def test_the_user_path_puts_the_login_shell_first_and_keeps_inherited_entries(
     assert user_path().split(os.pathsep) == ["/home/me/.local/bin", "/usr/bin", "/inherited/only"]
     user_path()
     assert calls == [1], "the login shell is asked once per process"
+
+
+def _bundle(root: pathlib.Path, name: str, version: str | None) -> pathlib.Path:
+    import plistlib
+
+    contents = root / name / "Contents"
+    contents.mkdir(parents=True)
+    info = {"CFBundleName": name} | ({"CFBundleShortVersionString": version} if version else {})
+    (contents / "Info.plist").write_bytes(plistlib.dumps(info))
+    return root / name
+
+
+@pytest.mark.acceptance(
+    spec="agent-registry/antigravity", scenario="detect the Antigravity App without agy"
+)
+def test_an_app_only_install_reads_installed_with_the_app_version(tmp_path: pathlib.Path) -> None:
+    from coffer.infrastructure.platform.apps import find_app_bundle
+
+    (tmp_path / "empty").mkdir()
+    app = _bundle(tmp_path / "Applications", "Antigravity.app", "2.32.2")
+    probe = ProgramProbe(
+        "agy",
+        user_path=lambda: str(tmp_path / "empty"),
+        app_bundle="Antigravity.app",
+        find_app=lambda b: find_app_bundle(b, roots=(tmp_path / "Applications",)),
+    )
+    info = probe.probe()
+    assert info.found and info.path == str(app) and info.version == "2.32.2"
+
+
+def test_the_program_on_the_path_wins_over_the_app(tmp_path: pathlib.Path) -> None:
+    from coffer.infrastructure.platform.apps import find_app_bundle
+
+    _program(tmp_path / "bin", "agy", 'echo "agy 1.4.0"')
+    _bundle(tmp_path / "Applications", "Antigravity.app", "2.32.2")
+    probe = ProgramProbe(
+        "agy",
+        user_path=lambda: str(tmp_path / "bin"),
+        app_bundle="Antigravity.app",
+        find_app=lambda b: find_app_bundle(b, roots=(tmp_path / "Applications",)),
+    )
+    info = probe.probe()
+    assert info.path == str((tmp_path / "bin" / "agy").resolve()) and info.version == "1.4.0"
+
+
+def test_an_app_without_a_readable_version_is_still_found(tmp_path: pathlib.Path) -> None:
+    from coffer.infrastructure.platform.apps import find_app_bundle
+
+    _bundle(tmp_path / "Applications", "Antigravity.app", None)
+    found = find_app_bundle("Antigravity.app", roots=(tmp_path / "Applications",))
+    assert found is not None and found.version is None
+    assert find_app_bundle("Missing.app", roots=(tmp_path / "Applications",)) is None

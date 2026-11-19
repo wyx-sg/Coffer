@@ -26,6 +26,12 @@ const KEPT: Record<AgentType, KeptEntry[]> = {
     { name: "hooks.json", role: "agents.configDirDialog.role.hooks", folder: false },
     { name: "skills", role: "agents.configDirDialog.role.skills", folder: true },
   ],
+  antigravity: [
+    { name: "mcp_config.json", role: "agents.configDirDialog.role.mcpServers", folder: false },
+    { name: "config.json", role: "agents.configDirDialog.role.appSettings", folder: false },
+    { name: "rules", role: "agents.configDirDialog.role.rules", folder: true },
+    { name: "skills", role: "agents.configDirDialog.role.skills", folder: true },
+  ],
 };
 
 export function keptEntries(type: AgentType): KeptEntry[] {
