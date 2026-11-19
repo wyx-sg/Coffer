@@ -91,15 +91,6 @@ def test_the_provider_projection_round_trips_and_keeps_user_keys(
     assert not facet.is_present(original)
 
 
-def test_the_memory_reader_reads_an_empty_directory(
-    agent: FakeAgentDir, catalog: AgentCatalog
-) -> None:
-    reader = catalog.memory_reader(agent.agent_type)
-    assert reader is not None
-    assert reader.agent_type == agent.agent_type.value
-    assert reader.sources(str(agent.config_dir)) == ()
-
-
 def test_the_driver_and_probe_name_the_agent_they_serve(
     agent: FakeAgentDir, catalog: AgentCatalog
 ) -> None:

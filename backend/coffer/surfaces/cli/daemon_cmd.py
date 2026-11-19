@@ -241,12 +241,11 @@ def status(
         False, "--workers", help="Also list each background worker and when it runs next"
     ),
 ) -> None:
-    """Show whether the daemon is running, and the passes it is running right now.
+    """Show whether the daemon is running, and how it is doing.
 
     Reports its version, port and pid, the event loop's lag (p99 and
     maximum over the last few minutes), how many background tasks are running
-    and how many have crashed, and the long passes in flight (kind, target,
-    start time), oldest first. --tasks adds the running tasks counted by name
+    and how many have crashed. --tasks adds the running tasks counted by name
     (reconciler, seatalk-ws, coffer-mcp-http-upstream, ...), largest first.
     --workers adds one line per background worker: how it is woken (event,
     event+fallback, on-demand), whether it is waiting, running or parked, its

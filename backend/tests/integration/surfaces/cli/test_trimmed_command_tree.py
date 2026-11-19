@@ -101,20 +101,11 @@ def test_knowledge_is_managed_on_the_command_line_its_documents_as_files() -> No
     assert _runner.invoke(app, ["path", "knowledge"]).exit_code == 2
 
 
-@pytest.mark.acceptance(spec="memory", scenario="memory sync is managed on the command line")
-def test_memory_sync_is_managed_on_the_command_line() -> None:
+@pytest.mark.acceptance(spec="memory", scenario="memory is read and tidied on the command line")
+def test_memory_is_read_and_tidied_on_the_command_line() -> None:
     memory = {" ".join(p[1:]) for p, _ in _tree() if p[0] == "memory" and len(p) > 1}
-    assert memory == {
-        "state",
-        "sync",
-        "preview-write",
-        "preview-cancel",
-        "undo",
-        "codex-import",
-        "entries",
-        "show",
-    }
-    # A memory's text is edited in the agent's own memory directory, never here.
+    assert memory == {"state", "topics", "show", "tidy-start", "tidy-finish", "session-start"}
+    # A memory's text is edited as a file, never through a command.
     assert not memory & _FILE_VERBS
     assert _runner.invoke(app, ["path", "memory"]).exit_code == 2
 

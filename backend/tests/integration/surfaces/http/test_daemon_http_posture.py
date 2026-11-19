@@ -42,6 +42,8 @@ def test_every_management_route_refuses_a_missing_or_wrong_token(
     _isolated: None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("COFFER_WEBUI_DIR", str(tmp_path / "no-ui"))
+    # Every feature on, so a switched-off feature's gate answers no route first.
+    monkeypatch.setenv("COFFER_FEATURES", "knowledge=on,memory=on,scheduled_tasks=on")
     app = create_app()
     # Read from the OpenAPI schema: FastAPI 0.141 no longer flattens an included
     # router's routes into ``app.routes``, so walking that list finds nothing.

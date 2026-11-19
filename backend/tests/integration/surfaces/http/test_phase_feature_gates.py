@@ -79,7 +79,7 @@ def test_knowledge_off_hides_the_write_tool(home: pathlib.Path) -> None:
 
         _switch(c, "knowledge", False)
         # Memory and conversations carry on.
-        assert c.get("/api/v1/memory/sync/state").status_code == 200
+        assert c.get("/api/v1/memory").status_code == 200
         assert c.get("/api/v1/agent-sessions").status_code == 200
         tools = {t for t in kind_gates._listed_tools(c) if t.startswith("coffer__")}
         text = kind_gates._instructions(c)

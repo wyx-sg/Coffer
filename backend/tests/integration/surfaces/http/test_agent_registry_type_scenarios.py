@@ -53,29 +53,6 @@ def _audit_count(c: TestClient) -> int:
 
 
 # ---------------------------------------------------------------------------
-# agent-registry (parent)
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.acceptance(
-    spec="agent-registry",
-    scenario="return an empty scan when the agent has no native memory on disk",
-)
-def test_native_memory_scan_without_layout_on_disk_is_empty_and_unaudited(tmp_path, monkeypatch):
-    (tmp_path / ".claude").mkdir()  # no projects/ directory at all
-    app = _app(tmp_path, monkeypatch, 61100)
-    with _client(app) as c:
-        uid = _register(c, "claude_code", "cc")
-        before = _audit_count(c)
-
-        r = c.get(f"/api/v1/agents/{uid}/native-memory")
-
-        assert r.status_code == 200, r.text
-        assert r.json()["items"] == []
-        assert _audit_count(c) == before
-
-
-# ---------------------------------------------------------------------------
 # agent-registry/claude-code
 # ---------------------------------------------------------------------------
 
@@ -234,30 +211,6 @@ def _claude_session_line(sid: str, cwd: str, text: str) -> str:
             "message": {"role": "user", "content": text},
         }
     )
-
-
-@pytest.mark.acceptance(
-    spec="agent-registry/claude-code",
-    scenario="list sessions from projects and refuse a sibling as a memory store",
-)
-def test_a_sibling_of_a_memory_store_is_no_store(tmp_path, monkeypatch):
-    project = tmp_path / ".claude" / "projects" / "-work-repo"
-    (project / "memory").mkdir(parents=True)
-    (project / "memory" / "fact.md").write_text("a fact", encoding="utf-8")
-    (project / "s1.jsonl").write_text(
-        _claude_session_line("s1", "/work/repo", "set up auth"), encoding="utf-8"
-    )
-    app = _app(tmp_path, monkeypatch, 61160)
-    with _client(app) as c:
-        uid = _register(c, "claude_code", "cc")
-
-        sibling = c.get(f"/api/v1/agents/{uid}/native-memory/files", params={"dir": str(project)})
-        assert sibling.status_code == 404, sibling.text
-        # The real store beside it is readable — the refusal is about the shape.
-        store = c.get(
-            f"/api/v1/agents/{uid}/native-memory/files", params={"dir": str(project / "memory")}
-        )
-        assert store.status_code == 200, store.text
 
 
 # ---------------------------------------------------------------------------

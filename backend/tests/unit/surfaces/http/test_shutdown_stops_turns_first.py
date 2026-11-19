@@ -43,7 +43,7 @@ async def test_turns_are_stopped_before_the_engine_is_disposed(
     for name in (
         "stop_sync_worker",
         "stop_knowledge_sweep",
-        "stop_memory_sync_worker",
+        "stop_memory_worker",
         "shutdown_all_sessions",
     ):
         monkeypatch.setattr(app_shutdown, name, AsyncMock())
@@ -85,7 +85,7 @@ async def test_a_cancelled_step_is_not_logged_as_failed(
     for name in (
         "stop_sync_worker",
         "stop_knowledge_sweep",
-        "stop_memory_sync_worker",
+        "stop_memory_worker",
         "shutdown_all_sessions",
     ):
         monkeypatch.setattr(app_shutdown, name, AsyncMock())

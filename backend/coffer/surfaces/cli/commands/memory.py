@@ -73,8 +73,7 @@ mount(SPECS)
 
 @group("memory").command("session-start")
 def session_start() -> None:
-    """Print the memories a session started here is handed (run by the
-    session-start hook Coffer installs in each agent).
+    """Print the memories a session started here is handed (the agents' hook runs it).
 
     Reads the hook's JSON from standard input for the session's working
     directory, falling back to the current directory. Prints nothing outside
