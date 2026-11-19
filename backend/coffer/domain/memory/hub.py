@@ -1,23 +1,18 @@
-"""The memory hub's vocabulary: one entry per memory an agent wrote itself
-(spec memory "Keep every agent's memories in a hub in the vault").
+"""The memory hub's vocabulary (spec memory "Keep memory in one place in the
+vault"; ADR keep-memory-in-one-place-agents-write-themselves).
 
-The hub is a transport, not a curated store: every memory a registered agent
-on any of the person's machines wrote for itself is one Markdown file under
-``vault/memory/``, filed under a project named by a key that does not depend
-on the machine ("Identify a project by a key that does
-not depend on the machine"). Each machine writes the hub into the agents
-installed on it; the agents curate what they receive with their own built-in
-curation.
-
-Everything here is a plain value or a pure function. Rendering an entry as a
-file and reading one back is :mod:`coffer.infrastructure.memory.hub_store`'s.
+Memory is files. ``vault/memory/projects/<project>/`` holds one Markdown file
+per **topic**: memories that belong together and are used together, one per
+line, under a frontmatter of ``title``, ``type`` and ``updated``. Agents read
+and write these files with their own file tools by the rules the coffer-guide
+skill states; Coffer writes none of them except when the person edits one on
+the Memory page. Everything here is a plain value or a pure function.
 """
 
 from __future__ import annotations
 
-import hashlib
 import re
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 from coffer.domain.memory.errors import UnsafeMemoryPath
 from coffer.domain.memory.repository import normalise_remote
@@ -25,98 +20,83 @@ from coffer.domain.memory.repository import normalise_remote
 #: The folder holding one subfolder per project.
 PROJECTS = "projects"
 
-#: The memory types a hub entry carries. Claude Code's four; Codex's
-#: sections map onto ``user`` and ``project``.
+#: What a topic is about: the person, how to work with them, a project's state.
 TYPE_USER = "user"
 TYPE_FEEDBACK = "feedback"
 TYPE_PROJECT = "project"
-TYPE_REFERENCE = "reference"
-HUB_TYPES = frozenset({TYPE_USER, TYPE_FEEDBACK, TYPE_PROJECT, TYPE_REFERENCE})
+TYPES = (TYPE_USER, TYPE_FEEDBACK, TYPE_PROJECT)
 
-#: The agent types the hub knows a reader and a writer for.
-CLAUDE_CODE = "claude_code"
-CODEX = "codex"
-AGENT_LABELS = {CLAUDE_CODE: "Claude Code", CODEX: "Codex"}
+#: The longest line a topic keeps: a memory is a sentence or two.
+MAX_LINE = 400
 
 _UNSAFE_FOLDER_CHARS = re.compile(r"[^A-Za-z0-9._-]+")
-_SLUG_CHARS = re.compile(r"[^a-z0-9]+")
 _DOTS_ONLY = re.compile(r"^\.+$")
-_ID = re.compile(r"^[0-9a-f]{16}$")
-#: A title slug's longest form; a file name stays readable in a listing.
-SLUG_MAX = 48
+_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}")
 
 
 @dataclass(frozen=True)
-class Origin:
-    """Where a hub entry came from: the only machine and agent that may change
-    or delete it ("Publish only what the origin agent wrote, and only from its
-    machine")."""
+class Topic:
+    """One memory file as the page and the session-start hook read it."""
 
-    machine: str
-    agent: str
-    #: The source's own identity on that machine: a Claude Code topic file's
-    #: path under its config directory, or a Codex file plus bullet anchor.
-    source: str
-
-
-@dataclass(frozen=True)
-class HubEntry:
-    """One memory, as the hub holds it.
-
-    ``body`` is stored portable ("Store paths in a memory portably"): the
-    repository root it was learned in is ``<repo>`` and the home directory
-    ``~``.
-    """
-
-    id: str
-    origin: Origin
-    #: The project key (``github.com/acme/payments``).
+    #: The project folder under ``projects/``.
     project: str
-    type: str
+    #: The file name, ``.md`` included.
+    name: str
     title: str
-    description: str
+    type: str
+    #: ``YYYY-MM-DD``, or ``""`` when the file names none.
+    updated: str
     body: str
-    created_at: str
-    updated_at: str
-
-    @property
-    def folder(self) -> str:
-        """The hub-relative folder this entry is filed under."""
-        return f"{PROJECTS}/{project_folder(self.project)}"
+    #: What breaks the format, in plain words; empty when the file follows it.
+    problems: tuple[str, ...] = ()
 
     @property
     def path(self) -> str:
-        """The hub-relative path of this entry's file."""
-        return f"{self.folder}/{check_id(self.id)}.md"
-
-    def same_content(self, other: HubEntry) -> bool:
-        """Whether ``other`` says the same thing, ignoring the timestamps."""
-        return replace(self, created_at="", updated_at="") == replace(
-            other, created_at="", updated_at=""
-        )
+        """The hub-relative path of this file."""
+        return f"{PROJECTS}/{self.project}/{self.name}"
 
 
-def entry_id(machine: str, agent_type: str, source_identity: str) -> str:
-    """The stable id of the memory ``source_identity`` names.
+def read_topic(project: str, name: str, frontmatter: dict[str, object], body: str) -> Topic:
+    """A topic from its parsed file, with what breaks the format named.
 
-    A re-read of an unchanged source maps to the same id, so an edit is an
-    update, not a new entry; the machine and agent are part of it so two
-    machines never mint one id.
+    Lenient: a file that breaks the format is still read and shown — the
+    page flags it and a tidy fixes it — so nothing an agent wrote is lost
+    because one field is missing.
     """
-    raw = "\0".join((machine, agent_type, source_identity)).encode("utf-8")
-    return hashlib.sha256(raw).hexdigest()[:16]
+    title = str(frontmatter.get("title") or "").strip()
+    kind = str(frontmatter.get("type") or "").strip()
+    updated = _date(frontmatter.get("updated"))
+    text = body.strip("\n")
+    problems: list[str] = []
+    if not title:
+        problems.append("no title")
+    if kind not in TYPES:
+        problems.append("type is not user, feedback or project")
+    if not updated:
+        problems.append("no updated date")
+    if not text.strip():
+        problems.append("no memories")
+    elif any(len(line) > MAX_LINE for line in text.splitlines()):
+        problems.append(f"a line longer than {MAX_LINE} characters")
+    return Topic(
+        project=project,
+        name=name,
+        title=title or name.removesuffix(".md"),
+        type=kind if kind in TYPES else "",
+        updated=updated,
+        body=text,
+        problems=tuple(problems),
+    )
 
 
-def check_id(value: str) -> str:
-    """``value`` when it is a hub entry id, else ``UnsafeMemoryPath``: an id
-    read back from a hub file becomes a file name."""
-    if not _ID.fullmatch(value or ""):
-        raise UnsafeMemoryPath(value, "not a memory id")
-    return value
+def _date(value: object) -> str:
+    text = str(value or "").strip()
+    match = _DATE.match(text)
+    return match.group(0) if match else ""
 
 
 def hub_project_key(*, remote_url: str, root_name: str) -> str:
-    """The key a repository's memories are filed under in the hub.
+    """The key a repository's memories are filed under.
 
     The normalised ``origin`` URL when there is one, so two clones on two
     machines agree; the repository directory's own name otherwise, because a
@@ -129,10 +109,9 @@ def hub_project_key(*, remote_url: str, root_name: str) -> str:
 
 
 def project_folder(key: str) -> str:
-    """The hub folder of the project ``key``: every character outside
+    """The folder of the project ``key``: every character outside
     ``[A-Za-z0-9._-]`` becomes ``-`` (``github.com/acme/payments`` →
-    ``github.com-acme-payments``). The key itself is in each entry, so the
-    folder name never has to be decoded."""
+    ``github.com-acme-payments``)."""
     folder = _UNSAFE_FOLDER_CHARS.sub("-", key).strip("-")
     return check_segment(folder)
 
@@ -150,35 +129,25 @@ def check_segment(segment: str) -> str:
     return segment
 
 
-def title_slug(title: str) -> str:
-    """A short file-name slug from a title."""
-    slug = _SLUG_CHARS.sub("-", title.lower()).strip("-")[:SLUG_MAX].strip("-")
-    return slug or "memory"
-
-
-def one_line(text: str, limit: int = 200) -> str:
-    """``text`` on one line, cut to ``limit`` characters."""
-    flat = " ".join(text.split())
-    return flat if len(flat) <= limit else flat[: limit - 1].rstrip() + "…"
+def check_file_name(name: str) -> str:
+    """A memory file's name: a safe segment ending in ``.md``."""
+    check_segment(name)
+    if not name.endswith(".md"):
+        raise UnsafeMemoryPath(name, "not a Markdown file")
+    return name
 
 
 __all__ = [
-    "AGENT_LABELS",
-    "CLAUDE_CODE",
-    "CODEX",
-    "HUB_TYPES",
+    "MAX_LINE",
     "PROJECTS",
+    "TYPES",
     "TYPE_FEEDBACK",
     "TYPE_PROJECT",
-    "TYPE_REFERENCE",
     "TYPE_USER",
-    "HubEntry",
-    "Origin",
-    "check_id",
+    "Topic",
+    "check_file_name",
     "check_segment",
-    "entry_id",
     "hub_project_key",
-    "one_line",
     "project_folder",
-    "title_slug",
+    "read_topic",
 ]
