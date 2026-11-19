@@ -100,7 +100,6 @@ function route(path: string): unknown {
       ],
     };
   if (p.endsWith("/plugins")) return { items: [{ id: "x@m", marketplace: "m", enabled: true }] };
-  if (p.endsWith("/native-memory")) return { items: [{}, {}] };
   if (p.endsWith("/transcripts"))
     return {
       total: 412,
