@@ -379,19 +379,30 @@ async def test_web_conversation_gets_the_model_note_only(tmp_path) -> None:  # t
 
 
 @pytest.mark.asyncio
-@pytest.mark.acceptance(spec="memory", scenario="a channel turn carries no memory from Coffer")
-async def test_a_channel_turn_carries_no_memory_from_coffer(tmp_path) -> None:  # type: ignore[no-untyped-def]
-    """Coffer puts no memory into a turn: a channel turn's Claude Code starts
-    with the same environment as one the developer drives, and its system
-    prompt names no memory. Its memory is what Claude Code reads itself."""
+@pytest.mark.acceptance(
+    spec="memory", scenario="a conversation in Coffer carries the memories in its system prompt"
+)
+async def test_a_turn_carries_its_projects_memories_once(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """A turn Coffer starts carries the project's memories in its system prompt,
+    channel or not, and tells Coffer's own session-start hook not to hand them
+    again; a project with none adds nothing."""
     repo, engine = await _repo(tmp_path)
     channel = await repo.create(_conv(channel_uid=_TELEGRAM_UID))
     web = await repo.create(_conv())
+    memory = '<coffer-memory project="p">\nNever mock the vault.\n</coffer-memory>\n'
+    seen: list[str] = []
+
+    async def resolve(cwd: str) -> str:
+        seen.append(cwd)
+        return memory if cwd == str(tmp_path) else ""
+
     envs: dict[str, dict[str, str]] = {}
     prompts: dict[str, str] = {}
     for conv in (channel, web):
         factory, captured = _make_factory(_simple_messages())
-        provider = ClaudeSdkProvider(conversations=repo, session_factory=factory)
+        provider = ClaudeSdkProvider(
+            conversations=repo, session_factory=factory, resolve_memory=resolve
+        )
         await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
         adapter = await provider.build_adapter(conv.id)
         await _collect(adapter, _user_turn("hi", conv.id))
@@ -400,10 +411,13 @@ async def test_a_channel_turn_carries_no_memory_from_coffer(tmp_path) -> None:  
         }
         prompts[conv.id] = str(captured[0].system_prompt)
 
+    assert seen == [str(tmp_path), str(tmp_path)]
+    for conv in (channel, web):
+        assert "Never mock the vault." in prompts[conv.id]
+        assert envs[conv.id]["COFFER_MEMORY_IN_PROMPT"] == "1"
     # A channel's turn differs by one switch only: no background tasks.
-    assert envs[web.id] == {}
-    assert envs[channel.id] == {"CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1"}
-    assert "memory" not in prompts[channel.id].lower()
+    assert envs[channel.id].pop("CLAUDE_CODE_DISABLE_BACKGROUND_TASKS") == "1"
+    assert envs[channel.id] == envs[web.id]
 
     await engine.dispose()
 

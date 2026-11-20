@@ -242,3 +242,16 @@ def test_the_context_follows_the_sessions_repository(
         outside = tmp_path / "loose"
         outside.mkdir()
         assert c.get("/api/v1/memory/context", params={"cwd": str(outside)}).json()["text"] == ""
+
+
+@pytest.mark.acceptance(spec="memory", scenario="keep memory as files only")
+def test_memory_adds_no_table_or_kind(home: pathlib.Path) -> None:
+    import sqlite3
+
+    client = _client()
+    with client:
+        kinds = set(client.app.state.kinds)  # type: ignore[attr-defined]
+    with sqlite3.connect(home / "c.db") as db:
+        tables = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    assert tables and not [t for t in tables if "memory" in t]
+    assert "memory" not in kinds

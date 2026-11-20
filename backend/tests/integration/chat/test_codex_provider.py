@@ -308,20 +308,25 @@ async def test_build_adapter_puts_no_provider_key_in_codex_env(tmp_path: Any) ->
 
 
 @pytest.mark.asyncio
-@pytest.mark.acceptance(spec="memory", scenario="a channel turn carries no memory from Coffer")
 async def test_a_channel_turn_spawns_the_app_server_as_any_other_turn(tmp_path: Any) -> None:
-    """Coffer puts no memory into a turn: a channel turn's ``codex app-server``
-    starts with the same environment as one the developer drives, and its
-    memory is whatever Codex reads from its own memory directory."""
+    """A channel turn's ``codex app-server`` starts with the same environment
+    as one the developer drives; with no memories for the project, Coffer adds
+    nothing to it."""
     import asyncio
 
     repo, engine = await _repo(tmp_path)
     channel = await repo.create(_conv(channel_uid=_SEATALK_UID))
     web = await repo.create(_conv())
     envs: dict[str, dict[str, str] | None] = {}
+
+    async def none(_cwd: str) -> str:
+        return ""
+
     for conv in (channel, web):
         factory, _ = _make_factory()
-        provider = CodexAppServerProvider(conversations=repo, session_factory=factory)
+        provider = CodexAppServerProvider(
+            conversations=repo, session_factory=factory, resolve_memory=none
+        )
         await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
         adapter = await provider.build_adapter(conv.id)
         await asyncio.wait_for(_collect(adapter, _user_turn("hi", conv.id)), timeout=5)
