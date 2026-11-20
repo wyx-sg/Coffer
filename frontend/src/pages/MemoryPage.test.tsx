@@ -143,10 +143,15 @@ function renderPage(at = "/memory") {
   return render(ui);
 }
 
+// The list renders before its entries load, so a row is waited for, never read at once.
 const rowOf = (scope: HTMLElement, text: string) =>
-  within(scope)
-    .getAllByRole("row")
-    .find((r) => r.textContent?.includes(text)) as HTMLElement;
+  waitFor(() => {
+    const row = within(scope)
+      .queryAllByRole("row")
+      .find((r) => r.textContent?.includes(text));
+    expect(row).toBeDefined();
+    return row as HTMLElement;
+  });
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -183,11 +188,11 @@ describe("MemoryPage — scopes and memories", () => {
     expect(list).toHaveTextContent("github.com/me/app");
     expect(list).toHaveTextContent("~/src/app");
     await waitFor(() => expect(api.listEntries).toHaveBeenCalledWith(PROJECT.key));
-    const own = rowOf(list, "Run make verify");
+    const own = await rowOf(list, "Run make verify");
     expect(own).toHaveTextContent("This machine");
     // A written copy says nothing; a copy the agent's curation removed says so.
     expect(own).not.toHaveTextContent(/Written|Removed/);
-    const other = rowOf(list, "Use uv");
+    const other = await rowOf(list, "Use uv");
     expect(other).toHaveTextContent("work-imac");
     expect(other).toHaveTextContent("Removed by Claude Code");
   });
@@ -206,7 +211,7 @@ describe("MemoryPage — scopes and memories", () => {
     });
     renderPage(`/memory?scope=${PROJECT.folder}`);
     const list = await screen.findByTestId("memory-list");
-    expect(rowOf(list, "Old lesson")).toHaveTextContent("Did not fit in Claude Code");
+    expect(await rowOf(list, "Old lesson")).toHaveTextContent("Did not fit in Claude Code");
   });
 
   test("a project not checked out here says when its memories are written", async () => {
