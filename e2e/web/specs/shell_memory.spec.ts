@@ -39,7 +39,11 @@ test("the Memory page shows the hub", async ({ page }) => {
     page.getByRole("heading", { name: "Memory", level: 1 }),
   ).toBeVisible();
   await expect(page.getByText(`Kept in ${folder_path}`)).toBeVisible();
-  await expect(page.getByRole("button", { name: "Tidy" })).toBeVisible();
+  // Tidy hands off to a managed agent; an e2e run installs none, so the
+  // handoff offers Copy prompt instead.
+  await expect(
+    page.getByRole("button", { name: /^(Tidy|Copy prompt)$/ }),
+  ).toBeVisible();
   if (projects.length === 0) {
     await expect(page.getByText("No memories yet")).toBeVisible();
   } else {
