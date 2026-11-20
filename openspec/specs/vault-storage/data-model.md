@@ -42,7 +42,6 @@ with no per-tree override, and `coffer path logs` prints the log directory).
     resources/agent/<name>.json  resources/channel/<uid>.json
     channel-peers.json                     {channel uid: {peers: [...]}}
     reach.json  engine.json  retention.json
-    memory-sync.json  memory-sync-preview.json
     skill-source-status.json
     secret/<ref>.enc                       machine-local ciphertext (proxy tokens)
     secret-boundary/{bindings,approvals,settings,times,last-used}.json
@@ -156,7 +155,7 @@ owner is renamed or deleted. Only one document per owner is admitted.
 | Area | Owner key | Own keys | Spec |
 | --- | --- | --- | --- |
 | `mcp-preferences` | `server_uid` | `disabled` — `{capability_type: [key, ...]}` | mcp-gateway |
-| `settings` (`internal-engine.json` only) | — | `transcribe_model`, `upkeep` (`memory_sync`); an older document's `model`, `curate_owner_machine_id`, `model_timeout_s`, `upkeep.curate` and `upkeep.distil` are retired and dropped on write, and its `upkeep.aggregate` carries over to `memory_sync` | internal-engine |
+| `settings` (`internal-engine.json` only) | — | `transcribe_model`; an older document's `model`, `curate_owner_machine_id`, `model_timeout_s` and `upkeep` are retired and dropped on write | internal-engine |
 
 Every state document carries `format_version` (1). A key this build does not
 know is a warning; an area it does not know is accepted as it is.
@@ -223,7 +222,7 @@ as a `disk` write.
 
 | Trailer | Value |
 | --- | --- |
-| `Coffer-Writer` | `user` (a person through a Coffer surface) · `disk` (found on disk: an editor, a shell, an agent's own file tools, a hand commit) · `agent` (an agent through a Coffer tool) · `daemon` (the daemon on its own account: a minted uid, a machine descriptor, the layout commit) · `curation` · `sync` (a round's merge) · `memory-sync` (the memory sync publishing to the hub; one commit per sync) |
+| `Coffer-Writer` | `user` (a person through a Coffer surface) · `disk` (found on disk: an editor, a shell, an agent's own file tools, a hand commit) · `agent` (an agent through a Coffer tool) · `daemon` (the daemon on its own account: a minted uid, a machine descriptor, the layout commit) · `curation` · `sync` (a round's merge) |
 | `Coffer-Operation` | what the commit did: `create`, `update`, `delete`, `rename`, `edit`, `restore`, `mint-uid`, `layout`, `sync`, `baseline`, and each kind's own words |
 | `Coffer-Actor` | the audit actor of the operation |
 | `Coffer-Agent` | the agent, when the writer is `agent`; for a curation pass, the author of the item it curated |
@@ -277,8 +276,6 @@ empty, because local state can be set again.
 | `reach.json` | `{uid: {enabled, agents: [uid] \| null}}` | resource-framework |
 | `engine.json` | `{updated_at}` | internal-engine |
 | `retention.json` | `{table: {retention_days, last_pruned_at, last_pruned_rows, updated_at}}` | resource-framework |
-| `memory-sync.json` | the memory sync's ledger: `{version, previewed, codex_imports_claude, sources, copies, delivered, last_synced_at, last_report}` | memory |
-| `memory-sync-preview.json` | a pending preview of a first or large sync | memory |
 | `skill-source-status.json` | `{skill uid: {checked_at, last_success_at, error, latest_commit, commits_ahead, files_changed, dismissed_commit}}` | skill-manager |
 | `secret-boundary/*.json` | bindings, approvals, settings, first-stored times, last-used times | secret |
 | `sync/remote.json`, `sync/round.json` | the remote; the round waiting for a person | vault-sync |

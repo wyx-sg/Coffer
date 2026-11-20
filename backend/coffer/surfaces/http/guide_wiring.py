@@ -20,7 +20,7 @@ from collections.abc import Awaitable, Callable
 
 from coffer.application.features import FeatureService
 from coffer.application.skill.builtin_seed import BuiltinSkillSeed
-from coffer.domain.features import KNOWLEDGE
+from coffer.domain.features import KNOWLEDGE, MEMORY
 
 _log = logging.getLogger(__name__)
 
@@ -64,8 +64,8 @@ class BuiltinGuide:
 
 
 #: The features whose switch changes what the guide documents: ``knowledge``
-#: carries the catalogue.
-GUIDE_FEATURES = frozenset({KNOWLEDGE})
+#: carries the catalogue, ``memory`` the rules for writing memory.
+GUIDE_FEATURES = frozenset({KNOWLEDGE, MEMORY})
 
 
 def follow_guide_features(guide: BuiltinGuide, features: FeatureService) -> None:

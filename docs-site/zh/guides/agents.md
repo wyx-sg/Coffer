@@ -14,7 +14,7 @@ Coffer 共享的一切——MCP 服务器、技能、知识、记忆、模型提
 - 往里面写入一个 `coffer` MCP 条目，让智能体通过[同一个网关](/zh/guides/mcp-servers)访问所有上游 MCP 服务器；
 - 把[技能](/zh/guides/skills)链接进它的 `skills/` 文件夹；
 - 把[模型提供商](/zh/guides/providers)投射到它的原生配置里；
-- 在一个地方展示它的配置文件、MCP 条目、插件、原生记忆和会话。
+- 在一个地方展示它的配置文件、MCP 条目、插件和会话。
 
 Coffer 支持六种智能体类型：
 
@@ -35,7 +35,7 @@ Coffer 支持六种智能体类型：
 
 Antigravity 的 App、`agy` CLI 和 IDE 读的是同一个个人配置文件夹 `~/.gemini/config`。Coffer 只在这里工作：把 `coffer` 条目写进 `mcp_config.json`，把技能链接进 `skills/`，并在智能体的**配置文件** tab 里展示 `mcp_config.json`、`config.json`、`AGENTS.md`、`rules/` 和 `hooks.json`。Coffer 的条目带 `"timeoutSeconds": 86400`，因为 Antigravity 默认三分钟就会中止一次工具调用，而 Coffer 的工具可能要等你处理。Antigravity 第一次调用 Coffer 的工具时会问你；在那里允许与否由你决定，Coffer 不替它写权限规则。
 
-Antigravity 只能用 Google 托管的模型，没有存放学到的记忆的地方，也没有公开它把对话存在哪里，所以它在 Coffer 里没有[模型提供商](/zh/guides/providers)、没有记忆同步、也没有会话列表。Google 不支持在个人套餐下把 `agy` 包进其他工具里运行，所以[对话](/zh/guides/chat)、[消息渠道](/zh/guides/channels)和定时任务里都不提供 Antigravity。Coffer 从不读取 Antigravity 自己的数据文件夹（`~/.gemini/antigravity`、`antigravity-cli`、`antigravity-ide`），那里存着它的对话和登录信息。原因见[决策记录](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/antigravity-joins-at-its-config-layer-only.md)。
+Antigravity 只能用 Google 托管的模型，没有会话开始钩子，也没有公开它把对话存在哪里，所以它在 Coffer 里没有[模型提供商](/zh/guides/providers)、拿不到[记忆](/zh/guides/memory)、也没有会话列表。Google 不支持在个人套餐下把 `agy` 包进其他工具里运行，所以[对话](/zh/guides/chat)、[消息渠道](/zh/guides/channels)和定时任务里都不提供 Antigravity。Coffer 从不读取 Antigravity 自己的数据文件夹（`~/.gemini/antigravity`、`antigravity-cli`、`antigravity-ide`），那里存着它的对话和登录信息。原因见[决策记录](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/antigravity-joins-at-its-config-layer-only.md)。
 
 ### 每种类型一个智能体 {#one-agent-per-type}
 
@@ -44,7 +44,7 @@ Antigravity 只能用 Google 托管的模型，没有存放学到的记忆的地
 除了类型，智能体唯一的设置就是**配置目录**，外加[模型绑定](#models)。注册时默认使用该类型的标准目录（见上表），除非你另行指定。把 Coffer 指向别的目录，是把这唯一的智能体挪过去，绝不会新增第二个。注册一个已注册过的类型会被拒绝，返回 `409 AGENT_TYPE_REGISTERED`。
 
 ::: info 智能体自己的文件才是真相来源
-Coffer 从不把智能体的配置复制进自己的存储。配置文件、MCP 条目、插件和原生记忆，每次查看时都从磁盘读取，会话则由智能体自己列出。智能体记录本身只保存类型、配置目录和模型绑定。
+Coffer 从不把智能体的配置复制进自己的存储。配置文件、MCP 条目和插件，每次查看时都从磁盘读取，会话则由智能体自己列出。智能体记录本身只保存类型、配置目录和模型绑定。
 :::
 
 ## 注册智能体 {#register-an-agent}
@@ -209,7 +209,8 @@ Coffer 只通过一小组有文档说明的面接触智能体的文件：
 | 智能体配置里的 MCP 条目 | 是 | 安装/卸载 `coffer`、移除、纳入托管 |
 | 插件 | 清单和启用状态 | 启用开关；按该类型自己的方式卸载 |
 | 模型提供商 key | 是（每轮调和都会检查） | 当你切换[提供商](/zh/guides/providers)时，以及把值已过时的投射重新对齐时 |
-| 原生记忆库 | 是 | 只写自己的副本，在开启[记忆同步](/zh/guides/memory)时 |
+| `settings.json` / `hooks.json` 里的钩子 | 只为找到自己的那个 | 一个 `SessionStart` 钩子，在开启[记忆](/zh/guides/memory)时 |
+| 智能体自己的记忆 | 从不 | 从不 |
 | 会话（智能体自己的对话记录） | 是，通过智能体 | 仅在你要求时重命名和删除，通过智能体 |
 | Codex `auth.json` | 从不 | 从不 |
 
@@ -289,7 +290,7 @@ Coffer 会把它写入的每个文件的上一版内容保存在 `~/.coffer/conf
 - **技能投递到 `~/.agents/skills`。** 三者都从那里读个人技能（Cursor 和 OpenCode 还读 `~/.claude/skills`），Codex 也是。Coffer 在这个共享文件夹里每个技能只放一个链接，只要技能的[生效范围](/zh/guides/skills)包含任何一个读这个文件夹的智能体，就投递过去。所以一个生效范围只写了 Codex 的技能，在装了 Cursor、OpenCode 或 DeepSeek Harness 时也会被它们看到。
 - **OpenCode** 1.x 和 2.x 的 MCP 表名字不同。Coffer 用 1.x 形状（`mcp.coffer`）写自己的条目，2.x 仍然能读；两种形状的条目都会列出。`mcp.servers` 下的 2.x 条目可以像其他条目一样移除和纳入托管。
 - **DeepSeek Harness** 用 YAML 补丁层组合配置，里面可能有 `!!js` 表达式，所以 Coffer 从不重写整个文件。它自己的那一行放在[各写到哪里](#what-gets-written-where)里那段带标记的内容中，连接和断开只替换这一段。其他 MCP 行会列出，但不能在 Coffer 里移除或纳入托管（`MCP_ENTRY_NOT_EDITABLE`）：请自己编辑 `cordis.patch.yml`。Coffer 只往顶层是块状列表（`- …`）的文件里加这一段；流式写法的文件会被拒绝，返回 `CONFIG_FILE_FORMAT_INVALID`。
-- **暂不支持：** 让这些智能体使用 Coffer 的[模型提供商](/zh/guides/providers)，从[对话](/zh/guides/chat)、[消息渠道](/zh/guides/channels)或[定时任务](/zh/guides/scheduled-tasks)运行它们，[记忆](/zh/guides/memory)同步，会话列表，插件和 Hook。它们的智能体页面没有模型部分，也没有插件、Hook、记忆或会话 tab。
+- **暂不支持：** 让这些智能体使用 Coffer 的[模型提供商](/zh/guides/providers)，从[对话](/zh/guides/chat)、[消息渠道](/zh/guides/channels)或[定时任务](/zh/guides/scheduled-tasks)运行它们，[记忆](/zh/guides/memory)钩子，会话列表，插件和 Hook。它们的智能体页面没有模型部分，也没有插件、Hook 或会话 tab。
 
 ## 插件 {#plugins}
 
@@ -317,7 +318,7 @@ Coffer 从不写 Claude Code 自己的清单文件。当 `claude` CLI 不在 `PA
 
 ## Hook {#hooks}
 
-**Hooks** tab 展示智能体将运行的每个 Hook，直接从智能体的文件读取：每个 Hook 的事件、matcher、命令，以及它来自哪里——智能体自己的某个设置文件，或某个插件（按名字）。只包含已开启的插件，因为停用插件的 Hook 不会运行。项目自己设置里的 Hook 不显示，因为 Coffer 不知道你在哪些仓库里使用这个智能体。Coffer 不安装自己的 Hook。
+**Hooks** tab 展示智能体将运行的每个 Hook，直接从智能体的文件读取：每个 Hook 的事件、matcher、命令，以及它来自哪里——智能体自己的某个设置文件，或某个插件（按名字）。只包含已开启的插件，因为停用插件的 Hook 不会运行。项目自己设置里的 Hook 不显示，因为 Coffer 不知道你在哪些仓库里使用这个智能体。[记忆](/zh/guides/memory)开启时，列表里还有 Coffer 的那一个会话开始钩子，它运行 `coffer memory session-start`。
 
 | | Claude Code | Codex |
 | --- | --- | --- |
@@ -341,12 +342,12 @@ Coffer 从不写 Claude Code 自己的清单文件。当 `claude` CLI 不在 `PA
 
 ## Web 界面中的智能体页面 {#the-agent-page-in-the-web-ui}
 
-智能体页面以智能体类型寻址（`/agents/claude_code`、`/agents/codex`、`/agents/antigravity`、`/agents/cursor`、`/agents/opencode`、`/agents/deepseek_harness`）。页面头部有智能体的图标、名字、一个状态标签和 **⋯** 菜单——名字下面没有说明行——它也永远不会变成修复按钮。下面是八个 tab，都不带数量。六个在标签栏里，各有自己的地址：**总览**（`/agents/<type>`）、**技能**、**MCP 服务器**、**Hooks**、**配置文件**和**会话**（`…/skills`、`…/mcp-servers`、`…/hooks`、`…/config`、`…/sessions`）。**更多**里放最少用的两个，**插件**和**记忆**（`…/plugins`、`…/memory`）；其中一个打开时，**更多**会显示它的名字并带下划线，**更多**上的警告点表示里面有 tab 需要处理。没有模型 tab。
+智能体页面以智能体类型寻址（`/agents/claude_code`、`/agents/codex`、`/agents/antigravity`、`/agents/cursor`、`/agents/opencode`、`/agents/deepseek_harness`）。页面头部有智能体的图标、名字、一个状态标签和 **⋯** 菜单——名字下面没有说明行——它也永远不会变成修复按钮。下面是七个 tab，都不带数量。六个在标签栏里，各有自己的地址：**总览**（`/agents/<type>`）、**技能**、**MCP 服务器**、**Hooks**、**配置文件**和**会话**（`…/skills`、`…/mcp-servers`、`…/hooks`、`…/config`、`…/sessions`）。**更多**里放最少用的**插件**（`…/plugins`）；它打开时，**更多**会显示它的名字并带下划线，**更多**上的警告点表示它需要处理。没有模型 tab。
 
 **总览**是单列，从上到下：
 
 1. **连接**——[连接](#connect-an-agent-to-coffer)的网关条目，以及当前状态所需的那一个按钮。
-2. **这个智能体能用什么**——六张卡片，三列两行：**MCP 服务器**、**技能**、**配置文件**、**插件**、**Hooks** 和**记忆**。每张显示数量、一条事实，以及当智能体自己的东西等着你看时的警告「N 个待查看」；整张卡片点开对应 tab。
+2. **这个智能体能用什么**——五张卡片：**MCP 服务器**、**技能**、**配置文件**、**插件**和 **Hooks**。每张显示数量、一条事实，以及当智能体自己的东西等着你看时的警告「N 个待查看」；整张卡片点开对应 tab。
 3. **模型**——**提供商**、**模型**和**路径**（经由 Coffer 的中转，带**测试**；或直连），以及**更改…**。
 4. **详情**——**版本**、**配置目录**、**UID** 和**注册于**。智能体的名字就是类型，所以没有名字或标题可编辑。
 
@@ -362,14 +363,7 @@ Coffer 从不写 Claude Code 自己的清单文件。当 `claude` CLI 不在 `PA
 
 在**模型**下面，Coffer 会自动用选中的模型、按智能体实际的调用方式测试提供商（Claude Code 总是走 Anthropic 兼容接口，只提供 OpenAI 兼容接口的提供商会在这里失败）——**正在测试连接…**，然后是带用时的**连接正常**，或带原因和**重试**的**连接失败**。针对这一对提供商和模型的测试通过之前，**审阅改动**不可用（内置登录不需要测试），旁边有一行说明原因。通过后它会打开每个文件将增删的确切行，并注明只有这些行会变、会在 Coffer 的文件夹里保留一份备份副本；**应用**才会写入。如果审阅画出之后文件在磁盘上变了——智能体重写了它，或你编辑了它——应用会拒绝、什么都不写，说明哪个文件变了，并提供**重新加载预览**。应用成功后会提示：重启该智能体后生效，已打开的会话仍用原来的设置。提供商的**使用方**列表里的链接（**Codex › 更改模型**）会在到达时直接打开这个表单。
 
-### 原生记忆和会话 {#native-memory-and-sessions}
-
-**记忆** tab 以只读方式列出智能体自己的记忆库：
-
-- **Claude Code：** 每个项目一个库，位于 `<config_dir>/projects/<slug>/memory/`，标注真实的项目目录。
-- **Codex：** 全局的 `<config_dir>/memories/MEMORY.md`，按它把任务组路由到的项目拆成每项目一行（这里会显示，但记忆同步不读它）；v2 记忆是 `<config_dir>/memories_v2/memory_summary.md`，按其中列出的工作所在的项目每项目一行。
-
-打开一行会在文件树里显示该库的文件，并带只读预览。开启[记忆同步](/zh/guides/memory)时，这些库里还有 Coffer 从你其他智能体写入的内容：Claude Code 是 `MEMORY.md` 里的一个标记区块，Codex 是它每个记忆文件夹里的 `extensions/coffer/`。Coffer 同步了什么、每份副本写到了哪里，在**记忆**页上查看。
+### 会话 {#sessions}
 
 **会话** tab 列出智能体自己的会话——你在终端或应用里跑的，以及[消息渠道](/zh/guides/channels)发起的——带标题、智能体、工作目录和最近活动时间。Coffer 向智能体自己要这份列表（Claude Code 的会话列表，Codex 的 `thread/list`），不解析智能体的文件。搜索匹配标题和目录。属于某个消息渠道对话的会话还会显示它的消息渠道，轮次运行时显示**运行中**，并带行内**停止**。
 
@@ -379,9 +373,7 @@ Coffer 从不写 Claude Code 自己的清单文件。当 `claude` CLI 不在 `PA
 
 Claude Code 会删除超过 `cleanupPeriodDays`（默认约 30 天）没有动过的会话，已经没有的会话会从这个列表里消失。想保留更久，请在 Claude Code 的 `settings.json` 里调大它；见[对话](/zh/guides/chat#chat-and-the-agent-s-own-sessions)。
 
-原生记忆库是普通文件；**记忆** tab 会显示每个库所在的文件夹，你可以用自己的工具读取其中的文件。
-
-Coffer 不展示会话文本：读一个会话要去智能体自己的界面。Coffer 从不把会话写入、存储或发送到任何地方；在原生记忆里，它只写自己的记忆同步副本。
+Coffer 不展示会话文本：读一个会话要去智能体自己的界面。Coffer 从不把会话写入、存储或发送到任何地方，也从不读写智能体自己的记忆。
 
 ## 智能体上的技能 {#skills-on-an-agent}
 

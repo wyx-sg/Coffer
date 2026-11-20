@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-29
 **Deciders**: Yuxing Wu
-**Related**: [Per-Agent Behaviour Lives in One Descriptor Record per Agent](agent-descriptor-manifest.md), [LLM Connections Are Projected Into Each Agent's Own Config File](provider-connections-projected-into-agent-config.md), [Coffer Drives Claude Code Through the Agent SDK and Codex Through `codex app-server`](driving-agents-through-sdk-and-app-server.md), [Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault](sync-memory-into-each-agents-own-memory.md), [Skills Reach an Agent as a Directory Link to One Master Folder](cross-platform-skill-delivery.md), [Writing Agent-Native Config Safely](writing-agent-native-config-safely.md), [One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database](one-level-triggered-reconciler-compares-parameters.md), research note [agent plugins](../research/agent-plugins.md), research note [agent chat clients](../research/agent-chat-clients.md), spec agent-registry "Support exactly the Claude Code, Codex, Antigravity, Cursor, OpenCode and DeepSeek Harness agent types", spec chat "Run Claude Code and Codex as subprocess providers on the type's one agent", spec provider-switching "Keep projection transforms pure", PR #87, PR #309
+**Related**: [Per-Agent Behaviour Lives in One Descriptor Record per Agent](agent-descriptor-manifest.md), [LLM Connections Are Projected Into Each Agent's Own Config File](provider-connections-projected-into-agent-config.md), [Coffer Drives Claude Code Through the Agent SDK and Codex Through `codex app-server`](driving-agents-through-sdk-and-app-server.md), [Keep Memory in One Place in the Vault, Written by the Agents Themselves](keep-memory-in-one-place-agents-write-themselves.md), [Skills Reach an Agent as a Directory Link to One Master Folder](cross-platform-skill-delivery.md), [Writing Agent-Native Config Safely](writing-agent-native-config-safely.md), [One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database](one-level-triggered-reconciler-compares-parameters.md), research note [agent plugins](../research/agent-plugins.md), research note [agent chat clients](../research/agent-chat-clients.md), spec agent-registry "Support exactly the Claude Code, Codex, Antigravity, Cursor, OpenCode and DeepSeek Harness agent types", spec chat "Run Claude Code and Codex as subprocess providers on the type's one agent", spec provider-switching "Keep projection transforms pure", PR #87, PR #309
 
 ## Context
 
@@ -49,7 +49,7 @@ and install-time copying defeats the one-master-folder delivery.
 
 ### Option A — Mechanism facets on the existing descriptor, projection as a registry (chosen)
 
-`AgentDescriptor` gains four optional **ports**, each `None` where the agent
+`AgentDescriptor` gains three optional **ports**, each `None` where the agent
 lacks the mechanism, each implemented in `infrastructure/` and bound to the
 record at the composition root (the domain record names the port type, never
 the implementation):
@@ -58,7 +58,6 @@ the implementation):
 | --- | --- | --- |
 | `projection` | Which asset types this agent can receive, where each lands, and how Coffer's asset is translated into the agent's native shape | the MCP injection spec, the skill subpath, the provider translation (`domain/provider/agent_projection.py`) |
 | `driver` | How Coffer runs a turn on this agent | the Claude Code and Codex chat drivers (`infrastructure/chat/drivers.py`) |
-| `memory_reader` | How the agent's native memory is read, so what the agent learned can enter the memory hub ([Sync Memory Into Each Agent's Own Memory](sync-memory-into-each-agents-own-memory.md)) | `domain/agent/native_memory.py`, `domain/agent/codex_memory.py`, `infrastructure/memory/readers/` |
 | `dependency_probe` | Whether the agent is installed here, which version, and what that version supports (model catalogue) | the program probe (`infrastructure/agent/program_probe.py`), the model catalogue probes |
 
 The projection facet is a **registry keyed by asset type × landing point**.
@@ -94,7 +93,7 @@ Kimi CLI and Qwen Code); it never replaces a direct driver.
   Facets can be contract-tested once against a fake agent directory.
 - **Cons.** The descriptor now references ports whose implementations live in
   `infrastructure/`, so binding moves to the composition root and the record
-  is no longer pure data. Four port interfaces are a contract to review. The
+  is no longer pure data. Three port interfaces are a contract to review. The
   capability declaration must be kept deliberately small or it becomes
   speculative design for agents Coffer does not support.
 - **Why it wins.** It finishes the descriptor ADR along the line it already
@@ -157,16 +156,18 @@ Drive every agent through the Agent Client Protocol, using adapters such as
 
 ## Decision
 
-Agent-specific **mechanisms** are four optional facets of the existing
-`AgentDescriptor` — `projection`, `driver`, `memory_reader`,
-`dependency_probe` — named by the record in `domain/` and bound to
+Agent-specific **mechanisms** are three optional facets of the existing
+`AgentDescriptor` — `projection`, `driver`, `dependency_probe` — named by the record in `domain/` and bound to
 implementations at the composition root. `projection` is a registry of
 asset type × landing point (user, project, shared), each with a pure
 translation and a minimal capability declaration. Provider protocols are
 declared per agent and may be empty; nothing maps one protocol to one agent
 type. Drivers are direct where the vendor offers a structured protocol; ACP
 serves only agents that speak it natively. The agent plugin format is not a
-projection target.
+projection target. Where Coffer's memory
+hook goes is plain data beside them, `session_hook`, since installing it needs
+no code of the agent's own ([Keep Memory in One Place in the Vault, Written by
+the Agents Themselves](keep-memory-in-one-place-agents-write-themselves.md)).
 
 The facets are bound in `surfaces/http/agent_facet_wiring.py`, which calls
 `bind_facets` in `domain/agent/facets.py`; each implementation declares the

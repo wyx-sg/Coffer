@@ -11,7 +11,6 @@ from coffer.surfaces.cli.registry import record
 
 record("cli list", "GET", "/clis", "CLIs · list")
 record("daemon status", "GET", "/daemon/status", "Settings · Daemon · status")
-record("daemon status", "GET", "/upkeep/runs", "Settings · Daemon · passes in flight")
 record("log audit", "GET", "/audit", "Activity · Audit")
 record("log mcp", "GET", "/mcp/invocations", "Activity · MCP calls")
 record("log call", "GET", "/mcp/invocations/{invocation_id}", "Activity · tool call drawer")

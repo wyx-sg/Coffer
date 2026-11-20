@@ -1,34 +1,19 @@
 // frontend/src/lib/api/memoryTypes.ts
 //
-// Wire types of the memory sync (`/api/v1/memory/sync/*`), every one an alias
-// of the generated contract (`generated/memory.ts`, from `openspec/specs/memory`'s
-// `api.openapi.yaml`, itself generated from
-// `backend/coffer/surfaces/http/memory/sync_routes.py`). Coffer keeps every
-// memory an agent wrote for itself in a hub in the vault and writes each one
-// into the person's other agents; there is no write shape for a memory's text:
-// the person edits memory in the agent's own memory directory.
+// Wire types of memory (`/api/v1/memory`), every one an alias of the generated
+// contract (`generated/memory.ts`, from `openspec/specs/memory`'s
+// `api.openapi.yaml`). Memory is one Markdown file per topic under
+// `vault/memory/projects/<project>/`, which agents write themselves; the page
+// reads them, and a person edits or deletes one.
 import type { components as MemoryWire } from "@/lib/api/generated/memory";
 
 type Schemas = MemoryWire["schemas"];
 
-/** What the Memory page reads: the switch-independent facts of the sync, the
- *  pending preview, the hub's projects and this machine's agents. */
-export type MemorySyncState = Schemas["MemorySyncStateOut"];
-
-/** One local agent: its writer's status and the copies
- *  Coffer holds in it on this machine, by state. */
-export type SyncAgent = Schemas["SyncAgentOut"];
-
-/** One project in the hub: how many memories, from which agent types, and
- *  where it is checked out here (`null`: held back). */
-export type SyncProject = Schemas["SyncProjectOut"];
-
-/** What one sync, write or undo did (the `memory_synced` details). */
-export type MemorySyncReport = Schemas["MemorySyncReportOut"];
-
-/** One hub entry with, per local agent type, its copy's state here. */
-export type HubEntry = Schemas["HubEntryOut"];
-export type HubEntryList = Schemas["HubEntryListOut"];
-/** One hub entry with its text and, per local agent, its copy's state and file. */
-export type HubEntryDetail = Schemas["HubEntryDetailOut"];
-export type EntryCopy = Schemas["EntryCopyOut"];
+/** What the Memory page reads: the projects, whether a tidy is open, and the Tidy prompt. */
+export type MemoryState = Schemas["MemoryStateOut"];
+/** One project folder: how many topic files, how many break the format, the newest `updated`. */
+export type MemoryProject = Schemas["MemoryProjectOut"];
+/** One topic file as the list shows it. */
+export type MemoryTopic = Schemas["MemoryTopicOut"];
+/** One topic file with its raw text and the digest an edit quotes. */
+export type MemoryFile = Schemas["MemoryFileOut"];

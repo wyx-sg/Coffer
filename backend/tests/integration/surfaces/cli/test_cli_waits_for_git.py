@@ -94,4 +94,3 @@ def test_daemon_status_reports_the_setup_state(
     res = CliRunner().invoke(app, ["daemon", "status", "--json"])
     body = json.loads(res.stdout)
     assert body["status"] == "setup" and body["setup"]["reason"] == "git_too_old"
-    assert body["passes_in_flight"] == []

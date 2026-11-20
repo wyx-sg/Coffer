@@ -65,7 +65,7 @@ Which class a resource belongs to is declared by its kind, with a per-row refine
 ├── manifest.json                       {"schema_version": 3}
 ├── resources/<kind>/<name>.json        mcp_server, skill, knowledge (a provider's is <uid>.json)
 ├── state/mcp-preferences/<server>.json the capabilities you switched off
-├── state/settings/internal-engine.json upkeep and speech-to-text model settings (absent = defaults)
+├── state/settings/internal-engine.json speech-to-text model setting (absent = defaults)
 ├── state/secret-notes/notes.json       each secret's label and description
 ├── state/cli-tools/tools.json          the command-line tools you added by hand, and your edits to required ones
 ├── knowledge/<collection>/…            Markdown documents and the pictures kept with uploads
@@ -114,7 +114,6 @@ What Coffer ignores in the repository is written into `.git/info/exclude`, never
 ├── engine.json                   when this machine last changed engine settings
 ├── retention.json                retention policy per prunable table
 ├── skill-source-status.json      what this machine last found at a Git-imported skill's source
-├── memory-sync.json              what the memory sync wrote into this machine's agents (and memory-sync-preview.json)
 ├── secret/                       machine-local ciphertext (proxy tokens), the not-a-secret list (plaintext-ignored.json)
 ├── secret-boundary/              bindings, approvals, switches, first-stored times
 ├── sync/remote.json              the one sync remote

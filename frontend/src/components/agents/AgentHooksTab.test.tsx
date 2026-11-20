@@ -2,8 +2,8 @@
 //
 // Spec agent-registry "List every hook in the agent's native config": the
 // agent's own hooks are one table with search and an Event filter, and a row
-// opens a read-only details dialog. Coffer installs no hook of its own, so the
-// tab has no Coffer block. Only the network boundary (`agentsApi`) is mocked.
+// opens a read-only details dialog. Coffer's one memory hook is listed like any
+// other hook, so the tab has no Coffer block. Only the network boundary (`agentsApi`) is mocked.
 import type { PropsWithChildren } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";

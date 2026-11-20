@@ -37,7 +37,7 @@ openspec/
 
 | 能力 | 负责什么 |
 | --- | --- |
-| [`agent-registry`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/agent-registry/spec.md) | 已注册的智能体、它们的配置文件、MCP 安装、插件、模型目录、原生记忆和对话记录 |
+| [`agent-registry`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/agent-registry/spec.md) | 已注册的智能体、它们的配置文件、MCP 安装、插件、模型目录和对话记录 |
 | `agent-registry/claude-code`、`agent-registry/codex` | 每种智能体类型如何实现这些切面 |
 | [`channels`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/channels/spec.md) | 通往智能体的消息渠道，与具体平台无关 |
 | `channels/telegram`、`channels/seatalk` | 各平台的具体机制 |
@@ -46,10 +46,10 @@ openspec/
 | [`daemon`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/daemon/spec.md) | Coffer 进程：每个保险库一个、发现机制、回环 HTTP 防护、提供界面、日志、终端安装 |
 | [`desktop-app`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/desktop-app/spec.md) | macOS 桌面壳：窗口、托盘、握手、检测或启动守护进程、`.dmg` |
 | [`experimental-features`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/experimental-features/spec.md) | 功能注册表、按机器的开关、关闭对应入口 |
-| [`internal-engine`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/internal-engine/spec.md) | 语音转文字模型，以及 Coffer 的机械维护任务 |
+| [`internal-engine`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/internal-engine/spec.md) | 语音转文字模型 |
 | [`knowledge`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/knowledge/spec.md) | 纯文件的知识集及其整理 |
 | [`mcp-gateway`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/mcp-gateway/spec.md) | 聚合在一个端点之后的上游 MCP 服务器 |
-| [`memory`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/memory/spec.md) | 通过保险库里的中心库，把每个智能体的原生记忆同步进其他智能体自己的记忆 |
+| [`memory`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/memory/spec.md) | 所有智能体共用一份记忆：保险库里由智能体写的主题文件，由钩子交给每个会话 |
 | [`provider-switching`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/provider-switching/spec.md) | 投射到每个智能体配置中的模型提供商连接 |
 | [`resource-framework`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/resource-framework/spec.md) | 与类型无关的资源模型、scope、审计日志、保留策略、最小 CLI 规则 |
 | [`skill-manager`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/skill-manager/spec.md) | 技能主存储以及向智能体的投递 |

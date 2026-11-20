@@ -65,7 +65,7 @@ flowchart TB
 | 已弃用的引擎处处禁止 | `llama_index`、`mem0`、`chromadb`、`sentence_transformers`、`sqlite_vec`、`fastembed`、`langgraph` 和 `langchain*` 系列包在任何地方都不能导入。Coffer 不做任何 embedding，也不运行自己的对话模型（它唯一的模型调用是一次普通的 HTTP 语音转文字请求），要重新引入就必须有意地修改这条契约。 |
 | Claude Agent SDK 限定 | 领域层、应用层和其他基础设施包不能导入 `claude_agent_sdk`。它的归宿是 `infrastructure/chat`（智能体适配器）和 `infrastructure/agent`（读取已安装智能体的目录）。 |
 
-当两个类型确实需要同一段代码时，它会搬到层根目录下一个与类型无关的包或模块里：`infrastructure/net/`（SSRF 防护）、`infrastructure/agent_files/`（`agent` 和 `memory` 共用的智能体对话记录读取器）。其他所有跨类型的东西，都通过消费方类型声明、组合根满足的端口来传递。比如对话平台声明的模型目录端口，对话平台用它读取智能体类型的模型目录，而无需导入智能体类型。
+当两个类型确实需要同一段代码时，它会搬到层根目录下一个与类型无关的包或模块里：`infrastructure/net/`（SSRF 防护）。其他所有跨类型的东西，都通过消费方类型声明、组合根满足的端口来传递。比如对话平台声明的模型目录端口，对话平台用它读取智能体类型的模型目录，而无需导入智能体类型。
 
 ## 组合根 {#the-composition-root}
 
@@ -73,7 +73,7 @@ flowchart TB
 
 ### 按类型显式接线 {#explicit-per-kind-wiring}
 
-没有插件发现，没有全局注册表，也没有导入时的副作用。每种注册的类型在它自己的应用层包里有一个以包名命名的工厂，它接收这个类型需要的服务，返回一个冻结的 [类型](/zh/architecture/resource-framework#kind)。注册表的键可以和包名不同：MCP 类型注册为 `"mcp_server"`。对话、记忆和同步不注册类型。`surfaces/http/` 里每种类型有一个接线模块，负责构建这个类型的服务、调用工厂，并把结果存进应用级的类型表。一个接线模块同时注册 `"agent"` 和 `"skill"`；`"provider"`、`"knowledge"`、`"mcp_server"` 和 `"channel"` 各有自己的接线模块；记忆同步有它自己的接线模块，由后台任务启动器调用。
+没有插件发现，没有全局注册表，也没有导入时的副作用。每种注册的类型在它自己的应用层包里有一个以包名命名的工厂，它接收这个类型需要的服务，返回一个冻结的 [类型](/zh/architecture/resource-framework#kind)。注册表的键可以和包名不同：MCP 类型注册为 `"mcp_server"`。对话、记忆和同步不注册类型。`surfaces/http/` 里每种类型有一个接线模块，负责构建这个类型的服务、调用工厂，并把结果存进应用级的类型表。一个接线模块同时注册 `"agent"` 和 `"skill"`；`"provider"`、`"knowledge"`、`"mcp_server"` 和 `"channel"` 各有自己的接线模块；记忆有它自己的接线模块，把它的钩子注册到协调器。
 
 资源服务在构建时拿到同一张表的引用，每次分发都读它。
 
@@ -120,7 +120,7 @@ backend/coffer/
 │   ├── knowledge/          # catalogue and file values
 │   ├── channel/            # channel config, envelopes
 │   ├── chat/               # conversation, message, attachment, turn events
-│   ├── memory/             # hub entries, project keys, portable paths, sync plan, reader protocol
+│   ├── memory/             # project keys, the topic format, the session text
 │   ├── provider/           # provider config, projection rules, local runtimes
 │   ├── model_proxy/        # the state the daemon pushes the model proxy
 │   ├── usage/              # usage records, stream usage readers, prices, ranges
@@ -132,7 +132,6 @@ backend/coffer/
 │   ├── retention_service.py # plus retention_registry.py, retention_worker.py
 │   ├── builtin_tools.py    # BuiltinTool and its registry
 │   ├── features.py         # FeatureService: pin, machine setting, default off
-│   ├── upkeep_runs.py      # passes in flight, in process
 │   ├── attention.py        # the cross-kind "needs you" list and its source port
 │   ├── reconcile/          # the unified reconciler: target port, loop, hints, drift source
 │   ├── events/             # the change feed: numbered hints, replay buffer, attention watch
@@ -146,7 +145,7 @@ backend/coffer/
 │   ├── knowledge/          # intake and upload ingest, wiki layout, change history, tidy hand-off, sweep, guide rendering
 │   ├── channel/            # adapter protocol, pairing, inbound, runtime
 │   ├── chat/               # turn orchestrator, runner, conversation service
-│   ├── memory/             # memory sync: publish, write, preview, undo, worker, upgrade removal
+│   ├── memory/             # the hub, the tidy, a turn's memory text, the hook reconcile target
 │   ├── provider/           # provider service, projection, projection target, proxy tokens and state
 │   ├── usage/              # usage ingest and reports
 │   ├── vault/              # validation rules, problems
@@ -161,14 +160,13 @@ backend/coffer/
 │   ├── logging/            # structlog setup, log files
 │   ├── media_retention.py  # age sweep for the two attachment media dirs
 │   ├── llm/                # speech-to-text over HTTP
-│   ├── agent_files/        # agent transcript readers shared by two kinds
 │   ├── mcp/                # upstream subprocess and HTTP clients
 │   ├── agent/              # agent config-file store
 │   ├── skill/              # master store, delivery engine
 │   ├── knowledge/          # paths, file tree, frontmatter, ripgrep
 │   ├── channel/            # Telegram and SeaTalk transports
 │   ├── chat/               # Claude SDK and Codex adapters, persistence
-│   ├── memory/             # native-memory readers and writers, hub store, ledger
+│   ├── memory/             # hub store, frontmatter, repository resolution, upgrade clean-up
 │   ├── provider/           # provider introspector, local-runtime detection
 │   ├── model_proxy/        # the local model proxy process and its supervisor
 │   ├── usage/              # the proxy's usage spool, as the daemon reads it

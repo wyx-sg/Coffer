@@ -1,42 +1,13 @@
-"""The one failure mode a memory reader has: it could not parse its source.
-
-Spec memory "Fail a broken reader loudly and in isolation" asks for this to
-fail loudly and in isolation — the offending file's
-path and the reason, so the surface can say exactly what broke, while
-everything else aggregation already holds keeps standing. `CofferError`
-(rather than a bare `Exception`, which is how the spec's contract sketches it)
-is the base every other domain error in this codebase already uses, and gives
-this one the `.code` the HTTP surface needs to map it to a status without a
-special case.
-"""
+"""The memory kind's errors."""
 
 from __future__ import annotations
 
 from coffer.domain.error_base import CofferError
 
 
-class UnreadableMemory(CofferError):  # noqa: N818
-    """One agent's native memory file could not be parsed.
-
-    Carries the path and the reason a human (or the surface) needs to see
-    what changed in the agent's own format — never raised with a half-parsed
-    result attached, and never for more than the one file it names.
-    """
-
-    code = "MEMORY_UNREADABLE"
-
-    def __init__(self, path: str, reason: str) -> None:
-        super().__init__(f"cannot read memory at {path!r}: {reason}")
-        self.path = path
-        self.reason = reason
-
-
 class UnsafeMemoryPath(CofferError):  # noqa: N818
-    """A path segment that is hidden, all dots, or otherwise unsafe.
-
-    See "Confine reads to registered agents' memory paths": every path built
-    from a source's or a hub entry's contents passes this guard.
-    """
+    """A path segment that is hidden, all dots, or otherwise unsafe: every
+    path built from a request passes this guard before anything is read."""
 
     code = "MEMORY_UNSAFE_PATH"
 
@@ -46,21 +17,24 @@ class UnsafeMemoryPath(CofferError):  # noqa: N818
         self.reason = reason
 
 
-class MemorySyncRunning(CofferError):  # noqa: N818
-    """A memory sync was asked for while one runs (spec memory "Sync on an
-    interval and on demand")."""
+class MemoryFileNotFound(CofferError):  # noqa: N818
+    """No memory file at that project and name. Maps to 404."""
 
-    code = "MEMORY_SYNC_RUNNING"
+    code = "MEMORY_FILE_NOT_FOUND"
 
-    def __init__(self) -> None:
-        super().__init__("a memory sync is already running")
+    def __init__(self, path: str) -> None:
+        super().__init__(f"no memory file {path!r}")
+        self.path = path
 
 
-class MemorySyncNoPreview(CofferError):  # noqa: N818
-    """**Write** or **Cancel** with no preview pending (spec memory "Preview
-    a first or large sync")."""
+class MemoryFileStale(CofferError):  # noqa: N818
+    """The file changed since the caller read it; nothing was written."""
 
-    code = "MEMORY_SYNC_NO_PREVIEW"
+    code = "MEMORY_FILE_STALE"
 
-    def __init__(self) -> None:
-        super().__init__("no memory sync preview is pending")
+    def __init__(self, path: str) -> None:
+        super().__init__(f"memory file {path!r} changed since it was read")
+        self.path = path
+
+
+__all__ = ["MemoryFileNotFound", "MemoryFileStale", "UnsafeMemoryPath"]

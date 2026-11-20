@@ -53,9 +53,6 @@ coffer agent [OPTIONS] COMMAND [ARGS]...
 | [`agent unmanaged-skill files`](#agent-unmanaged-skill-files) | The skill's files (read them with your own tools). |
 | [`agent unmanaged-skill adopt`](#agent-unmanaged-skill-adopt) | Make Coffer manage the skill. |
 | [`agent unmanaged-skill delete`](#agent-unmanaged-skill-delete) | Delete an unmanaged skill from the agent. |
-| [`agent native-memory`](#agent-native-memory) | What an agent keeps in its own memory files (read-only). |
-| [`agent native-memory list`](#agent-native-memory-list) | What the agent keeps in its own memory. |
-| [`agent native-memory files`](#agent-native-memory-files) | The memory files and their paths. |
 
 ## agent list
 
@@ -658,51 +655,4 @@ coffer agent unmanaged-skill delete [OPTIONS] UID SKILL
 | `UID` <span class="cli-chip">参数</span> | text | 必填 | The agent's name or uid |
 | `SKILL` <span class="cli-chip">参数</span> | text | 必填 | skill |
 | `--location` <span class="cli-chip">选项</span> | text |  |  |
-| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
-
-## agent native-memory
-
-What an agent keeps in its own memory files (read-only).
-
-<p class="cli-label">概要</p>
-
-```sh
-coffer agent native-memory [OPTIONS] COMMAND [ARGS]...
-```
-
-子命令：`list`, `files`。
-
-## agent native-memory list
-
-What the agent keeps in its own memory.
-
-<p class="cli-label">概要</p>
-
-```sh
-coffer agent native-memory list [OPTIONS] UID
-```
-
-<p class="cli-label">参数与选项</p>
-
-| 名称 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- |
-| `UID` <span class="cli-chip">参数</span> | text | 必填 | The agent's name or uid |
-| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
-
-## agent native-memory files
-
-The memory files and their paths.
-
-<p class="cli-label">概要</p>
-
-```sh
-coffer agent native-memory files [OPTIONS] UID
-```
-
-<p class="cli-label">参数与选项</p>
-
-| 名称 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- |
-| `UID` <span class="cli-chip">参数</span> | text | 必填 | The agent's name or uid |
-| `--dir` <span class="cli-chip">选项</span> | text |  | A folder under the agent's memory |
 | `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |

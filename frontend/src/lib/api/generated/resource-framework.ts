@@ -314,23 +314,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/upkeep/runs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Runs */
-        get: operations["list_runs_api_v1_upkeep_runs_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -872,46 +855,6 @@ export interface components {
              *     ]
              */
             agents: string[] | null;
-        };
-        /**
-         * UpkeepRunListOut
-         * @description Every pass in flight, oldest first. Empty means nothing is running.
-         */
-        UpkeepRunListOut: {
-            /** Runs */
-            runs: components["schemas"]["UpkeepRunOut"][];
-        };
-        /**
-         * UpkeepRunOut
-         * @description One pass in flight.
-         */
-        UpkeepRunOut: {
-            /**
-             * Done
-             * @description For a run that works through several items one pass at a time (memory's Update memory): the items finished so far. Null for a single pass, and for Update memory while it is still reading.
-             */
-            done: number | null;
-            /**
-             * Kind
-             * @description The kind whose pass this is: `memory`.
-             */
-            kind: string;
-            /**
-             * Name
-             * @description The uid of the partition or collection being rewritten, or `update` for a memory Update memory action as a whole.
-             */
-            name: string;
-            /**
-             * Started At
-             * Format: date-time
-             * @description When this daemon started the pass.
-             */
-            started_at: string;
-            /**
-             * Total
-             * @description For such a run: how many items were pending when it started.
-             */
-            total: number | null;
         };
     };
     responses: never;
@@ -1784,46 +1727,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PruneResultOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    list_runs_api_v1_upkeep_runs_get: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["UpkeepRunListOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

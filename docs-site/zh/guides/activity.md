@@ -90,7 +90,7 @@ Coffer 为自己保留三类记录：保险库变更的审计日志、经 MCP �
 coffer log audit                                   # newest 50
 coffer log audit --kind mcp_server --name filesystem
 coffer log audit --event-type secret_resolved --since 2026-09-01T00:00:00Z
-coffer log audit --event-type memory_synced --limit 20
+coffer log audit --event-type memory_hook_installed --limit 20
 coffer log audit --nature use --since 1d          # 只看密钥使用
 coffer log audit --trace 44e10b60da1b4f26         # one request's or turn's rows
 coffer log audit --json

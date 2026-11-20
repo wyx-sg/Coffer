@@ -136,7 +136,7 @@ def test_agents_are_told_about_the_tool_and_the_knowledge_root(home: pathlib.Pat
         assert "coffer__search_tools" in told
         for retired in ("coffer__write", "coffer__recall", "coffer__diagnose"):
             assert retired not in told
-        # Memory reaches an agent through its own native memory, not a path.
+        # Memory reaches a session through the memory hook, not a derived path.
         assert "derived/memory" not in told
         assert "coffer log" in told
         assert "coffer path logs" in told

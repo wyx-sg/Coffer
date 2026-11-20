@@ -8,9 +8,12 @@ info:
 servers:
 - url: http://127.0.0.1:38470
 paths:
-  /api/v1/memory/sync/codex-import:
-    put:
-      operationId: set_codex_import_api_v1_memory_sync_codex_import_put
+  /api/v1/memory:
+    get:
+      description: |-
+        The projects that hold memories, whether a tidy is open, and the
+        prompt **Tidy** hands to the agent.
+      operationId: memory_state_api_v1_memory_get
       parameters:
       - in: header
         name: x-coffer-token
@@ -20,14 +23,12 @@ paths:
           - type: string
           - type: 'null'
           title: X-Coffer-Token
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CodexImportIn'
-        required: true
       responses:
-        '204':
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryStateOut'
           description: Successful Response
         '422':
           content:
@@ -41,19 +42,60 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
-      summary: Set Codex Import
+      summary: Memory State
       tags:
       - memory
-  /api/v1/memory/sync/entries:
+  /api/v1/memory/context:
     get:
-      operationId: list_entries_api_v1_memory_sync_entries_get
+      description: What a session started in ``cwd`` is handed.
+      operationId: get_context_api_v1_memory_context_get
       parameters:
-      - description: A project key.
+      - description: A session's working directory.
         in: query
+        name: cwd
+        required: true
+        schema:
+          description: A session's working directory.
+          title: Cwd
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryContextOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Get Context
+      tags:
+      - memory
+  /api/v1/memory/projects/{project}:
+    get:
+      operationId: list_topics_api_v1_memory_projects__project__get
+      parameters:
+      - in: path
         name: project
         required: true
         schema:
-          description: A project key.
           title: Project
           type: string
       - in: header
@@ -69,7 +111,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/HubEntryListOut'
+                $ref: '#/components/schemas/MemoryTopicListOut'
           description: Successful Response
         '422':
           content:
@@ -83,19 +125,32 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
-      summary: List Entries
+      summary: List Topics
       tags:
       - memory
-  /api/v1/memory/sync/entries/{entry_id}:
-    get:
-      description: One memory's text and where each agent on this machine holds it.
-      operationId: get_entry_api_v1_memory_sync_entries__entry_id__get
+  /api/v1/memory/projects/{project}/{name}:
+    delete:
+      operationId: delete_file_api_v1_memory_projects__project___name__delete
       parameters:
       - in: path
-        name: entry_id
+        name: project
         required: true
         schema:
-          title: Entry Id
+          title: Project
+          type: string
+      - in: path
+        name: name
+        required: true
+        schema:
+          title: Name
+          type: string
+      - description: The digest the page read.
+        in: query
+        name: expected
+        required: true
+        schema:
+          description: The digest the page read.
+          title: Expected
           type: string
       - in: header
         name: x-coffer-token
@@ -105,40 +160,14 @@ paths:
           - type: string
           - type: 'null'
           title: X-Coffer-Token
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HubEntryDetailOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Get Entry
-      tags:
-      - memory
-  /api/v1/memory/sync/preview/cancel:
-    post:
-      operationId: cancel_preview_api_v1_memory_sync_preview_cancel_post
-      parameters:
       - in: header
-        name: x-coffer-token
+        name: x-coffer-actor
         required: false
         schema:
           anyOf:
           - type: string
           - type: 'null'
-          title: X-Coffer-Token
+          title: X-Coffer-Actor
       responses:
         '204':
           description: Successful Response
@@ -154,98 +183,24 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
-      summary: Cancel Preview
+      summary: Delete File
       tags:
       - memory
-  /api/v1/memory/sync/preview/write:
-    post:
-      operationId: write_preview_api_v1_memory_sync_preview_write_post
-      parameters:
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      - in: header
-        name: x-coffer-actor
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Actor
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MemorySyncReportOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Write Preview
-      tags:
-      - memory
-  /api/v1/memory/sync/run:
-    post:
-      description: '**Sync now**: 409 ``MEMORY_SYNC_RUNNING`` while a sync runs.'
-      operationId: sync_now_api_v1_memory_sync_run_post
-      parameters:
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      - in: header
-        name: x-coffer-actor
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Actor
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MemorySyncReportOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Sync Now
-      tags:
-      - memory
-  /api/v1/memory/sync/state:
     get:
-      operationId: sync_state_api_v1_memory_sync_state_get
+      operationId: get_file_api_v1_memory_projects__project___name__get
       parameters:
+      - in: path
+        name: project
+        required: true
+        schema:
+          title: Project
+          type: string
+      - in: path
+        name: name
+        required: true
+        schema:
+          title: Name
+          type: string
       - in: header
         name: x-coffer-token
         required: false
@@ -259,7 +214,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MemorySyncStateOut'
+                $ref: '#/components/schemas/MemoryFileOut'
           description: Successful Response
         '422':
           content:
@@ -273,15 +228,126 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
-      summary: Sync State
+      summary: Get File
       tags:
       - memory
-  /api/v1/memory/sync/undo:
+    put:
+      description: |-
+        Replace a memory file's text; refused ``MEMORY_FILE_STALE`` when it
+        changed since ``expected`` was read.
+      operationId: put_file_api_v1_memory_projects__project___name__put
+      parameters:
+      - in: path
+        name: project
+        required: true
+        schema:
+          title: Project
+          type: string
+      - in: path
+        name: name
+        required: true
+        schema:
+          title: Name
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemoryFileIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryFileOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Put File
+      tags:
+      - memory
+  /api/v1/memory/tidy/finish:
+    post:
+      description: Close the tidy and commit what it changed as one commit carrying the report.
+      operationId: finish_tidy_api_v1_memory_tidy_finish_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemoryTidyFinishIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryTidyFinishOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Finish Tidy
+      tags:
+      - memory
+  /api/v1/memory/tidy/start:
     post:
       description: |-
-        **Undo sync…**: removes Coffer's copies from this machine's agents and
-        turns automatic sync off.
-      operationId: undo_sync_api_v1_memory_sync_undo_post
+        Open a tidy: until it finishes, the edits under memory/ are kept for
+        one commit.
+      operationId: start_tidy_api_v1_memory_tidy_start_post
       parameters:
       - in: header
         name: x-coffer-token
@@ -291,20 +357,12 @@ paths:
           - type: string
           - type: 'null'
           title: X-Coffer-Token
-      - in: header
-        name: x-coffer-actor
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Actor
       responses:
         '200':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MemorySyncReportOut'
+                $ref: '#/components/schemas/MemoryTidyStatusOut'
           description: Successful Response
         '422':
           content:
@@ -318,38 +376,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
-      summary: Undo Sync
+      summary: Start Tidy
       tags:
       - memory
 components:
   schemas:
-    CodexImportIn:
-      properties:
-        value:
-          anyOf:
-          - type: boolean
-          - type: 'null'
-          title: Value
-      title: CodexImportIn
-      type: object
-    EntryCopyOut:
-      properties:
-        agent_type:
-          title: Agent Type
-          type: string
-        path:
-          default: ''
-          title: Path
-          type: string
-        state:
-          title: State
-          type: string
-      required:
-      - agent_type
-      - state
-      - path
-      title: EntryCopyOut
-      type: object
     ErrorDetail:
       properties:
         code:
@@ -380,284 +411,227 @@ components:
       - error
       title: ErrorResponse
       type: object
-    HubEntryDetailOut:
-      description: One memory with its text and, per local agent, where it is held.
+    MemoryContextOut:
+      properties:
+        text:
+          description: What a session started in `cwd` is handed; empty outside a project.
+          title: Text
+          type: string
+      required:
+      - text
+      title: MemoryContextOut
+      type: object
+    MemoryFileIn:
+      properties:
+        expected:
+          title: Expected
+          type: string
+        text:
+          title: Text
+          type: string
+      required:
+      - text
+      - expected
+      title: MemoryFileIn
+      type: object
+    MemoryFileOut:
       properties:
         body:
           title: Body
           type: string
-        copies:
-          items:
-            $ref: '#/components/schemas/EntryCopyOut'
-          title: Copies
-          type: array
-        created_at:
-          title: Created At
+        digest:
+          description: Quote it as `expected` on an edit or delete.
+          title: Digest
           type: string
-        description:
-          title: Description
-          type: string
-        id:
-          title: Id
-          type: string
-        origin_agent:
-          title: Origin Agent
-          type: string
-        origin_machine:
-          title: Origin Machine
-          type: string
-        project:
-          default: ''
-          title: Project
-          type: string
-        title:
-          title: Title
-          type: string
-        type:
-          title: Type
-          type: string
-        updated_at:
-          title: Updated At
-          type: string
-      required:
-      - id
-      - title
-      - description
-      - type
-      - project
-      - origin_machine
-      - origin_agent
-      - created_at
-      - updated_at
-      - body
-      - copies
-      title: HubEntryDetailOut
-      type: object
-    HubEntryListOut:
-      properties:
-        entries:
-          items:
-            $ref: '#/components/schemas/HubEntryOut'
-          title: Entries
-          type: array
-        project:
-          title: Project
-          type: string
-      required:
-      - project
-      - entries
-      title: HubEntryListOut
-      type: object
-    HubEntryOut:
-      properties:
-        copies:
-          additionalProperties:
-            type: string
-          title: Copies
-          type: object
-        created_at:
-          title: Created At
-          type: string
-        description:
-          title: Description
-          type: string
-        id:
-          title: Id
-          type: string
-        origin_agent:
-          title: Origin Agent
-          type: string
-        origin_machine:
-          title: Origin Machine
-          type: string
-        project:
-          default: ''
-          title: Project
-          type: string
-        title:
-          title: Title
-          type: string
-        type:
-          title: Type
-          type: string
-        updated_at:
-          title: Updated At
-          type: string
-      required:
-      - id
-      - title
-      - description
-      - type
-      - project
-      - origin_machine
-      - origin_agent
-      - created_at
-      - updated_at
-      - copies
-      title: HubEntryOut
-      type: object
-    MemorySyncReportOut:
-      description: What one sync, write or undo did (the ``memory_synced`` details).
-      properties:
-        details:
-          additionalProperties: true
-          title: Details
-          type: object
-        summary:
-          additionalProperties: true
-          title: Summary
-          type: object
-      required:
-      - details
-      - summary
-      title: MemorySyncReportOut
-      type: object
-    MemorySyncStateOut:
-      properties:
-        agents:
-          items:
-            $ref: '#/components/schemas/SyncAgentOut'
-          title: Agents
-          type: array
-        codex_imports_claude:
-          anyOf:
-          - type: boolean
-          - type: 'null'
-          title: Codex Imports Claude
-        last_report:
-          additionalProperties: true
-          title: Last Report
-          type: object
-        last_synced_at:
-          default: ''
-          title: Last Synced At
-          type: string
-        machine:
-          default: ''
-          title: Machine
-          type: string
-        preview:
-          anyOf:
-          - additionalProperties: true
-            type: object
-          - type: 'null'
-          title: Preview
-        projects:
-          items:
-            $ref: '#/components/schemas/SyncProjectOut'
-          title: Projects
-          type: array
-        running:
-          title: Running
-          type: boolean
-      required:
-      - running
-      - last_synced_at
-      - last_report
-      - preview
-      - codex_imports_claude
-      - agents
-      - projects
-      - machine
-      title: MemorySyncStateOut
-      type: object
-    SyncAgentOut:
-      properties:
-        agent:
-          title: Agent
-          type: string
-        agent_type:
-          title: Agent Type
-          type: string
-        copies:
-          additionalProperties:
-            type: integer
-          title: Copies
-          type: object
-        locations:
-          items:
-            $ref: '#/components/schemas/SyncLocationOut'
-          title: Locations
-          type: array
-        writer:
-          $ref: '#/components/schemas/WriterStatusOut'
-      required:
-      - agent
-      - agent_type
-      - writer
-      - copies
-      - locations
-      title: SyncAgentOut
-      type: object
-    SyncLocationOut:
-      description: 'One place the agent''s writer writes into (Codex: one per memory folder).'
-      properties:
-        copies:
-          additionalProperties:
-            type: integer
-          title: Copies
-          type: object
         name:
-          default: ''
           title: Name
           type: string
         path:
+          description: Absolute path of the file.
           title: Path
           type: string
-        writer:
-          $ref: '#/components/schemas/WriterStatusOut'
+        problems:
+          description: 'What breaks the format: no_title, bad_type (type is not user, feedback or project), no_updated, no_memories, long_line (a line over 400 characters).'
+          items:
+            type: string
+          title: Problems
+          type: array
+        project:
+          title: Project
+          type: string
+        text:
+          description: The whole file, frontmatter included.
+          title: Text
+          type: string
+        title:
+          title: Title
+          type: string
+        type:
+          description: user, feedback, project, or empty when the file names none.
+          title: Type
+          type: string
+        updated:
+          title: Updated
+          type: string
       required:
+      - project
       - name
+      - title
+      - type
+      - updated
+      - body
+      - problems
       - path
-      - writer
-      - copies
-      title: SyncLocationOut
+      - text
+      - digest
+      title: MemoryFileOut
       type: object
-    SyncProjectOut:
+    MemoryProjectOut:
       properties:
-        agents:
-          additionalProperties:
-            type: integer
-          title: Agents
-          type: object
-        checked_out:
+        folder:
+          description: The project's folder under memory/projects/.
+          title: Folder
+          type: string
+        problems:
+          description: Files in it that break the memory format.
+          title: Problems
+          type: integer
+        topics:
+          title: Topics
+          type: integer
+        updated:
+          description: The newest `updated` date, or empty.
+          title: Updated
+          type: string
+      required:
+      - folder
+      - topics
+      - problems
+      - updated
+      title: MemoryProjectOut
+      type: object
+    MemoryStateOut:
+      properties:
+        folder_path:
+          description: Absolute path of memory/projects/.
+          title: Folder Path
+          type: string
+        projects:
+          items:
+            $ref: '#/components/schemas/MemoryProjectOut'
+          title: Projects
+          type: array
+        tidy_handoff:
+          $ref: '#/components/schemas/TidyHandoffOut'
+        tidy_running:
+          title: Tidy Running
+          type: boolean
+        tidy_started_at:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Tidy Started At
+      required:
+      - folder_path
+      - projects
+      - tidy_running
+      - tidy_started_at
+      - tidy_handoff
+      title: MemoryStateOut
+      type: object
+    MemoryTidyFinishIn:
+      properties:
+        summary:
+          default: ''
+          title: Summary
+          type: string
+      title: MemoryTidyFinishIn
+      type: object
+    MemoryTidyFinishOut:
+      properties:
+        version:
           anyOf:
           - type: string
           - type: 'null'
-          title: Checked Out
-        folder:
-          title: Folder
-          type: string
-        key:
-          title: Key
-          type: string
-        memories:
-          title: Memories
-          type: integer
+          description: The tidy's commit, or null when it changed nothing.
+          title: Version
       required:
-      - key
-      - folder
-      - memories
-      - agents
-      - checked_out
-      title: SyncProjectOut
+      - version
+      title: MemoryTidyFinishOut
       type: object
-    WriterStatusOut:
+    MemoryTidyStatusOut:
       properties:
-        path:
-          default: ''
-          title: Path
+        running:
+          title: Running
+          type: boolean
+        started_at:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Started At
+      required:
+      - running
+      - started_at
+      title: MemoryTidyStatusOut
+      type: object
+    MemoryTopicListOut:
+      properties:
+        project:
+          title: Project
           type: string
-        reason:
-          default: ''
-          title: Reason
+        topics:
+          items:
+            $ref: '#/components/schemas/MemoryTopicOut'
+          title: Topics
+          type: array
+      required:
+      - project
+      - topics
+      title: MemoryTopicListOut
+      type: object
+    MemoryTopicOut:
+      properties:
+        body:
+          title: Body
           type: string
-        state:
-          title: State
+        name:
+          title: Name
+          type: string
+        problems:
+          description: 'What breaks the format: no_title, bad_type (type is not user, feedback or project), no_updated, no_memories, long_line (a line over 400 characters).'
+          items:
+            type: string
+          title: Problems
+          type: array
+        project:
+          title: Project
+          type: string
+        title:
+          title: Title
+          type: string
+        type:
+          description: user, feedback, project, or empty when the file names none.
+          title: Type
+          type: string
+        updated:
+          title: Updated
           type: string
       required:
-      - state
-      - path
-      - reason
-      title: WriterStatusOut
+      - project
+      - name
+      - title
+      - type
+      - updated
+      - body
+      - problems
+      title: MemoryTopicOut
+      type: object
+    TidyHandoffOut:
+      properties:
+        prompt:
+          title: Prompt
+          type: string
+      required:
+      - prompt
+      title: TidyHandoffOut
       type: object

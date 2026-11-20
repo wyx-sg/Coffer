@@ -132,12 +132,6 @@ const pageRoutes: RouteObject[] = gateRoutes([
     path: "agents/:type/:tab",
     element: lazyPage(() => import("./pages/AgentDetailPage"), "AgentDetailPage"),
   },
-  // One native memory store, from the Memory tab. Its identity is its
-  // directory, an absolute path, so it rides in `?dir=` rather than a segment.
-  {
-    path: "agents/:type/memory/store",
-    element: lazyPage(() => import("./pages/AgentMemoryStorePage"), "AgentMemoryStorePage"),
-  },
   // The Channels page is the list beside the open channel, so all three
   // addresses render the same page (the tab is the optional last segment).
   { path: "channels", element: <ChannelsPage /> },

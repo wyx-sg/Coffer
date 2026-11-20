@@ -261,16 +261,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`markdown-diagrams-render-with-mermaid`](markdown-diagrams-render-with-mermaid.md) | Markdown Diagrams Render With Mermaid, in the Browser, Loaded on Demand |
 | [`confluence-pages-import-as-readable-sources`](confluence-pages-import-as-readable-sources.md) | Confluence Pages Import as Readable Sources With Their Attachments |
 | [`linked-knowledge-folders-are-read-only-and-machine-local`](linked-knowledge-folders-are-read-only-and-machine-local.md) | A Linked Knowledge Folder Is Shared in Place, Read-Only to Coffer, and Recorded Machine-Local |
-| [`sync-memory-into-each-agents-own-memory`](sync-memory-into-each-agents-own-memory.md) | Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault |
-| [`file-a-memory-where-its-agent-filed-it`](file-a-memory-where-its-agent-filed-it.md) | File a Memory Where Its Agent Filed It |
-| [`leave-agent-memory-curation-to-the-agent`](leave-agent-memory-curation-to-the-agent.md) | Leave an Agent's Memory Curation to the Agent |
-| [`memory-page-lists-memories-by-scope`](memory-page-lists-memories-by-scope.md) | The Memory Page Lists the Memories by Scope; the Sync Shows Only When It Needs the Person |
-| [`follow-codex-memory-into-every-version-folder`](follow-codex-memory-into-every-version-folder.md) | Follow Codex's Memory Into Every Version Folder It Keeps |
-| [`memory-is-about-the-person-knowledge-is-about-the-world`](memory-is-about-the-person-knowledge-is-about-the-world.md) | Memory Is About the Person, Knowledge Is About the World; Task Notes Are Sorted Into Knowledge on Request |
-| [`sync-only-project-memories`](sync-only-project-memories.md) | Sync Only Project Memories |
-| [`sync-memories-not-task-notes`](sync-memories-not-task-notes.md) | Sync Memories, Not Task Notes: Read Codex Only From Its v2 Summary |
-| [`a-memory-outlives-its-checkout`](a-memory-outlives-its-checkout.md) | A Memory Outlives Its Checkout |
-| [`claude-code-reads-other-agents-memories-as-text`](claude-code-reads-other-agents-memories-as-text.md) | Claude Code Reads Other Agents' Memories as Text It Loads |
+| [`keep-memory-in-one-place-agents-write-themselves`](keep-memory-in-one-place-agents-write-themselves.md) | Keep Memory in One Place in the Vault, Written by the Agents Themselves |
 | [`a-skills-tool-is-checked-against-each-agent-that-gets-the-skill`](a-skills-tool-is-checked-against-each-agent-that-gets-the-skill.md) | A Skill's Tool Is Checked Against Each Agent That Gets the Skill |
 
 ### Sync & secrets

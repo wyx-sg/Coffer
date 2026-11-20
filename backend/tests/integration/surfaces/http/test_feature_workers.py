@@ -1,8 +1,8 @@
 """The background passes of a switched-off feature skip their rounds.
 
 Spec experimental-features "Close every surface of a switched-off feature":
-the memory sync (``memory``) and the knowledge sweep (``knowledge``)
-read the switch at the top of every round; the sync worker, graduated, reads
+the knowledge sweep (``knowledge``) reads the switch at the top of every
+round; the sync worker, graduated, reads
 none. Each pass is started through its real wiring
 function with fakes behind it, so what is asserted is the check the
 composition root actually installs — and a switch flipped on the same service
@@ -20,7 +20,7 @@ import pytest
 from coffer.application.features import FeatureService
 from coffer.application.sync.worker import SyncWorker
 from coffer.domain.features import feature_keys
-from coffer.surfaces.http import knowledge_sweep_wiring, memory_sync_wiring
+from coffer.surfaces.http import knowledge_sweep_wiring
 
 
 class _Settings:
@@ -40,55 +40,6 @@ class _Settings:
 def _features(**off: bool) -> FeatureService:
     """Every feature on, except the ones named: those are off."""
     return FeatureService(settings=_Settings(dict.fromkeys(feature_keys(), True) | off))
-
-
-class _EngineConfig:
-    """Every upkeep pass switched on, on this machine: only the feature decides."""
-
-    async def get(self) -> Any:
-        return SimpleNamespace(
-            upkeep=lambda _name: SimpleNamespace(enabled=True, interval_s=None),
-        )
-
-
-@pytest.mark.acceptance(
-    spec="experimental-features",
-    scenario="memory off skips the memory sync",
-)
-async def test_the_memory_sync_worker_runs_no_pass_while_memory_is_off() -> None:
-    calls: list[str] = []
-
-    async def sync(actor: str) -> None:
-        calls.append(actor)
-
-    features = _features(memory=False)
-    service = SimpleNamespace(sync=sync)
-    task = memory_sync_wiring.start_memory_sync_worker(
-        service,  # type: ignore[arg-type]
-        _EngineConfig(),  # type: ignore[arg-type]
-        features,
-    )
-    try:
-        # The worker's first round runs at once, on start.
-        await asyncio.sleep(0.05)
-        assert calls == []
-
-    finally:
-        await memory_sync_wiring.stop_memory_sync_worker(task)
-
-    # Switched on, the same service's next worker round runs — the control
-    # that shows the round above was skipped rather than never due.
-    await features.set("memory", True)
-    task = memory_sync_wiring.start_memory_sync_worker(
-        service,  # type: ignore[arg-type]
-        _EngineConfig(),  # type: ignore[arg-type]
-        features,
-    )
-    try:
-        await asyncio.sleep(0.05)
-        assert len(calls) == 1
-    finally:
-        await memory_sync_wiring.stop_memory_sync_worker(task)
 
 
 async def test_a_sync_round_always_reaches_the_service() -> None:

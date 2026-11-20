@@ -275,24 +275,6 @@ SPECS = [
         names=A,
         query=(Q("location"),),
     ),
-    # Native memory (the files are the agent's own).
-    RouteCommand(
-        "agent native-memory list",
-        "GET",
-        "/agents/{uid}/native-memory",
-        _UI + "Memory tab",
-        "What the agent keeps in its own memory.",
-        names=A,
-    ),
-    RouteCommand(
-        "agent native-memory files",
-        "GET",
-        "/agents/{uid}/native-memory/files",
-        _UI + "Memory tab · files",
-        "The memory files and their paths.",
-        names=A,
-        query=(Q("dir", "A folder under the agent's memory"),),
-    ),
 ]
 
 mount(SPECS)

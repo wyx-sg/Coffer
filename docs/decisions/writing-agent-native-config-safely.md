@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-15
 **Deciders**: Yuxing Wu
-**Related**: [Per-Agent Behaviour Lives in One Descriptor Record per Agent](agent-descriptor-manifest.md), [Provider Connections Projected Into Agent Config](provider-connections-projected-into-agent-config.md), [API-Key Providers Are Reached Through a Separate Local Model Proxy That Relays Bytes Unchanged](api-key-providers-are-reached-through-a-separate-local-model-proxy.md), [Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault](sync-memory-into-each-agents-own-memory.md), [Audit and Retention](audit-and-retention.md), spec agent-registry "List an agent's config files with their locations", spec agent-registry "Back up and compare-and-swap every write Coffer makes to an agent's config", spec agent-registry "Back up and compare-and-swap every write Coffer makes to an agent's config", spec agent-registry "Back up and compare-and-swap every write Coffer makes to an agent's config", spec agent-registry "Degrade a facet to a parse-error state when its config file is unparseable", spec agent-registry "Uninstall a plugin by the type's own strategy", spec agent-registry/codex "Install Coffer's MCP entry into config.toml preserving its layout", spec agent-registry/codex "Never expose Codex's credential file", spec agent-registry/claude-code "Delegate Claude Code plugin uninstall to its CLI", PR #60, PR #337, PR #386
+**Related**: [Per-Agent Behaviour Lives in One Descriptor Record per Agent](agent-descriptor-manifest.md), [Provider Connections Projected Into Agent Config](provider-connections-projected-into-agent-config.md), [API-Key Providers Are Reached Through a Separate Local Model Proxy That Relays Bytes Unchanged](api-key-providers-are-reached-through-a-separate-local-model-proxy.md), [Keep Memory in One Place in the Vault, Written by the Agents Themselves](keep-memory-in-one-place-agents-write-themselves.md), [Audit and Retention](audit-and-retention.md), spec agent-registry "List an agent's config files with their locations", spec agent-registry "Back up and compare-and-swap every write Coffer makes to an agent's config", spec agent-registry "Back up and compare-and-swap every write Coffer makes to an agent's config", spec agent-registry "Back up and compare-and-swap every write Coffer makes to an agent's config", spec agent-registry "Degrade a facet to a parse-error state when its config file is unparseable", spec agent-registry "Uninstall a plugin by the type's own strategy", spec agent-registry/codex "Install Coffer's MCP entry into config.toml preserving its layout", spec agent-registry/codex "Never expose Codex's credential file", spec agent-registry/claude-code "Delegate Claude Code plugin uninstall to its CLI", PR #60, PR #337, PR #386
 
 **Partly superseded** (2026-10-05): the in-app and CLI config editor and its user-edit stale check no longer exist; the web UI lists an agent's config files and opens them in the person's editor, and only Coffer's own writes (connect, repair, plugin toggle, MCP install, provider projection) keep the backup and the fingerprint compare-and-swap, see the OpenSpec change `hand-files-to-external-tools`.
 
@@ -14,11 +14,9 @@ Coffer writes into files that belong to someone else: Claude Code's
 `agents/*.md`, and Codex's `config.toml` and `AGENTS.md`. The writers are the
 in-app and CLI config editor, the Coffer MCP install and uninstall, adoption
 and removal of the agent's own MCP entries, plugin toggle and uninstall, and
-provider projection. Coffer installs no hooks into an agent. What the memory
-sync writes into an agent's own memory, rather than its config, keeps to the
-guard rails of
-[Sync Memory Into Each Agent's Own Memory](sync-memory-into-each-agents-own-memory.md),
-which reuse the backups below.
+provider projection, and one `SessionStart` hook that hands a session its
+memories, added beside the agent's own hooks and removed alone
+([Keep Memory in One Place](keep-memory-in-one-place-agents-write-themselves.md)).
 
 Three other parties touch the same files: the user in their own editor, the
 agent itself (Claude Code rewrites `.claude.json` constantly), and other tools

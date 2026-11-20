@@ -117,7 +117,7 @@ function renderPage() {
 describe("EngineSettings", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    engineConfig = { updated_at: null, upkeep: {} };
+    engineConfig = { updated_at: null };
   });
 
   acceptance(
@@ -150,8 +150,7 @@ describe("EngineSettings", () => {
       expect(screen.getByRole("combobox", { name: /^transcription model$/i })).toHaveTextContent(
         "whisper-1",
       );
-      // No upkeep switch or interval: those live on the Memory page. The one
-      // switch left is the price refresh.
+      // The one switch on the page is the price refresh.
       expect(screen.queryAllByRole("switch").filter((s) => s.id !== "price-refresh")).toHaveLength(
         0,
       );

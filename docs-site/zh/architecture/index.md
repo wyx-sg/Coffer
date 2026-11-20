@@ -48,7 +48,7 @@ Coffer 是一个本地进程，把这些资产只存一份，再通过智能体�
 | HTTP API | `/api/v1/*` 下的 FastAPI 路由：所有客户端共用的管理面。 |
 | MCP 网关 | `/mcp` 端点。它把每个启用的上游 MCP 服务器聚合到一个端点后面，加上 Coffer 的内置工具，并按生效范围过滤每个智能体能看到的内容。见 [MCP 网关](/zh/architecture/mcp-gateway)。 |
 | 资源框架与各类型 | 与类型无关的核心，给每个用户管理的东西（一个 MCP 服务器、一个技能、一个消息渠道）同一套身份、生命周期、审计轨迹和生效范围，外加接入它的六种类型。见 [资源框架](/zh/architecture/resource-framework)。 |
-| 后台 worker | 进程内的 asyncio 循环：保留期清理、知识清扫、记忆同步、保险库同步轮次、MCP 会话回收，以及承载 Telegram 轮询和 SeaTalk websocket 连接的消息渠道运行时。完整列表和运行周期见 [守护进程与进程](/zh/architecture/daemon#background-work)。 |
+| 后台 worker | 进程内的 asyncio 循环：保留期清理、知识清扫、保险库同步轮次、MCP 会话回收，以及承载 Telegram 轮询和 SeaTalk websocket 连接的消息渠道运行时。完整列表和运行周期见 [守护进程与进程](/zh/architecture/daemon#background-work)。 |
 | `vault/` | `~/.coffer` 下的一个 git 仓库，是配置和内容的记录系统：每个资源一个 JSON 文件、状态文档、知识集、技能文件夹、记忆中心库和密钥密文。每一次被接受的写入都是一次经过校验、写明写入者的提交。它旁边，`local/` 存只对本机成立的东西，`content/` 存媒体和对话工作目录，`derived/` 存可以重建的东西，比如 MCP 服务器的健康状况。见 [持久化](/zh/architecture/persistence)。 |
 | `runs.db` | SQLite，只存历史：审计日志、MCP 调用、对话和消息、同步轮次、用量。 |
 | 上游 MCP 服务器 | 你注册的服务器（stdio 子进程或 HTTP 端点），按客户端会话启动。 |
@@ -120,7 +120,7 @@ Coffer 的大部分形态都来自少数几项决策。下面每一项都在它�
 - **每个 MCP 客户端会话都有自己惰性启动的上游进程。** MCP 是按会话的协议。跨客户端共享上游，意味着要在网关里重新实现能力协商和通知路由。 [MCP 网关](/zh/architecture/mcp-gateway)
 - **网关按使用量排序列出一部分工具，其余的提供搜索。** 工具超过大约 30 到 50 个后，模型选工具就不那么可靠了。分层只决定列出什么，从不决定能调用什么。 [MCP 网关](/zh/architecture/mcp-gateway#budget-driven-tiering)
 - **知识是不带索引的纯 Markdown；它的目录以技能的形式到达智能体。** 智能体整天都在读文件，却很少调用检索工具。没有派生物，就不会有东西和文件不一致。 [知识](/zh/architecture/knowledge)
-- **记忆被同步进每个智能体自己的记忆，智能体写下的内容从不被修改。** 保险库里的中心库在机器之间传送每个智能体的记忆；每个智能体用自己的内置功能加载和整理 Coffer 写入的副本。 [记忆](/zh/architecture/memory)
+- **记忆是一组由每个智能体自己写的文件。** 保险库里的主题文件在机器和智能体之间传递；每个智能体里一个钩子把项目记忆交给会话，Coffer 从不碰智能体自己的记忆。 [记忆](/zh/architecture/memory)
 - **保险库是一个 git 仓库；同步 pull 和 push 它，应用干净的合并，遇到任何冲突就停。** 只有共同的基线才能区分「从来没有」和「删掉了」，而且 Coffer 自己做的任何事都不需要撤销。你的远端始终是一个你可以查看的普通仓库。 [保险库同步](/zh/architecture/vault-sync)
 - **密钥是用一个主密钥加密的 Fernet 密文，主密钥存放在 macOS 钥匙串里。** 主密钥是一个只有 Coffer 签名二进制能读取的访问组里的条目，所以别的程序拿不到它，`~/.coffer/` 的副本只是没有密钥的密文。 [安全模型](/zh/architecture/security#the-secret-store)
 - **未完成的功能随每个构建发布，在你开启之前一直关闭，而不是放在分支上。** 只有一条开发线，所有者测的正是用户在跑的东西。关闭一个功能只是隐藏它，数据保留。 [分发与发布](/zh/architecture/distribution#experimental-features)

@@ -2,13 +2,12 @@
 
 ADR agent-mechanisms-are-optional-facets-on-the-descriptor. The descriptor
 table (``descriptor.py``) holds per-agent *values*; this module holds the
-shape of the per-agent *mechanisms*. Four facets, each optional:
+shape of the per-agent *mechanisms*. Three facets, each optional:
 
 - ``projection`` — a registry of what Coffer can place into the agent, keyed by
   asset type x landing point, each entry carrying its translation and a
   minimal capability declaration (:class:`AgentProjection`);
 - ``driver`` — how Coffer runs a turn on the agent;
-- ``memory_reader`` — how the agent's native memory is read (read only);
 - ``dependency_probe`` — whether the agent's program is installed here and
   which version (:class:`DependencyProbe`).
 
@@ -20,8 +19,8 @@ groups them onto a copy of the table. Consumers receive the resulting
 :class:`AgentCatalog` and ask it for a facet; none of them branches on
 ``AgentType`` (``scripts/check_agent_type_branches.py``).
 
-Where a port belongs to the kind that consumes it (the memory kind's reader
-, the chat kind's driver, the provider kind's translation),
+Where a port belongs to the kind that consumes it (the chat kind's driver,
+the provider kind's translation),
 the port type is that kind's Protocol, named here under ``TYPE_CHECKING`` only
 — annotation-only imports execute nothing and the cross-kind fence does not
 count them.
@@ -42,7 +41,6 @@ from coffer.domain.agent.types import AgentType
 if TYPE_CHECKING:
     from coffer.application.chat.ports import AgentDriver
     from coffer.domain.agent.descriptor import AgentDescriptor
-    from coffer.domain.memory.reader import MemoryReader
     from coffer.domain.provider.agent_projection import ProviderProjection
 
 
@@ -168,15 +166,6 @@ class AgentCatalog:
         d = self._descriptors.get(agent_type)
         return d.driver if d is not None else None
 
-    def memory_reader(self, agent_type: AgentType) -> MemoryReader | None:
-        d = self._descriptors.get(agent_type)
-        return d.memory_reader if d is not None else None
-
-    def memory_readers(self) -> dict[str, MemoryReader]:
-        """Every bound memory reader, keyed by the agent type's value — the
-        shape the memory kind's aggregation pass looks readers up in."""
-        return {d.type.value: d.memory_reader for d in self if d.memory_reader is not None}
-
     def drivers(self) -> tuple[AgentDriver[Any], ...]:
         """Every bound driver, in agent-type order."""
         return tuple(d.driver for d in self if d.driver is not None)
@@ -204,7 +193,6 @@ def bind_facets(
     *,
     providers: Iterable[ProviderProjection] = (),
     drivers: Iterable[AgentDriver[Any]] = (),
-    memory_readers: Iterable[MemoryReader] = (),
     probe_for: Callable[[AgentDescriptor], DependencyProbe | None] | None = None,
 ) -> AgentCatalog:
     """Bind each implementation to the record of the agent it declares.
@@ -218,7 +206,6 @@ def bind_facets(
     """
     provider_by = _by_type(providers, lambda p: p.agent_type, "provider projection")
     driver_by = _by_type(drivers, lambda d: d.agent_key, "driver")
-    reader_by = _by_type(memory_readers, lambda r: r.agent_type, "memory reader")
     bound: dict[AgentType, AgentDescriptor] = {}
     for agent_type, d in descriptors.items():
         projection = AgentProjection(
@@ -230,7 +217,6 @@ def bind_facets(
             d,
             projection=projection if projection.entries else None,
             driver=driver_by.get(agent_type),
-            memory_reader=reader_by.get(agent_type),
             dependency_probe=probe_for(d) if probe_for is not None else None,
         )
     return AgentCatalog(bound)

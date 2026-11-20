@@ -4,41 +4,7 @@
  */
 
 export interface paths {
-    "/api/v1/memory/sync/codex-import": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Set Codex Import */
-        put: operations["set_codex_import_api_v1_memory_sync_codex_import_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/memory/sync/entries": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Entries */
-        get: operations["list_entries_api_v1_memory_sync_entries_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/memory/sync/entries/{entry_id}": {
+    "/api/v1/memory": {
         parameters: {
             query?: never;
             header?: never;
@@ -46,10 +12,11 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Entry
-         * @description One memory's text and where each agent on this machine holds it.
+         * Memory State
+         * @description The projects that hold memories, whether a tidy is open, and the
+         *     prompt **Tidy** hands to the agent.
          */
-        get: operations["get_entry_api_v1_memory_sync_entries__entry_id__get"];
+        get: operations["memory_state_api_v1_memory_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -58,41 +25,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/memory/sync/preview/cancel": {
+    "/api/v1/memory/context": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Get Context
+         * @description What a session started in ``cwd`` is handed.
+         */
+        get: operations["get_context_api_v1_memory_context_get"];
         put?: never;
-        /** Cancel Preview */
-        post: operations["cancel_preview_api_v1_memory_sync_preview_cancel_post"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/memory/sync/preview/write": {
+    "/api/v1/memory/projects/{project}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List Topics */
+        get: operations["list_topics_api_v1_memory_projects__project__get"];
         put?: never;
-        /** Write Preview */
-        post: operations["write_preview_api_v1_memory_sync_preview_write_post"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/memory/sync/run": {
+    "/api/v1/memory/projects/{project}/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get File */
+        get: operations["get_file_api_v1_memory_projects__project___name__get"];
+        /**
+         * Put File
+         * @description Replace a memory file's text; refused ``MEMORY_FILE_STALE`` when it
+         *     changed since ``expected`` was read.
+         */
+        put: operations["put_file_api_v1_memory_projects__project___name__put"];
+        post?: never;
+        /** Delete File */
+        delete: operations["delete_file_api_v1_memory_projects__project___name__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/memory/tidy/finish": {
         parameters: {
             query?: never;
             header?: never;
@@ -102,34 +95,17 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Sync Now
-         * @description **Sync now**: 409 ``MEMORY_SYNC_RUNNING`` while a sync runs.
+         * Finish Tidy
+         * @description Close the tidy and commit what it changed as one commit carrying the report.
          */
-        post: operations["sync_now_api_v1_memory_sync_run_post"];
+        post: operations["finish_tidy_api_v1_memory_tidy_finish_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/memory/sync/state": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Sync State */
-        get: operations["sync_state_api_v1_memory_sync_state_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/memory/sync/undo": {
+    "/api/v1/memory/tidy/start": {
         parameters: {
             query?: never;
             header?: never;
@@ -139,11 +115,11 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Undo Sync
-         * @description **Undo sync…**: removes Coffer's copies from this machine's agents and
-         *     turns automatic sync off.
+         * Start Tidy
+         * @description Open a tidy: until it finishes, the edits under memory/ are kept for
+         *     one commit.
          */
-        post: operations["undo_sync_api_v1_memory_sync_undo_post"];
+        post: operations["start_tidy_api_v1_memory_tidy_start_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -154,23 +130,6 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /** CodexImportIn */
-        CodexImportIn: {
-            /** Value */
-            value?: boolean | null;
-        };
-        /** EntryCopyOut */
-        EntryCopyOut: {
-            /** Agent Type */
-            agent_type: string;
-            /**
-             * Path
-             * @default
-             */
-            path: string;
-            /** State */
-            state: string;
-        };
         /** ErrorDetail */
         ErrorDetail: {
             /**
@@ -192,176 +151,151 @@ export interface components {
         ErrorResponse: {
             error: components["schemas"]["ErrorDetail"];
         };
-        /**
-         * HubEntryDetailOut
-         * @description One memory with its text and, per local agent, where it is held.
-         */
-        HubEntryDetailOut: {
+        /** MemoryContextOut */
+        MemoryContextOut: {
+            /**
+             * Text
+             * @description What a session started in `cwd` is handed; empty outside a project.
+             */
+            text: string;
+        };
+        /** MemoryFileIn */
+        MemoryFileIn: {
+            /** Expected */
+            expected: string;
+            /** Text */
+            text: string;
+        };
+        /** MemoryFileOut */
+        MemoryFileOut: {
             /** Body */
             body: string;
-            /** Copies */
-            copies: components["schemas"]["EntryCopyOut"][];
-            /** Created At */
-            created_at: string;
-            /** Description */
-            description: string;
-            /** Id */
-            id: string;
-            /** Origin Agent */
-            origin_agent: string;
-            /** Origin Machine */
-            origin_machine: string;
             /**
-             * Project
-             * @default
+             * Digest
+             * @description Quote it as `expected` on an edit or delete.
              */
-            project: string;
-            /** Title */
-            title: string;
-            /** Type */
-            type: string;
-            /** Updated At */
-            updated_at: string;
-        };
-        /** HubEntryListOut */
-        HubEntryListOut: {
-            /** Entries */
-            entries: components["schemas"]["HubEntryOut"][];
-            /** Project */
-            project: string;
-        };
-        /** HubEntryOut */
-        HubEntryOut: {
-            /** Copies */
-            copies: {
-                [key: string]: string;
-            };
-            /** Created At */
-            created_at: string;
-            /** Description */
-            description: string;
-            /** Id */
-            id: string;
-            /** Origin Agent */
-            origin_agent: string;
-            /** Origin Machine */
-            origin_machine: string;
-            /**
-             * Project
-             * @default
-             */
-            project: string;
-            /** Title */
-            title: string;
-            /** Type */
-            type: string;
-            /** Updated At */
-            updated_at: string;
-        };
-        /**
-         * MemorySyncReportOut
-         * @description What one sync, write or undo did (the ``memory_synced`` details).
-         */
-        MemorySyncReportOut: {
-            /** Details */
-            details: {
-                [key: string]: unknown;
-            };
-            /** Summary */
-            summary: {
-                [key: string]: unknown;
-            };
-        };
-        /** MemorySyncStateOut */
-        MemorySyncStateOut: {
-            /** Agents */
-            agents: components["schemas"]["SyncAgentOut"][];
-            /** Codex Imports Claude */
-            codex_imports_claude: boolean | null;
-            /** Last Report */
-            last_report: {
-                [key: string]: unknown;
-            };
-            /**
-             * Last Synced At
-             * @default
-             */
-            last_synced_at: string;
-            /**
-             * Machine
-             * @default
-             */
-            machine: string;
-            /** Preview */
-            preview: {
-                [key: string]: unknown;
-            } | null;
-            /** Projects */
-            projects: components["schemas"]["SyncProjectOut"][];
-            /** Running */
-            running: boolean;
-        };
-        /** SyncAgentOut */
-        SyncAgentOut: {
-            /** Agent */
-            agent: string;
-            /** Agent Type */
-            agent_type: string;
-            /** Copies */
-            copies: {
-                [key: string]: number;
-            };
-            /** Locations */
-            locations: components["schemas"]["SyncLocationOut"][];
-            writer: components["schemas"]["WriterStatusOut"];
-        };
-        /**
-         * SyncLocationOut
-         * @description One place the agent's writer writes into (Codex: one per memory folder).
-         */
-        SyncLocationOut: {
-            /** Copies */
-            copies: {
-                [key: string]: number;
-            };
-            /**
-             * Name
-             * @default
-             */
+            digest: string;
+            /** Name */
             name: string;
-            /** Path */
-            path: string;
-            writer: components["schemas"]["WriterStatusOut"];
-        };
-        /** SyncProjectOut */
-        SyncProjectOut: {
-            /** Agents */
-            agents: {
-                [key: string]: number;
-            };
-            /** Checked Out */
-            checked_out: string | null;
-            /** Folder */
-            folder: string;
-            /** Key */
-            key: string;
-            /** Memories */
-            memories: number;
-        };
-        /** WriterStatusOut */
-        WriterStatusOut: {
             /**
              * Path
-             * @default
+             * @description Absolute path of the file.
              */
             path: string;
             /**
-             * Reason
+             * Problems
+             * @description What breaks the format: no_title, bad_type (type is not user, feedback or project), no_updated, no_memories, long_line (a line over 400 characters).
+             */
+            problems: string[];
+            /** Project */
+            project: string;
+            /**
+             * Text
+             * @description The whole file, frontmatter included.
+             */
+            text: string;
+            /** Title */
+            title: string;
+            /**
+             * Type
+             * @description user, feedback, project, or empty when the file names none.
+             */
+            type: string;
+            /** Updated */
+            updated: string;
+        };
+        /** MemoryProjectOut */
+        MemoryProjectOut: {
+            /**
+             * Folder
+             * @description The project's folder under memory/projects/.
+             */
+            folder: string;
+            /**
+             * Problems
+             * @description Files in it that break the memory format.
+             */
+            problems: number;
+            /** Topics */
+            topics: number;
+            /**
+             * Updated
+             * @description The newest `updated` date, or empty.
+             */
+            updated: string;
+        };
+        /** MemoryStateOut */
+        MemoryStateOut: {
+            /**
+             * Folder Path
+             * @description Absolute path of memory/projects/.
+             */
+            folder_path: string;
+            /** Projects */
+            projects: components["schemas"]["MemoryProjectOut"][];
+            tidy_handoff: components["schemas"]["TidyHandoffOut"];
+            /** Tidy Running */
+            tidy_running: boolean;
+            /** Tidy Started At */
+            tidy_started_at: number | null;
+        };
+        /** MemoryTidyFinishIn */
+        MemoryTidyFinishIn: {
+            /**
+             * Summary
              * @default
              */
-            reason: string;
-            /** State */
-            state: string;
+            summary?: string;
+        };
+        /** MemoryTidyFinishOut */
+        MemoryTidyFinishOut: {
+            /**
+             * Version
+             * @description The tidy's commit, or null when it changed nothing.
+             */
+            version: string | null;
+        };
+        /** MemoryTidyStatusOut */
+        MemoryTidyStatusOut: {
+            /** Running */
+            running: boolean;
+            /** Started At */
+            started_at: number | null;
+        };
+        /** MemoryTopicListOut */
+        MemoryTopicListOut: {
+            /** Project */
+            project: string;
+            /** Topics */
+            topics: components["schemas"]["MemoryTopicOut"][];
+        };
+        /** MemoryTopicOut */
+        MemoryTopicOut: {
+            /** Body */
+            body: string;
+            /** Name */
+            name: string;
+            /**
+             * Problems
+             * @description What breaks the format: no_title, bad_type (type is not user, feedback or project), no_updated, no_memories, long_line (a line over 400 characters).
+             */
+            problems: string[];
+            /** Project */
+            project: string;
+            /** Title */
+            title: string;
+            /**
+             * Type
+             * @description user, feedback, project, or empty when the file names none.
+             */
+            type: string;
+            /** Updated */
+            updated: string;
+        };
+        /** TidyHandoffOut */
+        TidyHandoffOut: {
+            /** Prompt */
+            prompt: string;
         };
     };
     responses: never;
@@ -372,7 +306,7 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    set_codex_import_api_v1_memory_sync_codex_import_put: {
+    memory_state_api_v1_memory_get: {
         parameters: {
             query?: never;
             header?: {
@@ -381,18 +315,16 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CodexImportIn"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
-            204: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["MemoryStateOut"];
+                };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
             422: {
@@ -414,11 +346,11 @@ export interface operations {
             };
         };
     };
-    list_entries_api_v1_memory_sync_entries_get: {
+    get_context_api_v1_memory_context_get: {
         parameters: {
             query: {
-                /** @description A project key. */
-                project: string;
+                /** @description A session's working directory. */
+                cwd: string;
             };
             header?: {
                 "x-coffer-token"?: string | null;
@@ -434,7 +366,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HubEntryListOut"];
+                    "application/json": components["schemas"]["MemoryContextOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
@@ -457,14 +389,14 @@ export interface operations {
             };
         };
     };
-    get_entry_api_v1_memory_sync_entries__entry_id__get: {
+    list_topics_api_v1_memory_projects__project__get: {
         parameters: {
             query?: never;
             header?: {
                 "x-coffer-token"?: string | null;
             };
             path: {
-                entry_id: string;
+                project: string;
             };
             cookie?: never;
         };
@@ -476,7 +408,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HubEntryDetailOut"];
+                    "application/json": components["schemas"]["MemoryTopicListOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
@@ -499,13 +431,111 @@ export interface operations {
             };
         };
     };
-    cancel_preview_api_v1_memory_sync_preview_cancel_post: {
+    get_file_api_v1_memory_projects__project___name__get: {
         parameters: {
             query?: never;
             header?: {
                 "x-coffer-token"?: string | null;
             };
-            path?: never;
+            path: {
+                project: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryFileOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    put_file_api_v1_memory_projects__project___name__put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                project: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemoryFileIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryFileOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_file_api_v1_memory_projects__project___name__delete: {
+        parameters: {
+            query: {
+                /** @description The digest the page read. */
+                expected: string;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                project: string;
+                name: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -537,7 +567,7 @@ export interface operations {
             };
         };
     };
-    write_preview_api_v1_memory_sync_preview_write_post: {
+    finish_tidy_api_v1_memory_tidy_finish_post: {
         parameters: {
             query?: never;
             header?: {
@@ -547,7 +577,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemoryTidyFinishIn"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -555,7 +589,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MemorySyncReportOut"];
+                    "application/json": components["schemas"]["MemoryTidyFinishOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
@@ -578,48 +612,7 @@ export interface operations {
             };
         };
     };
-    sync_now_api_v1_memory_sync_run_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-                "x-coffer-actor"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MemorySyncReportOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    sync_state_api_v1_memory_sync_state_get: {
+    start_tidy_api_v1_memory_tidy_start_post: {
         parameters: {
             query?: never;
             header?: {
@@ -636,48 +629,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MemorySyncStateOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    undo_sync_api_v1_memory_sync_undo_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-                "x-coffer-actor"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MemorySyncReportOut"];
+                    "application/json": components["schemas"]["MemoryTidyStatusOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

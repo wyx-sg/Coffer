@@ -45,29 +45,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/internal-engine-config/upkeep": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Update Upkeep
-         * @description Change one pass's switch or timer.
-         *
-         *     Each half is left alone when the client does not send it, so a settings
-         *     page can flip a switch without restating a timer it never looked at.
-         */
-        put: operations["update_upkeep_api_v1_internal_engine_config_upkeep_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -95,17 +72,13 @@ export interface components {
         };
         /**
          * InternalEngineConfigOut
-         * @description Coffer's own operating settings: its unattended work and its speech-to-text.
+         * @description Coffer's own operating settings: its speech-to-text.
          */
         InternalEngineConfigOut: {
             /** Transcribe Model */
             transcribe_model: string | null;
             /** Updated At */
             updated_at: string | null;
-            /** Upkeep */
-            upkeep: {
-                [key: string]: components["schemas"]["UpkeepSettingOut"];
-            };
         };
         /**
          * TranscribeModelUpdate
@@ -118,55 +91,6 @@ export interface components {
         TranscribeModelUpdate: {
             /** Model */
             model?: string | null;
-        };
-        /**
-         * UpkeepSettingOut
-         * @description One unattended pass's switch and timer, as a surface needs to show them.
-         *
-         *     ``interval_s`` is ``null`` while the operator has chosen none;
-         *     ``default_interval_s`` is what runs in that case, reported so a settings
-         *     page can name the default instead of showing a blank where a number
-         *     belongs.
-         */
-        UpkeepSettingOut: {
-            /** Default Interval S */
-            default_interval_s: number;
-            /** Enabled */
-            enabled: boolean;
-            /** Interval S */
-            interval_s: number | null;
-            /** Last Pass At */
-            last_pass_at: string | null;
-            /** Next Pass At */
-            next_pass_at: string | null;
-        };
-        /**
-         * UpkeepUpdate
-         * @description Change ONE unattended pass, leaving the others exactly as they stand.
-         *
-         *     One pass at a time on purpose: a settings page toggles one row, and a body
-         *     carrying both would make every toggle a chance to write back a stale
-         *     copy of the other — on settings the operator may also be changing on
-         *     another machine, since they converge through vault sync.
-         *
-         *     Omitting a field leaves that half of the pass alone, so a switch and a
-         *     timer can be changed independently.
-         */
-        UpkeepUpdate: {
-            /** Enabled */
-            enabled?: boolean | null;
-            /** Interval S */
-            interval_s?: number | null;
-            /**
-             * Pass
-             * @constant
-             */
-            pass: "memory_sync";
-            /**
-             * Use Default Interval
-             * @default false
-             */
-            use_default_interval?: boolean;
         };
     };
     responses: never;
@@ -230,51 +154,6 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["TranscribeModelUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["InternalEngineConfigOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    update_upkeep_api_v1_internal_engine_config_upkeep_put: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-                "x-coffer-actor"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpkeepUpdate"];
             };
         };
         responses: {

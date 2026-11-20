@@ -1,17 +1,16 @@
 // e2e/web/specs/shell_memory.spec.ts
 //
-// The /memory sync page against a live daemon: it renders from the real
-// GET /memory/sync/state answer.
+// The /memory page against a live daemon: it renders from the real GET /memory
+// answer.
 //
-// The e2e daemon runs on an isolated HOME, so it normally has no agent with
-// memory to sync and the page shows its "No agent to sync" state; a daemon
-// with an agent registered shows the scopes beside the open scope's memories,
-// with one Sync now. The walk asserts whichever the daemon's own sync state says, so it
-// holds either way.
+// The e2e daemon runs on an isolated HOME, so it normally holds no memories
+// and the page shows its "No memories yet" state; a daemon whose hub holds a
+// project shows the projects beside the open project's topic files. The walk
+// asserts whichever the daemon's own answer says, so it holds either way.
 //
 // No acceptance marker: the memory scenarios are pinned by the component
 // tests, which can assert the page's contents far more precisely. What this
-// adds is that the page and the sync-state route agree against a live daemon.
+// adds is that the page and the route agree against a live daemon.
 
 import { expect, test } from "@playwright/test";
 import { beforeEachInjectToken, readDaemonToken } from "./_helpers";
@@ -26,32 +25,28 @@ function api() {
   };
 }
 
-test("the Memory page shows the sync state", async ({ page }) => {
+test("the Memory page shows the hub", async ({ page }) => {
   const { base, headers } = api();
-  const res = await page.request.get(`${base}/memory/sync/state`, { headers });
+  const res = await page.request.get(`${base}/memory`, { headers });
   expect(res.ok()).toBe(true);
-  const { agents } = (await res.json()) as { agents: unknown[] };
+  const { projects, folder_path } = (await res.json()) as {
+    projects: unknown[];
+    folder_path: string;
+  };
 
   await page.goto("/memory");
   await expect(
     page.getByRole("heading", { name: "Memory", level: 1 }),
   ).toBeVisible();
-  // Nothing on the page edits a memory's text.
-  await expect(page.getByRole("textbox", { name: /memory/i })).toHaveCount(0);
-
-  if (agents.length === 0) {
-    await expect(page.getByText("No agent to sync")).toBeVisible();
-    await expect(
-      page.getByRole("navigation", { name: "Memory scopes" }),
-    ).toHaveCount(0);
-    return;
-  }
-
+  await expect(page.getByText(`Kept in ${folder_path}`)).toBeVisible();
+  // Tidy hands off to a managed agent; an e2e run installs none, so the
+  // handoff offers Copy prompt instead.
   await expect(
-    page.getByRole("navigation", { name: "Memory scopes" }),
+    page.getByRole("button", { name: /^(Tidy|Copy prompt)$/ }),
   ).toBeVisible();
-  await expect(page.getByTestId("memory-list")).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: /^(Sync now|Syncing…)$/ }),
-  ).toHaveCount(1);
+  if (projects.length === 0) {
+    await expect(page.getByText("No memories yet")).toBeVisible();
+  } else {
+    await expect(page.getByTestId("memory-list")).toBeVisible();
+  }
 });

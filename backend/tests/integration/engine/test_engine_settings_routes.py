@@ -16,14 +16,11 @@ from collections.abc import AsyncIterator
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from coffer.application.upkeep_schedule import DEFAULT_INTERVALS
 from coffer.infrastructure.vault.instance import vault_writer
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
 
 _TOKEN = "test-token-internal-engine"
-_PASSES = ("memory_sync",)
-# The memory sync pass ships switched off until its page lands.
 
 
 @pytest.fixture
@@ -78,10 +75,6 @@ def _doc() -> dict:
     return json.loads(raw) if raw is not None else {}
 
 
-def _upkeep(doc: dict, name: str) -> dict:
-    return (doc.get("upkeep") or {}).get(name) or {}
-
-
 @pytest.mark.acceptance(
     spec="internal-engine",
     scenario="record every settings write with its actor and values",
@@ -90,142 +83,28 @@ async def test_every_write_is_audited_with_its_actor_and_the_value_after_it(
     api: AsyncClient,
 ) -> None:
     assert (
-        await api.put(
-            "/internal-engine-config/upkeep", json={"pass": "memory_sync", "enabled": False}
-        )
-    ).status_code == 200
-    assert (
         await api.put("/internal-engine-config/transcribe-model", json={"model": "hears"})
     ).status_code == 200
 
     r = await api.get("/audit", params={"event_type": "internal_engine_model_set", "limit": 50})
     assert r.status_code == 200, r.text
     entries = r.json()["entries"]
-    assert len(entries) == 2
-    assert {e["actor"] for e in entries} == {"tester"}
-    details = [e["details"] for e in entries]
-    # The value AFTER the write: the switch off, the model stored.
-    assert any(d.get("memory_sync_enabled") is False for d in details)
-    assert any(d.get("transcribe_model") == "hears" for d in details)
+    assert len(entries) == 1
+    assert entries[0]["actor"] == "tester"
+    assert entries[0]["details"]["transcribe_model"] == "hears"
 
 
 @pytest.mark.acceptance(spec="internal-engine", scenario="read the engine settings")
-async def test_the_settings_read_reports_the_stored_values_beside_the_defaults(
-    api: AsyncClient,
-) -> None:
+async def test_the_settings_read_reports_the_stored_values(api: AsyncClient) -> None:
     assert (
         await api.put("/internal-engine-config/transcribe-model", json={"model": "hears"})
-    ).status_code == 200
-    assert (
-        await api.put(
-            "/internal-engine-config/upkeep", json={"pass": "memory_sync", "enabled": False}
-        )
     ).status_code == 200
 
     body = await _config(api)
 
     assert body["transcribe_model"] == "hears"
     assert body["updated_at"]
-    assert set(body["upkeep"]) == set(_PASSES)
-    assert body["upkeep"]["memory_sync"]["enabled"] is False
-    assert "model" not in body and "curate_owner_machine_id" not in body
-    assert "model_timeout_s" not in body and "default_model_timeout_s" not in body
-
-
-@pytest.mark.acceptance(
-    spec="internal-engine",
-    scenario="report the memory sync's switch and interval",
-)
-async def test_the_upkeep_block_names_exactly_the_memory_sync(api: AsyncClient) -> None:
-    upkeep = (await _config(api))["upkeep"]
-    assert set(upkeep) == set(_PASSES)
-    for name in _PASSES:
-        assert set(upkeep[name]) == {
-            "enabled",
-            "interval_s",
-            "default_interval_s",
-            "last_pass_at",
-            "next_pass_at",
-        }
-
-    r = await api.put(
-        "/internal-engine-config/upkeep",
-        json={"pass": "memory_sync", "enabled": False, "interval_s": 1800},
-    )
-    assert r.status_code == 200, r.text
-    sync = (await _config(api))["upkeep"]["memory_sync"]
-    assert sync["enabled"] is False
-    assert sync["interval_s"] == 1800
-
-
-@pytest.mark.acceptance(
-    spec="internal-engine",
-    scenario="report an unchosen interval beside the default that runs",
-)
-async def test_an_unchosen_interval_is_reported_beside_its_default(
-    api: AsyncClient, tmp_path: pathlib.Path
-) -> None:
-    await api.put("/internal-engine-config/upkeep", json={"pass": "memory_sync", "interval_s": 900})
-    assert (await _config(api))["upkeep"]["memory_sync"]["interval_s"] == 900
-
-    r = await api.put(
-        "/internal-engine-config/upkeep",
-        json={"pass": "memory_sync", "use_default_interval": True},
-    )
-    assert r.status_code == 200, r.text
-    upkeep = (await _config(api))["upkeep"]
-    for name in _PASSES:
-        assert upkeep[name]["interval_s"] is None
-        assert upkeep[name]["default_interval_s"] == int(DEFAULT_INTERVALS[name])
-
-    # The default lives in the worker's module, not in the vault's document.
-    doc = _doc()
-    for name in _PASSES:
-        assert _upkeep(doc, name).get("interval_s") is None
-
-
-@pytest.mark.acceptance(
-    spec="internal-engine",
-    scenario="refuse an interval below the floor or an unknown pass",
-)
-async def test_a_floor_breaking_interval_and_an_unknown_pass_are_refused(
-    api: AsyncClient,
-) -> None:
-    await api.put(
-        "/internal-engine-config/upkeep",
-        json={"pass": "memory_sync", "enabled": False, "interval_s": 3600},
-    )
-    before = (await _config(api))["upkeep"]
-
-    r = await api.put(
-        "/internal-engine-config/upkeep", json={"pass": "memory_sync", "interval_s": 59}
-    )
-    assert r.status_code == 422, r.text
-    r = await api.put("/internal-engine-config/upkeep", json={"pass": "vacuum", "enabled": True})
-    assert r.status_code == 422, r.text
-
-    assert (await _config(api))["upkeep"] == before
-
-
-@pytest.mark.acceptance(
-    spec="internal-engine",
-    scenario="a fresh vault runs every unattended pass",
-)
-async def test_a_fresh_vault_ships_every_pass_switched_on(
-    api: AsyncClient, tmp_path: pathlib.Path
-) -> None:
-    upkeep = (await _config(api))["upkeep"]
-    assert [upkeep[name]["enabled"] for name in _PASSES] == [True]
-
-    # The first write carries only the model; the document it creates still runs the sync.
-    assert (
-        await api.put("/internal-engine-config/transcribe-model", json={"model": "hears"})
-    ).status_code == 200
-    upkeep = (await _config(api))["upkeep"]
-    assert [upkeep[name]["enabled"] for name in _PASSES] == [True]
-    doc = _doc()
-    assert doc["transcribe_model"] == "hears"
-    assert [_upkeep(doc, name).get("enabled", True) for name in _PASSES] == [True]
+    assert set(body) == {"transcribe_model", "updated_at"}
 
 
 @pytest.mark.acceptance(
@@ -263,25 +142,24 @@ async def test_moving_the_transcribe_flag_drops_an_uncurated_model_only(
 async def test_the_transcribe_model_leaves_the_rest_of_the_row_alone(
     api: AsyncClient,
 ) -> None:
-    await api.put("/internal-engine-config/upkeep", json={"pass": "memory_sync", "enabled": False})
-    audit_before = len(
-        (
-            await api.get("/audit", params={"event_type": "internal_engine_model_set", "limit": 50})
-        ).json()["entries"]
-    )
+    assert (
+        await api.put("/internal-engine-config/transcribe-model", json={"model": "first"})
+    ).status_code == 200
+    path = vault_writer().repo.root / _DOC
+    doc = json.loads(path.read_text())
+    doc["written_by_a_newer_build"] = {"kept": True}
+    path.write_text(json.dumps(doc, indent=2) + "\n")
+    vault_writer().settle([_DOC])
 
     r = await api.put("/internal-engine-config/transcribe-model", json={"model": "hears"})
     assert r.status_code == 200, r.text
-    body = r.json()
-    assert body["transcribe_model"] == "hears"
-    assert body["upkeep"]["memory_sync"]["enabled"] is False
-
-    audit_after = len(
-        (
-            await api.get("/audit", params={"event_type": "internal_engine_model_set", "limit": 50})
-        ).json()["entries"]
-    )
-    assert audit_after == audit_before + 1
+    assert r.json()["transcribe_model"] == "hears"
+    assert _doc()["written_by_a_newer_build"] == {"kept": True}
+    entries = (
+        await api.get("/audit", params={"event_type": "internal_engine_model_set", "limit": 50})
+    ).json()["entries"]
+    assert [e["details"]["transcribe_model"] for e in entries][:1] == ["hears"]
+    assert len(entries) == 2
 
 
 async def test_the_call_bound_route_is_gone(api: AsyncClient) -> None:
@@ -293,16 +171,10 @@ async def test_the_call_bound_route_is_gone(api: AsyncClient) -> None:
 
 async def test_the_retired_routes_and_keys_are_gone(api: AsyncClient) -> None:
     assert (await api.put("/internal-engine-config", json={"model": "m"})).status_code == 405
-    assert (
-        await api.put("/internal-engine-config/curation-owner", json={"machine_id": "m"})
-    ).status_code == 404
-    for retired in ("curate", "aggregate", "distil"):
+    for retired in ("curation-owner", "upkeep"):
         assert (
-            await api.put(
-                "/internal-engine-config/upkeep", json={"pass": retired, "enabled": False}
-            )
-        ).status_code == 422
+            await api.put(f"/internal-engine-config/{retired}", json={"pass": "memory_sync"})
+        ).status_code in (404, 405)
     body = await _config(api)
     assert "model" not in body
-    assert "curate_owner_machine_id" not in body
-    assert set(body["upkeep"]) == set(_PASSES)
+    assert "upkeep" not in body

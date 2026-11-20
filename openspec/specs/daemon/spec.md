@@ -233,10 +233,7 @@ is `stop` then `start`, and is how a setting read before the bind takes effect; 
 not exit within the period is forced out (see "Force out a wedged daemon on an explicit restart"). `status` MUST only look: with no
 daemon answering — no `daemon.json`, or one whose port nothing answers on — it MUST report the
 daemon as not running (`{"status": "stopped"}` under `--json`) and exit non-zero, and MUST NOT
-start one. With a daemon answering, `status` MUST also report the passes in flight — the list
-[resource-framework](../resource-framework/spec.md) "Report the passes in flight in one cross-kind read"
-defines, each with its kind, its target and when it started — in its own section of the table form,
-which says so when nothing is running, and as part of the object under `--json`. It MUST also list
+start one. With a daemon answering, `status` MUST list
 every other daemon process serving the same vault — a start still booting or waiting on the lock,
 or a stray — by pid (`other_daemon_pids` under `--json`), counting a one-file daemon's bootloader
 and child once and never the model proxy, because one serving daemon is the rule and an extra one
@@ -259,12 +256,6 @@ running (see "Bind a fixed, settable port").
 - **WHEN** the user runs `coffer daemon status`, or `coffer daemon status --json`,
 - **THEN** it reports the daemon as not running (`{"status": "stopped"}` under `--json`) and exits non-zero,
 - **AND** no daemon is spawned and no `daemon.json` is written.
-
-#### Scenario: status names the passes in flight
-- **GIVEN** a running daemon with two passes under way, one of them over a knowledge collection,
-- **WHEN** the user runs `coffer daemon status --json`, and again `coffer daemon status` once both passes have ended,
-- **THEN** the JSON reports the daemon as ready and lists both passes with their kind, target and start time, oldest first,
-- **AND** the later table form carries a passes section saying that no pass is running, and neither call starts a pass.
 
 #### Scenario: status names other daemon processes of the vault
 - **GIVEN** a serving daemon and a second daemon process of the same vault still starting,
@@ -1310,7 +1301,8 @@ newest release it MUST say so and change nothing.
 `~/.coffer` and then stop the daemon, so uninstalling is one action instead of a
 list of manual steps. In order, it MUST take the model-provider routing out of
 every agent's settings, disconnect every agent (its MCP entry),
-remove every skill link Coffer delivered with its delivery records, keep any
+remove every skill link Coffer delivered with its delivery records, remove
+Coffer's memory hook from every agent, keep any
 reconcile pass from restoring them, remove the start-at-login job, remove the
 terminal launch files Coffer wrote, remove the installer's `PATH` lines (the
 `# Added by Coffer installer` marker and the line after it) from the shell
@@ -1334,9 +1326,9 @@ daemon has exited. The command line MUST NOT touch the Keychain, which only the
 daemon owns: it MUST say that the master key's Keychain items stay.
 
 #### Scenario: uninstall removes every footprint and keeps the vault
-- **GIVEN** a connected agent with a provider switch, two delivered skills, start at login on and the installer's `PATH` line in `~/.zshrc`
+- **GIVEN** a connected agent with a provider switch, two delivered skills, Coffer's memory hook, start at login on and the installer's `PATH` line in `~/.zshrc`
 - **WHEN** `POST /api/v1/daemon/uninstall` is called without `delete_data`
-- **THEN** the agent's MCP entry and provider keys are gone, the skill links are gone, the launch agent is gone, the `PATH` line and its marker are gone and `~/.coffer/bin` is gone
+- **THEN** the agent's MCP entry and provider keys are gone, the skill links are gone, the memory hook is gone while the agent's own hooks stay, the launch agent is gone, the `PATH` line and its marker are gone and `~/.coffer/bin` is gone
 - **AND** the answer lists each step and the daemon stops, while `~/.coffer/vault` is unchanged
 
 #### Scenario: deleting the data needs a presence grant

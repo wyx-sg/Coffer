@@ -22,11 +22,6 @@ from tests.support.facets import agent_catalog
 
 
 @dataclasses.dataclass(frozen=True)
-class _Reader:
-    agent_type: str
-
-
-@dataclasses.dataclass(frozen=True)
 class _Driver:
     agent_key: str
     display_name: str = "x"
@@ -39,7 +34,6 @@ def test_the_pure_table_carries_no_mechanism() -> None:
     for d in AGENT_DESCRIPTORS.values():
         assert d.projection is None
         assert d.driver is None
-        assert d.memory_reader is None
         assert d.dependency_probe is None
 
 
@@ -48,11 +42,9 @@ def test_binding_groups_implementations_by_the_agent_they_declare() -> None:
         AGENT_DESCRIPTORS,
         providers=PROVIDER_PROJECTIONS,
         drivers=[_Driver("codex")],
-        memory_readers=[_Reader("claude_code")],
     )
     assert catalog.driver(AgentType.CODEX) == _Driver("codex")
     assert catalog.driver(AgentType.CLAUDE_CODE) is None
-    assert catalog.memory_readers() == {"claude_code": _Reader("claude_code")}
     projected = {p.agent_type for p in PROVIDER_PROJECTIONS}
     for d in catalog:
         provider = catalog.provider_projection(d.type)

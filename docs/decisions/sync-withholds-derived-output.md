@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-18
 **Deciders**: Yuxing Wu
-**Related**: [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [Coffer Ships Its Own Skill](coffer-ships-its-own-skill.md), [Reach Is Machine-Local: Stored by uid in `local/reach.json`, Never Synced](reach-is-machine-local-stored-by-uid-never-synced.md), [Kind Plugin Contract](kind-plugin-contract.md), [Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault](sync-memory-into-each-agents-own-memory.md), spec vault-sync, spec memory, spec knowledge, PR #405
+**Related**: [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [Coffer Ships Its Own Skill](coffer-ships-its-own-skill.md), [Reach Is Machine-Local: Stored by uid in `local/reach.json`, Never Synced](reach-is-machine-local-stored-by-uid-never-synced.md), [Kind Plugin Contract](kind-plugin-contract.md), [Keep Memory in One Place in the Vault, Written by the Agents Themselves](keep-memory-in-one-place-agents-write-themselves.md), spec vault-sync, spec memory, spec knowledge, PR #405
 
 ## Context
 
@@ -22,10 +22,8 @@ Some of what Coffer holds is not authored by anyone; each machine
 
 Memory itself is not rendered output. The hub of memory entries under
 `vault/memory/` is what the person's agents learned, kept nowhere else, so it
-is vault content and syncs; each machine writes its own copies from it into
-the agents installed there and records them in the machine-local
-`local/memory-sync.json`
-([Sync Memory Into Each Agent's Own Memory](sync-memory-into-each-agents-own-memory.md)).
+is vault content and syncs
+([Keep Memory in One Place](keep-memory-in-one-place-agents-write-themselves.md)).
 
 [Sync](sync-applies-clean-merges-and-stops-on-any-conflict.md) publishes the
 whole vault repository, so anything stored in the vault would be carried. For

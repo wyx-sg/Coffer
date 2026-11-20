@@ -82,6 +82,7 @@ from coffer.surfaces.http.guide_wiring import follow_guide_features, run_builtin
 from coffer.surfaces.http.kind_wiring import wire_resource_kinds
 from coffer.surfaces.http.mcp.protocol_routes import start_session_reaper
 from coffer.surfaces.http.mcp.session_registry import tools_changed_sink
+from coffer.surfaces.http.memory_wiring import wire_memory
 from coffer.surfaces.http.openapi_route import include_openapi_route
 from coffer.surfaces.http.provider_health_wiring import wire_provider_health
 from coffer.surfaces.http.reconcile_wiring import (
@@ -254,6 +255,11 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     # One boot pass converges every target (MCP, skills, providers) before ready.
     await migrate_saved_connections(kinds.provider.service)
+    # Memory: the hub's services, Coffer's session-start hook as a target,
+    # and the clean-up of what an older build wrote into the agents.
+    memory = await wire_memory(
+        reconciler=reconciler, agents=kinds.agent_skill.agent_service, features=features
+    )
     await run_boot_pass(reconciler)
     follow_guide_features(kinds.guide, features)
     # Coffer's own skill, re-rendered from this build and the corpus every boot
@@ -279,7 +285,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         guide=kinds.guide,
         resource_svc=resource_svc,
         audit=audit,
-        engine_config=internal_engine_config_svc,
+        memory_tidy=memory.tidy,
         sm=sm,
         secret_store=secret_store,
         master_key=secrets.master_key,

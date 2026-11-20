@@ -37,7 +37,7 @@ backend/coffer/
 ├── domain/            resource.py, scope.py, audit.py, …   + agent/ channel/ mcp/ skill/ …
 ├── application/       resource_service.py, audit_service.py, retention_service.py, …
 │                      + agent/ channel/ knowledge/ mcp/ memory/ provider/ skill/ sync/ chat/ …
-├── infrastructure/    persistence/ secret/ daemon/ net/ llm/ agent_files/ …
+├── infrastructure/    persistence/ secret/ daemon/ net/ llm/ …
 │                      + agent/ channel/ mcp/ skill/ sync/ chat/ …
 └── surfaces/
     ├── http/          app.py, *_wiring.py, resource_routes.py, dependencies.py, … + mcp/ knowledge/ memory/ chat/
@@ -121,8 +121,7 @@ import-linter contracts in `backend/pyproject.toml`:
   engine (`application.engine` and the engine modules fenced in the core
   contract), the knowledge substrate (`domain.knowledge`,
   `infrastructure.knowledge`), and the kind-agnostic infrastructure packages
-  `infrastructure.net` (the SSRF guard), `infrastructure.agent_files`
-  (Claude Code transcript parsing), `infrastructure.llm` and
+  `infrastructure.net` (the SSRF guard), `infrastructure.llm` and
   `infrastructure.persistence`.
 - **Kind-agnostic core does not import kind-specific code.** The core modules
   (and `surfaces/http/dependencies.py`) may import no kind. Its one listed
@@ -141,7 +140,7 @@ Only the composition root may see two kinds at once; how it does so is
   [Layering & boundaries](../../docs-site/architecture/layering.md) is the
   reader's guide.
 - A package two kinds need moves to the layer root and becomes kind-agnostic
-  (`infrastructure/net/`, `infrastructure/agent_files/`), rather than one kind
+  (`infrastructure/net/`), rather than one kind
   importing the other.
 - Adding a kind means adding its packages to its own contract as sources and
   to every other contract's forbidden list, by hand; removing one means taking

@@ -20,8 +20,8 @@ All _per-type behaviour_ lives in the **capability manifest**
 AgentDescriptor]`, one record per agent. `types.py` methods, `config_files_for`,
 the MCP services, and auto-detect read this table (the enum's methods delegate
 via a lazy import to keep the graph acyclic). **Adding an agent = adding one
-enum value + one descriptor record** (plus a novel MCP entry renderer or native-memory
-reader only when the agent introduces a genuinely new shape).
+enum value + one descriptor record** (plus a novel MCP entry renderer only when
+the agent introduces a genuinely new shape).
 
 | Value         | Display name | Default `config_dir` | MCP file / container / shape               |
 | ------------- | ------------ | -------------------- | ------------------------------------------ |
@@ -37,8 +37,11 @@ of scope.
 `plugins` (`PluginCapability | None`), `hook_source_keys` (the allowlist keys of
 the files that carry hooks: `settings` and `settings_local` for Claude Code,
 `hooks` for Codex) and `program` (the executable detection looks for: `claude`,
-`codex`), plus `default_config_dir()`. It also names four optional mechanism
-facets — `projection`, `driver`, `memory_reader`, `dependency_probe` — which are
+`codex`), `session_hook` (`SessionHookSpec(config_key, event)`: the allowlisted
+file and the event Coffer's memory session-start hook goes under — `settings` for
+Claude Code, `hooks` for Codex, both `SessionStart`; `None` for an agent with no
+place for one), plus `default_config_dir()`. It also names three optional mechanism
+facets — `projection`, `driver`, `dependency_probe` — which are
 `None` in the pure table and bound to their implementations at the composition
 root into an `AgentCatalog` (`domain/agent/facets.py`; ADR
 agent-mechanisms-are-optional-facets-on-the-descriptor). The projection facet
@@ -66,8 +69,8 @@ stored: candidates and the agent read model compute them per request.
 `HookRow {event, matcher, command, type, timeout, group_index, hook_index}` — the last two are where the hook sits in its file, `hooks.<event>[group_index].hooks[hook_index]` — parsed from the
 `{"hooks": {event: [{matcher, hooks: [{type, command, timeout}]}]}}` shape both
 agents use; `HookSource` is `user` | `plugin`.
-Read only; nothing stored. The module judges nothing: Coffer installs no hook into an
-agent, so no row is Coffer's own and nothing carries a health.
+Read only; nothing stored. The module judges nothing: Coffer's one memory hook (memory
+"Hand a session its project's memories at start") is listed like any other, and nothing carries a health.
 
 The config-file allowlist and the skills-delivery target (`<config_dir>/skills`) both resolve against the agent's resolved `config_dir`.
 
@@ -287,7 +290,7 @@ the program installed — `installed_never_run` included, `config_only` not) and
 
 | Method | Purpose |
 | --- | --- |
-| `list_hooks(uid) -> AgentHooks` | Every hook in the agent's hook-carrying files and its enabled plugins' `hooks/hooks.json`, each a `NativeHook` (the `HookRow` fields plus `source`, the declaring file's `path` and, for a plugin hook, its `plugin` id), and `parse_errors` for the files that did not parse. Coffer installs no hook, so none is marked as Coffer's and there is no health or last fire. Writes nothing, records no audit event. |
+| `list_hooks(uid) -> AgentHooks` | Every hook in the agent's hook-carrying files and its enabled plugins' `hooks/hooks.json`, each a `NativeHook` (the `HookRow` fields plus `source`, the declaring file's `path` and, for a plugin hook, its `plugin` id), and `parse_errors` for the files that did not parse. Coffer's memory hook is listed like any other; none is marked as Coffer's and there is no health or last fire. Writes nothing, records no audit event. |
 
 A removed agent re-appears as a candidate on the next scan — there is no
 suppression list.
@@ -353,9 +356,9 @@ writes nothing itself and records no audit event of its own.
 | `disconnect(uid, *, actor)`              | Remove every part the type supports. |
 | `connected_agents() -> list[str]`        | The uids of agents carrying the `mcp` entry — the ones Coffer treats as connected. Best-effort: an agent whose config file cannot be read is left out. |
 
-Today the connection has one part, `mcp`: Coffer installs no hook into an
-agent, and the memory sync writes into each agent's own memory files rather
-than through a connection part (spec memory). The service still takes a list
+Today the connection has one part, `mcp`. Coffer's memory session-start hook
+is not a connection part: the reconciler keeps it while the memory feature is
+on, whether or not the agent is connected (spec memory). The service still takes a list
 of parts — the `mcp` part first, which the constructor enforces — and
 `surfaces/http/agent_connection_wiring.py` (`wire_agent_connection`) builds it
 over that one part. The HTTP shape is `CofferConnectionOut`
@@ -545,7 +548,7 @@ the routers are mounted in `surfaces/http/routing.py`. Together they:
 
 1. Build `AgentService` + `AutoDetectService`.
 2. Build `AgentConfigFileService` + `AgentMcpService` + `AgentMcpEntryService` +
-   `AgentPluginService` + the native-memory reader and the native-session service over a
+   `AgentPluginService` + the native-session service over a
    `ConfigFileStore`.
 3. Construct the `Kind` via `make_agent_kind(...)` with its `on_delete` hook.
 4. Register it in the per-kind registry the kind-agnostic resource routes read.
@@ -554,7 +557,7 @@ the routers are mounted in `surfaces/http/routing.py`. Together they:
    `agent_connection_wiring` builds over the agent and MCP services once the
    kinds are wired),
    `agent_workspace_routes` (MCP entries + plugins),
-   `agent_native_memory_routes`, `agent_session_routes`,
+   `agent_session_routes`,
    and `agent_unmanaged_skill_routes`. The `/fs/*` routes the picker and the
    open/reveal affordances call are mounted by spec daemon, not here.
 

@@ -1,7 +1,7 @@
 # Agent Registry — Claude Code
 
 ## Purpose
-This child of [`agent-registry`](../spec.md) says how the `claude_code` agent type realises each facet its parent defines: where its config directory is, which of its files Coffer may read and write, the shape of the MCP entry Coffer installs, where its plugin inventory and enabled state live, how its model catalogue is read back, where it keeps its own memory, and where it writes its transcripts. It is the prose reading of that type's one `AGENT_DESCRIPTORS` record — default config dir `~/.claude/`, its allowlist, its injection spec, a `PluginCapability` whose uninstall strategy is CLI delegation, its native-memory layout, its transcript location and its catalogue sources. Everything the supported types share, and everything the parent assumes, lives in the parent and is not restated here.
+This child of [`agent-registry`](../spec.md) says how the `claude_code` agent type realises each facet its parent defines: where its config directory is, which of its files Coffer may read and write, the shape of the MCP entry Coffer installs, where its plugin inventory and enabled state live, how its model catalogue is read back, where Coffer's session-start hook goes (`settings.json`), and where it writes its transcripts. It is the prose reading of that type's one `AGENT_DESCRIPTORS` record — default config dir `~/.claude/`, its allowlist, its injection spec, a `PluginCapability` whose uninstall strategy is CLI delegation, the place for its session-start hook, its transcript location and its catalogue sources. Everything the supported types share, and everything the parent assumes, lives in the parent and is not restated here.
 
 "Claude Code" is the product: its CLI and its IDE/desktop form together, because they read one shared config directory. The separate **Claude Desktop** chat app has its own config directory and is not this type. Claude Code keeps its plugin inventory in files it owns and its enabled state in a file the user owns; Coffer reads the first, writes only the second, and hands an uninstall to Claude Code's own CLI. `.claude.json` sits beside the default config directory (`~/.claude.json`) and inside a custom one (`<config_dir>/.claude.json`, where Claude Code keeps it when run with `CLAUDE_CONFIG_DIR`); only its `mcpServers` map is a write target, and the rest of that file is the agent's own state, read where needed and never written.
 
@@ -17,7 +17,7 @@ The `claude_code` type's standard config directory MUST be `~/.claude/`, which i
 - **AND** a `claude_code` agent registered without a `config_dir` resolves to `~/.claude`
 
 ### Requirement: Allowlist exactly the files Claude Code reads
-The curated allowlist ([agent-registry](../spec.md) "Define a curated config-file allowlist per type") for `claude_code` MUST be exactly: `settings.json`, `settings.local.json`, `.claude.json` under the key `global`, `CLAUDE.md` under the key `instructions`, and the `agents/` directory entry of "Expose personal subagents as a directory entry" under the key `subagents`. `CLAUDE.md` is human-authored instructions and its key says so; the agent's own written memory is the scan of "Scan Claude Code's per-project memory stores" and memory's domain, not this file.
+The curated allowlist ([agent-registry](../spec.md) "Define a curated config-file allowlist per type") for `claude_code` MUST be exactly: `settings.json`, `settings.local.json`, `.claude.json` under the key `global`, `CLAUDE.md` under the key `instructions`, and the `agents/` directory entry of "Expose personal subagents as a directory entry" under the key `subagents`. `CLAUDE.md` is human-authored instructions and its key says so; the agent's own written memory is its own, which Coffer neither lists nor reads.
 
 The `global` file MUST be the one Claude Code itself reads for the agent's config directory: `~/.claude.json`, beside the directory, when `config_dir` is the default `~/.claude`; `<config_dir>/.claude.json`, inside it, for any other `config_dir`. Claude Code run with `CLAUDE_CONFIG_DIR` set keeps `.claude.json` inside that directory and never reads `~/.claude.json` — observed on Claude Code 2.1.281, where `claude mcp add -s user` under `CLAUDE_CONFIG_DIR=<dir>` wrote `<dir>/.claude.json` and `claude mcp get` did not see a server kept in `$HOME/.claude.json`. Every reader of that file resolves it this one way, with no fallback to the other location: the config-file editor, the MCP install of "Install Coffer's MCP entry into Claude Code's .claude.json", the entry listing of "Read MCP entries from both Claude Code config files" and the model source of "Read additionalModelOptionsCache without writing it".
 
@@ -126,23 +126,6 @@ The native-config source of [agent-registry](../spec.md) "Contribute models from
 - **THEN** the options returned are the ones in `<config_dir>/.claude.json`
 - **AND** none of `~/.claude.json`'s options are returned
 
-### Requirement: Scan Claude Code's per-project memory stores
-The native-memory layout of [agent-registry](../spec.md) "Scan an agent's own native memory stores read-only" for this type MUST be per project at `<config_dir>/projects/<slug>/memory/` — one row per project that has a `memory/` directory. The `project` label and `path` MUST be the REAL project directory, recovered from that project's session-transcript `cwd`; the slug encoding is lossy (`/`, `.` and `_` all collapse to `-`), so decoding the slug is a last-resort fallback — used, for example, when a project's transcripts are gone but its memory directory remains — and never the preferred source.
-
-#### Scenario: the native memory scan lists an agent's own per-project stores
-- **GIVEN** a registered `claude_code` agent whose `<config_dir>/projects/<slug>/memory` directory holds `.md` fact files (plus a `MEMORY.md` index)
-- **WHEN** the user scans the agent's native memory
-- **THEN** Coffer returns one store per project with a `project` label and `path` that are the REAL project directory (recovered from the project's session-transcript `cwd`, not the lossy slug), the real `memory_dir`, and an `item_count` of `.md` files excluding `MEMORY.md` (or `1` for a store whose only content is an inline `MEMORY.md`) — read-only, deriving everything from disk and emitting no audit event. An agent with no `projects/` directory returns an empty list.
-
-### Requirement: Count memory items excluding the MEMORY.md index
-`item_count` for a store MUST be the number of `.md` fact files excluding `MEMORY.md` — or `1` when there are no fact files but `MEMORY.md` itself holds inline content, which is an older or hand-written hub document and is still one item of memory.
-
-#### Scenario: count an inline MEMORY.md as one item
-- **GIVEN** a project memory directory whose only file is a `MEMORY.md` with inline content
-- **WHEN** the native memory is scanned
-- **THEN** that store reports an `item_count` of 1
-- **AND** a store holding fact files beside its `MEMORY.md` counts only the fact files
-
 ### Requirement: List Claude Code sessions through the Agent SDK
 The native sessions of [agent-registry](../spec.md) "List an agent's native sessions through the agent" for this type
 MUST be asked of the Claude Agent SDK — `list_sessions`, `rename_session` and `delete_session` — and not parsed from files.
@@ -150,16 +133,6 @@ The SDK finds sessions through `CLAUDE_CONFIG_DIR`: when the agent's config dire
 to it for the call, under a module lock, and restore it after; the calls run in a worker thread, off the request path.
 The listing is fetched whole (the SDK reads only the head and tail of each session file), then filtered by the search and paged in memory,
 the cursor carrying the last row's activity time and session id so a session written between two reads neither repeats nor skips a row.
-The sessions live under `<config_dir>/projects/`, which is also the parent of this type's memory stores,
-which is why the store read of [agent-registry](../spec.md) "Read one native memory store's files read-only" MUST accept only a
-directory the layout of "Scan Claude Code's per-project memory stores" would have listed and reject a sibling path under
-`projects/` that merely looks like one.
-
-#### Scenario: list sessions from projects and refuse a sibling as a memory store
-- **GIVEN** a registered `claude_code` agent with a session and a `memory/` store under `<config_dir>/projects/<slug>/`
-- **WHEN** the user lists the agent's sessions and then opens `<config_dir>/projects/<slug>` as a memory store
-- **THEN** the session is listed
-- **AND** the store read is rejected as `not_found` (404)
 
 #### Scenario: list sessions of a custom config directory
 - **GIVEN** a `claude_code` agent registered with a `config_dir` other than `~/.claude`

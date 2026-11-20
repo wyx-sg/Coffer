@@ -32,13 +32,16 @@ from coffer.application.skill.ports import (
 )
 from coffer.application.skill.service import SkillService
 from coffer.application.skill.staging import ImportStage, StagingRegistry
-from coffer.application.upkeep_schedule import SLICE_S
 from coffer.domain.resource import Resource
 from coffer.domain.skill.source_status import SourceStatus
 from coffer.domain.skill.update_check import DEFAULT_CHOICE, UpdateCheckChoice, interval_of
 from coffer.domain.skill_source_errors import SkillSourceUnreachable
 
 logger = logging.getLogger(__name__)
+
+#: How often the update check reads its setting again while it waits, so a
+#: change in Settings lands within one slice.
+SLICE_S = 30.0
 
 #: The longest one operation that reads a skill's Git repository may take, all
 #: its git commands together (spec skill-manager "Add skills from a Git
@@ -145,7 +148,7 @@ class SkillUpdateWorker:
     """Checks Git-imported skills in the background on this machine's schedule
     (spec skill-manager "Hand a Git-imported skill's update to an agent").
 
-    The setting is read again every slice (``upkeep_schedule.SLICE_S``), so a
+    The setting is read again every slice (``SLICE_S``), so a
     change of **Check skills for updates** takes effect within one slice and
     **Only when I ask** stops the background checks. Each round checks only the
     skills not checked within the chosen interval, so a daemon restarted often

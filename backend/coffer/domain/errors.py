@@ -310,23 +310,6 @@ def _describe_skill_details(details: dict[str, object]) -> str:
     return ""
 
 
-class UpkeepAlreadyRunning(CofferError):  # noqa: N818
-    """A long upkeep pass over this target is already in flight.
-
-    Two passes over the same target at once are two writers racing, not one
-    faster pass. Surfaces map this to 409 — the
-    request is refused, and the caller's own display should already have been
-    saying "running" (``application.upkeep_runs``).
-    """
-
-    code = "UPKEEP_ALREADY_RUNNING"
-
-    def __init__(self, kind: str, name: str) -> None:
-        super().__init__(f"an upkeep pass is already running for {kind}:{name}")
-        self.kind = kind
-        self.name = name
-
-
 class ResourceProtected(CofferError):  # noqa: N818
     """A resource Coffer owns outright, asked to be taken over.
 

@@ -41,10 +41,10 @@ The `McpInjectionSpec` [agent-registry](../spec.md) "Install Coffer's MCP server
 - **AND** `~/.gemini/config/skills/` exists for skill delivery
 
 ### Requirement: Leave Antigravity's models, memory and sessions to Antigravity
-The `antigravity` type MUST have no provider projection, no driver, no memory reader and no session source ([Antigravity Joins Coffer Through Its Config Layer Only](../../../../docs/decisions/antigravity-joins-at-its-config-layer-only.md)): Antigravity runs only Google-hosted models and documents no custom endpoint; Google does not permit wrapping `agy` inside a third-party tool on a personal plan; Antigravity keeps no store of learned memories; and its conversation storage is undocumented. So no model connection reaches it, no chat, channel or scheduled-task picker lists it, memory sync neither reads nor writes it, its native-memory scan, plugin list and hook list are empty, and listing its sessions answers `AGENT_TYPE_UNSUPPORTED`. Coffer MUST read nothing under its per-surface data folders.
+The `antigravity` type MUST have no provider projection, no driver, no session-start hook place and no session source ([Antigravity Joins Coffer Through Its Config Layer Only](../../../../docs/decisions/antigravity-joins-at-its-config-layer-only.md)): Antigravity runs only Google-hosted models and documents no custom endpoint; Google does not permit wrapping `agy` inside a third-party tool on a personal plan; Antigravity keeps no store of learned memories; and its conversation storage is undocumented. So no model connection reaches it, no chat, channel or scheduled-task picker lists it, Coffer installs no memory hook into it and reads or writes no memory of its, its plugin list and hook list are empty, and listing its sessions answers `AGENT_TYPE_UNSUPPORTED`. Coffer MUST read nothing under its per-surface data folders.
 
 #### Scenario: read nothing from Antigravity's per-surface data folders
 - **GIVEN** a registered `antigravity` agent and a conversation folder under `~/.gemini/antigravity/brain/`
-- **WHEN** the user lists the agent's sessions, native memory, plugins and hooks
+- **WHEN** the user lists the agent's sessions, plugins and hooks
 - **THEN** the sessions request answers `AGENT_TYPE_UNSUPPORTED`
-- **AND** the native memory, plugins and hooks lists are empty
+- **AND** the plugins and hooks lists are empty

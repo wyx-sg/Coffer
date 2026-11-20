@@ -4,8 +4,6 @@ export const FULL_AGENT_FEATURES = [
   "skills",
   "provider",
   "chat",
-  "memory_read",
-  "memory_write",
   "sessions",
   "plugins",
   "hooks",

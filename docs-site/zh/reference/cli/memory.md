@@ -1,12 +1,12 @@
 ---
 title: coffer memory
-description: "Memory sync into each agent's own memory: state, sync now, preview, undo, curate."
+description: "Memory, one Markdown file per topic in the vault: projects, topics, tidy."
 pageClass: cli-ref
 ---
 
 # coffer memory
 
-Memory sync into each agent's own memory: state, sync now, preview, undo, curate.
+Memory, one Markdown file per topic in the vault: projects, topics, tidy.
 
 ```sh
 coffer memory [OPTIONS] COMMAND [ARGS]...
@@ -18,18 +18,16 @@ coffer memory [OPTIONS] COMMAND [ARGS]...
 
 | 命令 | 说明 |
 | --- | --- |
-| [`memory state`](#memory-state) | The sync, its pending preview, the hub's projects and each agent's state. |
-| [`memory sync`](#memory-sync) | Sync memory now. |
-| [`memory preview-write`](#memory-preview-write) | Write exactly what the pending preview lists. |
-| [`memory preview-cancel`](#memory-preview-cancel) | Drop the pending preview. |
-| [`memory undo`](#memory-undo) | Remove every unedited copy Coffer wrote on this machine and turn automatic sync off. |
-| [`memory codex-import`](#memory-codex-import) | Say whether Codex imports Claude Code's memories itself. |
-| [`memory entries`](#memory-entries) | A project's memories with their origin and where each was written. |
-| [`memory show`](#memory-show) | One memory's text and the file each agent on this machine holds it in. |
+| [`memory state`](#memory-state) | The projects that hold memories, whether a tidy is open, and the Tidy prompt. |
+| [`memory topics`](#memory-topics) | A project's memory files, with what breaks the format in each. |
+| [`memory show`](#memory-show) | One memory file's text. |
+| [`memory tidy-start`](#memory-tidy-start) | Open a tidy: until it finishes, the edits under memory/ are kept for one commit. |
+| [`memory tidy-finish`](#memory-tidy-finish) | Close the tidy and commit its edits as one commit. |
+| [`memory session-start`](#memory-session-start) | Print the memories a session started here is handed (the agents' hook runs it). |
 
 ## memory state
 
-The sync, its pending preview, the hub's projects and each agent's state.
+The projects that hold memories, whether a tidy is open, and the Tidy prompt.
 
 <p class="cli-label">概要</p>
 
@@ -43,14 +41,49 @@ coffer memory state [OPTIONS]
 | --- | --- | --- | --- |
 | `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
 
-## memory sync
+## memory topics
 
-Sync memory now.
+A project's memory files, with what breaks the format in each.
 
 <p class="cli-label">概要</p>
 
 ```sh
-coffer memory sync [OPTIONS]
+coffer memory topics [OPTIONS] PROJECT
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `PROJECT` <span class="cli-chip">参数</span> | text | 必填 | The project's folder (from coffer memory state) |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## memory show
+
+One memory file's text.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer memory show [OPTIONS] PROJECT NAME
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `PROJECT` <span class="cli-chip">参数</span> | text | 必填 | The project's folder |
+| `NAME` <span class="cli-chip">参数</span> | text | 必填 | The file's name (from coffer memory topics) |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## memory tidy-start
+
+Open a tidy: until it finishes, the edits under memory/ are kept for one commit.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer memory tidy-start [OPTIONS]
 ```
 
 <p class="cli-label">参数与选项</p>
@@ -59,62 +92,14 @@ coffer memory sync [OPTIONS]
 | --- | --- | --- | --- |
 | `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
 
-## memory preview-write
+## memory tidy-finish
 
-Write exactly what the pending preview lists.
-
-<p class="cli-label">概要</p>
-
-```sh
-coffer memory preview-write [OPTIONS]
-```
-
-<p class="cli-label">参数与选项</p>
-
-| 名称 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- |
-| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
-
-## memory preview-cancel
-
-Drop the pending preview.
+Close the tidy and commit its edits as one commit. Body: summary (the agent's report).
 
 <p class="cli-label">概要</p>
 
 ```sh
-coffer memory preview-cancel [OPTIONS]
-```
-
-<p class="cli-label">参数与选项</p>
-
-| 名称 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- |
-| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
-
-## memory undo
-
-Remove every unedited copy Coffer wrote on this machine and turn automatic sync off.
-
-<p class="cli-label">概要</p>
-
-```sh
-coffer memory undo [OPTIONS]
-```
-
-<p class="cli-label">参数与选项</p>
-
-| 名称 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- |
-| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
-
-## memory codex-import
-
-Say whether Codex imports Claude Code's memories itself. Body: value (true, false, null).
-
-<p class="cli-label">概要</p>
-
-```sh
-coffer memory codex-import [OPTIONS]
+coffer memory tidy-finish [OPTIONS]
 ```
 
 <p class="cli-label">参数与选项</p>
@@ -125,36 +110,14 @@ coffer memory codex-import [OPTIONS]
 | `--set` <span class="cli-chip">选项</span> | text（可重复） |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
 | `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
 
-## memory entries
+## memory session-start
 
-A project's memories with their origin and where each was written.
+Print the memories a session started here is handed (the agents' hook runs it).
 
-<p class="cli-label">概要</p>
-
-```sh
-coffer memory entries [OPTIONS]
-```
-
-<p class="cli-label">参数与选项</p>
-
-| 名称 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- |
-| `--project` <span class="cli-chip">选项</span> | text |  | The project key |
-| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
-
-## memory show
-
-One memory's text and the file each agent on this machine holds it in.
+Reads the hook's JSON from standard input for the session's working directory, falling back to the current directory. Prints nothing outside a repository, and nothing in a session Coffer started itself, whose system prompt already carries them. Never fails a session: any error prints nothing and exits 0. Needs no running daemon.
 
 <p class="cli-label">概要</p>
 
 ```sh
-coffer memory show [OPTIONS] ENTRY_ID
+coffer memory session-start [OPTIONS]
 ```
-
-<p class="cli-label">参数与选项</p>
-
-| 名称 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- |
-| `ENTRY_ID` <span class="cli-chip">参数</span> | text | 必填 | The memory's id (from coffer memory entries) |
-| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |

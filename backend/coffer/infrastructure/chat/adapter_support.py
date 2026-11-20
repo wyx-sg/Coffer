@@ -135,6 +135,15 @@ HomeEnvResolver = Callable[[], Awaitable[dict[str, str]]]
 #: managed agents"): without one the provider is not offered and runs no turn.
 #: ``None`` at a provider means "no registry to ask" (tests), never "unmanaged".
 ManagedCheck = Callable[[], Awaitable[bool]]
+#: cwd -> the project memories a session started there is handed, or ``""``
+#: (spec memory "Hand a session its project's memories at start"). A narrow seam
+#: so chat never imports the memory kind; the composition root builds it, and it
+#: answers ``""`` while the memory feature is off.
+MemoryResolver = Callable[[str], Awaitable[str]]
+#: Set in a turn's environment when its system prompt carries the memories, so
+#: Coffer's own session-start hook in the agent prints nothing and the session
+#: is not handed them twice. Must equal ``application.memory.context.INJECTED_ENV``.
+MEMORY_IN_PROMPT_ENV = "COFFER_MEMORY_IN_PROMPT"
 
 
 async def require_managed(check: ManagedCheck | None, agent_key: str) -> None:
@@ -154,10 +163,13 @@ async def compose_system_context(
     list_models: ModelLister | None,
     resolve_channel: ChannelNoteResolver | None = None,
     conversation_id: str = "",
+    memory: str = "",
 ) -> str:
     """The appends every provider owes its agent, joined into one.
 
-    Two of them, and the order is the order they matter in:
+    The project's memories come first when there are any (the same text the
+    session-start hook hands a session the person starts), then two notes, in
+    the order they matter in:
 
     * a channel-originated conversation drives the agent from a phone chat, so
       tell it so — concise replies, no clickable dialogs;
@@ -174,7 +186,7 @@ async def compose_system_context(
     true across a rename, and the facts answer "what is it called, where is this
     conversation, what renders there", which are only ever read here and now.
     """
-    parts: list[str] = []
+    parts: list[str] = [memory.strip()] if memory.strip() else []
     # Whether this is a channel turn is decided by the stored uid, never by
     # whether its label could be resolved. A deleted channel would otherwise
     # silently downgrade a phone-chat turn to a terminal one — dropping the

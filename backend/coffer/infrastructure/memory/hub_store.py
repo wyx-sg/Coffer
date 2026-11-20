@@ -1,15 +1,12 @@
-"""The memory hub on disk: ``vault/memory/`` (spec memory "Keep every agent's
-memories in a hub in the vault").
+"""The memory hub on disk: ``vault/memory/`` (spec memory "Keep memory in one
+place in the vault").
 
-One Markdown file per memory, frontmatter first, under
-``projects/<folder>/``. The hub is vault content: every change a sync makes is
-one vault commit through the vault's single write path, naming the memory sync
-as its writer, and vault sync carries the hub to the person's other machines
-like any other vault file.
-
-Reading is from disk, not ``HEAD``: a sync round may have merged another
-machine's entries a moment ago, and the working tree is what the person's
-machines agree on.
+Agents write the hub's files themselves, with their own file tools; the vault
+scanner commits what they wrote as ``disk`` writes, as it does any edit made
+outside Coffer. This module reads the files from disk (the working tree is
+what the person's machines agree on), writes a person's edit from the Memory
+page through the vault's one write path, keeps a tidy's edits together as one
+commit, and converts the one-file-per-memory entries an older build published.
 """
 
 from __future__ import annotations
@@ -17,98 +14,49 @@ from __future__ import annotations
 import logging
 import os
 import pathlib
-from collections.abc import Callable, Iterable
-from dataclasses import dataclass, field
-from typing import Any
+from collections.abc import Callable
+from dataclasses import dataclass
 
-from coffer.domain.memory.errors import UnsafeMemoryPath
+from coffer.domain.memory.errors import MemoryFileNotFound, MemoryFileStale
 from coffer.domain.memory.hub import (
-    HUB_TYPES,
     PROJECTS,
     TYPE_PROJECT,
-    HubEntry,
-    Origin,
-    check_id,
+    TYPES,
+    Topic,
+    check_file_name,
+    check_segment,
+    read_topic,
 )
 from coffer.domain.vault.content_ids import fingerprint
 from coffer.domain.vault.layout import MEMORY
-from coffer.domain.vault.writers import WRITER_MEMORY_SYNC, CommitMeta
-from coffer.domain.vault.writes import Expect
+from coffer.domain.vault.writers import (
+    OP_DELETE,
+    OP_LAYOUT,
+    OP_UPDATE,
+    WRITER_DAEMON,
+    WRITER_USER,
+    CommitMeta,
+)
 from coffer.infrastructure.memory.frontmatter import render_frontmatter, split_frontmatter
+from coffer.infrastructure.vault import git
 from coffer.infrastructure.vault.instance import vault_writer
 from coffer.infrastructure.vault.writer import VaultWriter
 
 logger = logging.getLogger(__name__)
 
-#: The operation every hub commit names; its writer is ``memory-sync``.
-OP_MEMORY_SYNC = "memory-sync"
+#: What a recording failure looks like; logged, and the files stand.
+_RECORDING_ERRORS = (git.VaultGitError, git.GitMissing, OSError)
+#: The vault-relative prefix every hub path starts with.
+PREFIX = f"{MEMORY}/"
 
 
-def render_entry(entry: HubEntry) -> str:
-    """The file a hub entry is stored as."""
-    fm: dict[str, Any] = {
-        "id": entry.id,
-        "origin": {
-            "machine": entry.origin.machine,
-            "agent": entry.origin.agent,
-            "source": entry.origin.source,
-        },
-    }
-    fm.update(
-        {
-            "project": entry.project,
-            "type": entry.type,
-            "title": entry.title,
-            "description": entry.description,
-            "created_at": entry.created_at,
-            "updated_at": entry.updated_at,
-        }
-    )
-    body = entry.body.strip("\n")
-    return render_frontmatter(fm, f"\n{body}\n")
+@dataclass(frozen=True)
+class TopicFile:
+    """One file with its raw text and the token a write must quote."""
 
-
-def parse_entry(text: str) -> HubEntry | None:
-    """A hub file read back, or ``None`` when it is not one (a person's own
-    file under ``vault/memory/`` is kept, and ignored)."""
-    fm, body = split_frontmatter(text)
-    origin = fm.get("origin")
-    if not isinstance(origin, dict):
-        return None
-    try:
-        entry_id = check_id(str(fm.get("id", "")))
-    except UnsafeMemoryPath:
-        return None
-    project = str(fm.get("project", "") or "")
-    if not project:
-        return None
-    entry_type = str(fm.get("type", "") or "")
-    return HubEntry(
-        id=entry_id,
-        origin=Origin(
-            machine=str(origin.get("machine", "") or ""),
-            agent=str(origin.get("agent", "") or ""),
-            source=str(origin.get("source", "") or ""),
-        ),
-        project=project,
-        type=entry_type if entry_type in HUB_TYPES else TYPE_PROJECT,
-        title=str(fm.get("title", "") or ""),
-        description=str(fm.get("description", "") or ""),
-        body=body.strip("\n"),
-        created_at=str(fm.get("created_at", "") or ""),
-        updated_at=str(fm.get("updated_at", "") or ""),
-    )
-
-
-@dataclass
-class HubChanges:
-    """One sync's changes to the hub, committed together."""
-
-    upserts: list[HubEntry] = field(default_factory=list)
-    deletes: list[HubEntry] = field(default_factory=list)
-
-    def __bool__(self) -> bool:
-        return bool(self.upserts or self.deletes)
+    topic: Topic
+    text: str
+    digest: str
 
 
 class HubStore:
@@ -117,92 +65,209 @@ class HubStore:
     def __init__(self, writer: Callable[[], VaultWriter] = vault_writer) -> None:
         self._writer = writer
 
-    @property
-    def writer_factory(self) -> Callable[[], VaultWriter]:
-        """The vault writer this store commits through, for a sibling store."""
-        return self._writer
-
     def root(self) -> pathlib.Path:
         return self._writer().repo.root / MEMORY
 
-    def entries(self) -> dict[str, HubEntry]:
-        """Every hub entry, by id. A file that does not parse is skipped."""
-        root = self.root()
-        found: dict[str, HubEntry] = {}
-        for path in _md_files(root):
-            try:
-                entry = parse_entry(path.read_bytes().decode("utf-8"))
-            except (OSError, UnicodeDecodeError):
-                logger.warning("memory.hub.unreadable path=%s", path)
-                continue
-            if entry is None:
-                continue
-            found[entry.id] = entry
-        return found
+    def projects_root(self) -> pathlib.Path:
+        return self.root() / PROJECTS
 
-    def located(self) -> dict[str, str]:
-        """Each entry id's hub-relative path as found on disk."""
-        root = self.root()
-        out: dict[str, str] = {}
-        for path in _md_files(root):
-            stem = path.stem
-            try:
-                out[check_id(stem)] = path.relative_to(root).as_posix()
-            except UnsafeMemoryPath:
-                continue
-        return out
+    # --- reading -----------------------------------------------------------------
 
-    def apply(self, changes: HubChanges, summary: str, actor: str | None) -> str | None:
-        """Write ``changes`` as one vault commit; answer the commit or ``None``."""
-        if not changes:
-            return None
-        writer = self._writer()
-        located = self.located()
-        meta = CommitMeta(
-            writer=WRITER_MEMORY_SYNC, operation=OP_MEMORY_SYNC, summary=summary, actor=actor
+    def projects(self) -> list[str]:
+        """Every project folder that holds at least one Markdown file."""
+        base = self.projects_root()
+        if not base.is_dir():
+            return []
+        return sorted(
+            d.name
+            for d in base.iterdir()
+            if d.is_dir() and not d.name.startswith(".") and any(_md_files(d))
         )
+
+    def topics(self, project: str) -> list[Topic]:
+        """Every topic of ``project``, in file-name order."""
+        return read_topics(self.projects_root() / check_segment(project), project)
+
+    def read(self, project: str, name: str) -> TopicFile:
+        path = self._path(project, name)
+        try:
+            data = path.read_bytes()
+        except FileNotFoundError:
+            raise MemoryFileNotFound(f"{project}/{name}") from None
+        text = data.decode("utf-8", errors="replace")
+        fm, body = split_frontmatter(text)
+        return TopicFile(read_topic(project, name, fm, body), text, fingerprint(data))
+
+    # --- a person's edit -----------------------------------------------------------
+
+    def write(self, project: str, name: str, text: str, *, expected: str, actor: str) -> str | None:
+        """Replace the file with ``text`` as one commit; refused
+        :class:`MemoryFileStale` when it no longer holds ``expected``."""
+        rel = self._rel(project, name)
+        writer = self._writer()
+        self._check_current(writer, rel, expected)
+        meta = CommitMeta(WRITER_USER, OP_UPDATE, f"Edited memory {project}/{name}", actor=actor)
         with writer.begin(meta) as txn:
-            for entry in changes.deletes:
-                rel = located.get(entry.id, entry.path)
-                path = f"{MEMORY}/{rel}"
-                if writer.read_disk(path) is not None:
-                    txn.delete(path, _any(writer, path))
-            for entry in changes.upserts:
-                old = located.get(entry.id)
-                if old and old != entry.path:
-                    stale = f"{MEMORY}/{old}"
-                    txn.delete(stale, _any(writer, stale))
-                path = f"{MEMORY}/{entry.path}"
-                data = render_entry(entry).encode("utf-8")
-                current = writer.read_disk(path)
-                if current == data:
-                    continue
-                txn.write(path, data, _any(writer, path) if current is not None else Expect.ABSENT)
+            txn.write(rel, text.encode("utf-8"), expected)
         return txn.version
 
+    def delete(self, project: str, name: str, *, expected: str, actor: str) -> str | None:
+        rel = self._rel(project, name)
+        writer = self._writer()
+        self._check_current(writer, rel, expected)
+        meta = CommitMeta(WRITER_USER, OP_DELETE, f"Deleted memory {project}/{name}", actor=actor)
+        with writer.begin(meta) as txn:
+            txn.delete(rel, expected)
+        return txn.version
 
-def _any(writer: VaultWriter, path: str) -> str | Expect:
-    """What ``path`` holds now: the hub is Coffer's to rewrite, so a sync
-    states the bytes it found rather than refusing a file a round just merged."""
-    current = writer.read_disk(path)
-    return Expect.ABSENT if current is None else fingerprint(current)
+    def _check_current(self, writer: VaultWriter, rel: str, expected: str) -> None:
+        current = writer.read_disk(rel)
+        if current is None:
+            raise MemoryFileNotFound(rel.removeprefix(f"{PREFIX}{PROJECTS}/"))
+        if fingerprint(current) != expected:
+            raise MemoryFileStale(rel.removeprefix(f"{PREFIX}{PROJECTS}/"))
+
+    # --- a tidy ----------------------------------------------------------------------
+
+    def pause(self, running: Callable[[], bool]) -> None:
+        """Leave edits under ``vault/memory/`` uncommitted while ``running()``:
+        neither the vault scanner nor a sync round settles them until the tidy
+        closes. Idempotent."""
+        try:
+            self._writer().set_paused(lambda: [PREFIX] if running() else [], owner="memory")
+        except _RECORDING_ERRORS:
+            logger.warning("memory.hub.pause_failed", exc_info=True)
+
+    def settle(self) -> None:
+        """Commit what changed under ``vault/memory/`` as ``disk`` writes."""
+        try:
+            writer = self._writer()
+            pending = [p for p in writer.pending() if p.startswith(PREFIX)]
+            if pending:
+                writer.settle(pending)
+        except _RECORDING_ERRORS:
+            logger.warning("memory.hub.settle_failed", exc_info=True)
+
+    def pending(self) -> tuple[tuple[str, str | None], ...]:
+        """The hub's uncommitted paths and digests, paused ones included: what
+        a tidy watches to tell whether its agent is still at work."""
+        try:
+            pending = self._writer().pending(include_paused=True)
+        except _RECORDING_ERRORS:
+            logger.warning("memory.hub.pending_failed", exc_info=True)
+            return ()
+        return tuple(sorted((p, d) for p, d in pending.items() if p.startswith(PREFIX)))
+
+    def settle_as(self, meta: CommitMeta) -> str | None:
+        """Commit everything that changed under ``vault/memory/`` as one commit
+        carrying ``meta``; ``None`` when nothing had changed."""
+        try:
+            writer = self._writer()
+            pending = [p for p in writer.pending(include_paused=True) if p.startswith(PREFIX)]
+            if not pending:
+                return None
+            result = writer.settle(pending, meta=meta)
+        except _RECORDING_ERRORS:
+            logger.warning("memory.hub.settle_failed", exc_info=True)
+            return None
+        return result.version if result is not None else None
+
+    # --- converting an older build's entries ------------------------------------------
+
+    def convert_legacy(self) -> int:
+        """Rewrite every hub entry an older build published (one memory per
+        file, with ``id`` and ``origin`` in its frontmatter) into the topic
+        format, as one ``daemon`` commit; the number converted. A file in the
+        topic format, or anyone's own file, is left alone."""
+        writer = self._writer()
+        changes: list[tuple[str, bytes, str]] = []
+        for path in _md_files(self.projects_root(), recursive=True):
+            try:
+                data = path.read_bytes()
+            except OSError:
+                continue
+            new = _converted(data.decode("utf-8", errors="replace"))
+            if new is None:
+                continue
+            rel = f"{PREFIX}{path.relative_to(self.root()).as_posix()}"
+            changes.append((rel, new.encode("utf-8"), fingerprint(data)))
+        if not changes:
+            return 0
+        meta = CommitMeta(
+            WRITER_DAEMON,
+            OP_LAYOUT,
+            f"Converted {len(changes)} memories to the topic format",
+            actor="daemon",
+        )
+        try:
+            with writer.begin(meta) as txn:
+                for rel, data, expected in changes:
+                    txn.write(rel, data, expected)
+        except _RECORDING_ERRORS:
+            logger.warning("memory.hub.convert_failed", exc_info=True)
+            return 0
+        return len(changes)
+
+    # --- paths -------------------------------------------------------------------------
+
+    def _path(self, project: str, name: str) -> pathlib.Path:
+        return self.projects_root() / check_segment(project) / check_file_name(name)
+
+    def _rel(self, project: str, name: str) -> str:
+        return f"{PREFIX}{PROJECTS}/{check_segment(project)}/{check_file_name(name)}"
 
 
-def _md_files(root: pathlib.Path) -> Iterable[pathlib.Path]:
-    for folder, dirs, files in os.walk(root):
-        dirs[:] = [d for d in dirs if not d.startswith(".")]
-        rel = pathlib.Path(folder).relative_to(root).parts
-        if rel and rel[0] != PROJECTS:
+def read_topics(folder: pathlib.Path, project: str) -> list[Topic]:
+    """Every topic file in ``folder``, in file-name order. A file that cannot
+    be read is skipped and logged. Needs no vault writer, so the session-start
+    hook can call it without a daemon."""
+    out: list[Topic] = []
+    for path in _md_files(folder):
+        try:
+            text = path.read_bytes().decode("utf-8")
+        except (OSError, UnicodeDecodeError):
+            logger.warning("memory.hub.unreadable path=%s", path)
             continue
-        for name in files:
-            if name.endswith(".md") and not name.startswith("."):
-                yield pathlib.Path(folder) / name
+        fm, body = split_frontmatter(text)
+        out.append(read_topic(project, path.name, fm, body))
+    return out
 
 
-__all__ = [
-    "OP_MEMORY_SYNC",
-    "HubChanges",
-    "HubStore",
-    "parse_entry",
-    "render_entry",
-]
+def _converted(text: str) -> str | None:
+    """An older build's entry in the topic format, or ``None`` when ``text``
+    is not one."""
+    fm, body = split_frontmatter(text)
+    if not isinstance(fm.get("origin"), dict) or not fm.get("id"):
+        return None
+    kind = str(fm.get("type") or "")
+    updated = str(fm.get("updated_at") or fm.get("created_at") or "")[:10]
+    lines = body.strip("\n").splitlines()
+    return render_frontmatter(
+        {
+            "title": str(fm.get("title") or fm.get("id")),
+            "type": kind if kind in TYPES else TYPE_PROJECT,
+            "updated": updated,
+        },
+        "\n" + "\n".join(lines) + "\n",
+    )
+
+
+def _md_files(folder: pathlib.Path, *, recursive: bool = False) -> list[pathlib.Path]:
+    if not folder.is_dir():
+        return []
+    if not recursive:
+        return sorted(
+            p
+            for p in folder.iterdir()
+            if p.is_file() and p.suffix == ".md" and not p.name.startswith(".")
+        )
+    found: list[pathlib.Path] = []
+    for here, dirs, files in os.walk(folder):
+        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        found.extend(
+            pathlib.Path(here) / f for f in files if f.endswith(".md") and not f.startswith(".")
+        )
+    return sorted(found)
+
+
+__all__ = ["PREFIX", "HubStore", "TopicFile", "read_topics"]

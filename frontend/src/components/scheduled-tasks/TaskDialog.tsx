@@ -40,17 +40,23 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   /** The task being edited; omit for a new one. */
   existing?: ScheduledTask;
+  /** A new task's starting values, offered by another page (the Memory page's
+   *  periodic tidy); the person still reviews and saves it. */
+  draft?: Partial<TaskForm>;
   /** Called with the uid once it is saved. */
   onSaved?: (uid: string) => void;
 }
 
-function Form({ onOpenChange, existing, onSaved }: Omit<Props, "open">) {
+function Form({ onOpenChange, existing, draft, onSaved }: Omit<Props, "open">) {
   const { t } = useTranslation();
   const editing = existing !== undefined;
   const create = useCreateScheduledTask();
   const edit = useEditScheduledTask();
   const save = editing ? edit : create;
-  const [form, setForm] = useState<TaskForm>(() => formFrom(existing));
+  const [form, setForm] = useState<TaskForm>(() => ({
+    ...formFrom(existing),
+    ...(existing ? {} : draft),
+  }));
   const set = (patch: Partial<TaskForm>) => {
     setForm((f) => ({ ...f, ...patch }));
     if (save.error) save.reset();
@@ -159,11 +165,13 @@ function Form({ onOpenChange, existing, onSaved }: Omit<Props, "open">) {
   );
 }
 
-export function TaskDialog({ open, onOpenChange, existing, onSaved }: Props) {
+export function TaskDialog({ open, onOpenChange, existing, draft, onSaved }: Props) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] max-w-[540px] grid-rows-[minmax(0,1fr)]">
-        {open ? <Form onOpenChange={onOpenChange} existing={existing} onSaved={onSaved} /> : null}
+        {open ? (
+          <Form onOpenChange={onOpenChange} existing={existing} draft={draft} onSaved={onSaved} />
+        ) : null}
       </DialogContent>
     </Dialog>
   );

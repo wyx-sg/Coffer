@@ -87,13 +87,6 @@ SPECS = [
         "Look for git again while the daemon waits in its setup state.",
         wait=_waits.NETWORK_S,
     ),
-    RouteCommand(
-        "daemon upkeep",
-        "GET",
-        "/upkeep/runs",
-        _UI + "passes in flight",
-        "The rewriting passes running now.",
-    ),
 ]
 
 mount(SPECS)

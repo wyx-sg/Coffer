@@ -61,8 +61,8 @@ coffer [OPTIONS] COMMAND [ARGS]...
 | [`coffer provider`](/reference/cli/provider) | Model providers: connections, prices, switching agents' models. |
 | [`coffer model`](/reference/cli/model) | Ask a model endpoint which models it serves, or test it. |
 | [`coffer conversation`](/reference/cli/conversation) | Conversations: rename, stop a turn, delete (list: agent session all). |
-| [`coffer memory`](/reference/cli/memory) | Memory sync into each agent's own memory: state, sync now, preview, undo, curate. |
-| [`coffer settings`](/reference/cli/settings) | Settings: approvals, secret storage, features, data, upkeep. |
+| [`coffer memory`](/reference/cli/memory) | Memory, one Markdown file per topic in the vault: projects, topics, tidy. |
+| [`coffer settings`](/reference/cli/settings) | Settings: approvals, secret storage, features, data, engine. |
 | [`coffer attention`](/reference/cli/attention) | What needs you (the Overview list): list, ignore, un-ignore. |
 | [`coffer usage`](/reference/cli/usage) | Model usage and cost. |
 | [`coffer sync`](/reference/cli/sync) | Vault sync: remote, rounds, machines, conflicts. |

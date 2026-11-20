@@ -30,7 +30,7 @@ WRITER_CURATION = "curation"
 #: A sync round's merge: another machine's changes, applied here.
 WRITER_SYNC = "sync"
 #: The memory sync publishing this machine's agents' memories to the hub
-#: (spec memory "Keep every agent's memories in a hub in the vault").
+#: (spec memory "Keep memory in one place in the vault").
 WRITER_MEMORY_SYNC = "memory-sync"
 
 WRITERS = (

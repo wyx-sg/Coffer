@@ -44,7 +44,6 @@ vi.mock("@/components/agents/AgentMcpServersTab", () => ({ AgentMcpServersTab: s
 vi.mock("@/components/agents/AgentPluginsTab", () => ({ AgentPluginsTab: stub("plugins") }));
 vi.mock("@/components/agents/AgentHooksTab", () => ({ AgentHooksTab: stub("hooks") }));
 vi.mock("@/components/agents/AgentConfigFilesTab", () => ({ AgentConfigFilesTab: stub("config") }));
-vi.mock("@/components/agents/AgentMemoryTab", () => ({ AgentMemoryTab: stub("memory") }));
 vi.mock("@/components/agents/sessions/AgentSessionsTab", () => ({
   AgentSessionsTab: stub("sessions"),
 }));
@@ -133,7 +132,7 @@ describe("AgentDetailPage", () => {
   acceptance("agent-registry", "the agent detail page carries six tabs and a More menu", () => {
     mockRoute();
     renderAt("/agents/claude_code/skills");
-    // Six in the strip, no counts, and no Model tab; Plugins and Memory sit behind More.
+    // Six in the strip, no counts, and no Model tab; Plugins sits behind More.
     const tabs = screen.getAllByRole("tab").map((tab) => tab.textContent);
     expect(tabs).toEqual([
       "Overview",
@@ -166,10 +165,10 @@ describe("AgentDetailPage", () => {
     renderAt("/agents/claude_code");
     fireEvent.click(screen.getByRole("button", { name: "More" }));
     const items = within(screen.getByRole("menu")).getAllByRole("menuitem");
-    expect(items.map((i) => i.textContent)).toEqual(["Plugins", "Memory"]);
-    fireEvent.click(items[1]);
-    expect(screen.getByTestId("where")).toHaveTextContent("/agents/claude_code/memory");
-    expect(screen.getByRole("button", { name: "Memory" })).toBeInTheDocument();
+    expect(items.map((i) => i.textContent)).toEqual(["Plugins"]);
+    fireEvent.click(items[0]);
+    expect(screen.getByTestId("where")).toHaveTextContent("/agents/claude_code/plugins");
+    expect(screen.getByRole("button", { name: "Plugins" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "More" })).not.toBeInTheDocument();
   });
 

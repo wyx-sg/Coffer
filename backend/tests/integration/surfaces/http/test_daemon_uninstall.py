@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+import time
 from collections.abc import Iterator
 
 import pytest
@@ -91,9 +92,17 @@ def _gateway(home: pathlib.Path) -> object:
 def test_uninstall_removes_coffers_footprint_and_keeps_the_vault(
     home: pathlib.Path, stops: list[bool]
 ) -> None:
+    settings = home / ".claude" / "settings.json"
+    settings.write_text(
+        json.dumps({"hooks": {"Stop": [{"hooks": [{"type": "command", "command": "say done"}]}]}})
+    )
     with _client() as c:
         uid = _connected_agent(c)
         assert _gateway(home) is not None
+        deadline = time.monotonic() + 10
+        while "memory session-start" not in settings.read_text() and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert "memory session-start" in settings.read_text()
         vault = sorted(p.name for p in (home / ".coffer" / "vault").iterdir())
         r = c.post("/api/v1/daemon/uninstall", json={})
         assert r.status_code == 200, r.text
@@ -101,6 +110,10 @@ def test_uninstall_removes_coffers_footprint_and_keeps_the_vault(
         status = c.get(f"/api/v1/agents/{uid}/coffer-connection").json()
     steps = {s["key"]: s["outcome"] for s in body["steps"]}
     assert steps["agent_connections"] == "done"
+    assert steps["memory_hooks"] == "done"
+    assert json.loads(settings.read_text())["hooks"] == {
+        "Stop": [{"hooks": [{"type": "command", "command": "say done"}]}]
+    }
     assert steps["path_lines"] == "done"
     assert steps["binaries"] == "done"
     assert steps["terminal_files"] == "done"

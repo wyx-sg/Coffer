@@ -20,8 +20,6 @@ FEATURES: tuple[str, ...] = (
     "skills",
     "provider",
     "chat",
-    "memory_read",
-    "memory_write",
     "sessions",
     "plugins",
     "hooks",
@@ -40,15 +38,12 @@ def agent_features(
     session sources are bound in infrastructure, so the composition root
     passes them in)."""
     d = catalog.get(agent_type)
-    memory = catalog.memory_reader(agent_type) is not None
     have = {
         "mcp": d.mcp is not None,
         # Every type is delivered skills (its projection's SKILL entry).
         "skills": True,
         "provider": catalog.provider_projection(agent_type) is not None,
         "chat": catalog.driver(agent_type) is not None,
-        "memory_read": memory,
-        "memory_write": memory,
         "sessions": agent_type in session_types,
         "plugins": d.plugins is not None,
         "hooks": bool(d.hook_source_keys),

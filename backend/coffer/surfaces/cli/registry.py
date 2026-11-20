@@ -65,9 +65,13 @@ EXEMPT: dict[tuple[str, str], tuple[Category, str]] = {
         "file-content",
         "an agent's config file is its own plain file",
     ),
-    ("GET", "/agents/{uid}/native-memory/files/content"): (
+    ("PUT", "/memory/projects/{project}/{name}"): (
         "file-content",
-        "an agent's native memory is its own plain file",
+        "a memory topic is a plain file",
+    ),
+    ("DELETE", "/memory/projects/{project}/{name}"): (
+        "file-content",
+        "a memory topic is a plain file",
     ),
     # Acts whose whole meaning is the window a person sits at.
     ("GET", "/fs/browse"): ("window", "the folder picker's own listing"),

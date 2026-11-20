@@ -1,7 +1,3 @@
-"""Application layer for the memory sync (spec memory).
-
-Each machine publishes what its agents wrote into the hub in the vault
-(``sync_publish``) and writes the hub into each local agent's own memory
-(``sync_write``); :class:`~coffer.application.memory.sync_service.MemorySyncService`
-drives both, and ``sync_view`` answers the Memory page.
-"""
+"""The memory kind (ADR keep-memory-in-one-place-agents-write-themselves): one
+hub of topic files in the vault, written by the agents themselves, handed to
+each session at its start, and tidied by the person's agent on request."""

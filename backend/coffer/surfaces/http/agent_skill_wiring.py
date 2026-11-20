@@ -24,7 +24,6 @@ from coffer.application.agent.mcp_import import McpImportService
 from coffer.application.agent.mcp_import_plan import McpImportPlanner
 from coffer.application.agent.mcp_reconcile import McpEntryTarget
 from coffer.application.agent.mcp_service import AgentMcpService, default_shim_resolver
-from coffer.application.agent.native_memory_service import AgentNativeMemoryService
 from coffer.application.agent.native_session_service import NativeSessionService
 from coffer.application.agent.plugin_service import AgentPluginService
 from coffer.application.agent.service import AgentService
@@ -47,7 +46,6 @@ from coffer.domain.resource import Resource
 from coffer.domain.secrets import secret_ref
 from coffer.domain.skill.cli_status import ServerLauncher
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
-from coffer.infrastructure.agent.native_memory_store import FileNativeMemoryScanner
 from coffer.infrastructure.agent.native_session_sources import native_session_sources
 from coffer.infrastructure.agent.plugin_bundle import FsPluginDetailReader
 from coffer.infrastructure.agent.plugin_cli import ClaudePluginCli
@@ -77,7 +75,6 @@ from coffer.surfaces.http.vault_composition import VaultStores
 from coffer.surfaces.http.workspace_dependencies import (
     set_agent_hooks_service,
     set_agent_mcp_entry_service,
-    set_agent_native_memory_service,
     set_agent_plugin_service,
     set_native_session_service,
 )
@@ -278,14 +275,10 @@ def wire_agent_and_skill_kinds(
         catalog=agent_catalog,
     )
 
-    # Read-only listing of the agent's OWN native per-project memory stores
-    # (Claude Code's projects/<slug>/memory, Codex's global memories/MEMORY.md).
-    # Coffer never writes them — the UI only opens/reveals the directory.
-    agent_native_memory_svc = AgentNativeMemoryService(
-        agent_service=agent_svc,
-        scanner=FileNativeMemoryScanner(),
-    )
-
+    # The agent's own sessions, listed / renamed / deleted through the agent
+    # itself (Agent SDK for Claude Code, a short-lived app-server for Codex).
+    # Surfaces may import both kinds, so the chat package's app-server
+    # transport is handed to the agent adapter here.
     native_session_svc = NativeSessionService(agent_service=agent_svc, sources=session_sources)
 
     async def _agent_on_delete(agent: Resource) -> None:
@@ -317,7 +310,6 @@ def wire_agent_and_skill_kinds(
     set_auto_detect_service(auto_detect_svc)
     set_agent_config_file_service(agent_config_file_svc)
     set_agent_mcp_entry_service(agent_mcp_entry_svc)
-    set_agent_native_memory_service(agent_native_memory_svc)
     set_agent_plugin_service(agent_plugin_svc)
     set_agent_hooks_service(agent_hooks_svc)
     set_native_session_service(native_session_svc)

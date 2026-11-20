@@ -234,10 +234,6 @@ Log-style tables are pruned by one worker against one registry, so no kind write
 
 The registered policies, their defaults and the worker's cadence are listed in [Observability](/architecture/observability#retention).
 
-## Passes in flight
-
-A long upkeep pass that rewrites one target's files is tracked in an in-process registry keyed by kind and name, so a second pass never starts on the same target: a request is refused with `UPKEEP_ALREADY_RUNNING`, and the timers skip a busy target. There is no table and no lease: a daemon restart ends every pass, and a persisted claim that outlived its runner would wedge its target forever. Read it with `GET /api/v1/upkeep/runs` or `coffer daemon status`.
-
 ## Trade-offs and alternatives
 
 - **Extract the framework on the second kind.** Coffer's usual rule. Rejected here because pulling a generic resource model out of MCP-specific code would have meant re-modelling the audit table, the routes and retention at once.

@@ -10,8 +10,8 @@ import type { AgentType } from "@/lib/api/agents";
 import { detailTabPath } from "@/lib/detailTabs";
 
 /**
- * The eight detail tabs, in the order the page shows them: the six in the strip,
- * then the two behind More. The value is the path segment. There is no Model
+ * The seven detail tabs, in the order the page shows them: the six in the strip,
+ * then Plugins behind More. The value is the path segment. There is no Model
  * tab: the model is a section of Overview.
  */
 export const AGENT_PRIMARY_TABS = [
@@ -22,7 +22,7 @@ export const AGENT_PRIMARY_TABS = [
   "config",
   "sessions",
 ] as const;
-export const AGENT_MORE_TABS = ["plugins", "memory"] as const;
+export const AGENT_MORE_TABS = ["plugins"] as const;
 export const AGENT_TABS = [...AGENT_PRIMARY_TABS, ...AGENT_MORE_TABS] as const;
 export type AgentTab = (typeof AGENT_TABS)[number];
 export const DEFAULT_AGENT_TAB: AgentTab = "overview";
@@ -32,7 +32,6 @@ const TAB_FEATURE: Partial<Record<AgentTab, string>> = {
   "mcp-servers": "mcp",
   plugins: "plugins",
   hooks: "hooks",
-  memory: "memory_read",
   sessions: "sessions",
 };
 
@@ -65,11 +64,4 @@ export function agentBasePath(type: string): string {
 /** The canonical address of one tab (`/agents/<type>` for Overview). */
 export function agentTabPath(type: string, tab: AgentTab, search = ""): string {
   return detailTabPath(agentBasePath(type), tab, AGENT_TABS, DEFAULT_AGENT_TAB, search);
-}
-
-/** One native memory store, addressed by its directory (its identity), under Memory. */
-export function agentMemoryStorePath(type: string, dir: string, project?: string | null): string {
-  const params = new URLSearchParams({ dir });
-  if (project) params.set("project", project);
-  return `${agentBasePath(type)}/memory/store?${params.toString()}`;
 }

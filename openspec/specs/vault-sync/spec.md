@@ -107,7 +107,7 @@ Module-owned shared state that belongs to the vault rather than to one machine
 MUST converge as vault state documents under `vault/state/<area>/`: MCP
 capability switches (`state/mcp-preferences/<server>.json`) and Coffer's own
 settings — the
-speech-to-text model and the upkeep switches
+speech-to-text model
 (`state/settings/internal-engine.json`). A state document names its owner by
 uid; an area with nothing but its defaults has no document. The plugin
 inventory is not a state area: it is carried in each machine's descriptor (see
@@ -162,8 +162,7 @@ travel (see "Write only this machine's descriptor").
 Only `~/.coffer/vault/` is a repository. Everything true of one machine only
 MUST be stored outside it: `local/` (agents, reach, the rows of linked
 knowledge folders, the sync remote, retention, the secret boundary's files,
-machine-local ciphertext, and what memory sync wrote into this machine's
-agents), `content/` (media and
+machine-local ciphertext), `content/` (media and
 the chat workspace), `runs.db` (conversations, the audit log, MCP invocation
 records, rounds, usage), `derived/` (everything rebuilt),
 and `daemon-config.json`, `daemon.json`, the master key and logs directly under
@@ -200,7 +199,7 @@ derived: its master folder (`derived/skills/coffer-guide/`) and its resource
 file (`derived/resources/skill/coffer-guide.json`). Every other skill is in the
 vault. Memory is not derived: the memory hub, `vault/memory/`, is vault content
 and converges like any other vault file
-([memory](../memory/spec.md) "Keep every agent's memories in a hub in the vault").
+([memory](../memory/spec.md) "Keep memory in one place in the vault").
 
 #### Scenario: a locally generated skill is neither published nor overwritten
 - **GIVEN** Coffer's own skill and a person's imported skill

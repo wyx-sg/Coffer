@@ -207,12 +207,11 @@ forbidden_modules = ["coffer.surfaces"]
 # a port would be ceremony. So the application MAY import these substrate
 # modules, but no other infrastructure.
 #
-# Second exception: ``coffer.application.memory`` (the sync) composes
-# ``coffer.infrastructure.memory`` — the hub store, the ledger, the two
-# readers and the two writers — directly, the same substrate reasoning as
-# knowledge above: there is no engine behind a port, only file I/O and format
-# parsers and renderers, and this is the whole layer's one consumer of them.
-# The memory layer holds no table, so there is no persistence exception
+# Second exception: ``coffer.application.memory`` composes
+# ``coffer.infrastructure.memory`` — the hub's files, the repository lookup and
+# the clean-up of an older build's copies — directly, the same substrate
+# reasoning as knowledge above: there is no engine behind a port, only file
+# I/O. The memory layer holds no table, so there is no persistence exception
 # beside it.
 #
 # Third exception: ``coffer.application.binary_deploy`` asks
@@ -229,7 +228,6 @@ forbidden_modules = ["coffer.infrastructure"]
 ignore_imports = [
     "coffer.application.knowledge.* -> coffer.infrastructure.knowledge.*",
     "coffer.application.memory.* -> coffer.infrastructure.memory.*",
-    "coffer.application.memory.* -> coffer.infrastructure.memory.writers.*",
     "coffer.application.binary_deploy -> coffer.infrastructure.vault.home",
 ]
 
@@ -292,7 +290,7 @@ forbidden_modules = ["coffer.infrastructure.secret"]
 # any other kind's modules; the kind-agnostic core (Resource/Audit/etc.),
 # Coffer's own engine (``application.engine`` and the engine modules listed in
 # Contract 6), the knowledge substrate, and the kind-agnostic infrastructure
-# packages (``infrastructure.net``, ``infrastructure.agent_files``,
+# packages (``infrastructure.net``,
 # ``infrastructure.llm``, ``infrastructure.persistence``) are the only shared
 # ground. Only the composition root (``surfaces.http.app`` + ``*_wiring.py``,
 # ``*_composition.py``, ``surfaces.cli.main``) may see two kinds at once.
@@ -312,8 +310,8 @@ forbidden_modules = ["coffer.infrastructure.secret"]
 #   another kind's class without executing any of its code.
 #
 # Everything else crosses through a port the consuming kind declares
-# (``application.chat.ports.ModelCatalogPort``, ``application.memory
-# .legacy_removal.HooksFileStore``) and the composition root satisfies.
+# (``application.chat.ports.ModelCatalogPort``) and the composition root
+# satisfies.
 
 # MCP servers: the gateway, the supervisors, the capability catalogue.
 [[tool.importlinter.contracts]]
@@ -335,7 +333,6 @@ forbidden_modules = [
     "coffer.surfaces.http.agent_connection_routes",
     "coffer.surfaces.http.agent_workspace_routes",
     "coffer.surfaces.http.agent_mcp_import_routes",
-    "coffer.surfaces.http.agent_native_memory_routes",
     "coffer.surfaces.http.agent_session_routes",
     "coffer.surfaces.http.agent_hooks_routes",
     "coffer.surfaces.http.agent_dependencies",
@@ -402,7 +399,6 @@ source_modules = [
     "coffer.surfaces.http.agent_connection_routes",
     "coffer.surfaces.http.agent_workspace_routes",
     "coffer.surfaces.http.agent_mcp_import_routes",
-    "coffer.surfaces.http.agent_native_memory_routes",
     "coffer.surfaces.http.agent_session_routes",
     "coffer.surfaces.http.agent_hooks_routes",
     "coffer.surfaces.http.agent_dependencies",
@@ -497,7 +493,6 @@ forbidden_modules = [
     "coffer.surfaces.http.agent_connection_routes",
     "coffer.surfaces.http.agent_workspace_routes",
     "coffer.surfaces.http.agent_mcp_import_routes",
-    "coffer.surfaces.http.agent_native_memory_routes",
     "coffer.surfaces.http.agent_session_routes",
     "coffer.surfaces.http.agent_hooks_routes",
     "coffer.surfaces.http.agent_dependencies",
@@ -563,7 +558,6 @@ forbidden_modules = [
     "coffer.surfaces.http.agent_connection_routes",
     "coffer.surfaces.http.agent_workspace_routes",
     "coffer.surfaces.http.agent_mcp_import_routes",
-    "coffer.surfaces.http.agent_native_memory_routes",
     "coffer.surfaces.http.agent_session_routes",
     "coffer.surfaces.http.agent_hooks_routes",
     "coffer.surfaces.http.agent_dependencies",
@@ -641,7 +635,6 @@ forbidden_modules = [
     "coffer.surfaces.http.agent_connection_routes",
     "coffer.surfaces.http.agent_workspace_routes",
     "coffer.surfaces.http.agent_mcp_import_routes",
-    "coffer.surfaces.http.agent_native_memory_routes",
     "coffer.surfaces.http.agent_session_routes",
     "coffer.surfaces.http.agent_hooks_routes",
     "coffer.surfaces.http.agent_dependencies",
@@ -726,7 +719,6 @@ forbidden_modules = [
     "coffer.surfaces.http.agent_connection_routes",
     "coffer.surfaces.http.agent_workspace_routes",
     "coffer.surfaces.http.agent_mcp_import_routes",
-    "coffer.surfaces.http.agent_native_memory_routes",
     "coffer.surfaces.http.agent_session_routes",
     "coffer.surfaces.http.agent_hooks_routes",
     "coffer.surfaces.http.agent_dependencies",
@@ -803,7 +795,6 @@ forbidden_modules = [
     "coffer.surfaces.http.agent_connection_routes",
     "coffer.surfaces.http.agent_workspace_routes",
     "coffer.surfaces.http.agent_mcp_import_routes",
-    "coffer.surfaces.http.agent_native_memory_routes",
     "coffer.surfaces.http.agent_session_routes",
     "coffer.surfaces.http.agent_hooks_routes",
     "coffer.surfaces.http.agent_dependencies",
@@ -880,7 +871,6 @@ forbidden_modules = [
     "coffer.surfaces.http.agent_connection_routes",
     "coffer.surfaces.http.agent_workspace_routes",
     "coffer.surfaces.http.agent_mcp_import_routes",
-    "coffer.surfaces.http.agent_native_memory_routes",
     "coffer.surfaces.http.agent_session_routes",
     "coffer.surfaces.http.agent_hooks_routes",
     "coffer.surfaces.http.agent_dependencies",
@@ -930,9 +920,7 @@ forbidden_modules = [
     "coffer.surfaces.http.sync_dependencies",
 ]
 ignore_imports = [
-    "coffer.infrastructure.memory.readers.* -> coffer.domain.agent.*",
-    "coffer.infrastructure.memory.writers.* -> coffer.domain.agent.*",
-    "coffer.infrastructure.memory.checkouts -> coffer.domain.agent.*",
+    "coffer.application.memory.* -> coffer.domain.agent.*",
 ]
 
 # Vault convergence with a git remote.
@@ -965,7 +953,6 @@ forbidden_modules = [
     "coffer.surfaces.http.agent_connection_routes",
     "coffer.surfaces.http.agent_workspace_routes",
     "coffer.surfaces.http.agent_mcp_import_routes",
-    "coffer.surfaces.http.agent_native_memory_routes",
     "coffer.surfaces.http.agent_session_routes",
     "coffer.surfaces.http.agent_hooks_routes",
     "coffer.surfaces.http.agent_dependencies",
@@ -1052,7 +1039,6 @@ source_modules = [
     # itself, plus the settings modules, fenced in neither direction.
     "coffer.application.engine",
     "coffer.application.internal_engine_config_service",
-    "coffer.application.upkeep_schedule",
     "coffer.surfaces.http.internal_engine_routes",
     "coffer.domain.resource",
     "coffer.domain.audit",
@@ -1063,7 +1049,6 @@ source_modules = [
     # may import one.
     "coffer.application.platform_port",
     "coffer.infrastructure.platform",
-    "coffer.infrastructure.agent_files",
     "coffer.infrastructure.persistence.models",
     "coffer.infrastructure.persistence.migrations.env",
     "coffer.surfaces.http.dependencies",
@@ -1085,7 +1070,6 @@ forbidden_modules = [
     "coffer.surfaces.http.agent_connection_routes",
     "coffer.surfaces.http.agent_workspace_routes",
     "coffer.surfaces.http.agent_mcp_import_routes",
-    "coffer.surfaces.http.agent_native_memory_routes",
     "coffer.surfaces.http.agent_session_routes",
     "coffer.surfaces.http.agent_hooks_routes",
     "coffer.surfaces.http.agent_dependencies",

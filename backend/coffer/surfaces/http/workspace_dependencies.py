@@ -10,7 +10,6 @@ from __future__ import annotations
 from coffer.application.agent.agent_sessions_listing import AgentSessionsListing
 from coffer.application.agent.hooks_service import AgentHooksService
 from coffer.application.agent.mcp_entry_service import AgentMcpEntryService
-from coffer.application.agent.native_memory_service import AgentNativeMemoryService
 from coffer.application.agent.native_session_service import NativeSessionService
 from coffer.application.agent.plugin_service import AgentPluginService
 
@@ -44,22 +43,6 @@ def get_agent_plugin_service() -> AgentPluginService:
     if _agent_plugin_service is None:
         raise RuntimeError("agent plugin service not initialised")
     return _agent_plugin_service
-
-
-_agent_native_memory_service: AgentNativeMemoryService | None = None
-
-
-def set_agent_native_memory_service(svc: AgentNativeMemoryService) -> None:
-    """Called by the composition root once on startup."""
-    global _agent_native_memory_service
-    _agent_native_memory_service = svc
-
-
-def get_agent_native_memory_service() -> AgentNativeMemoryService:
-    """FastAPI Depends() target."""
-    if _agent_native_memory_service is None:
-        raise RuntimeError("agent native-memory service not initialised")
-    return _agent_native_memory_service
 
 
 _native_session_service: NativeSessionService | None = None

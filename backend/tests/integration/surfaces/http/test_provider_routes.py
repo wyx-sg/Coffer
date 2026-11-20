@@ -762,65 +762,6 @@ async def test_a_second_transcribe_default_cannot_be_written_behind_the_service(
         assert flagged == ["first"]
 
 
-@pytest.mark.asyncio
-@pytest.mark.acceptance(
-    spec="internal-engine",
-    scenario="switch off and re-time the passes Coffer runs unattended",
-)
-async def test_upkeep_switches_and_intervals_round_trip(tmp_path, monkeypatch):
-    """The memory sync, the pass Coffer runs on its own behalf, made visible."""
-    from httpx import ASGITransport, AsyncClient
-
-    app = _app(tmp_path, monkeypatch, 59884)
-    set_active_token(TOKEN)
-    async with (
-        app.router.lifespan_context(app),
-        AsyncClient(
-            transport=ASGITransport(app), base_url="http://t", headers={"X-Coffer-Token": TOKEN}
-        ) as c,
-    ):
-        # Out of the box the sync runs with no chosen interval, so it reports
-        # the default it actually runs at.
-        upkeep = (await c.get("/api/v1/internal-engine-config")).json()["upkeep"]
-        assert list(upkeep) == ["memory_sync"]
-        assert upkeep["memory_sync"]["enabled"] is True
-        assert upkeep["memory_sync"]["interval_s"] is None
-        assert upkeep["memory_sync"]["default_interval_s"] == 3600
-
-        # Each half independent of the other.
-        r = await c.put(
-            "/api/v1/internal-engine-config/upkeep", json={"pass": "memory_sync", "enabled": False}
-        )
-        assert r.status_code == 200, r.text
-        assert r.json()["upkeep"]["memory_sync"]["enabled"] is False
-
-        r = await c.put(
-            "/api/v1/internal-engine-config/upkeep",
-            json={"pass": "memory_sync", "interval_s": 900},
-        )
-        assert r.json()["upkeep"]["memory_sync"]["interval_s"] == 900
-        # ...and the half it did not name is exactly as it was left.
-        assert r.json()["upkeep"]["memory_sync"]["enabled"] is False
-
-        # Back to the pass's own interval — which a null cannot say.
-        r = await c.put(
-            "/api/v1/internal-engine-config/upkeep",
-            json={"pass": "memory_sync", "use_default_interval": True},
-        )
-        assert r.json()["upkeep"]["memory_sync"]["interval_s"] is None
-
-        # A pass this vault does not run is a 422, not a silently ignored write.
-        r = await c.put("/api/v1/internal-engine-config/upkeep", json={"pass": "vacuum"})
-        assert r.status_code == 422, r.text
-
-        # And an interval below the floor is refused rather than busy-looping.
-        r = await c.put(
-            "/api/v1/internal-engine-config/upkeep",
-            json={"pass": "memory_sync", "interval_s": 5},
-        )
-        assert r.status_code == 422, r.text
-
-
 @pytest.mark.acceptance(
     spec="provider-switching",
     scenario="curate which of a connection's models are offered downstream",

@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-23
 **Deciders**: Yuxing Wu
-**Related**: spec knowledge; [Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](tidying-knowledge-is-the-agents-job.md); [A Linked Knowledge Folder Is Shared in Place, Read-Only to Coffer, and Recorded Machine-Local](linked-knowledge-folders-are-read-only-and-machine-local.md) (a folder the person keeps elsewhere, shared with agents but never copied in); [Coffer Ships Its Own Manual as a Skill Resource](coffer-ships-its-own-skill.md); [Per-Agent Resource Scope](per-agent-resource-scope.md); [Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault](sync-memory-into-each-agents-own-memory.md); [Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md); research note [knowledge curation](../research/knowledge-curation.md); PRs #368, #382, #404, #405, #418
+**Related**: spec knowledge; [Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](tidying-knowledge-is-the-agents-job.md); [A Linked Knowledge Folder Is Shared in Place, Read-Only to Coffer, and Recorded Machine-Local](linked-knowledge-folders-are-read-only-and-machine-local.md) (a folder the person keeps elsewhere, shared with agents but never copied in); [Coffer Ships Its Own Manual as a Skill Resource](coffer-ships-its-own-skill.md); [Per-Agent Resource Scope](per-agent-resource-scope.md); [Keep Memory in One Place in the Vault, Written by the Agents Themselves](keep-memory-in-one-place-agents-write-themselves.md); [Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md); research note [knowledge curation](../research/knowledge-curation.md); PRs #368, #382, #404, #405, #418
 
 **Partly superseded** (2026-11-13): a collection has no `.inbox/` ([Knowledge Has No Inbox](knowledge-has-no-inbox.md)), and the catalogue counts a collection's files instead of listing them ([The Guide Catalogue Counts Files](the-guide-catalogue-counts-files.md)).
 
@@ -189,11 +189,9 @@ so they load ambiently without the agent reaching for anything.
 - **Cons.** Writing another tool's files is intrusive and illegible, collapses
   the boundary between agent configuration and knowledge, and owes a
   hand-maintained adapter per agent for a format that moves upstream.
-- **Why it lost.** It was built, as native projection, and removed. The
-  memory layer does write into each agent's own memory today, but only copies
-  of what the person's other agents learned, in files Coffer owns and one
-  marked block, for the agents' own curation
-  ([Sync Memory Into Each Agent's Own Memory](sync-memory-into-each-agents-own-memory.md)).
+- **Why it lost.** It was built, as native projection, and removed. Memory is
+  the one thing Coffer hands a session at start, through a hook, within 4 KB
+  ([Keep Memory in One Place](keep-memory-in-one-place-agents-write-themselves.md)).
   Knowledge is the person's reference material, read on demand, and this
   layer pushes nothing into a session.
 

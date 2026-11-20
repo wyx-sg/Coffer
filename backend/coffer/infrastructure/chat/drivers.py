@@ -17,6 +17,7 @@ from coffer.infrastructure.chat.adapter_support import (
     ChannelNoteResolver,
     HomeEnvResolver,
     ManagedCheck,
+    MemoryResolver,
     ModelLister,
 )
 from coffer.infrastructure.chat.claude_sdk_provider import (
@@ -43,6 +44,8 @@ class DriverDeps:
     resolve_home_env: Callable[[str], HomeEnvResolver]
     #: Per-agent "is an enabled agent of this type managed" check (``None`` ⇒ not asked).
     is_managed: Callable[[str], ManagedCheck] | None = None
+    #: The project memories a turn started in a directory is handed (``None`` ⇒ none).
+    resolve_memory: MemoryResolver | None = None
 
 
 class ClaudeSdkDriver:
@@ -59,6 +62,7 @@ class ClaudeSdkDriver:
             resolve_channel=deps.resolve_channel,
             resolve_home_env=deps.resolve_home_env(self.agent_key),
             is_managed=deps.is_managed(self.agent_key) if deps.is_managed else None,
+            resolve_memory=deps.resolve_memory,
         )
 
 
@@ -76,6 +80,7 @@ class CodexAppServerDriver:
             resolve_channel=deps.resolve_channel,
             resolve_home_env=deps.resolve_home_env(self.agent_key),
             is_managed=deps.is_managed(self.agent_key) if deps.is_managed else None,
+            resolve_memory=deps.resolve_memory,
         )
 
 

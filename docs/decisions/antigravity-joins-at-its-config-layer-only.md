@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-11-19
 **Deciders**: Yuxing Wu
-**Related**: [Per-Agent Behaviour Lives in One Descriptor Record per Agent](agent-descriptor-manifest.md), [Agent Mechanisms Are Optional Facets on the Descriptor](agent-mechanisms-are-optional-facets-on-the-descriptor.md), [Coffer Drives Claude Code Through the Agent SDK and Codex Through `codex app-server`](driving-agents-through-sdk-and-app-server.md), [Skills Reach an Agent as a Directory Link to One Master Folder](cross-platform-skill-delivery.md), [Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault](sync-memory-into-each-agents-own-memory.md), spec agent-registry "Support exactly the Claude Code, Codex, Antigravity, Cursor, OpenCode and DeepSeek Harness agent types", spec agent-registry/antigravity
+**Related**: [Per-Agent Behaviour Lives in One Descriptor Record per Agent](agent-descriptor-manifest.md), [Agent Mechanisms Are Optional Facets on the Descriptor](agent-mechanisms-are-optional-facets-on-the-descriptor.md), [Coffer Drives Claude Code Through the Agent SDK and Codex Through `codex app-server`](driving-agents-through-sdk-and-app-server.md), [Skills Reach an Agent as a Directory Link to One Master Folder](cross-platform-skill-delivery.md), [Keep Memory in One Place in the Vault, Written by the Agents Themselves](keep-memory-in-one-place-agents-write-themselves.md), spec agent-registry "Support exactly the Claude Code, Codex, Antigravity, Cursor, OpenCode and DeepSeek Harness agent types", spec agent-registry/antigravity
 
 ## Context
 
@@ -152,9 +152,10 @@ Two details follow from what Antigravity does:
 - Antigravity never appears in the chat picker, channel agent pickers or
   scheduled tasks, and no model connection reaches it: those lists already come
   from the bound driver and provider facets.
-- Memory sync neither reads from nor writes to Antigravity. Writing hub
-  memories as a global `trigger: glob` rule per project is possible and is left
-  for a separate decision.
+- Antigravity carries no memory hook, so it is not handed memories ([Keep Memory
+  in One Place in the Vault, Written by the Agents Themselves](keep-memory-in-one-place-agents-write-themselves.md)).
+  Writing hub memories as a global `trigger: glob` rule per project is possible
+  and is left for a separate decision.
 - Nothing is read from `~/.gemini/antigravity*/`, including its OAuth tokens.
 - Antigravity's paths changed once already. Detection reports the App's version,
   and a future move is a change to one descriptor record.

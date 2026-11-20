@@ -32,9 +32,9 @@ function entry(eventType: string): AuditEntry {
 }
 
 acceptance("memory", "label every memory event type on the audit surface", () => {
-  // The sync and its undo are among them, and the retired types old rows carry.
+  // The hook's install and removal are among them, and the retired types old rows carry.
   expect(MEMORY_EVENTS).toEqual(
-    expect.arrayContaining(["memory_synced", "memory_sync_undone", "memory_curation_requested"]),
+    expect.arrayContaining(["memory_hook_installed", "memory_hook_removed", "memory_synced"]),
   );
 
   for (const lng of ["en", "zh"]) {

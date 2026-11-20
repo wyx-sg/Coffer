@@ -264,8 +264,6 @@ A choice saves as soon as you make it; there is no Save button. A line under the
 
 At most one provider carries speech to text; setting it moves the flag from wherever it was. A provider can be switched into agents and carry speech to text at the same time. When the speech-to-text provider changes, the model is cleared unless the new provider's curated list includes it. The speech-to-text provider has no default: move the flag by choosing another provider.
 
-Memory sync, which runs on a timer and copies what each agent wrote into the others' own memory, calls no model; it is switched and timed from the **▾** on **Sync now** on the Memory page. `coffer daemon status` shows the passes running right now.
-
 ## Troubleshooting
 
 | Symptom | Cause | Fix |

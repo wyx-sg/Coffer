@@ -22,9 +22,11 @@ from coffer.application.chat.service import ConversationRepo
 from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.errors import AgentConfigRejected, ConversationNotFound
 from coffer.infrastructure.chat.adapter_support import (
+    MEMORY_IN_PROMPT_ENV,
     ChannelNoteResolver,
     HomeEnvResolver,
     ManagedCheck,
+    MemoryResolver,
     ModelLister,
     compose_system_context,
     require_managed,
@@ -67,6 +69,7 @@ class CodexAppServerProvider:
         resolve_channel: ChannelNoteResolver | None = None,
         resolve_home_env: HomeEnvResolver | None = None,
         is_managed: ManagedCheck | None = None,
+        resolve_memory: MemoryResolver | None = None,
     ) -> None:
         self._conversations = conversations
         self._session_factory: AppServerSessionFactory = (
@@ -92,6 +95,10 @@ class CodexAppServerProvider:
         # Whether an enabled agent of this type is managed by Coffer; chat offers
         # and runs managed agents only. ``None`` ⇒ not asked.
         self._is_managed = is_managed
+        # The project memories a turn's working directory is handed, put in
+        # the system prompt (spec memory "Hand a session its project's
+        # memories at start"). ``None`` ⇒ none.
+        self._resolve_memory = resolve_memory
 
     async def init_conversation(self, conversation_id: str, agent_config: dict[str, Any]) -> None:
         cwd = agent_config.get("cwd")
@@ -146,6 +153,11 @@ class CodexAppServerProvider:
         # The PATH the CLIs page checks commands on (spec skill-manager "Check
         # every required command where the agent runs").
         overrides.update(await asyncio.to_thread(user_path_env))
+        memory = await self._resolve_memory(config.cwd) if self._resolve_memory else ""
+        if memory:
+            # The memories ride on ``developerInstructions``: Coffer's own
+            # session-start hook in Codex must not hand them again.
+            overrides[MEMORY_IN_PROMPT_ENV] = "1"
         env = {**os.environ, **overrides} if overrides else None
         system_context = await compose_system_context(
             agent_key=self.agent_key,
@@ -154,6 +166,7 @@ class CodexAppServerProvider:
             list_models=self._list_models,
             resolve_channel=self._resolve_channel,
             conversation_id=conversation_id,
+            memory=memory,
         )
 
         return CodexAppServerAdapter(

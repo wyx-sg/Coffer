@@ -13,9 +13,9 @@ Everything Coffer keeps that you would want on another machine — MCP servers, 
 ~/.coffer/vault/
 ├── resources/<kind>/<name>.json        one file per MCP server, skill, provider, knowledge collection
 ├── state/mcp-preferences/<server>.json the tools, prompts and resources you switched off on a server
-├── state/settings/internal-engine.json speech-to-text model and upkeep settings
+├── state/settings/internal-engine.json speech-to-text model
 ├── knowledge/<collection>/…            knowledge collections (README.md, sources/, pages/)
-├── memory/global/, memory/projects/<key>/  the memory hub, written by memory sync
+├── memory/projects/<project>/<topic>.md the memory hub, written by your agents
 ├── skills/<name>/…                     skill folders (SKILL.md and the rest)
 ├── secret/<ref>.enc                    encrypted secrets (never edit these)
 └── machines/<id>.json                  one descriptor per machine that syncs

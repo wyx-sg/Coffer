@@ -152,7 +152,7 @@ class VaultWriter:
         self._listeners: list[Listener] = []
         self._problems: dict[str, tuple[Finding, ...]] = {}
         self._held: Callable[[], Iterable[str]] = _nothing_held
-        self._paused: Callable[[], Iterable[str]] = _nothing_held
+        self._paused_by: dict[str, Callable[[], Iterable[str]]] = {}
 
     # --- configuration -------------------------------------------------------
 
@@ -176,12 +176,19 @@ class VaultWriter:
     def held(self) -> frozenset[str]:
         return frozenset(self._held())
 
-    def set_paused(self, provider: Callable[[], Iterable[str]]) -> None:
+    def set_paused(
+        self, provider: Callable[[], Iterable[str]], *, owner: str = "knowledge"
+    ) -> None:
         """Path prefixes whose edits are left in the working tree for now — a
-        knowledge collection an agent is tidying, committed as one change when
-        the tidy closes (spec knowledge "Record a tidy as one change"). Unlike a
-        held path, a paused one is the edit's to commit later, by whoever paused it."""
-        self._paused = provider
+        knowledge collection or the memory hub an agent is tidying, committed
+        as one change when the tidy closes (spec knowledge "Record a tidy as one
+        change", spec memory "Tidy memory as one change"). Each ``owner`` keeps
+        its own provider; the prefixes paused are all of theirs. Unlike a held
+        path, a paused one is the edit's to commit later, by whoever paused it."""
+        self._paused_by[owner] = provider
+
+    def _paused(self) -> list[str]:
+        return [prefix for provider in list(self._paused_by.values()) for prefix in provider()]
 
     def _is_paused(self, path: str, prefixes: tuple[str, ...]) -> bool:
         return bool(prefixes) and path.startswith(prefixes)

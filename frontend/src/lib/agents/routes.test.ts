@@ -1,10 +1,10 @@
 // src/lib/agents/routes.test.ts — the /agents addresses.
 import { describe, expect, test } from "vitest";
 
-import { AGENT_TABS, agentHasTab, agentMemoryStorePath, agentTabPath, isAgentType } from "./routes";
+import { AGENT_TABS, agentHasTab, agentTabPath, isAgentType } from "./routes";
 
 describe("agent addresses", () => {
-  test("the eight tabs, in the page's order: six in the strip, two behind More", () => {
+  test("the seven tabs, in the page's order: six in the strip, one behind More", () => {
     expect(AGENT_TABS).toEqual([
       "overview",
       "skills",
@@ -13,7 +13,6 @@ describe("agent addresses", () => {
       "config",
       "sessions",
       "plugins",
-      "memory",
     ]);
     expect(AGENT_TABS).not.toContain("model");
   });
@@ -22,12 +21,6 @@ describe("agent addresses", () => {
     expect(agentTabPath("claude_code", "overview")).toBe("/agents/claude_code");
     expect(agentTabPath("codex", "mcp-servers")).toBe("/agents/codex/mcp-servers");
     expect(agentTabPath("codex", "skills", "?owner=own")).toBe("/agents/codex/skills?owner=own");
-  });
-
-  test("pages opened from a tab are nested under it", () => {
-    expect(agentMemoryStorePath("codex", "/h/.codex/memories", "Global")).toBe(
-      "/agents/codex/memory/store?dir=%2Fh%2F.codex%2Fmemories&project=Global",
-    );
   });
 
   test("only the supported types are types", () => {

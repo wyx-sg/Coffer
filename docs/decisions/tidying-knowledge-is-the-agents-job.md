@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-10-12
 **Deciders**: Yuxing Wu
-**Related**: [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md), [Knowledge Collections Own Their Format; Coffer Checks Only Links](knowledge-collections-own-their-format.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault](sync-memory-into-each-agents-own-memory.md), [Coffer Ships Its Own Manual as a Skill Resource](coffer-ships-its-own-skill.md), [Managed Agents Run With Full Permissions; Owner Pairing Is the Gate](managed-agents-run-with-full-permissions.md), [Internal Engine Settings](internal-engine-settings.md), research notes [knowledge curation](../research/knowledge-curation.md) and [knowledge structures](../research/knowledge-structures.md), spec knowledge "Teach writing and tidying in the guide", "Hand a tidy to the agent", "Record a tidy as one change", "Undo a tidy", spec vault-storage "Keep the last valid version when a hand edit is invalid", OpenSpec change `make-a-tidy-one-change`
+**Related**: [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md), [Knowledge Collections Own Their Format; Coffer Checks Only Links](knowledge-collections-own-their-format.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [Keep Memory in One Place in the Vault, Written by the Agents Themselves](keep-memory-in-one-place-agents-write-themselves.md), [Coffer Ships Its Own Manual as a Skill Resource](coffer-ships-its-own-skill.md), [Managed Agents Run With Full Permissions; Owner Pairing Is the Gate](managed-agents-run-with-full-permissions.md), [Internal Engine Settings](internal-engine-settings.md), research notes [knowledge curation](../research/knowledge-curation.md) and [knowledge structures](../research/knowledge-structures.md), spec knowledge "Teach writing and tidying in the guide", "Hand a tidy to the agent", "Record a tidy as one change", "Undo a tidy", spec vault-storage "Keep the last valid version when a hand edit is invalid", OpenSpec change `make-a-tidy-one-change`
 
 **Partly superseded** (2026-11-13): a collection has no `.inbox/`, so the sweep adopts nothing; see [Knowledge Has No Inbox](knowledge-has-no-inbox.md).
 
@@ -38,10 +38,9 @@ running that way:
 The agents already load the `coffer-guide` skill
 ([Coffer Ships Its Own Manual as a Skill Resource](coffer-ships-its-own-skill.md)),
 so there is a delivery channel for instructions that costs nothing extra.
-Memory is outside this decision: Coffer keeps no memory of its own to tidy, and
-each agent curates the copies Coffer writes into its own memory with its own
-built-in curation
-([Sync Memory Into Each Agent's Own Memory](sync-memory-into-each-agents-own-memory.md)).
+Memory follows the same pattern: a Tidy on the Memory page is the same kind of
+hand-off over the memory hub, recorded as one change
+([Keep Memory in One Place](keep-memory-in-one-place-agents-write-themselves.md)).
 
 **How the person asks.** Once the agent did the work, a collection page carried
 two hand-offs: **Tidy**, which edits, and **Check with agent**, which read the

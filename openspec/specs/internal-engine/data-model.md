@@ -1,7 +1,6 @@
 # Data Model — Internal Engine
 
-The one global settings document that says what Coffer transcribes speech with
-and what it does unattended. Depends on the
+The one global settings document that says what Coffer transcribes speech with. Depends on the
 connection kind from spec [provider-switching](../provider-switching/spec.md)
 for the transcription endpoint, and on spec vault-storage for the state document
 it is stored as.
@@ -16,40 +15,8 @@ Coffer's own operating settings: one document per vault,
 
 | Field | Type | Constraints / Notes |
 |---|---|---|
-| `memory_sync_enabled` | `bool` | The `memory_sync` pass's switch (spec memory). Ships **ON** (see "Ship every unattended pass switched on"): a first or large sync waits for the person to confirm a preview before it writes into an agent. |
-| `memory_sync_interval_s` | `int \| None` | `None` = the pass's own default interval, one hour (see "Report an unchosen interval beside its default"). |
 | `transcribe_model` | `str \| None` | The speech-to-text model, run on the connection flagged `transcribe_default` (see "Transcribe speech on its own connection and model"). `None` until chosen, and while it is `None` Coffer transcribes nothing and the agent receives the audio file. A blank value on write is normalised to `None`. |
 | `updated_at` | `datetime` | When this machine last changed the settings (`local/engine.json`), reported so a surface can say when they last moved. Not in the vault document. |
-
-`upkeep(pass_name)` is the single read seam: a surface asks for a pass by name
-and gets an `UpkeepSetting`, so adding a pass adds one entry here instead of a
-branch in every reader. An unknown name raises rather than defaulting, which is
-what the refusal in "Refuse an interval below the floor or an unknown pass" is
-built on.
-
-### `UpkeepSetting`
-
-```python
-@dataclass(frozen=True)
-class UpkeepSetting:
-    enabled: bool
-    interval_s: int | None = None
-```
-
-`interval_s = None` means "whatever this pass's own default is". The default is
-NOT copied into the document — it lives with the pass, so raising it later reaches
-every vault that never chose one (see "Report an unchosen interval beside its
-default").
-
-### Pass names
-
-`MEMORY_SYNC = "memory_sync"` — the one pass, named in the domain rather than
-in the worker, so a surface can offer it without importing an application
-module. This is the word every surface uses: the route enum, the CLI's
-`<pass>` argument and the document's `upkeep` block. `RETIRED_AGGREGATE =
-"aggregate"` names the retired layer's pass only so an older document's entry
-can be read as the memory sync's (see "Carry a switch and interval for each
-unattended pass").
 
 ## Application services
 
@@ -57,9 +24,8 @@ unattended pass").
 
 | Method | Purpose |
 |---|---|
-| `get()` | The settings, or an unset default (ship-on switches, `transcribe_model=None`). |
-| `set_upkeep(pass_name, setting, actor)` | Change ONE pass, leaving the others as they stand (see "Change one unattended pass per write"). |
-| `set_transcribe_model(model, actor)` | Change the speech-to-text model the same way; blank normalises to `None`, which stops transcription rather than failing it (see "Transcribe speech on its own connection and model"). |
+| `get()` | The settings, or an unset default (`transcribe_model=None`). |
+| `set_transcribe_model(model, actor)` | Change the speech-to-text model; blank normalises to `None`, which stops transcription rather than failing it (see "Transcribe speech on its own connection and model"). |
 
 ### Resolution and the drop rule
 
@@ -83,29 +49,16 @@ under. It is a constant, not a setting: the transcriber factory passes it to
 every transcriber it builds (see "Change the speech-to-text model on its own
 route").
 
-### The schedule (`backend/coffer/application/upkeep_schedule.py`)
-
-`wait_for_next_pass()` takes the wait in slices and re-reads the interval each
-slice, so a change lands within one slice instead of after the hour a
-worker was already asleep (see "Apply a changed switch or interval without a
-restart"). `DEFAULT_INTERVALS` holds each pass's own interval (`memory_sync`: 3600
-seconds), used while the operator has chosen none, and is what `default_interval_s` reports over the wire
-(see "Report an unchosen interval beside its default").
-
 ## Audit events
 
 | Value | When emitted |
 |---|---|
-| `internal_engine_model_set` | every write to the settings through the service — a pass's switch, a pass's interval, the speech-to-text model |
+| `internal_engine_model_set` | every write to the settings through the service: the speech-to-text model |
 
 The connection half of the speech-to-text pair is audited by spec
 provider-switching: `provider_transcribe_default_set`.
 
-The details blob carries the value or values that write changed, as they stand
-after it: `set_upkeep` and `set_transcribe_model` each carry their own fields. The event NAME, however, says "model set" for a write that may have changed only a
-switch. That is a known defect, recorded rather than fixed here: correcting it
-needs either a second event type or a rename, and a rename is a migration over
-the audit enum.
+The details blob carries `transcribe_model` as it stands after the write.
 
 ## Storage
 
@@ -122,10 +75,7 @@ machine-local timestamp:
 ```json
 {
   "format_version": 1,
-  "transcribe_model": "<model id>",
-  "upkeep": {
-    "memory_sync": { "enabled": true, "interval_s": null }
-  }
+  "transcribe_model": "<model id>"
 }
 ```
 
@@ -133,18 +83,12 @@ machine-local timestamp:
 |---|---|
 | `format_version` | the state document's format (1) |
 | `transcribe_model` | `null` until chosen |
-| `upkeep.<pass>.enabled` | a missing entry reads as on |
-| `upkeep.<pass>.interval_s` | `null` = the pass's own default |
 
 A document written by an older build may still carry `model`,
-`curate_owner_machine_id`, `model_timeout_s` and `upkeep.curate` and
-`upkeep.distil` entries. They are ignored on read and dropped by the next write
+`curate_owner_machine_id`, `model_timeout_s` and `upkeep` (the switches and
+intervals of retired unattended passes). They are ignored on read and dropped by the next write
 of the document, while every other key the document holds is kept (see "Ignore
-retired keys in the settings document"). An `upkeep.aggregate` entry is the one
-that carries over: while the document has no `upkeep.memory_sync`, its switch
-and interval are read as the memory sync's, and the next write stores them
-under `memory_sync` and drops `aggregate` (see "Carry a switch and interval for
-each unattended pass").
+retired keys in the settings document").
 
 `VaultInternalEngineConfigRepo` (`infrastructure/persistence/internal_engine_repo.py`)
 reads the document at `HEAD`. A vault that never chose anything has no document
@@ -170,7 +114,6 @@ defaults (see "Reset to the defaults when the document is deleted").
   naming its writer.
 - A read of the speech-to-text connection MUST NOT touch the network, and MUST
   answer `None` rather than raise when either half is missing.
-- One request, one pass: an upkeep write MUST NOT be able to carry a stale copy
-  of a pass it did not name. The speech-to-text model has a write of
-  its own for the same reason.
+- A write MUST restate only the fields it changes, so it cannot carry a stale
+  copy of a field another machine changed meanwhile.
 - No transcription call MUST be unbounded.

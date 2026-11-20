@@ -1,6 +1,6 @@
-// src/components/agents/overview/OverviewSummary.tsx — "What this agent can use": six tiles, each opening its tab (board 2.1.08).
+// src/components/agents/overview/OverviewSummary.tsx — "What this agent can use": five tiles, each opening its tab (board 2.1.08).
 //
-// MCP servers, Skills, Config files, Plugins, Hooks and Memory — a 3×2 grid of
+// MCP servers, Skills, Config files, Plugins and Hooks — a grid of
 // cards, each a name with its icon and a chevron, the count in big type, one
 // fact line and, when something of the agent's own waits for a look, a warning
 // "N to review". Every number comes from useAgentCounts, the same queries the
@@ -9,7 +9,6 @@ import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   Anchor,
-  Brain,
   ChevronRight,
   FileCog,
   Plug,
@@ -33,7 +32,6 @@ import {
   configLine,
   hooksLine,
   mcpLine,
-  memoryLine,
   pluginsLine,
   skillsLine,
   type SummaryLine,
@@ -71,7 +69,6 @@ export function OverviewSummary({ agent, typeRow, notConnected = false }: Props)
     { tab: "config", icon: FileCog, summary: configLine(t, configNames) },
     { tab: "plugins", icon: Plug, summary: pluginsLine(t, counts.plugins) },
     { tab: "hooks", icon: Anchor, summary: hooksLine(t, counts.hooks, ctx) },
-    { tab: "memory", icon: Brain, summary: memoryLine(t, counts.memoryStores) },
   ];
 
   return (

@@ -65,7 +65,7 @@ The rules are [import-linter](https://github.com/seddonym/import-linter) contrac
 | Dropped engines banned everywhere | `llama_index`, `mem0`, `chromadb`, `sentence_transformers`, `sqlite_vec`, `fastembed`, `langgraph` and the `langchain*` packages may not be imported anywhere. Coffer embeds nothing and runs no chat model of its own (its one model call is a plain HTTP speech-to-text request), and a reintroduction has to be a deliberate change to this contract. |
 | Claude Agent SDK confined | Domain, application and the other infrastructure packages may not import `claude_agent_sdk`. Its homes are `infrastructure/chat` (the agent adapters) and `infrastructure/agent` (reading the installed agent's catalogue). |
 
-When two kinds genuinely need the same code, it moves to a kind-agnostic package or module at the layer root: `infrastructure/net/` (the SSRF guard), `infrastructure/agent_files/` (agent transcript readers shared by `agent` and `memory`). Everything else crosses between kinds through a port the consuming kind declares and the composition root satisfies — for example the model-catalogue port the chat platform declares, which it uses to read the agent kind's model catalogue without importing it.
+When two kinds genuinely need the same code, it moves to a kind-agnostic package or module at the layer root: `infrastructure/net/` (the SSRF guard). Everything else crosses between kinds through a port the consuming kind declares and the composition root satisfies — for example the model-catalogue port the chat platform declares, which it uses to read the agent kind's model catalogue without importing it.
 
 ## The composition root
 
@@ -73,7 +73,7 @@ The composition root is the only code allowed to see every kind. For the daemon 
 
 ### Explicit per-kind wiring
 
-There is no plugin discovery, no global registry and no import-time side effect. Each registered kind has a factory in its own application package, named after that package, that takes the services the kind needs and returns a frozen [kind](/architecture/resource-framework#kind). The registry key can differ from the package name: the MCP kind registers as `"mcp_server"`. Chat, memory and sync register no kind. A per-kind wiring module in `surfaces/http/` builds the kind's services, calls the factory, and stores the result in a per-app table of kinds. One wiring module registers `"agent"` and `"skill"` together; `"provider"`, `"knowledge"`, `"mcp_server"` and `"channel"` each have their own; the memory sync has a wiring module of its own that the background-worker launcher calls.
+There is no plugin discovery, no global registry and no import-time side effect. Each registered kind has a factory in its own application package, named after that package, that takes the services the kind needs and returns a frozen [kind](/architecture/resource-framework#kind). The registry key can differ from the package name: the MCP kind registers as `"mcp_server"`. Chat, memory and sync register no kind. A per-kind wiring module in `surfaces/http/` builds the kind's services, calls the factory, and stores the result in a per-app table of kinds. One wiring module registers `"agent"` and `"skill"` together; `"provider"`, `"knowledge"`, `"mcp_server"` and `"channel"` each have their own; memory has a wiring module of its own that registers its hook with the reconciler.
 
 The resource service is constructed with a reference to that same table and reads it for every dispatch.
 
@@ -120,7 +120,7 @@ backend/coffer/
 │   ├── knowledge/          # catalogue and file values
 │   ├── channel/            # channel config, envelopes
 │   ├── chat/               # conversation, message, attachment, turn events
-│   ├── memory/             # hub entries, project keys, portable paths, sync plan, reader protocol
+│   ├── memory/             # project keys, the topic format, the session text
 │   ├── provider/           # provider config, projection rules, local runtimes
 │   ├── model_proxy/        # the state the daemon pushes the model proxy
 │   ├── usage/              # usage records, stream usage readers, prices, ranges
@@ -132,7 +132,6 @@ backend/coffer/
 │   ├── retention_service.py # plus retention_registry.py, retention_worker.py
 │   ├── builtin_tools.py    # BuiltinTool and its registry
 │   ├── features.py         # FeatureService: pin, machine setting, default off
-│   ├── upkeep_runs.py      # passes in flight, in process
 │   ├── attention.py        # the cross-kind "needs you" list and its source port
 │   ├── reconcile/          # the unified reconciler: target port, loop, hints, drift source
 │   ├── events/             # the change feed: numbered hints, replay buffer, attention watch
@@ -146,7 +145,7 @@ backend/coffer/
 │   ├── knowledge/          # intake and upload ingest, wiki layout, change history, tidy hand-off, sweep, guide rendering
 │   ├── channel/            # adapter protocol, pairing, inbound, runtime
 │   ├── chat/               # turn orchestrator, runner, conversation service
-│   ├── memory/             # memory sync: publish, write, preview, undo, worker, upgrade removal
+│   ├── memory/             # the hub, the tidy, a turn's memory text, the hook reconcile target
 │   ├── provider/           # provider service, projection, projection target, proxy tokens and state
 │   ├── usage/              # usage ingest and reports
 │   ├── vault/              # validation rules, problems
@@ -161,14 +160,13 @@ backend/coffer/
 │   ├── logging/            # structlog setup, log files
 │   ├── media_retention.py  # age sweep for the two attachment media dirs
 │   ├── llm/                # speech-to-text over HTTP
-│   ├── agent_files/        # agent transcript readers shared by two kinds
 │   ├── mcp/                # upstream subprocess and HTTP clients
 │   ├── agent/              # agent config-file store
 │   ├── skill/              # master store, delivery engine
 │   ├── knowledge/          # paths, file tree, frontmatter, ripgrep
 │   ├── channel/            # Telegram and SeaTalk transports
 │   ├── chat/               # Claude SDK and Codex adapters, persistence
-│   ├── memory/             # native-memory readers and writers, hub store, ledger
+│   ├── memory/             # hub store, frontmatter, repository resolution, upgrade clean-up
 │   ├── provider/           # provider introspector, local-runtime detection
 │   ├── model_proxy/        # the local model proxy process and its supervisor
 │   ├── usage/              # the proxy's usage spool, as the daemon reads it

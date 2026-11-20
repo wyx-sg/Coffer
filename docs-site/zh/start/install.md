@@ -244,6 +244,7 @@ coffer uninstall
 
 - 每个智能体配置里 Coffer 的 MCP 条目和模型路由；
 - 它投递到智能体技能目录里的技能链接；
+- 它为[记忆](/zh/guides/memory)给每个智能体加的会话开始钩子；
 - 开机自启动；
 - `~/.coffer/bin` 里的命令行工具，以及安装脚本加到 shell 配置文件里的 `PATH` 行；
 - `Coffer.app`，它会把自己移到废纸篓。

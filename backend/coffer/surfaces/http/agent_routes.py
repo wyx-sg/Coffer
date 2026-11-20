@@ -100,7 +100,7 @@ class AgentOut(BaseModel):
     #: "Hand installing an agent's program to an agent"); ``null`` otherwise.
     install_handoff: HandoffOut | None = None
     #: What Coffer can do with this type (``mcp``, ``skills``, ``provider``,
-    #: ``chat``, ``memory_read``, ``memory_write``, ``sessions``, ``plugins``,
+    #: ``chat``, ``sessions``, ``plugins``,
     #: ``hooks``), derived from its descriptor and facets. Surfaces show a
     #: tab or picker only for the features listed here.
     features: list[str] = []
@@ -144,7 +144,7 @@ class AgentTypeOut(BaseModel):
     #: The product's official install page (the Overview's first-run "Install").
     install_url: str = ""
     #: What Coffer can do with this type (``mcp``, ``skills``, ``provider``,
-    #: ``chat``, ``memory_read``, ``memory_write``, ``sessions``, ``plugins``,
+    #: ``chat``, ``sessions``, ``plugins``,
     #: ``hooks``), derived from its descriptor and facets. Surfaces show a
     #: tab or picker only for the features listed here.
     features: list[str] = []

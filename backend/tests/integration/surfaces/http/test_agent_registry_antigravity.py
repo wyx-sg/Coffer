@@ -117,7 +117,7 @@ def test_sessions_memory_and_plugins_read_empty(tmp_path, monkeypatch):
         uid = _register(c)
         r = c.get(f"/api/v1/agents/{uid}/sessions")
         assert r.status_code == 400 and r.json()["error"]["code"] == "AGENT_TYPE_UNSUPPORTED"
-        for path in ("native-memory", "plugins", "hooks"):
+        for path in ("plugins", "hooks"):
             r = c.get(f"/api/v1/agents/{uid}/{path}")
             assert r.status_code == 200, (path, r.text)
             body = r.json()

@@ -58,6 +58,8 @@ MAX_DESCRIPTION_CHARS = 1024
 
 #: Replaced in the asset with the knowledge root as ``display_root`` gives it.
 _ROOT_PLACEHOLDER = "<KNOWLEDGE_ROOT>"
+#: Replaced in the asset with the memory hub's projects folder.
+_MEMORY_PLACEHOLDER = "<MEMORY_ROOT>"
 
 #: A line ``<!-- when:<feature> -->`` opens a span of the asset that belongs to
 #: one experimental feature, ``<!-- end:<feature> -->`` closes it; spans nest.
@@ -190,10 +192,13 @@ def _select_spans(text: str, enabled: set[str]) -> str:
     return "".join(out)
 
 
-def _manual(root: str, *, knowledge: bool) -> str:
+def _manual(root: str, *, knowledge: bool, memory_root: str | None = None) -> str:
     """The static half with the switched-off features' spans taken out."""
     enabled = {"knowledge"} if knowledge else set()
-    return _select_spans(_static_body(), enabled).replace(_ROOT_PLACEHOLDER, root)
+    if memory_root is not None:
+        enabled.add("memory")
+    text = _select_spans(_static_body(), enabled).replace(_ROOT_PLACEHOLDER, root)
+    return text.replace(_MEMORY_PLACEHOLDER, memory_root or "")
 
 
 def _count(files: Sequence[FileEntry]) -> str:
@@ -286,11 +291,12 @@ def render_catalogue(root: str, catalogue: Catalogue) -> str:
     return "\n".join(lines).rstrip()
 
 
-def render_body(root: str, catalogue: Catalogue | None) -> str:
+def render_body(root: str, catalogue: Catalogue | None, *, memory_root: str | None = None) -> str:
     """The skill body: the manual, then the catalogue — or the manual alone,
     without its knowledge sections, while the knowledge feature is switched off
-    (``None``)."""
-    static = _manual(root, knowledge=catalogue is not None).rstrip()
+    (``None``). ``memory_root`` is the memory hub's projects folder while the
+    memory feature is on; ``None`` leaves the memory sections out."""
+    static = _manual(root, knowledge=catalogue is not None, memory_root=memory_root).rstrip()
     if catalogue is None:
         return f"{static}\n"
     return f"{static}\n\n{render_catalogue(root, catalogue)}\n"
@@ -321,15 +327,17 @@ def render_frontmatter(catalogue: Catalogue | None) -> str:
     )
 
 
-def render(root: str, catalogue: Catalogue | None) -> str:
+def render(root: str, catalogue: Catalogue | None, *, memory_root: str | None = None) -> str:
     """The complete `SKILL.md`, as every agent receives it.
 
     ``catalogue`` is ``None`` while the knowledge feature is switched off: the
     skill is then rendered without its knowledge catalogue or the sections
     that document writing and tidying knowledge (spec experimental-features
-    "Withdraw what a switched-off feature put in front of agents")."""
+    "Withdraw what a switched-off feature put in front of agents").
+    ``memory_root`` is ``None`` while the memory feature is off, which leaves
+    out the rules for writing and tidying memory."""
     frontmatter = render_frontmatter(catalogue)
-    body = render_body(root, catalogue)
+    body = render_body(root, catalogue, memory_root=memory_root)
     return f"---\n{frontmatter}---\n\n{body}"
 
 

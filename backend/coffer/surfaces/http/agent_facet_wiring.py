@@ -1,10 +1,9 @@
 """Bind every agent mechanism to the agent it serves (ADR
 agent-mechanisms-are-optional-facets-on-the-descriptor).
 
-The descriptor table is pure data; the implementations of its four facets
-live in four different kinds — the provider translation in the provider kind,
-the memory reader in the memory kind, the driver in the
-chat kind, the dependency probe in the agent kind. This is the one place that
+The descriptor table is pure data; the implementations of its three facets
+live in three different kinds — the provider translation in the provider kind,
+the driver in the chat kind, the dependency probe in the agent kind. This is the one place that
 sees all of them, so this is where they meet. Each implementation declares
 its own agent; this module only lists them, and never says which is which.
 """
@@ -16,7 +15,6 @@ from coffer.domain.agent.facets import AgentCatalog, DependencyProbe, bind_facet
 from coffer.domain.provider.agent_projection import PROVIDER_PROJECTIONS
 from coffer.infrastructure.agent.program_probe import ProgramProbe, UserPath
 from coffer.infrastructure.chat.drivers import DRIVERS
-from coffer.infrastructure.memory.readers import MEMORY_READERS
 
 
 def build_agent_catalog(*, user_path: UserPath | None = None) -> AgentCatalog:
@@ -32,7 +30,6 @@ def build_agent_catalog(*, user_path: UserPath | None = None) -> AgentCatalog:
         AGENT_DESCRIPTORS,
         providers=PROVIDER_PROJECTIONS,
         drivers=DRIVERS,
-        memory_readers=MEMORY_READERS,
         probe_for=_probe,
     )
 

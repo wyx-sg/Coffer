@@ -169,9 +169,8 @@ _STATUS: dict[str, int] = {
     "ENGINE_UNAVAILABLE": 503,
     # spec memory
     "MEMORY_UNSAFE_PATH": 400,
-    "MEMORY_UNREADABLE": 422,
-    "MEMORY_SYNC_RUNNING": 409,
-    "MEMORY_SYNC_NO_PREVIEW": 409,
+    "MEMORY_FILE_NOT_FOUND": 404,
+    "MEMORY_FILE_STALE": 409,
     # agent turns (spec chat)
     "CONVERSATION_NOT_FOUND": 404,
     "UNKNOWN_AGENT": 400,
@@ -221,11 +220,6 @@ _STATUS: dict[str, int] = {
     # readable source with its attachments"): replaced only when asked.
     "KNOWLEDGE_SOURCE_EXISTS": 409,
     "KNOWLEDGE_ERROR": 400,
-    # Upkeep passes (memory's distil). A second pass over a
-    # target one is already rewriting is refused, not queued — the surface
-    # that asked should already have been showing the running one
-    # (``application.upkeep_runs``).
-    "UPKEEP_ALREADY_RUNNING": 409,
     # experimental features (spec experimental-features). A switched-off
     # feature's route is NOT FOUND, like a route this build never had.
     "FEATURE_UNKNOWN": 404,

@@ -21,14 +21,13 @@ coffer daemon [OPTIONS] COMMAND [ARGS]...
 | [`daemon start`](#daemon-start) | Spawn the daemon as a detached background process. |
 | [`daemon stop`](#daemon-stop) | Send SIGTERM to the running daemon and wait for it to exit. |
 | [`daemon restart`](#daemon-restart) | Stop the running daemon (if any) and start a fresh one. |
-| [`daemon status`](#daemon-status) | Show whether the daemon is running, and the passes it is running right now. |
+| [`daemon status`](#daemon-status) | Show whether the daemon is running, and how it is doing. |
 | [`daemon reload`](#daemon-reload) | Ask the running daemon to restart itself. |
 | [`daemon rotate-token`](#daemon-rotate-token) | Mint a new daemon token (clients re-read daemon.json). |
 | [`daemon upgrade`](#daemon-upgrade) | Whether this daemon is older than the installed Coffer, and the hand-off. |
 | [`daemon upgrade-check`](#daemon-upgrade-check) | Check for a newer release of the installer's binaries now. |
 | [`daemon upgrade-auto-check`](#daemon-upgrade-auto-check) | Switch the daemon's daily release check on or off. |
 | [`daemon setup-check`](#daemon-setup-check) | Look for git again while the daemon waits in its setup state. |
-| [`daemon upkeep`](#daemon-upkeep) | The rewriting passes running now. |
 | [`daemon port`](#daemon-port) | The port the daemon's next start uses. |
 | [`daemon port show`](#daemon-port-show) | The port the daemon serves and the one its next start uses. |
 | [`daemon port set`](#daemon-port-set) | Set the port of the next start. |
@@ -70,9 +69,9 @@ coffer daemon restart [OPTIONS]
 
 ## daemon status
 
-Show whether the daemon is running, and the passes it is running right now.
+Show whether the daemon is running, and how it is doing.
 
-Reports its version, port and pid, the event loop's lag (p99 and maximum over the last few minutes), how many background tasks are running and how many have crashed, and the long passes in flight (kind, target, start time), oldest first. --tasks adds the running tasks counted by name (reconciler, seatalk-ws, coffer-mcp-http-upstream, ...), largest first. --workers adds one line per background worker: how it is woken (event, event+fallback, on-demand), whether it is waiting, running or parked, its runs and failures, how long its last run took, and when its fallback timer runs it next.
+Reports its version, port and pid, the event loop's lag (p99 and maximum over the last few minutes), how many background tasks are running and how many have crashed. --tasks adds the running tasks counted by name (reconciler, seatalk-ws, coffer-mcp-http-upstream, ...), largest first. --workers adds one line per background worker: how it is woken (event, event+fallback, on-demand), whether it is waiting, running or parked, its runs and failures, how long its last run took, and when its fallback timer runs it next.
 
 Read-only: when no daemon is running it says so and exits 3 instead of starting one.
 
@@ -180,22 +179,6 @@ Look for git again while the daemon waits in its setup state.
 
 ```sh
 coffer daemon setup-check [OPTIONS]
-```
-
-<p class="cli-label">参数与选项</p>
-
-| 名称 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- |
-| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
-
-## daemon upkeep
-
-The rewriting passes running now.
-
-<p class="cli-label">概要</p>
-
-```sh
-coffer daemon upkeep [OPTIONS]
 ```
 
 <p class="cli-label">参数与选项</p>

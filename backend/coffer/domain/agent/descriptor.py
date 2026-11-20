@@ -12,8 +12,9 @@ imports them at top level, they import this module only on demand.
 
 :class:`AgentDescriptor` carries every per-type *value* Coffer needs: identity,
 the program it runs as, the config-file allowlist, MCP injection, the skill
-directory, and the plugin capability. It also names the four *mechanism*
-facets — ``projection``, ``driver``, ``memory_reader``, ``dependency_probe``
+directory, the plugin capability and where Coffer's session-start hook goes.
+It also names the three *mechanism* facets — ``projection``, ``driver``,
+``dependency_probe``
 (``facets.py``) — which are ``None`` in this pure table and bound to their
 implementations at the composition root (ADR
 agent-mechanisms-are-optional-facets-on-the-descriptor).
@@ -42,13 +43,13 @@ from coffer.domain.agent.plugin_capability import (
     PluginModel,
     UninstallStrategy,
 )
+from coffer.domain.agent.session_hook import SessionHookSpec
 from coffer.domain.agent.types import AgentType
 from coffer.domain.channel_turn import TURN_TOKEN_ENV
 
 if TYPE_CHECKING:
     from coffer.application.chat.ports import AgentDriver
     from coffer.domain.agent.facets import AgentProjection, DependencyProbe
-    from coffer.domain.memory.reader import MemoryReader
 
 
 @dataclass(frozen=True)
@@ -105,14 +106,15 @@ class AgentDescriptor:
     #: catalogue pointer Coffer writes into ``config.toml``). Then the built-in
     #: models cannot be read while such a connection is active.
     curated_list_replaces_builtin: bool = False
+    #: Where Coffer's session-start hook goes, which hands a session its
+    #: project's memories (``None`` = the agent runs no hooks Coffer can use).
+    session_hook: SessionHookSpec | None = None
 
     # --- mechanism facets (bound at the composition root; None here) ----------
     #: What Coffer can place into the agent, keyed by asset type x landing.
     projection: AgentProjection | None = None
     #: How Coffer runs a turn on the agent.
     driver: AgentDriver[Any] | None = None
-    #: How the agent's native memory is read (read only).
-    memory_reader: MemoryReader | None = None
     #: Whether the agent's program is installed here, and which version.
     dependency_probe: DependencyProbe | None = None
 
@@ -148,6 +150,7 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
         program="claude",
         install_url="https://docs.claude.com/en/docs/claude-code/setup",
         hook_source_keys=("settings", "settings_local"),
+        session_hook=SessionHookSpec(config_key="settings"),
         mcp=McpInjectionSpec(
             config_key="global",
             container_key="mcpServers",
@@ -179,6 +182,7 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
         # $CODEX_HOME/skills is kept only for backward compatibility.
         skill_home_subpath=".agents/skills",
         hook_source_keys=("hooks",),
+        session_hook=SessionHookSpec(config_key="hooks"),
         mcp=McpInjectionSpec(
             config_key="config",
             container_key="mcp_servers",

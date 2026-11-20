@@ -43,7 +43,7 @@ KNOWLEDGE = "knowledge"
 SKILLS = "skills"
 SECRET = "secret"
 MACHINES = "machines"
-#: The memory hub (spec memory "Keep every agent's memories in a hub in the vault").
+#: The memory hub (spec memory "Keep memory in one place in the vault").
 MEMORY = "memory"
 MANIFEST = "manifest.json"
 

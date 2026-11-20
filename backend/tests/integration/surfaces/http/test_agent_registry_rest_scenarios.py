@@ -275,19 +275,14 @@ def test_adopt_a_direct_mcp_entry_under_a_new_name(home: pathlib.Path) -> None:
     spec="agent-registry", scenario="report the absolute locations of an agent's files"
 )
 def test_report_the_absolute_locations_of_an_agents_files(home: pathlib.Path) -> None:
-    project = home / ".claude" / "projects" / "-work-repo"
-    (project / "memory").mkdir(parents=True)
-    (project / "memory" / "fact.md").write_text("a fact", encoding="utf-8")
     with _client() as c:
         uid = _register(c)
         before = _audit_types(c, uid)
 
         files = c.get(f"/api/v1/agents/{uid}/config-files").json()["items"]
-        stores = c.get(f"/api/v1/agents/{uid}/native-memory").json()["items"]
 
         settings = next(f for f in files if f["key"] == "settings")
         assert settings["path"] == str(home / ".claude" / "settings.json")
-        assert stores[0]["memory_dir"] == str(project / "memory")
         assert not (home / ".claude" / "settings.json").exists()
         assert _audit_types(c, uid) == before
 
