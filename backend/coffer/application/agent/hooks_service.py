@@ -4,7 +4,7 @@
 Lists what the agent will run and where each hook came from: the agent's own
 hook-carrying files (the descriptor's ``hook_source_keys``, resolved through
 the config-file allowlist) and each enabled plugin's ``hooks/hooks.json``.
-Coffer installs no hook of its own.
+Coffer's one memory hook is listed like any other.
 
 Writes nothing, records no audit event. An unparseable file is reported as a
 parse error beside the rows the other files yield.

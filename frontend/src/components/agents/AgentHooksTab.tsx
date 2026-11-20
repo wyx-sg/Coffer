@@ -2,8 +2,8 @@
 //
 // Spec agent-registry "List every hook in the agent's native config". Read
 // only: the agent's own hooks as one searchable table that opens a read-only
-// details dialog. Coffer installs no hook of its own. A file that does not
-// parse is a warning above the table, not a failure of the tab.
+// details dialog. Coffer's one memory hook is listed like any other. A file
+// that does not parse is a warning above the table, not a failure of the tab.
 import { useTranslation } from "react-i18next";
 
 import { OwnHooksSection } from "@/components/agents/hooks/OwnHooksSection";

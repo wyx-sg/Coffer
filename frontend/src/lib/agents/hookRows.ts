@@ -2,8 +2,8 @@
 //
 // The listing (`GET /agents/{uid}/hooks`) gives every hook the agent's files
 // declare (spec agent-registry "List every hook in the agent's native config").
-// The agent's own hooks are one table, one row per declared hook. Coffer
-// installs no hook of its own.
+// The agent's own hooks are one table, one row per declared hook, Coffer's
+// memory hook among them.
 import type { AgentHooksOut, NativeHook } from "@/lib/api/agents";
 
 /** The events the Event filter always offers, in the order the agent fires them. */

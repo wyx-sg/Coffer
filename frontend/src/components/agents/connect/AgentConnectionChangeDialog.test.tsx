@@ -78,7 +78,7 @@ describe("AgentConnectionChangeDialog", () => {
       expect(within(dialog).getByTestId("changes-heading")).toHaveTextContent("Changes · 1"),
     );
     expect(within(dialog).getAllByText("~/.codex/config.toml").length).toBeGreaterThan(0);
-    // Coffer installs no hook: hooks.json is not touched.
+    // Connecting installs no hook: hooks.json is not touched.
     expect(within(dialog).queryByText("~/.codex/hooks.json")).toBeNull();
     // Before registration the uid is not known, and the MCP entry's preview says so.
     expect(within(dialog).getAllByText(/<assigned on add>/)).toHaveLength(1);

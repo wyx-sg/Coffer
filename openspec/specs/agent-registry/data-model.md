@@ -69,8 +69,8 @@ stored: candidates and the agent read model compute them per request.
 `HookRow {event, matcher, command, type, timeout, group_index, hook_index}` — the last two are where the hook sits in its file, `hooks.<event>[group_index].hooks[hook_index]` — parsed from the
 `{"hooks": {event: [{matcher, hooks: [{type, command, timeout}]}]}}` shape both
 agents use; `HookSource` is `user` | `plugin`.
-Read only; nothing stored. The module judges nothing: Coffer installs no hook into an
-agent, so no row is Coffer's own and nothing carries a health.
+Read only; nothing stored. The module judges nothing: Coffer's one memory hook (memory
+"Hand a session its project's memories at start") is listed like any other, and nothing carries a health.
 
 The config-file allowlist and the skills-delivery target (`<config_dir>/skills`) both resolve against the agent's resolved `config_dir`.
 
@@ -290,7 +290,7 @@ the program installed — `installed_never_run` included, `config_only` not) and
 
 | Method | Purpose |
 | --- | --- |
-| `list_hooks(uid) -> AgentHooks` | Every hook in the agent's hook-carrying files and its enabled plugins' `hooks/hooks.json`, each a `NativeHook` (the `HookRow` fields plus `source`, the declaring file's `path` and, for a plugin hook, its `plugin` id), and `parse_errors` for the files that did not parse. Coffer installs no hook, so none is marked as Coffer's and there is no health or last fire. Writes nothing, records no audit event. |
+| `list_hooks(uid) -> AgentHooks` | Every hook in the agent's hook-carrying files and its enabled plugins' `hooks/hooks.json`, each a `NativeHook` (the `HookRow` fields plus `source`, the declaring file's `path` and, for a plugin hook, its `plugin` id), and `parse_errors` for the files that did not parse. Coffer's memory hook is listed like any other; none is marked as Coffer's and there is no health or last fire. Writes nothing, records no audit event. |
 
 A removed agent re-appears as a candidate on the next scan — there is no
 suppression list.

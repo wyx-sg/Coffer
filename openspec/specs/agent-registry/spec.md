@@ -587,7 +587,7 @@ Users MUST be able to connect an agent to Coffer in one action, from the REST AP
 
 - `mcp` — the gateway MCP entry of "Install Coffer's MCP server into an agent in one action".
 
-Coffer writes no hook into an agent. A connect refused for want of a shim writes nothing. Every part MUST be installed through its own atomic write with a backup and record its own audit event, as it does when installed alone. Connecting MUST be idempotent: connecting a connected agent rewrites each entry in place and never duplicates one.
+Connecting writes no hook into an agent. A connect refused for want of a shim writes nothing. Every part MUST be installed through its own atomic write with a backup and record its own audit event, as it does when installed alone. Connecting MUST be idempotent: connecting a connected agent rewrites each entry in place and never duplicates one.
 
 #### Scenario: connect installs every part that applies
 - **GIVEN** a registered Claude Code agent without the gateway entry
@@ -1048,7 +1048,7 @@ elsewhere appears within one refresh.
 ### Requirement: List every hook in the agent's native config
 The system MUST list, read only, every command hook the agent will run. That covers the hooks in the agent's own hook-carrying files (the type's child spec names them) and those in each enabled plugin's hook file. Each is listed with its event, matcher, command, timeout, source (`user` or `plugin`, with the plugin's id) and the file that declares it. Project-level settings are not read, because Coffer does not know which repositories the agent is used in.
 
-The listing MUST be served by `GET /api/v1/agents/{uid}/hooks` as the hooks (`items`) and the files that did not parse (`parse_errors`), and MUST write nothing and record no audit event. A file that does not parse MUST be reported as a parse error beside the hooks the other files yield. Coffer installs no hook into an agent, so no hook is marked as Coffer's and the listing carries no health, trust or last fire.
+The listing MUST be served by `GET /api/v1/agents/{uid}/hooks` as the hooks (`items`) and the files that did not parse (`parse_errors`), and MUST write nothing and record no audit event. A file that does not parse MUST be reported as a parse error beside the hooks the other files yield. Coffer's one memory hook is listed like any other hook: no hook is marked as Coffer's and the listing carries no health, trust or last fire.
 
 Each listed hook MUST also carry where it sits in its file — `group_index` and `hook_index`, the positions in `hooks.<event>[group_index].hooks[hook_index]` — so a person can find the entry, and the REST listing reports them.
 
