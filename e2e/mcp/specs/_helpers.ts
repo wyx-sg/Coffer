@@ -170,26 +170,23 @@ export function sendEnvelope(shim: ShimHandle, envelope: unknown): void {
 }
 
 /**
- * Read the next complete JSON-RPC reply from the shim's stdout.
- * Polls `pendingLines` up to `timeoutMs` milliseconds before throwing.
+ * Read the next JSON-RPC reply (a message that answers a request) from the
+ * shim's stdout.
+ *
+ * The gateway tells a connected client when its tool list changes
+ * (`notifications/tools/list_changed`), and registering a server does that, so a
+ * notification may arrive ahead of any reply. A notification carries a `method`
+ * and no `id`; it is left in `pendingLines` for `readMatchingReply` and never
+ * taken for a reply.
  */
 export async function readReply(
   shim: ShimHandle,
   timeoutMs = 10_000,
 ): Promise<Record<string, unknown>> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (shim.pendingLines.length > 0) {
-      const line = shim.pendingLines.shift()!;
-      return JSON.parse(line) as Record<string, unknown>;
-    }
-    if (shim.closed) {
-      throw new Error("shim process closed before a reply arrived");
-    }
-    await new Promise<void>((r) => setTimeout(r, 50));
-  }
-  throw new Error(
-    `readReply timed out after ${timeoutMs}ms (pending: ${shim.pendingLines.length})`,
+  return readMatchingReply(
+    shim,
+    (msg) => msg["id"] !== undefined || msg["method"] === undefined,
+    timeoutMs,
   );
 }
 
