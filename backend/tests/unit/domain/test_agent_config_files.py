@@ -124,9 +124,9 @@ def test_no_credential_files_in_any_allowlist() -> None:
 @pytest.mark.acceptance(
     spec="agent-registry", scenario="key each type's instructions file as instructions"
 )
-def test_every_type_keys_one_markdown_instructions_file(monkeypatch, tmp_path) -> None:
+def test_every_type_keys_at_most_one_markdown_instructions_file(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
-    formats = {"json", "toml", "markdown", "text"}
+    formats = {"json", "toml", "yaml", "markdown", "text"}
     types = list(AgentType)
     assert types, "no agent types to check"
     for agent_type in types:
@@ -137,5 +137,8 @@ def test_every_type_keys_one_markdown_instructions_file(monkeypatch, tmp_path) -
             assert spec.path.is_absolute(), (agent_type, spec)
             assert spec.format.value in formats, (agent_type, spec)
         instructions = [s for s in specs if s.key == "instructions"]
-        assert len(instructions) == 1, agent_type
-        assert instructions[0].format is ConfigFileFormat.MARKDOWN, agent_type
+        assert len(instructions) <= 1, agent_type
+        for spec in instructions:
+            assert spec.format is ConfigFileFormat.MARKDOWN, agent_type
+    # Cursor keeps its user rules in the app, not in a file.
+    assert not [s for s in config_files_for(AgentType.CURSOR) if s.key == "instructions"]

@@ -48,7 +48,9 @@ def scan_locations(
 
     Locations by agent type (the first is where Coffer delivers):
     - **CLAUDE_CODE**: ``[<config_dir>/skills]``
-    - **CODEX**: ``[~/.agents/skills, <config_dir>/skills]``
+    - **CODEX**, and every agent that reads the shared ``~/.agents/skills``
+      (Cursor, OpenCode, DeepSeek Harness): ``[~/.agents/skills,
+      <config_dir>/skills]``
       ``~/.agents/skills`` is where Codex reads personal skills; its own
       ``<config_dir>/skills`` is the older location Codex still reads for
       backward compatibility, so skills left there are listed too (ADR
@@ -56,6 +58,9 @@ def scan_locations(
     """
     if home is None:
         home = _home()
-    if agent_type is AgentType.CODEX:
-        return [home / ".agents" / "skills", config_dir / "skills"]
-    return [config_dir / "skills"]
+    from coffer.domain.agent.descriptor import descriptor_for
+
+    descriptor = descriptor_for(agent_type)
+    if descriptor.skill_home_subpath is not None:
+        return [home / descriptor.skill_home_subpath, config_dir / descriptor.skill_subpath]
+    return [config_dir / descriptor.skill_subpath]

@@ -22,7 +22,7 @@ import { Section } from "@/components/Section";
 import { StatusWord } from "@/components/status/StatusWord";
 import { Skeleton } from "@/components/ui/skeleton";
 import { abbreviateHomePath } from "@/lib/agents/display";
-import { agentTabPath, type AgentTab } from "@/lib/agents/routes";
+import { agentHasTab, agentTabPath, type AgentTab } from "@/lib/agents/routes";
 import type { AgentOut, AgentTypeOut } from "@/lib/api/agents";
 import { useAgentCounts } from "@/lib/hooks/useAgentCounts";
 import { useAgentConfigFiles, useAgentHooks } from "@/lib/hooks/useAgents";
@@ -78,35 +78,37 @@ export function OverviewSummary({ agent, typeRow, notConnected = false }: Props)
     <Section title={t(`${K}.heading`)} as="h2">
       <SectionLine>{t(`${K}.description`)}</SectionLine>
       <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {tiles.map(({ tab, icon: Icon, summary }) => (
-          <li key={tab} className="flex">
-            <Link
-              to={agentTabPath(agent.type, tab)}
-              className="flex min-h-[110px] w-full flex-col gap-1.5 rounded-xl border border-border bg-surface-raised px-4 py-3.5 text-text transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
-            >
-              <span className="flex items-center gap-2 text-sm font-medium">
-                <Icon aria-hidden className="size-4 shrink-0 text-text-muted" />
-                <span className="grow">{t(`${K}.title.${tab}`)}</span>
-                <ChevronRight aria-hidden className="size-3.5 shrink-0 text-text-subtle" />
-              </span>
-              {summary ? (
-                <>
-                  <span className="text-2xl font-semibold leading-8 tracking-tight">
-                    {summary.count}
-                  </span>
-                  <span className="break-words text-xs text-text-muted">{summary.line}</span>
-                  {summary.toReview ? (
-                    <StatusWord tone="warn" className="mt-0.5">
-                      {t(`${K}.toReview`, { count: summary.toReview })}
-                    </StatusWord>
-                  ) : null}
-                </>
-              ) : (
-                <Skeleton className="mt-2 h-3.5 w-32" />
-              )}
-            </Link>
-          </li>
-        ))}
+        {tiles
+          .filter(({ tab }) => agentHasTab(agent, tab))
+          .map(({ tab, icon: Icon, summary }) => (
+            <li key={tab} className="flex">
+              <Link
+                to={agentTabPath(agent.type, tab)}
+                className="flex min-h-[110px] w-full flex-col gap-1.5 rounded-xl border border-border bg-surface-raised px-4 py-3.5 text-text transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+              >
+                <span className="flex items-center gap-2 text-sm font-medium">
+                  <Icon aria-hidden className="size-4 shrink-0 text-text-muted" />
+                  <span className="grow">{t(`${K}.title.${tab}`)}</span>
+                  <ChevronRight aria-hidden className="size-3.5 shrink-0 text-text-subtle" />
+                </span>
+                {summary ? (
+                  <>
+                    <span className="text-2xl font-semibold leading-8 tracking-tight">
+                      {summary.count}
+                    </span>
+                    <span className="break-words text-xs text-text-muted">{summary.line}</span>
+                    {summary.toReview ? (
+                      <StatusWord tone="warn" className="mt-0.5">
+                        {t(`${K}.toReview`, { count: summary.toReview })}
+                      </StatusWord>
+                    ) : null}
+                  </>
+                ) : (
+                  <Skeleton className="mt-2 h-3.5 w-32" />
+                )}
+              </Link>
+            </li>
+          ))}
       </ul>
     </Section>
   );

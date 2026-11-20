@@ -1,12 +1,7 @@
 // src/lib/agents/routes.test.ts — the /agents addresses.
 import { describe, expect, test } from "vitest";
 
-import {
-  AGENT_TABS,
-  agentMemoryStorePath,
-  agentTabPath,
-  isAgentType,
-} from "./routes";
+import { AGENT_TABS, agentHasTab, agentMemoryStorePath, agentTabPath, isAgentType } from "./routes";
 
 describe("agent addresses", () => {
   test("the eight tabs, in the page's order: six in the strip, two behind More", () => {
@@ -40,5 +35,17 @@ describe("agent addresses", () => {
     expect(isAgentType("codex")).toBe(true);
     expect(isAgentType("agt_01J8")).toBe(false);
     expect(isAgentType(undefined)).toBe(false);
+  });
+});
+
+describe("agentHasTab", () => {
+  test("a type shows only the tabs its features cover", () => {
+    const cursor = { features: ["mcp", "skills"] };
+    expect(AGENT_TABS.filter((tab) => agentHasTab(cursor, tab))).toEqual([
+      "overview",
+      "skills",
+      "mcp-servers",
+      "config",
+    ]);
   });
 });

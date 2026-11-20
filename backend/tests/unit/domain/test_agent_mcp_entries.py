@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from coffer.domain.agent import mcp_entries as me
+from coffer.domain.agent import mcp_entry_secrets as secrets
 from coffer.domain.agent.config_files import ConfigFileFormat
 from coffer.domain.workspace_errors import AgentConfigParseError, McpEntryNotFound
 
@@ -79,19 +80,19 @@ def test_remove_entry_toml_preserves_layout() -> None:
 def test_secret_env_keys() -> None:
     entries = me.parse_entries(ConfigFileFormat.JSON, CLAUDE_JSON, source="global")
     jira = next(e for e in entries if e.name == "jira")
-    assert me.secret_env_keys(jira.env) == ["JIRA_API_TOKEN"]
-    assert me.secret_env_keys({"MY_PASSWORD": "x", "EMPTY_TOKEN": "", "URL": "u"}) == [
+    assert secrets.secret_env_keys(jira.env) == ["JIRA_API_TOKEN"]
+    assert secrets.secret_env_keys({"MY_PASSWORD": "x", "EMPTY_TOKEN": "", "URL": "u"}) == [
         "MY_PASSWORD"
     ]
 
 
 def test_secret_env_keys_includes_authorization() -> None:
     """Authorization headers must be treated as secrets."""
-    assert me.secret_env_keys({"Authorization": "Bearer x"}) == ["Authorization"]
+    assert secrets.secret_env_keys({"Authorization": "Bearer x"}) == ["Authorization"]
     # Case-insensitive
-    assert me.secret_env_keys({"authorization": "tok"}) == ["authorization"]
+    assert secrets.secret_env_keys({"authorization": "tok"}) == ["authorization"]
     # Empty value is NOT flagged
-    assert me.secret_env_keys({"Authorization": ""}) == []
+    assert secrets.secret_env_keys({"Authorization": ""}) == []
 
 
 def test_to_transport_config_moves_secrets_to_refs() -> None:
@@ -234,7 +235,7 @@ def test_extra_values_stay_out_of_repr() -> None:
 
 
 def test_masked_extra_withholds_secret_keys_and_tables_that_nest_them() -> None:
-    fields = me.masked_extra(
+    fields = secrets.masked_extra(
         {
             "timeout": 20,
             "bearer_token": "tok",
@@ -249,20 +250,20 @@ def test_masked_extra_withholds_secret_keys_and_tables_that_nest_them() -> None:
         ["timeout", "bearer_token", "empty_token", "oauth", "hosts", "type", "flags"]
     )
     by_key = {f.key: f for f in fields}
-    assert by_key["timeout"] == me.ExtraField("timeout", "20", False)
-    assert by_key["type"] == me.ExtraField("type", "sse", False)
-    assert by_key["flags"] == me.ExtraField("flags", '{"debug": true}', False)
+    assert by_key["timeout"] == secrets.ExtraField("timeout", "20", False)
+    assert by_key["type"] == secrets.ExtraField("type", "sse", False)
+    assert by_key["flags"] == secrets.ExtraField("flags", '{"debug": true}', False)
     # An empty secret-looking value hides nothing, so it is shown as it is.
-    assert by_key["empty_token"] == me.ExtraField("empty_token", "", False)
+    assert by_key["empty_token"] == secrets.ExtraField("empty_token", "", False)
     for key in ("bearer_token", "oauth", "hosts"):
-        assert by_key[key] == me.ExtraField(key, None, True)
+        assert by_key[key] == secrets.ExtraField(key, None, True)
 
 
 def test_looks_secret_matches_the_adopt_pattern() -> None:
-    assert me.looks_secret("GITHUB_TOKEN")
-    assert me.looks_secret("x_api_key")
-    assert me.looks_secret("Authorization")
-    assert not me.looks_secret("LANG")
+    assert secrets.looks_secret("GITHUB_TOKEN")
+    assert secrets.looks_secret("x_api_key")
+    assert secrets.looks_secret("Authorization")
+    assert not secrets.looks_secret("LANG")
 
 
 def test_matches_transport_compares_command_args_or_url() -> None:

@@ -25,8 +25,17 @@ from coffer.domain.agent.config_files import ConfigFileFormat
 class McpEntryStyle(StrEnum):
     """How a single stdio MCP server entry is rendered."""
 
-    #: ``{"command": <shim>, "args": [...]}`` — used by Claude Code and Codex.
+    #: ``{"command": <shim>, "args": [...]}`` — used by Claude Code, Codex and
+    #: Cursor.
     COMMAND_MAP = "command_map"
+    #: ``{"type": "local", "command": [<shim>, ...args]}`` — OpenCode, whose
+    #: local entry is one command array.
+    COMMAND_ARRAY = "command_array"
+    #: One ``@deepseek-ai/dsh-mcp-client`` row in a Cordis patch (DeepSeek
+    #: Harness): ``{id, name, config: {serverName, transport, command, args}}``,
+    #: written as a block Coffer owns inside a YAML file it does not otherwise
+    #: rewrite (see :mod:`coffer.domain.agent.mcp_cordis`).
+    CORDIS_ROW = "cordis_row"
 
 
 #: Default top-level container key per format (Claude Code JSON ``mcpServers``;
@@ -35,6 +44,9 @@ class McpEntryStyle(StrEnum):
 _DEFAULT_CONTAINER_KEY: dict[ConfigFileFormat, str] = {
     ConfigFileFormat.JSON: "mcpServers",
     ConfigFileFormat.TOML: "mcp_servers",
+    # A Cordis patch file has no servers map: its rows are found by plugin
+    # name. The key only labels the section in a listing.
+    ConfigFileFormat.YAML: "insert",
 }
 
 

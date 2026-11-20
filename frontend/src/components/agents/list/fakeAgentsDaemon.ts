@@ -6,6 +6,7 @@
 import type { AgentProviderInfo } from "@/lib/api/agentProviders";
 import type { AgentTypeOut, CofferConnection } from "@/lib/api/agents";
 import { ApiError } from "@/lib/api/errors";
+import { FULL_AGENT_FEATURES } from "@/test/agentFeatures";
 
 interface FakeCall {
   method: string;
@@ -54,6 +55,7 @@ export function typeRow(over: Partial<AgentTypeOut> & Pick<AgentTypeOut, "type">
     version: over.type === "codex" ? "0.41.0" : "2.1.281",
     install_handoff: null,
     install_url: "",
+    features: [...FULL_AGENT_FEATURES],
     ...over,
   };
 }

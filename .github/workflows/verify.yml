@@ -28,6 +28,7 @@ concurrency:
 #   test-benchmark -> make verify-benchmark
 #   test-e2e -> make verify-e2e       test-visual -> make verify-visual
 #   secrets-scan -> make verify-secrets (gitleaks, through gitleaks-action here)
+#   agent-cli -> make verify-agent-cli (with the agent's command line installed)
 # The docs site's build is pages.yml's `build` job; locally `make docs-build`.
 # `changes` is CI plumbing and has no target.
 jobs:
@@ -218,6 +219,48 @@ jobs:
         run: npm ci
       - name: make verify-acceptance
         run: make verify-acceptance
+
+  # Each agent Coffer supports but the maintainer does not run day to day reads
+  # what Coffer writes for it, on its own released command line (ADR
+  # cursor-opencode-and-deepseek-harness-are-supported-agents). Versions are
+  # pinned so a red run names a Coffer change; bump them to follow a release.
+  agent-cli:
+    name: agent-cli (${{ matrix.agent }})
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - agent: opencode-1
+            install: npm install -g opencode-ai@1.19.6
+          - agent: opencode-2
+            install: npm install -g @opencode/cli@2.3.2
+          - agent: deepseek-harness
+            install: npm install -g @deepseek-ai/dsh@0.2.2-rc.5
+          - agent: cursor
+            install: curl -fsS https://cursor.com/install | bash && echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+      - name: Install backend (frozen)
+        env:
+          UV_PROJECT_ENVIRONMENT: ${{ github.workspace }}/.venv
+        run: uv sync --frozen --extra dev --project backend
+      - name: Install the agent
+        run: ${{ matrix.install }}
+      - name: make verify-agent-cli
+        run: make verify-agent-cli
 
   secrets:
     name: secrets-scan

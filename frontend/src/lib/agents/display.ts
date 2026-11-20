@@ -8,6 +8,9 @@ const AGENT_TYPE_LABELS: Record<AgentType, string> = {
   claude_code: "Claude Code",
   codex: "Codex",
   antigravity: "Antigravity",
+  cursor: "Cursor",
+  opencode: "OpenCode",
+  deepseek_harness: "DeepSeek Harness",
 };
 
 /** Product name for an agent type key; unknown keys fall through unchanged. */
@@ -43,11 +46,14 @@ export function abbreviateHomePath(path: string): string {
 
 /** The program an agent type runs as, as it appears on PATH. */
 export function agentProgramName(type: AgentType): string {
-  return PROGRAM[type];
+  return AGENT_PROGRAMS[type];
 }
 
-const PROGRAM: Record<AgentType, string> = {
+const AGENT_PROGRAMS: Record<AgentType, string> = {
   claude_code: "claude",
   codex: "codex",
   antigravity: "agy",
+  cursor: "cursor-agent",
+  opencode: "opencode",
+  deepseek_harness: "dsh",
 };

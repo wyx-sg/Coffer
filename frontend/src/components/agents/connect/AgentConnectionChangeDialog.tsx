@@ -16,12 +16,13 @@ import {
   type ChangePreviewState,
 } from "@/components/change-preview/ChangePreview";
 import { AgentHandoff } from "@/components/handoff/AgentHandoff";
+import { baseName } from "@/components/agents/overview/paths";
 import {
+  connectionFiles,
   createsConfigDir,
   partsToInstall,
   planConnect,
   planDisconnect,
-  type ConnectionPartKey,
   type PlanAgent,
 } from "@/lib/agents/connectionPlan";
 import { abbreviateHomePath, agentTypeLabel } from "@/lib/agents/display";
@@ -45,11 +46,6 @@ interface Snapshot {
   /** Repair (a partial connection, or some parts already in place) rather than Connect. */
   repairing: boolean;
 }
-
-const FILE_NAME: Record<string, Record<ConnectionPartKey, string>> = {
-  claude_code: { mcp: ".claude.json" },
-  codex: { mcp: "config.toml" },
-};
 
 export function AgentConnectionChangeDialog({ request, onClose }: Props) {
   const { t } = useTranslation();
@@ -94,7 +90,11 @@ export function AgentConnectionChangeDialog({ request, onClose }: Props) {
       }
       const sentences =
         partsToInstall(agent).length > 0
-          ? [t("agents.change.summary.gets.mcp", { mcpFile: FILE_NAME[type].mcp })]
+          ? [
+              t("agents.change.summary.gets.mcp", {
+                mcpFile: baseName(connectionFiles(agent.row).mcp),
+              }),
+            ]
           : [];
       if (createsConfigDir(agent)) {
         sentences.push(

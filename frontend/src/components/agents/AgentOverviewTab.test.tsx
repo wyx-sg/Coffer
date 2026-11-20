@@ -14,6 +14,7 @@ import { AgentOverviewTab, type OverviewActions } from "./AgentOverviewTab";
 import type { AgentOut, AgentTypeOut, CofferConnection } from "@/lib/api/agents";
 import { acceptance } from "@/test/acceptance";
 import { fakeApi } from "@/test/fakeApi";
+import { FULL_AGENT_FEATURES } from "@/test/agentFeatures";
 
 const callMock = fakeApi();
 
@@ -25,6 +26,7 @@ vi.mock("@/lib/hooks/useFeatures", async (importOriginal) => ({
 
 const HOME = "/Users/me";
 const AGENT: AgentOut = {
+  features: FULL_AGENT_FEATURES,
   uid: "u-cc",
   name: "claude-code",
   type: "claude_code",
@@ -40,6 +42,7 @@ const AGENT: AgentOut = {
   updated_at: "2026-09-27T18:04:00Z",
 };
 const TYPE_ROW: AgentTypeOut = {
+  features: FULL_AGENT_FEATURES,
   type: "claude_code",
   name: "claude-code",
   display_name: "Claude Code",

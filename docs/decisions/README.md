@@ -187,6 +187,9 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | ADR | Decision |
 | --- | --- |
 | [`agent-descriptor-manifest`](agent-descriptor-manifest.md) | Per-Agent Behaviour Lives in One Descriptor Record per Agent |
+| [`cursor-opencode-and-deepseek-harness-are-supported-agents`](cursor-opencode-and-deepseek-harness-are-supported-agents.md) | Cursor, OpenCode and DeepSeek Harness Are Supported Agents, Each With Every Facet It Offers |
+| [`deepseek-harness-mcp-row-lives-in-a-block-coffer-owns`](deepseek-harness-mcp-row-lives-in-a-block-coffer-owns.md) | DeepSeek Harness's MCP Row Lives in a Block Coffer Owns |
+| [`opencode-gets-its-mcp-entry-in-the-1x-shape`](opencode-gets-its-mcp-entry-in-the-1x-shape.md) | OpenCode Gets Its MCP Entry in the 1.x Shape |
 | [`agent-mechanisms-are-optional-facets-on-the-descriptor`](agent-mechanisms-are-optional-facets-on-the-descriptor.md) | Agent Mechanisms Are Optional Facets on the Descriptor, and Projection Is One Registry |
 | [`antigravity-joins-at-its-config-layer-only`](antigravity-joins-at-its-config-layer-only.md) | Antigravity Joins Coffer Through Its Config Layer Only |
 | [`writing-agent-native-config-safely`](writing-agent-native-config-safely.md) | Writing Agent-Native Config Safely |
@@ -244,6 +247,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`cross-platform-skill-delivery`](cross-platform-skill-delivery.md) | Skills Reach an Agent as a Directory Link to One Master Folder |
 | [`coffer-ships-its-own-skill`](coffer-ships-its-own-skill.md) | Coffer Ships Its Own Manual as a Skill Resource |
 | [`codex-skills-go-to-agents-skills`](codex-skills-go-to-agents-skills.md) | Codex Skills Go to `~/.agents/skills` |
+| [`a-shared-skills-directory-holds-one-link-for-every-reader`](a-shared-skills-directory-holds-one-link-for-every-reader.md) | A Shared Skills Directory Holds One Link for Every Agent That Reads It |
 | [`accept-long-skill-descriptions-and-find-skills-below-a-repos-top`](accept-long-skill-descriptions-and-find-skills-below-a-repos-top.md) | Accept Long Skill Descriptions, and Find Skills Below a Repository's Top |
 | [`trim-skill-management-to-what-an-agent-cannot-do`](trim-skill-management-to-what-an-agent-cannot-do.md) | Trim Skill Management to What an Agent Cannot Do |
 | [`git-source-partial-clone-prefetch`](git-source-partial-clone-prefetch.md) | A Git Skill's Folder Is Fetched in One Request From a Partial Clone, With One Full-Clone Fallback |

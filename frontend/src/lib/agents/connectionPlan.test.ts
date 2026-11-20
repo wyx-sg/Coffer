@@ -39,6 +39,24 @@ describe("connectionFiles", () => {
     expect(connectionFiles(codex)).toEqual({ mcp: "/Users/me/.codex/config.toml" });
   });
 
+  test("Cursor, OpenCode and DeepSeek Harness write a file in their directory", () => {
+    const row = (type: PlanAgent["row"]["type"], dir: string): PlanAgent["row"] => ({
+      type,
+      config_dir: dir,
+      standard_config_dir: dir,
+      state: "installed_active",
+    });
+    expect(connectionFiles(row("cursor", "/Users/me/.cursor")).mcp).toBe(
+      "/Users/me/.cursor/mcp.json",
+    );
+    expect(connectionFiles(row("opencode", "/Users/me/.config/opencode")).mcp).toBe(
+      "/Users/me/.config/opencode/opencode.json",
+    );
+    expect(connectionFiles(row("deepseek_harness", "/Users/me/.dsh")).mcp).toBe(
+      "/Users/me/.dsh/cordis.patch.yml",
+    );
+  });
+
   test("Antigravity writes mcp_config.json in its shared config folder", () => {
     expect(connectionFiles(antigravity)).toEqual({
       mcp: "/Users/me/.gemini/config/mcp_config.json",
@@ -52,6 +70,18 @@ describe("planConnect for Antigravity", () => {
     const lines = JSON.stringify(items);
     expect(lines).toContain("mcp_config.json");
     expect(lines).toContain('\\"timeoutSeconds\\": 86400');
+  });
+});
+
+describe("entry preview for the new shapes", () => {
+  test("OpenCode gets a local command array, DeepSeek Harness a patch row", () => {
+    const at = (type: PlanAgent["row"]["type"]) =>
+      planConnect(
+        [{ row: { ...codex, type, config_dir: "/d", standard_config_dir: "/d" }, uid: "u1" }],
+        OPTS,
+      )[0].diff?.map((l) => l.text);
+    expect(at("opencode")).toContain(`  "command": ["<shim>", "--agent-uid", "u1"]`);
+    expect(at("deepseek_harness")).toContain("        args: ['--agent-uid', 'u1']");
   });
 });
 

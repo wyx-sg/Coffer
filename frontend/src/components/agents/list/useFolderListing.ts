@@ -26,6 +26,20 @@ const KEPT: Record<AgentType, KeptEntry[]> = {
     { name: "hooks.json", role: "agents.configDirDialog.role.hooks", folder: false },
     { name: "skills", role: "agents.configDirDialog.role.skills", folder: true },
   ],
+  // Cursor, OpenCode and DeepSeek Harness read skills from ~/.agents/skills,
+  // outside their directory, so none has a skills folder here.
+  cursor: [
+    { name: "mcp.json", role: "agents.configDirDialog.role.mcp", folder: false },
+    { name: "cli-config.json", role: "agents.configDirDialog.role.cliConfig", folder: false },
+    { name: "hooks.json", role: "agents.configDirDialog.role.hooks", folder: false },
+  ],
+  opencode: [
+    { name: "opencode.json", role: "agents.configDirDialog.role.opencodeConfig", folder: false },
+    { name: "AGENTS.md", role: "agents.configDirDialog.role.instructions", folder: false },
+  ],
+  deepseek_harness: [
+    { name: "cordis.patch.yml", role: "agents.configDirDialog.role.dshPatch", folder: false },
+  ],
   antigravity: [
     { name: "mcp_config.json", role: "agents.configDirDialog.role.mcpServers", folder: false },
     { name: "config.json", role: "agents.configDirDialog.role.appSettings", folder: false },

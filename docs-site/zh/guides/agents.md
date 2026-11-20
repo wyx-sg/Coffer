@@ -1,11 +1,11 @@
 ---
 title: 智能体
-description: 把 Claude Code、Codex 和 Antigravity 注册到 Coffer、接入 Coffer，并管理它们的配置文件、MCP 条目、插件、Hook、模型、记忆和会话。
+description: 把 Claude Code、Codex、Antigravity、Cursor、OpenCode 和 DeepSeek Harness 注册到 Coffer、接入 Coffer，并管理它们的配置文件、MCP 条目、插件、Hook、模型、记忆和会话。
 ---
 
 # 智能体 {#agents}
 
-智能体是装在你机器上、由 Coffer 向其投递资源的编程智能体：Claude Code、Codex 或 Antigravity。本页讲如何注册智能体、如何把 Coffer 的 MCP 条目装进去，以及 Coffer 让你在智能体自己的文件里能看到和改动的一切。
+智能体是装在你机器上、由 Coffer 向其投递资源的编程智能体：Claude Code、Codex、Antigravity、Cursor、OpenCode 或 DeepSeek Harness。本页讲如何注册智能体、如何把 Coffer 的 MCP 条目装进去，以及 Coffer 让你在智能体自己的文件里能看到和改动的一切。
 
 ## 智能体的用途 {#what-agents-are-for}
 
@@ -16,15 +16,20 @@ Coffer 共享的一切——MCP 服务器、技能、知识、记忆、模型提
 - 把[模型提供商](/zh/guides/providers)投射到它的原生配置里；
 - 在一个地方展示它的配置文件、MCP 条目、插件、原生记忆和会话。
 
-Coffer 支持三种智能体类型：
+Coffer 支持六种智能体类型：
 
 | 类型 | 产品 | 默认配置目录 | Coffer 查找的程序 |
 | --- | --- | --- | --- |
 | `claude_code` | Claude Code（CLI 和 IDE/桌面形态） | `~/.claude` | `claude` |
 | `codex` | OpenAI Codex（CLI 和 IDE 形态） | `~/.codex` | `codex` |
 | `antigravity` | Google Antigravity（App、CLI 和 IDE） | `~/.gemini/config` | `agy`，或 `Antigravity.app` 应用包 |
+| `cursor` | Cursor（编辑器和它的 `cursor-agent` CLI） | `~/.cursor` | `cursor-agent` |
+| `opencode` | OpenCode | `~/.config/opencode` | `opencode` |
+| `deepseek_harness` | DeepSeek Harness，DeepSeek 的开源智能体 | `~/.dsh` | `dsh` |
 
 同一产品的 CLI 和 IDE 形态读的是同一个配置目录，所以注册一个智能体就能覆盖两者。Claude Desktop 聊天应用有自己的配置，不属于受支持的智能体。
+
+并非每种类型都能用上全部功能。Claude Code 和 Codex 全部都有。Antigravity 能用上它的配置文件夹允许的部分，见 [Antigravity 能得到什么](#what-antigravity-gets)。Cursor、OpenCode 和 DeepSeek Harness 有 Coffer 的网关 MCP 条目、技能、配置文件和它们自己 MCP 条目的列表；[模型提供商](/zh/guides/providers)、[对话](/zh/guides/chat)和[消息渠道](/zh/guides/channels)、[记忆](/zh/guides/memory)、会话、插件和 Hook 暂时还不支持。它们的智能体页面只显示适用的 tab。见 [Cursor、OpenCode 和 DeepSeek Harness](#cursor-opencode-and-deepseek-harness)。
 
 ### Antigravity 能得到什么 {#what-antigravity-gets}
 
@@ -34,9 +39,9 @@ Antigravity 只能用 Google 托管的模型，没有存放学到的记忆的地
 
 ### 每种类型一个智能体 {#one-agent-per-type}
 
-一台机器上每种类型最多注册一个智能体，智能体的名字**就是**它的类型：`claude-code`、`codex` 或 `antigravity`。你不用起名，智能体也没有标题或描述。凡是 Coffer 问你指哪个智能体的地方——技能或 MCP 服务器的生效范围，以及所有 `/api/v1/agents/{uid}/…` 路由——都可以填类型（`claude-code`；`claude_code` 也能识别）或智能体的 uid。
+一台机器上每种类型最多注册一个智能体，智能体的名字**就是**它的类型：`claude-code`、`codex`、`antigravity`、`cursor`、`opencode` 或 `deepseek-harness`。你不用起名，智能体也没有标题或描述。凡是 Coffer 问你指哪个智能体的地方——技能或 MCP 服务器的生效范围，以及所有 `/api/v1/agents/{uid}/…` 路由——都可以填类型（`claude-code`；`claude_code` 也能识别）或智能体的 uid。
 
-除了类型，智能体唯一的设置就是**配置目录**，外加[模型绑定](#models)。注册时默认使用该类型的标准目录（`~/.claude`、`~/.codex`、`~/.gemini/config`），除非你另行指定。把 Coffer 指向别的目录，是把这唯一的智能体挪过去，绝不会新增第二个。注册一个已注册过的类型会被拒绝，返回 `409 AGENT_TYPE_REGISTERED`。
+除了类型，智能体唯一的设置就是**配置目录**，外加[模型绑定](#models)。注册时默认使用该类型的标准目录（见上表），除非你另行指定。把 Coffer 指向别的目录，是把这唯一的智能体挪过去，绝不会新增第二个。注册一个已注册过的类型会被拒绝，返回 `409 AGENT_TYPE_REGISTERED`。
 
 ::: info 智能体自己的文件才是真相来源
 Coffer 从不把智能体的配置复制进自己的存储。配置文件、MCP 条目、插件和原生记忆，每次查看时都从磁盘读取，会话则由智能体自己列出。智能体记录本身只保存类型、配置目录和模型绑定。
@@ -59,9 +64,9 @@ Coffer 会报告每一种受支持的类型（无论是否已注册），状态�
 | **未安装** | 缺失 | 存在 | 没有可添加的：这个目录是以前安装留下的。重装智能体，或者忽略它。 |
 | **缺失** | 缺失 | 不存在 | 这台机器上什么都没有。该类型仍会列出，所以每种类型总有一行。 |
 
-对每种类型，Coffer 会查看它的标准目录；如果守护进程的环境设置了该类型自己的变量（Claude Code 是 `CLAUDE_CONFIG_DIR`，Codex 是 `CODEX_HOME`），还会查看变量指向的目录。第二个目录永远不会成为第二个智能体：标准目录存在时，它作为这唯一智能体的**使用其他配置目录**选项提供；只有它存在时，它就是「连接」注册的目录。Coffer 不会搜索磁盘的其他位置；要使用别的目录，见[使用其他配置目录](#use-a-different-config-directory)。已注册的类型不会再次提供。
+对每种类型，Coffer 会查看它的标准目录；如果守护进程的环境设置了该类型自己的变量（Claude Code 是 `CLAUDE_CONFIG_DIR`，Codex 是 `CODEX_HOME`，Cursor 是 `CURSOR_CONFIG_DIR`，OpenCode 是 `OPENCODE_CONFIG_DIR`，DeepSeek Harness 是 `DSH_HOME`），还会查看变量指向的目录。第二个目录永远不会成为第二个智能体：标准目录存在时，它作为这唯一智能体的**使用其他配置目录**选项提供；只有它存在时，它就是「连接」注册的目录。Coffer 不会搜索磁盘的其他位置；要使用别的目录，见[使用其他配置目录](#use-a-different-config-directory)。已注册的类型不会再次提供。
 
-**Web 界面：** **智能体**页面始终恰好有三行，依次是 Claude Code、Codex 和 Antigravity，不管各自是否安装。检测是自动的——打开页面时、窗口重新获得焦点时，以及每隔几分钟——所以没有「检测」按钮，也没有「添加智能体」对话框。每一行显示一种状态，并提供它对应的那一个操作：
+**Web 界面：** **智能体**页面始终每种受支持类型一行，顺序同上表，不管各自是否安装。检测是自动的——打开页面时、窗口重新获得焦点时，以及每隔几分钟——所以没有「检测」按钮，也没有「添加智能体」对话框。每一行显示一种状态，并提供它对应的那一个操作：
 
 | 行显示 | 含义 | 操作 |
 | --- | --- | --- |
@@ -75,11 +80,11 @@ Coffer 会报告每一种受支持的类型（无论是否已注册），状态�
 
 Coffer 不负责安装智能体，而安装又依赖具体机器，所以找不到程序的行会把活交给一个智能体，而不是给出安装命令。该行在 **⋯** 前面放着交接拆分按钮**交给 &lt;Agent&gt; ▾**，用的是守护进程写的一段提示词：在这台机器上安装（或重装）这个智能体，保留它现有的配置目录，确保它的程序能在 Coffer 查找的 `PATH` 上被找到（提示词里列出了这个 `PATH`），并用 `claude --version` 或 `codex --version` 确认，然后回来点**再检查一次**——登录留给你自己。**交给 &lt;Agent&gt;**会在你的首选终端里启动默认的交接智能体，把提示词作为它的第一条消息；▾ 后面是**交给**另一个智能体（它可用时）和**复制提示词**，后者复制它，给 Coffer 之外的任意助手用。没有受管智能体可以执行时（缺失的智能体自己装不了自己），该行只提供**复制提示词**。**⋯** 菜单不会重复它。智能体页面概览 tab 的问题状态里也提供同样的提示词。你仍然可以按厂商文档自己安装智能体；程序一出现在 `PATH` 上，这一行会自动更新。
 
-对新发现的智能体点**连接**，会在标准目录注册它并连接它。它会先打开**审阅改动**——列出将写入的每个文件和新增的行——在你应用之前什么都不写。首次运行时，如果还没有任何智能体连接、且至少装了两个，**全部连接**会在一次确认里审阅并连接所有已安装的智能体。已注册的行还会显示它的提供商（它所用的 Coffer 连接，或它的内置登录）、从智能体自己的配置里读出的默认模型（配置里没写时显示**内置默认**，即智能体按厂商的默认走；智能体自己报告了默认模型时（Codex 会报告）括号里写出它），以及有多少技能、MCP 服务器和插件送达它，点开进入智能体的页面。表格下方有一行说明这些数量的含义。
+对新发现的智能体点**连接**，会在标准目录注册它并连接它。它会先打开**审阅改动**——列出将写入的每个文件和新增的行——在你应用之前什么都不写。首次运行时，如果装了不止一个智能体且都没连接，**全部连接**会在一次确认里审阅并连接所有已安装的智能体。已注册的行还会显示它的提供商（它所用的 Coffer 连接，或它的内置登录）、从智能体自己的配置里读出的默认模型（配置里没写时显示**内置默认**，即智能体按厂商的默认走；智能体自己报告了默认模型时（Codex 会报告）括号里写出它），以及有多少技能、MCP 服务器和插件送达它，点开进入智能体的页面。表格下方有一行说明这些数量的含义。
 
 ### 使用其他配置目录 {#use-a-different-config-directory}
 
-Claude Code 用 `CLAUDE_CONFIG_DIR` 启动时会读取另一个目录，Codex 则是 `CODEX_HOME`。如果你就是这样运行智能体的，把这个目录告诉 Coffer，注册时或之后都可以。
+Claude Code 用 `CLAUDE_CONFIG_DIR` 启动时会读取另一个目录，Codex 是 `CODEX_HOME`，Cursor 是 `CURSOR_CONFIG_DIR`，OpenCode 是 `OPENCODE_CONFIG_DIR`，DeepSeek Harness 是 `DSH_HOME`。如果你就是这样运行智能体的，把这个目录告诉 Coffer，注册时或之后都可以。
 
 对已注册的智能体，同一个菜单项会把它挪过去。
 
@@ -91,7 +96,7 @@ Claude Code 用 `CLAUDE_CONFIG_DIR` 启动时会读取另一个目录，Codex �
 
 ### 编辑和断开连接 {#edit-and-disconnect}
 
-智能体行和智能体页面上的 **⋯** 菜单包含**使用其他配置目录…**、**在访达中显示配置目录**、**复制 uid**、和**断开连接…**（只要有任何部分已安装）。没有**移除**：列表里始终为每个受支持的智能体各留一行，想把 Coffer 的条目从某个智能体里拿掉，就断开它。
+智能体行和智能体页面上的 **⋯** 菜单包含**使用其他配置目录…**、**在访达中显示配置目录**、**复制 uid**、和**断开连接…**（只要有任何部分已安装）。没有**移除**：列表里始终每个受支持智能体一行，想把 Coffer 的条目从某个智能体里拿掉，就断开它。
 
 - **编辑**修改配置目录或[模型绑定](#models)。名字就是类型，不能改。所有引用智能体的地方——生效范围列表、消息渠道的默认智能体、已安装的 MCP 条目——保存的都是智能体不可变的 `uid`。
 - **断开连接…**会从智能体里删掉 Coffer 的网关条目，文件里的其他内容原样保留（见[把智能体接入 Coffer](#connect-an-agent-to-coffer)）。智能体仍保持已注册，所以[生效范围](/zh/guides/skills)授予它的技能会继续投递。
@@ -119,6 +124,10 @@ Claude Code 用 `CLAUDE_CONFIG_DIR` 启动时会读取另一个目录，Codex �
 | Claude Code，默认目录 | `~/.claude.json` | `mcpServers.coffer` |
 | Claude Code，自定义目录 | `<config_dir>/.claude.json` | `mcpServers.coffer` |
 | Codex | `<config_dir>/config.toml` | `[mcp_servers.coffer]` |
+| Antigravity | `<config_dir>/mcp_config.json` | `mcpServers.coffer`，带 `"timeoutSeconds": 86400` |
+| Cursor | `<config_dir>/mcp.json` | `mcpServers.coffer`，和 Claude Code 同一形状 |
+| OpenCode | `<config_dir>/opencode.json`（或 `opencode.jsonc`） | `mcp.coffer`，一个带命令数组的 `local` 条目 |
+| DeepSeek Harness | `<config_dir>/cordis.patch.yml` | Coffer 标记的一段里的一行 `coffer-mcp` |
 
 Claude Code 的条目长这样：
 
@@ -139,6 +148,34 @@ Codex 的：
 [mcp_servers.coffer]
 command = "/Users/you/.coffer/bin/coffer-mcp-shim"
 args = ["--agent-uid", "9a006a32d0bf5787955c43d54e4b44e9"]
+```
+
+OpenCode 的：
+
+```json
+{
+  "mcp": {
+    "coffer": {
+      "type": "local",
+      "command": ["/Users/you/.coffer/bin/coffer-mcp-shim", "--agent-uid", "9a006a32d0bf5787955c43d54e4b44e9"]
+    }
+  }
+}
+```
+
+DeepSeek Harness 的：Coffer 在对所有 profile 生效的主目录补丁层末尾追加一段带标记的内容：
+
+```yaml
+# >>> coffer: managed by Coffer, edits inside this block are replaced >>>
+- insert:
+    - id: coffer-mcp
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: coffer
+        transport: stdio
+        command: '/Users/you/.coffer/bin/coffer-mcp-shim'
+        args: ['--agent-uid', '9a006a32d0bf5787955c43d54e4b44e9']
+# <<< coffer <<<
 ```
 
 接入是幂等的：再接入一次会原地重写每个条目，绝不会加第二个。什么都没装时断开连接也会成功，且不做任何改动。每次写入都会备份并记入审计（`agent_mcp_installed` / `agent_mcp_uninstalled`）。连接状态每次都从文件读取，Coffer 不存储它。
@@ -205,6 +242,16 @@ Coffer 的每次写入：
 | | `instructions` | `<config_dir>/AGENTS.md` |
 | | `rules` | `<config_dir>/rules/`——一个目录，每条规则一个 Markdown 文件 |
 | | `hooks` | `<config_dir>/hooks.json` |
+| `cursor` | `mcp` | `<config_dir>/mcp.json` |
+| | `cli_config` | `<config_dir>/cli-config.json` |
+| | `hooks` | `<config_dir>/hooks.json` |
+| `opencode` | `config` | `<config_dir>/opencode.json`（只有 `opencode.jsonc` 时用它） |
+| | `instructions` | `<config_dir>/AGENTS.md` |
+| `deepseek_harness` | `patch` | `<config_dir>/cordis.patch.yml` |
+| | `web_patch` | `<config_dir>/profiles/web/cordis.patch.yml` |
+| | `instructions` | `~/.agents/AGENTS.md` |
+
+Cursor 的用户规则存在应用里而不是文件里，所以它没有 `instructions` 文件。
 
 **Web 界面：** 打开智能体，选择**配置文件**。这个 tab 左边是文件树，右边是只读预览，中间的分隔条可以拖动。文件树列出智能体的配置文件；`agents/` 这样的目录条目可展开，列出里面的文件。只列出已存在的文件：智能体还没创建的文件不会出现，因为 Coffer 不创建配置文件。选中一个文件即可按磁盘上的原样预览——进入时默认打开第一个文件，当前打开的文件记在页面地址里。预览顶部的工具栏显示文件路径和大小，并有**在编辑器中打开**和**在访达中显示**；文件树顶部的图标可在访达中显示整个配置文件夹。要修改文件，用**在编辑器中打开**。Coffer 没有编辑器、**新建文件**或**删除**：配置文件要在你自己的编辑器里改（在**设置 › 通用**里选择），或者让智能体去改。Coffer 自己对这些文件的改动——接入、修复、插件开关、MCP 条目、切换提供商——都会先经过**审阅改动**。
 
@@ -222,6 +269,9 @@ Coffer 会把它写入的每个文件的上一版内容保存在 `~/.coffer/conf
 | --- | --- |
 | Claude Code | `.claude.json`（`global` 文件）和 `settings.json` 里的 `mcpServers` |
 | Codex | `config.toml` 里的 `[mcp_servers.*]`（会显示 `enabled` 标志，但从不写入） |
+| Cursor | `mcp.json` 里的 `mcpServers` |
+| OpenCode | `opencode.json` 里的 `mcp`，1.x 形状（`mcp.<name>`）和 2.x 形状（`mcp.servers.<name>`）都读 |
+| DeepSeek Harness | `cordis.patch.yml` 和 `profiles/web/cordis.patch.yml` 里的 `@deepseek-ai/dsh-mcp-client` 行；只列出，见下文 |
 
 点击直接服务器所在的行（或它的名字），会在对话框里打开它的条目。对话框以只读方式展示智能体文件里关于该服务器的全部内容：传输方式、命令及每个参数（或 URL）、工作目录、格式支持时的 `enabled` 标志、环境变量和 HTTP 头的名字、条目带的其他键，以及所在的配置文件。密钥值永远不离开守护进程：环境变量和请求头的值只显示为*已设置*或*密钥 · 已隐藏*，名字看起来像密钥的其他键（规则见下）显示为*已隐藏*。Coffer 不会为了展示这些而启动直接服务器，所以不列工具。对话框页脚把行上的两个操作放在**关闭**两侧：左边是**移除**（或**移除重复项**），右边是**纳入托管**。
 
@@ -231,6 +281,15 @@ Coffer 会把它写入的每个文件的上一版内容保存在 `~/.coffer/conf
 - **纳入托管**：Coffer 把条目注册为一个 `mcp_server` 资源，确认能读回，然后才删除直接条目。任何失败都会回滚新资源，并让智能体的文件保持逐字节不变。之后该服务器通过网关提供给每个智能体。使用旧版 SSE 传输（`"type": "sse"`）的条目会标为**旧版 SSE 传输**，不能纳入托管或导入，因为 Coffer 只用 Streamable HTTP 连接远程服务器：把它留在智能体里，或改用服务器的 Streamable HTTP 地址（通常把 `/sse` 换成 `/mcp`）。
 
 当条目的环境变量或请求头在一个看起来像密钥的键下（包含 `TOKEN`、`SECRET`、`PASSWORD`、`PASSWD`、`API_KEY`、`APIKEY`、`CREDENTIAL` 或 `AUTHORIZATION`）带有非空值时，纳入托管对话框会在**存储为**下逐个列出它们，默认选**密钥**。Coffer 把当前值存进它的[加密密钥存储](/zh/guides/secret-store)，新资源的配置里只带引用。像 `Authorization: Bearer abc…` 这样的请求头值会被拆开：`abc…` 存为密钥，请求头行的认证方案设为 Bearer。名字冲突会被拒绝：换一个**在 Coffer 中的名称**。对同时出现在两个文件里的 Claude Code 名字，纳入的是你打开的那一条。`coffer` 条目本身永远不能用这种方式移除或纳入托管。
+
+## Cursor、OpenCode 和 DeepSeek Harness {#cursor-opencode-and-deepseek-harness}
+
+这三种类型支持对所有智能体都一样的部分：Coffer 的网关 MCP 条目、技能、配置文件列表，以及智能体自己的 MCP 条目。不同之处：
+
+- **技能投递到 `~/.agents/skills`。** 三者都从那里读个人技能（Cursor 和 OpenCode 还读 `~/.claude/skills`），Codex 也是。Coffer 在这个共享文件夹里每个技能只放一个链接，只要技能的[生效范围](/zh/guides/skills)包含任何一个读这个文件夹的智能体，就投递过去。所以一个生效范围只写了 Codex 的技能，在装了 Cursor、OpenCode 或 DeepSeek Harness 时也会被它们看到。
+- **OpenCode** 1.x 和 2.x 的 MCP 表名字不同。Coffer 用 1.x 形状（`mcp.coffer`）写自己的条目，2.x 仍然能读；两种形状的条目都会列出。`mcp.servers` 下的 2.x 条目可以像其他条目一样移除和纳入托管。
+- **DeepSeek Harness** 用 YAML 补丁层组合配置，里面可能有 `!!js` 表达式，所以 Coffer 从不重写整个文件。它自己的那一行放在[各写到哪里](#what-gets-written-where)里那段带标记的内容中，连接和断开只替换这一段。其他 MCP 行会列出，但不能在 Coffer 里移除或纳入托管（`MCP_ENTRY_NOT_EDITABLE`）：请自己编辑 `cordis.patch.yml`。Coffer 只往顶层是块状列表（`- …`）的文件里加这一段；流式写法的文件会被拒绝，返回 `CONFIG_FILE_FORMAT_INVALID`。
+- **暂不支持：** 让这些智能体使用 Coffer 的[模型提供商](/zh/guides/providers)，从[对话](/zh/guides/chat)、[消息渠道](/zh/guides/channels)或[定时任务](/zh/guides/scheduled-tasks)运行它们，[记忆](/zh/guides/memory)同步，会话列表，插件和 Hook。它们的智能体页面没有模型部分，也没有插件、Hook、记忆或会话 tab。
 
 ## 插件 {#plugins}
 
@@ -282,7 +341,7 @@ Coffer 从不写 Claude Code 自己的清单文件。当 `claude` CLI 不在 `PA
 
 ## Web 界面中的智能体页面 {#the-agent-page-in-the-web-ui}
 
-智能体页面以智能体类型寻址（`/agents/claude_code`、`/agents/codex`、`/agents/antigravity`）。页面头部有智能体的图标、名字、一个状态标签和 **⋯** 菜单——名字下面没有说明行——它也永远不会变成修复按钮。下面是八个 tab，都不带数量。六个在标签栏里，各有自己的地址：**总览**（`/agents/<type>`）、**技能**、**MCP 服务器**、**Hooks**、**配置文件**和**会话**（`…/skills`、`…/mcp-servers`、`…/hooks`、`…/config`、`…/sessions`）。**更多**里放最少用的两个，**插件**和**记忆**（`…/plugins`、`…/memory`）；其中一个打开时，**更多**会显示它的名字并带下划线，**更多**上的警告点表示里面有 tab 需要处理。没有模型 tab。
+智能体页面以智能体类型寻址（`/agents/claude_code`、`/agents/codex`、`/agents/antigravity`、`/agents/cursor`、`/agents/opencode`、`/agents/deepseek_harness`）。页面头部有智能体的图标、名字、一个状态标签和 **⋯** 菜单——名字下面没有说明行——它也永远不会变成修复按钮。下面是八个 tab，都不带数量。六个在标签栏里，各有自己的地址：**总览**（`/agents/<type>`）、**技能**、**MCP 服务器**、**Hooks**、**配置文件**和**会话**（`…/skills`、`…/mcp-servers`、`…/hooks`、`…/config`、`…/sessions`）。**更多**里放最少用的两个，**插件**和**记忆**（`…/plugins`、`…/memory`）；其中一个打开时，**更多**会显示它的名字并带下划线，**更多**上的警告点表示里面有 tab 需要处理。没有模型 tab。
 
 **总览**是单列，从上到下：
 

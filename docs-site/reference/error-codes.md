@@ -137,6 +137,7 @@ give the status each code is actually sent with.
 | `SHIM_NOT_FOUND` | 422 | The `coffer-mcp-shim` binary could not be found on `PATH` or in the bundled location. | Reinstall Coffer so `~/.coffer/bin` holds the shim. See [Install](/start/install). |
 | `MCP_INSTALL_UNSUPPORTED` | 422 | This agent type has no place to install Coffer's MCP entry. | Connect the client by hand; see [Connect a client](/guides/connect-a-client). |
 | `MCP_ENTRY_NOT_FOUND` | 404 | No MCP entry with that name exists in the agent's config files. | Refresh the agent's MCP list. |
+| `MCP_ENTRY_NOT_EDITABLE` | 422 | The entry lives in a file Coffer only lists (a DeepSeek Harness patch row), so Coffer cannot remove or adopt it. | Edit the agent's file yourself. |
 | `MCP_ENTRY_PROTECTED` | 422 | The entry is Coffer's own gateway entry. | Use the install and uninstall actions instead of editing it. |
 | `MCP_ENTRY_SOURCE_AMBIGUOUS` | 422 | The entry exists in more than one config file. | Name the source file. |
 | `ADOPT_SECRET_UNRESOLVED` | 422 | Adopting an MCP entry found secret-like environment keys with no secret mapping. | Map each listed key to a secret ref when adopting. |

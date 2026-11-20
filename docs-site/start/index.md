@@ -69,7 +69,7 @@ Every surface talks to the same daemon, so a change made in one shows up in all 
 | Agents | Claude Code (`claude_code`) and Codex (`codex`) |
 | Prebuilt binaries and desktop app | macOS on Apple silicon (arm64) |
 | From source | Python 3.12 or later. The release builds and the login service target macOS. |
-| MCP clients | Any client that can run a stdio MCP server can use `coffer-mcp-shim`. Only Claude Code, Codex and Antigravity get one-step install and skill delivery, and only Claude Code and Codex get provider switching. |
+| MCP clients | Any client that can run a stdio MCP server can use `coffer-mcp-shim`. Only Claude Code, Codex, Antigravity, Cursor, OpenCode and DeepSeek Harness get one-step install and skill delivery, and only Claude Code and Codex get provider switching. |
 
 ## Next steps
 

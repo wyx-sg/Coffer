@@ -36,14 +36,18 @@ interface Props {
 /** Where the agent writes its memory, for the empty state; null when it keeps none. */
 function memoryLocation(agent: AgentOut): string | null {
   const dir = abbreviateHomePath(agent.config_dir);
-  if (agent.type === "antigravity") return null;
-  return agent.type === "codex" ? `${dir}/memories/MEMORY.md` : `${dir}/projects/<project>/memory/`;
+  if (agent.type === "codex") return `${dir}/memories/MEMORY.md`;
+  if (agent.type === "claude_code") return `${dir}/projects/<project>/memory/`;
+  return null;
 }
 
 const OWN_DESCRIPTION: Record<AgentOut["type"], string> = {
   claude_code: "agents.memoryTab.own.descriptionClaude",
   codex: "agents.memoryTab.own.descriptionCodex",
   antigravity: "agents.memoryTab.own.descriptionNone",
+  cursor: "agents.memoryTab.own.descriptionNone",
+  opencode: "agents.memoryTab.own.descriptionNone",
+  deepseek_harness: "agents.memoryTab.own.descriptionNone",
 };
 
 /** The project a store belongs to: its real directory when Coffer resolved one. */

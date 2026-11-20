@@ -89,6 +89,69 @@ def _codex_files(cfg: pathlib.Path) -> tuple[ConfigFileSpec, ...]:
     )
 
 
+def _cursor_files(cfg: pathlib.Path) -> tuple[ConfigFileSpec, ...]:
+    # Cursor keeps no global instructions file: its User Rules live in the
+    # app's settings, not on disk (spec agent-registry/cursor).
+    return (
+        ConfigFileSpec("mcp", "MCP servers (mcp.json)", cfg / "mcp.json", ConfigFileFormat.JSON),
+        ConfigFileSpec(
+            "cli_config",
+            "CLI config (cli-config.json)",
+            cfg / "cli-config.json",
+            ConfigFileFormat.JSON,
+        ),
+        ConfigFileSpec("hooks", "Hooks (hooks.json)", cfg / "hooks.json", ConfigFileFormat.JSON),
+    )
+
+
+def opencode_config_file(cfg: pathlib.Path) -> pathlib.Path:
+    """``opencode.json``, or ``opencode.jsonc`` when only that one exists —
+    OpenCode reads either name."""
+    plain, commented = cfg / "opencode.json", cfg / "opencode.jsonc"
+    if commented.exists() and not plain.exists():
+        return commented
+    return plain
+
+
+def _opencode_files(cfg: pathlib.Path) -> tuple[ConfigFileSpec, ...]:
+    return (
+        ConfigFileSpec(
+            "config", "Config (opencode.json)", opencode_config_file(cfg), ConfigFileFormat.JSON
+        ),
+        ConfigFileSpec(
+            "instructions",
+            "Global instructions (AGENTS.md)",
+            cfg / "AGENTS.md",
+            ConfigFileFormat.MARKDOWN,
+        ),
+    )
+
+
+def _deepseek_harness_files(cfg: pathlib.Path) -> tuple[ConfigFileSpec, ...]:
+    # The home-level patch layer applies to every profile; the shared
+    # ``~/.agents`` root holds the user-global AGENTS.md DeepSeek Harness reads.
+    return (
+        ConfigFileSpec(
+            "patch",
+            "Patch for every profile (cordis.patch.yml)",
+            cfg / "cordis.patch.yml",
+            ConfigFileFormat.YAML,
+        ),
+        ConfigFileSpec(
+            "web_patch",
+            "Web profile patch (profiles/web/cordis.patch.yml)",
+            cfg / "profiles" / "web" / "cordis.patch.yml",
+            ConfigFileFormat.YAML,
+        ),
+        ConfigFileSpec(
+            "instructions",
+            "Global instructions (~/.agents/AGENTS.md)",
+            _home() / ".agents" / "AGENTS.md",
+            ConfigFileFormat.MARKDOWN,
+        ),
+    )
+
+
 def _antigravity_files(cfg: pathlib.Path) -> tuple[ConfigFileSpec, ...]:
     """Antigravity's personal config layer, ``~/.gemini/config/``, which its
     App, CLI and IDE all read (spec agent-registry/antigravity "Allowlist

@@ -188,8 +188,13 @@ def test_list_every_supported_type_whether_added_or_not(home: pathlib.Path) -> N
         r = c.get("/api/v1/agents/types")
         assert r.status_code == 200, r.text
         rows = r.json()["types"]
-        assert [row["type"] for row in rows] == ["claude_code", "codex", "antigravity"]
-        claude, codex, antigravity = rows
+        assert [row["type"] for row in rows] == [t.value for t in AgentType]
+        by_type = {row["type"]: row for row in rows}
+        claude, codex, antigravity = (
+            by_type["claude_code"],
+            by_type["codex"],
+            by_type["antigravity"],
+        )
         assert (antigravity["uid"], antigravity["state"]) == (None, "missing")
         assert antigravity["standard_config_dir"] == str(home / ".gemini" / "config")
 
@@ -242,3 +247,24 @@ def test_keep_an_agents_uid_while_its_directory_moves(home: pathlib.Path) -> Non
             assert read.status_code == 200, (ref, read.text)
             body = read.json()
             assert (body["uid"], body["name"], body["config_dir"]) == (uid, "codex", str(moved))
+
+
+@pytest.mark.acceptance(
+    spec="agent-registry", scenario="a type without facets reports only what it has"
+)
+def test_a_type_without_facets_reports_only_what_it_has(home: pathlib.Path) -> None:
+    app = _app()
+    with _client_for(app) as c:
+        rows = {row["type"]: row for row in c.get("/api/v1/agents/types").json()["types"]}
+        assert rows["claude_code"]["features"] == [
+            "mcp",
+            "skills",
+            "provider",
+            "chat",
+            "memory_read",
+            "memory_write",
+            "sessions",
+            "plugins",
+            "hooks",
+        ]
+        assert rows["cursor"]["features"] == ["mcp", "skills"]

@@ -49,15 +49,11 @@ from coffer.domain.agent.config_diff import (
     entry_secret_literals,
     normalise_server_name,
     server_name_usable,
+    unique_server_name,
 )
-from coffer.domain.agent.config_files import ConfigFileSpec
-from coffer.domain.agent.mcp_entries import (
-    McpEntry,
-    matches_transport,
-    parse_entries,
-    remove_entry,
-    secret_env_keys,
-)
+from coffer.domain.agent.config_files import ConfigFileFormat, ConfigFileSpec
+from coffer.domain.agent.mcp_entries import McpEntry, matches_transport, parse_entries, remove_entry
+from coffer.domain.agent.mcp_entry_secrets import secret_env_keys
 from coffer.domain.agent.mcp_injection import default_container_key
 from coffer.domain.agent.types import AgentType, agent_display_name
 from coffer.domain.errors import CofferError, ResourceNotFound
@@ -72,7 +68,7 @@ from coffer.domain.reconcile import (
     Subject,
 )
 from coffer.domain.resource import Resource
-from coffer.domain.workspace_errors import McpSseNotSupported
+from coffer.domain.workspace_errors import McpEntryNotEditable, McpSseNotSupported
 
 
 class _Resources(Protocol):
@@ -85,15 +81,6 @@ def _identity(entry: McpEntry) -> tuple[str, ...]:
     if entry.transport == "stdio":
         return ("stdio", entry.command or "", *entry.args)
     return ("http", entry.url or "")
-
-
-def _unique(base: str, taken: set[str]) -> str:
-    name, n = base, 2
-    while name in taken:
-        name = f"{base}-{n}"
-        n += 1
-    taken.add(name)
-    return name
 
 
 class McpImportPlanner:
@@ -127,8 +114,10 @@ class McpImportPlanner:
                 agent.uid, agent.name, choice.name, choice.source, None, "unavailable",
                 error_code=e.code, error=str(e),
             ), None  # fmt: skip
-        if parsed.legacy_sse:
-            refused = McpSseNotSupported(parsed.name)
+        refused: CofferError | None = McpSseNotSupported(parsed.name) if parsed.legacy_sse else None
+        if refused is None and spec.format is ConfigFileFormat.YAML:  # Cordis: read-only
+            refused = McpEntryNotEditable(parsed.name)
+        if refused is not None:
             return PlannedEntry(
                 agent.uid, agent.name, parsed.name, spec.key, str(spec.path), "unavailable",
                 error_code=refused.code, error=str(refused),
@@ -200,7 +189,7 @@ class McpImportPlanner:
         assert first.entry is not None
         wanted = next((c.new_name for c, _ in members if c.new_name), None)
         base = wanted or normalise_server_name(first.name)
-        name = _unique(base, taken)
+        name = unique_server_name(base, taken)
         entries = (first, *(dataclasses.replace(p, role="merged") for _, p in members[1:]))
         reach = tuple(dict.fromkeys(p.agent_uid for p in entries))
         differ = any(

@@ -53,11 +53,14 @@ def test_binding_groups_implementations_by_the_agent_they_declare() -> None:
     assert catalog.driver(AgentType.CODEX) == _Driver("codex")
     assert catalog.driver(AgentType.CLAUDE_CODE) is None
     assert catalog.memory_readers() == {"claude_code": _Reader("claude_code")}
+    projected = {p.agent_type for p in PROVIDER_PROJECTIONS}
     for d in catalog:
         provider = catalog.provider_projection(d.type)
-        assert provider is None or provider.agent_type == d.type
-    # Antigravity runs only Google-hosted models: no connection reaches it.
-    assert catalog.provider_projection(AgentType.ANTIGRAVITY) is None
+        if d.type in projected:
+            assert provider is not None and provider.agent_type == d.type
+        else:
+            # A type without a provider projection simply lacks the facet.
+            assert provider is None
 
 
 def test_two_implementations_for_one_agent_are_refused() -> None:
@@ -92,10 +95,9 @@ def test_the_registry_lists_every_asset_the_shipped_agent_receives(agent_type: A
     projection = agent_catalog().projection(agent_type)
     assert projection is not None
     assets = [e.asset for e in projection.entries]
-    expected = [AssetType.MCP_SERVER, AssetType.SKILL, AssetType.PROVIDER]
-    if agent_type is AgentType.ANTIGRAVITY:
-        # No model setting to project a connection into.
-        expected = [AssetType.MCP_SERVER, AssetType.SKILL]
+    expected = [AssetType.MCP_SERVER, AssetType.SKILL]
+    if agent_type in {p.agent_type for p in PROVIDER_PROJECTIONS}:
+        expected.append(AssetType.PROVIDER)
     assert assets == expected
     # Every entry the shipped agents have lands in the agent's own directory,
     # in exactly one of a file or a directory.
@@ -141,6 +143,7 @@ def test_the_probe_is_built_from_the_record_program_name() -> None:
             return ProgramInfo()
 
     catalog = bind_facets(AGENT_DESCRIPTORS, probe_for=lambda d: _Probe(d.program))
-    assert sorted(seen) == ["agy", "claude", "codex"]
+    assert sorted(seen) == sorted(d.program for d in AGENT_DESCRIPTORS.values())
+    assert {"agy", "claude", "codex", "cursor-agent", "opencode", "dsh"} <= set(seen)
     probe = catalog.dependency_probe(AgentType.CODEX)
     assert probe is not None and probe.program == "codex"

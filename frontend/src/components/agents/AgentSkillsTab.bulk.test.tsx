@@ -18,6 +18,7 @@ import type { UnmanagedSkillOut } from "@/lib/api/agents-workspace";
 import { ApiError } from "@/lib/api/errors";
 import type { SkillOut } from "@/lib/api/skills";
 import { acceptance } from "@/test/acceptance";
+import { FULL_AGENT_FEATURES } from "@/test/agentFeatures";
 
 vi.mock("@/lib/api/agents", () => ({
   agentsApi: {
@@ -35,6 +36,7 @@ const { skillsApi } = await import("@/lib/api/skills");
 const skillsList = vi.mocked(skillsApi.list);
 
 const AGENT: AgentOut = {
+  features: FULL_AGENT_FEATURES,
   uid: "u-cc",
   name: "claude_code",
   type: "claude_code",

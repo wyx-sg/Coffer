@@ -16,7 +16,7 @@ from __future__ import annotations
 import asyncio
 import os
 import pathlib
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -29,6 +29,7 @@ from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.descriptor import AgentDescriptor
 from coffer.domain.agent.detection import DetectionState, ProgramInfo, classify
 from coffer.domain.agent.facets import AgentCatalog
+from coffer.domain.agent.features import agent_features
 from coffer.domain.agent.types import AgentType
 from coffer.domain.resource import Resource
 
@@ -115,9 +116,11 @@ class AutoDetectService:
         dir_exists: Callable[[pathlib.Path], bool] = _is_dir,
         machine: Callable[[], str] = lambda: "unknown",
         lookup_path: Callable[[], str] = lambda: os.environ.get("PATH", ""),
+        session_types: Collection[AgentType] = (),
     ) -> None:
         self._agents = agent_service
         self._catalog = catalog
+        self._session_types = frozenset(session_types)
         self._environ = environ
         self._dir_exists = dir_exists
         # What an install prompt says about this machine: its OS and
@@ -137,6 +140,10 @@ class AutoDetectService:
         if not rows or any(row.state.installed for row in rows):
             return None
         return agent_install_handoff(rows, await self._facts())
+
+    def features(self, agent_type: AgentType) -> list[str]:
+        """What Coffer can do with an agent of this type (feature names)."""
+        return agent_features(self._catalog, agent_type, session_types=self._session_types)
 
     async def program_handoff(
         self, agent_type: AgentType, config_dir: str, state: DetectionState, *, registered: bool

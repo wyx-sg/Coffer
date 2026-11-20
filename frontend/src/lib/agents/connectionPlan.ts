@@ -37,10 +37,20 @@ function join(dir: string, name: string): string {
   return `${dir.replace(/[\\/]+$/, "")}/${name}`;
 }
 
+/** The file inside the config directory that holds the agent's MCP entries
+ *  (Claude Code is the exception: its ~/.claude.json sits beside the directory). */
+const MCP_FILE_IN_CONFIG_DIR: Partial<Record<string, string>> = {
+  codex: "config.toml",
+  antigravity: "mcp_config.json",
+  cursor: "mcp.json",
+  opencode: "opencode.json",
+  deepseek_harness: "cordis.patch.yml",
+};
+
 /** The absolute file each part of an agent's connection is written to. */
 export function connectionFiles(row: PlanAgent["row"]): Record<ConnectionPartKey, string> {
-  if (row.type === "codex") return { mcp: join(row.config_dir, "config.toml") };
-  if (row.type === "antigravity") return { mcp: join(row.config_dir, "mcp_config.json") };
+  const own = MCP_FILE_IN_CONFIG_DIR[row.type];
+  if (own) return { mcp: join(row.config_dir, own) };
   // Claude Code keeps its MCP entries in ~/.claude.json beside the standard
   // directory, and in <dir>/.claude.json when pointed at another one.
   const mcpDir =
@@ -77,6 +87,33 @@ function entryLines(agent: PlanAgent, opts: PlanOptions): { hunk: string; lines:
     return {
       hunk: "mcp_servers.coffer",
       lines: ["[mcp_servers.coffer]", `command = "${shim}"`, `args = ["--agent-uid", "${uid}"]`],
+    };
+  }
+  if (agent.row.type === "opencode") {
+    return {
+      hunk: "mcp",
+      lines: [
+        `"coffer": {`,
+        `  "type": "local",`,
+        `  "command": ["${shim}", "--agent-uid", "${uid}"]`,
+        `},`,
+      ],
+    };
+  }
+  if (agent.row.type === "deepseek_harness") {
+    // Coffer's own marked block at the end of the home patch layer.
+    return {
+      hunk: "insert",
+      lines: [
+        "- insert:",
+        "    - id: coffer-mcp",
+        "      name: '@deepseek-ai/dsh-mcp-client'",
+        "      config:",
+        "        serverName: coffer",
+        "        transport: stdio",
+        `        command: '${shim}'`,
+        `        args: ['--agent-uid', '${uid}']`,
+      ],
     };
   }
   if (agent.row.type === "antigravity") {

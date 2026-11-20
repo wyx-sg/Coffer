@@ -1,10 +1,10 @@
 // src/pages/AgentsPage.tsx — spec agent-registry "List the supported agents as fixed rows on the Agents page".
 //
-// One fixed row per supported type, Claude Code, Codex, then Antigravity, found
-// on their own (on load, when the window regains focus, and every few minutes —
+// One fixed row per supported type, in AGENT_TYPES order, found on their own
+// (on load, when the window regains focus, and every few minutes —
 // useAgentTypes), so there is no Detect and no Add-agent dialog. On first run,
-// with no agent connected and at least two connectable, the header offers
-// Connect all: one preview, one confirmation, for every connectable agent.
+// with none connected and every one connectable, the header offers Connect all:
+// one preview, one confirmation.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { RotateCcw } from "lucide-react";
@@ -14,7 +14,7 @@ import {
   type ConnectionChangeRequest,
 } from "@/components/agents/connect/AgentConnectionChangeDialog";
 import { AgentsTable, type AgentListRow } from "@/components/agents/list/AgentsTable";
-import { useAgentRowState } from "@/components/agents/list/useAgentRowState";
+import { useAgentRowStates } from "@/components/agents/list/useAgentRowState";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -29,20 +29,17 @@ export function AgentsPage() {
   const [change, setChange] = useState<ConnectionChangeRequest | null>(null);
   const byType = new Map((types.data ?? []).map((row) => [row.type, row]));
   // Exactly the supported types, in their fixed order.
-  const [claudeRow, codexRow, antigravityRow] = AGENT_TYPES.map((type) => byType.get(type));
-  const claude = useAgentRowState(claudeRow);
-  const codex = useAgentRowState(codexRow);
-  const antigravity = useAgentRowState(antigravityRow);
-  const rows: AgentListRow[] = [
-    { row: claudeRow, state: claude.state },
-    { row: codexRow, state: codex.state },
-    { row: antigravityRow, state: antigravity.state },
-  ].filter((r): r is AgentListRow => !!r.row);
+  const typeRows = AGENT_TYPES.map((type) => byType.get(type));
+  const states = useAgentRowStates(typeRows);
+  const rows: AgentListRow[] = typeRows
+    .map((row, i) => ({ row, state: states[i].state }))
+    .filter((r): r is AgentListRow => !!r.row);
 
+  // First run: nothing added yet and more than one agent ready to connect.
   const connectable = rows.filter(
-    ({ row, state }) => !row.uid && row.addable && !!state && isAddableState(state),
+    ({ row, state }) => row.addable && !!state && isAddableState(state),
   );
-  const firstRun = rows.every(({ row }) => !row.uid) && connectable.length >= 2;
+  const firstRun = rows.every(({ row }) => !row.uid) && connectable.length > 1;
 
   return (
     <div className="space-y-6">
