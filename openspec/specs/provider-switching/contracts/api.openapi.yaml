@@ -1292,6 +1292,9 @@ components:
       - claude_code
       - codex
       - antigravity
+      - cursor
+      - opencode
+      - deepseek_harness
       title: AgentType
       type: string
     CuratedPrice:

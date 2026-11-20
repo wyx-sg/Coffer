@@ -8,7 +8,9 @@
 // and while one of them is open More wears its name and the underline. There is
 // no Model tab: the model is a section of Overview. Leaving Config files with
 // an unsaved draft asks first, through the shell's unsaved-changes guard, like
-// every other way out of an editor.
+// every other way out of an editor. A tab whose feature the agent's type
+// lacks (the daemon's `features` list: no plugins, hooks, sessions or memory
+// for Cursor, OpenCode or DeepSeek Harness yet) is not shown at all.
 import { useTranslation } from "react-i18next";
 
 import { AgentConfigFilesTab } from "@/components/agents/AgentConfigFilesTab";
@@ -26,6 +28,7 @@ import {
   AGENT_PRIMARY_TABS,
   AGENT_TABS,
   agentBasePath,
+  agentHasTab,
   DEFAULT_AGENT_TAB,
   type AgentTab,
 } from "@/lib/agents/routes";
@@ -57,8 +60,14 @@ function useMoreAttention(uid: string): Partial<Record<AgentTab, boolean>> {
 
 export function AgentDetailTabs({ agent, typeRow, rowActions }: Props) {
   const { t } = useTranslation();
-  const [tab, setTab] = useDetailTab(AGENT_TABS, DEFAULT_AGENT_TAB, agentBasePath(agent.type));
-  const attention = useMoreAttention(agent.uid);
+  const [requested, setTab] = useDetailTab(
+    AGENT_TABS,
+    DEFAULT_AGENT_TAB,
+    agentBasePath(agent.type),
+  );
+  // A tab the type lacks (an old link) opens Overview instead.
+  const tab = agentHasTab(agent, requested) ? requested : DEFAULT_AGENT_TAB;
+  const attention = useMoreAttention(agentHasTab(agent, "plugins") ? agent.uid : "");
   const entry = (id: AgentTab): DetailTab => ({
     id,
     label: t(LABEL_KEY[id]),
@@ -74,8 +83,8 @@ export function AgentDetailTabs({ agent, typeRow, rowActions }: Props) {
   return (
     <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-col">
       <DetailTabsMore
-        tabs={AGENT_PRIMARY_TABS.map(entry)}
-        more={AGENT_MORE_TABS.map(entry)}
+        tabs={AGENT_PRIMARY_TABS.filter((id) => agentHasTab(agent, id)).map(entry)}
+        more={AGENT_MORE_TABS.filter((id) => agentHasTab(agent, id)).map(entry)}
         value={tab}
         onSelect={setTab}
         moreLabel={t("agents.tabs.more")}

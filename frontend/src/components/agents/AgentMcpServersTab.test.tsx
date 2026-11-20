@@ -21,6 +21,7 @@ import { getApiClient } from "@/lib/api/client";
 import { fsApi } from "@/lib/api/fs";
 import { acceptance } from "@/test/acceptance";
 import { mockApiClient } from "@/test/mockApiClient";
+import { FULL_AGENT_FEATURES } from "@/test/agentFeatures";
 
 vi.mock("@/lib/api/client", async (orig) => ({
   ...(await orig<typeof import("@/lib/api/client")>()),
@@ -41,6 +42,7 @@ const { agentsApi } = await import("@/lib/api/agents");
 const api = vi.mocked(agentsApi);
 
 const AGENT: AgentOut = {
+  features: FULL_AGENT_FEATURES,
   uid: "u-cc",
   name: "claude_code",
   type: "claude_code",
@@ -290,21 +292,25 @@ describe("AgentMcpServersTab", () => {
     expect(screen.getByText("github · filesystem")).toBeInTheDocument();
   });
 
-  acceptance("agent-registry", "an old SSE entry is listed but neither imported nor adopted", async () => {
-    const legacy = entry("legacy", {
-      transport: "http",
-      command: null,
-      args: [],
-      url: "https://sse.example/sse",
-      legacy_sse: true,
-    });
-    stub({ items: [GATEWAY, legacy] });
-    renderTab();
-    const adopt = await screen.findByRole("button", { name: "Adopt: legacy" });
-    expect(adopt).toBeDisabled();
-    expect(adopt).toHaveAttribute("title", expect.stringContaining("old SSE transport"));
-    expect(screen.getByText("Old SSE transport")).toBeInTheDocument();
-  });
+  acceptance(
+    "agent-registry",
+    "an old SSE entry is listed but neither imported nor adopted",
+    async () => {
+      const legacy = entry("legacy", {
+        transport: "http",
+        command: null,
+        args: [],
+        url: "https://sse.example/sse",
+        legacy_sse: true,
+      });
+      stub({ items: [GATEWAY, legacy] });
+      renderTab();
+      const adopt = await screen.findByRole("button", { name: "Adopt: legacy" });
+      expect(adopt).toBeDisabled();
+      expect(adopt).toHaveAttribute("title", expect.stringContaining("old SSE transport"));
+      expect(screen.getByText("Old SSE transport")).toBeInTheDocument();
+    },
+  );
 
   test("a config file that failed to parse is an inline warning; its entries are read-only", async () => {
     stub({

@@ -17,7 +17,8 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import Literal
 
-from coffer.domain.agent.mcp_entries import McpEntry, looks_secret
+from coffer.domain.agent.mcp_entries import McpEntry
+from coffer.domain.agent.mcp_entry_secrets import looks_secret
 
 #: What a redacted value reads as.
 REDACTED = "••••••"
@@ -172,6 +173,17 @@ def server_name_usable(name: str) -> bool:
     return bool(_NAME_PATTERN.match(name)) and "__" not in name and len(name) <= SERVER_NAME_MAX
 
 
+def unique_server_name(base: str, taken: set[str]) -> str:
+    """``base``, or ``base-2``, ``base-3`` … — the first not in ``taken``,
+    which it is then added to."""
+    name, n = base, 2
+    while name in taken:
+        name = f"{base}-{n}"
+        n += 1
+    taken.add(name)
+    return name
+
+
 __all__ = [
     "CONTEXT_LINES",
     "REDACTED",
@@ -183,4 +195,5 @@ __all__ = [
     "normalise_server_name",
     "redact_line",
     "server_name_usable",
+    "unique_server_name",
 ]

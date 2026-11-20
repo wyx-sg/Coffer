@@ -514,7 +514,7 @@ export interface components {
          * @description Supported agent products.
          * @enum {string}
          */
-        AgentType: "claude_code" | "codex" | "antigravity";
+        AgentType: "claude_code" | "codex" | "antigravity" | "cursor" | "opencode" | "deepseek_harness";
         /**
          * CuratedPrice
          * @description What the user says this connection charges for a model, in USD per

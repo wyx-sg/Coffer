@@ -9,7 +9,7 @@ Coffer 在你的机器上维护一个技能主库，并把每个技能链接到�
 
 ## 技能是做什么的 {#what-skills-are-for}
 
-技能是智能体按需加载的一个文件夹：一个写着指令的 `SKILL.md`，加上它需要的脚本或参考文件。Claude Code 从 `~/.claude/skills/` 读取技能，Codex 从 `~/.agents/skills/` 读取。没有 Coffer 的话，同一个技能会被分别拷进这两处，几份副本慢慢就不一样了。
+技能是智能体按需加载的一个文件夹：一个写着指令的 `SKILL.md`，加上它需要的脚本或参考文件。Claude Code 从 `~/.claude/skills/` 读取技能；Codex、Cursor、OpenCode 和 DeepSeek Harness 读取共享的 `~/.agents/skills/`。没有 Coffer 的话，同一个技能会被分别拷进这两处，几份副本慢慢就不一样了。
 
 Coffer 在 `~/.coffer/vault/skills/<name>/` 下为每个技能保留唯一一份主副本，并在每个智能体的技能文件夹里放一个指向它的目录链接。你只改一次，每个智能体读到的都是同样的字节。
 
@@ -19,7 +19,7 @@ Coffer 按开放的 [AgentSkills](https://agentskills.io) 格式管理技能。�
 
 - Coffer 守护进程正在运行（见[运行守护进程](/zh/guides/daemon)）。
 - 要从 Git 仓库添加，这台机器上需要装有 `git`。
-- 至少注册了一个智能体（见[智能体](/zh/guides/agents)）。Coffer 把技能投递给 Claude Code、Codex 和 Antigravity。
+- 至少注册了一个智能体（见[智能体](/zh/guides/agents)）。Coffer 把技能投递给每个受支持的智能体：Claude Code、Codex、Antigravity、Cursor、OpenCode 和 DeepSeek Harness。
 
 ## 技能格式 {#the-skill-format}
 
@@ -60,6 +60,8 @@ AgentSkills 规范把 `description` 限制在 1024 个字符以内，但 Claude 
 | --- | --- |
 | `~/.coffer/vault/skills/<name>/` | 主文件夹。这是你唯一需要编辑的副本。 |
 | `~/.claude/skills/<name>`（Claude Code）和 `~/.agents/skills/<name>`（Codex） | 每个智能体技能文件夹中投递的链接，指向主文件夹。配置目录不是默认位置的 Claude Code 智能体，链接在 `<config_dir>/skills/<name>`。 |
+
+`~/.agents/skills/` 由 Codex、Cursor、OpenCode 和 DeepSeek Harness 共用，所以 Coffer 在那里每个技能只放一个链接，只要技能的生效范围包含任何一个读这个文件夹的智能体就放。生效范围没法让其中一个看到、另一个看不到：只生效于 Codex 的技能，Cursor、OpenCode 和 DeepSeek Harness 也会看到。
 
 Codex 仍会读取旧的 `~/.codex/skills/` 文件夹，但已经把它标为弃用；Coffer 投递到 Codex 文档写明的 `~/.agents/skills/`，并在下一轮把以前放在旧文件夹里的链接挪过去，所以 Codex 不会把同一个技能列出两次。
 

@@ -42,6 +42,9 @@ def test_the_members_are_read_from_the_enum(members: dict[str, str]) -> None:
         "CLAUDE_CODE": "claude_code",
         "CODEX": "codex",
         "ANTIGRAVITY": "antigravity",
+        "CURSOR": "cursor",
+        "OPENCODE": "opencode",
+        "DEEPSEEK_HARNESS": "deepseek_harness",
     }
 
 

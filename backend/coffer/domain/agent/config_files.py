@@ -32,6 +32,7 @@ class ConfigFileFormat(StrEnum):
 
     JSON = "json"
     TOML = "toml"
+    YAML = "yaml"
     MARKDOWN = "markdown"
 
 

@@ -13,10 +13,12 @@ import { acceptance } from "@/test/acceptance";
 import { fakeApi } from "@/test/fakeApi";
 
 import { ChangeModelDialog } from "./ChangeModelDialog";
+import { FULL_AGENT_FEATURES } from "@/test/agentFeatures";
 
 const call = fakeApi();
 
 const AGENT: AgentOut = {
+  features: FULL_AGENT_FEATURES,
   uid: "u-cc",
   name: "claude-code",
   type: "claude_code",

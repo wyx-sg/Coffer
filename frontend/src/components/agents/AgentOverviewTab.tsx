@@ -1,7 +1,8 @@
 // src/components/agents/AgentOverviewTab.tsx — the agent detail page's Overview tab (boards 2.1.08–2.1.14).
 //
 // One column, 920 wide: Connection (its one fix at the title's right) → What
-// this agent can use (five tiles) → Model (with Change…) → Details. Detection
+// this agent can use (five tiles, fewer for a type that lacks some) → Model
+// (with Change…; only for a type Coffer can point at a provider) → Details. Detection
 // wins: an agent whose program is gone replaces the tab with the config-left-
 // behind or not-found sections. Every write goes through `actions`, which the
 // page wires to its dialogs.
@@ -54,7 +55,7 @@ function OverviewBody({ agent, typeRow, actions }: Props) {
         actions={actions}
       />
       <OverviewSummary agent={agent} typeRow={typeRow} notConnected={state === "not_connected"} />
-      <OverviewModelSection agent={agent} />
+      {agent.features.includes("provider") ? <OverviewModelSection agent={agent} /> : null}
       <OverviewDetails agent={agent} version={typeRow.version ?? agent.version ?? null} />
     </div>
   );

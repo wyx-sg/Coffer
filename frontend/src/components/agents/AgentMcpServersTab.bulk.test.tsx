@@ -18,6 +18,7 @@ import { getApiClient } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/errors";
 import { acceptance } from "@/test/acceptance";
 import { mockApiClient } from "@/test/mockApiClient";
+import { FULL_AGENT_FEATURES } from "@/test/agentFeatures";
 
 vi.mock("@/lib/api/client", async (orig) => ({
   ...(await orig<typeof import("@/lib/api/client")>()),
@@ -37,6 +38,7 @@ const { agentsApi } = await import("@/lib/api/agents");
 const api = vi.mocked(agentsApi);
 
 const AGENT: AgentOut = {
+  features: FULL_AGENT_FEATURES,
   uid: "u-cc",
   name: "claude_code",
   type: "claude_code",

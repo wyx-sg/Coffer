@@ -1985,6 +1985,7 @@
     "MCP_ENTRY_NOT_FOUND": "未找到该 MCP 条目",
     "MCP_ENTRY_PROTECTED": "该 MCP 条目受保护，无法修改",
     "MCP_SSE_NOT_SUPPORTED": "该条目使用旧版 SSE 传输，Coffer 不支持。请把它留在智能体里，或改用服务器的 Streamable HTTP 地址。",
+    "MCP_ENTRY_NOT_EDITABLE": "该条目所在的文件 Coffer 只读取、不改写。请在智能体自己的文件里编辑或删除它。",
     "MCP_ENTRY_SOURCE_AMBIGUOUS": "该 MCP 条目的来源存在歧义，请指定具体来源",
     "MCP_INSTALL_UNSUPPORTED": "该智能体不支持安装 Coffer 的 MCP 条目",
     "MEMORY_UNSAFE_PATH": "该路径在记忆库中不被允许",
@@ -2753,7 +2754,10 @@
         "creates": "Coffer 会为它创建 {{dir}}，里面只放这些条目。",
         "keeps": {
           "claude_code": "它自己的服务器和钩子保持不变。",
-          "codex": "它自己的服务器、钩子和提供商保持不变。"
+          "codex": "它自己的服务器、钩子和提供商保持不变。",
+          "cursor": "它自己的服务器、钩子和规则保持不变。",
+          "opencode": "它自己的服务器、智能体和提供商保持不变。",
+          "deepseek_harness": "它自己的补丁行保持不变；Coffer 只添加自己标记的那一段。"
         },
         "loses": "失去 Coffer 的 MCP 服务器和技能。它自己的服务器、钩子和设置保持不变。"
       },
@@ -2781,13 +2785,17 @@
       "role": {
         "settings": "模型、钩子和权限",
         "instructions": "指令",
-        "skills": "技能文件夹",
-        "mcpAt": "MCP 条目 — Coffer 会把它的条目写到 {{path}}",
-        "codexConfig": "模型、提供商和 MCP 条目",
         "mcpServers": "MCP 条目",
         "appSettings": "插件和权限",
         "rules": "规则",
-        "hooks": "钩子"
+        "skills": "技能文件夹",
+        "mcpAt": "MCP 条目 — Coffer 会把它的条目写到 {{path}}",
+        "codexConfig": "模型、提供商和 MCP 条目",
+        "hooks": "钩子",
+        "mcp": "MCP 条目",
+        "cliConfig": "权限和 CLI 设置",
+        "opencodeConfig": "模型、提供商和 MCP 条目",
+        "dshPatch": "插件行，包括 MCP 条目"
       }
     }
   },

@@ -99,6 +99,11 @@ class AgentOut(BaseModel):
     #: prompt that hands reinstalling it to an agent (spec agent-registry
     #: "Hand installing an agent's program to an agent"); ``null`` otherwise.
     install_handoff: HandoffOut | None = None
+    #: What Coffer can do with this type (``mcp``, ``skills``, ``provider``,
+    #: ``chat``, ``sessions``, ``plugins``,
+    #: ``hooks``), derived from its descriptor and facets. Surfaces show a
+    #: tab or picker only for the features listed here.
+    features: list[str] = []
     created_at: datetime
     updated_at: datetime
 
@@ -138,6 +143,11 @@ class AgentTypeOut(BaseModel):
     install_handoff: HandoffOut | None = None
     #: The product's official install page (the Overview's first-run "Install").
     install_url: str = ""
+    #: What Coffer can do with this type (``mcp``, ``skills``, ``provider``,
+    #: ``chat``, ``sessions``, ``plugins``,
+    #: ``hooks``), derived from its descriptor and facets. Surfaces show a
+    #: tab or picker only for the features listed here.
+    features: list[str] = []
 
 
 class AgentTypesOut(BaseModel):
@@ -171,6 +181,7 @@ async def _type_out(row: AgentTypeDetection, detect: AutoDetectService) -> Agent
         other_config_dir=row.other_config_dir,
         install_handoff=handoff_out(prompt),
         install_url=row.install_url,
+        features=detect.features(row.type),
     )
 
 
@@ -193,6 +204,7 @@ async def _to_out(r: Resource, detect: AutoDetectService) -> AgentOut:
         state=detection.state,
         version=detection.version,
         install_handoff=handoff_out(prompt),
+        features=detect.features(cfg.type),
         created_at=r.created_at,
         updated_at=r.updated_at,
     )

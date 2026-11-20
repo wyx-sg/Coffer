@@ -5,7 +5,7 @@ description: Coffer 如何把编程智能体之间的所有差异放在每个智
 
 # 智能体切面 {#agent-facets}
 
-Coffer 管理的编程智能体并不归它所有：目前是 Claude Code、Codex 和 Antigravity。Coffer 做的几乎每件事最终都落在其中一个上——写进其配置的 MCP 条目、链接到其技能目录的技能、投影到其设置里的模型提供商、加在它自己钩子旁边的记忆钩子、通过它驱动的一轮对话。本页说明 Coffer 如何把智能体之间的差异集中在一处，让支持一个新智能体，或把一种新资产放进已有智能体，变成一次添加而不是一次全局搜索。在写任何按智能体表现不同的代码之前，先读这一页。这个决定以及权衡过的备选方案记录在决策记录（ADR）[Agent Mechanisms Are Optional Facets on the Descriptor](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/agent-mechanisms-are-optional-facets-on-the-descriptor.md) 中。
+Coffer 管理的编程智能体并不归它所有：目前是 Claude Code、Codex、Antigravity、Cursor、OpenCode 和 DeepSeek Harness。Coffer 做的几乎每件事最终都落在其中一个上——写进其配置的 MCP 条目、链接到其技能目录的技能、投影到其设置里的模型提供商、加在它自己钩子旁边的记忆钩子、通过它驱动的一轮对话。本页说明 Coffer 如何把智能体之间的差异集中在一处，让支持一个新智能体，或把一种新资产放进已有智能体，变成一次添加而不是一次全局搜索。在写任何按智能体表现不同的代码之前，先读这一页。这个决定以及权衡过的备选方案记录在决策记录（ADR）[Agent Mechanisms Are Optional Facets on the Descriptor](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/agent-mechanisms-are-optional-facets-on-the-descriptor.md) 中。
 
 ## 问题 {#the-problem}
 

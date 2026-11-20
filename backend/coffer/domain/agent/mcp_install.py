@@ -29,6 +29,7 @@ from typing import Any
 
 import tomlkit
 
+from coffer.domain.agent import mcp_cordis
 from coffer.domain.agent.config_files import ConfigFileFormat
 from coffer.domain.agent.mcp_entries import (
     COFFER_SERVER_KEY,
@@ -36,6 +37,7 @@ from coffer.domain.agent.mcp_entries import (
     _parse_json,
     _parse_toml,
     _parse_toml_readonly,
+    _split_command,
 )
 from coffer.domain.agent.mcp_injection import McpEntryStyle, default_container_key
 
@@ -79,9 +81,16 @@ def _entry_fields(
     Claude Code / Codex already render stdio server args. ``agent_uid=None``
     (the default) omits the flag, for any caller that doesn't know the agent.
     """
-    fields: dict[str, Any] = {"command": shim_path}
-    if agent_uid:
-        fields["args"] = ["--agent-uid", agent_uid]
+    args = ["--agent-uid", agent_uid] if agent_uid else []
+    fields: dict[str, Any]
+    if entry_style is McpEntryStyle.COMMAND_ARRAY:
+        # OpenCode: one command array, and a type it requires (an entry without
+        # one is ignored with a warning).
+        fields = {"type": "local", "command": [shim_path, *args]}
+    else:
+        fields = {"command": shim_path}
+        if args:
+            fields["args"] = args
     for key, value in extras:
         fields[key] = list(value) if isinstance(value, (list, tuple)) else value
     return fields
@@ -117,6 +126,10 @@ def apply_install(
     Idempotent: an existing ``coffer`` entry is replaced whole, in place,
     never duplicated.
     """
+    if fmt is ConfigFileFormat.YAML:
+        args = ["--agent-uid", agent_uid] if agent_uid else []
+        return mcp_cordis.apply_install(text, shim_path, args)
+
     ck = container_key or default_container_key(fmt)
     fields = _entry_fields(shim_path, entry_style, agent_uid, extras)
 
@@ -147,6 +160,8 @@ def apply_install(
 
 def apply_uninstall(fmt: ConfigFileFormat, text: str, *, container_key: str | None = None) -> str:
     """Return new config text with the ``coffer`` entry removed (no-op if absent)."""
+    if fmt is ConfigFileFormat.YAML:
+        return mcp_cordis.apply_uninstall(text)
     ck = container_key or default_container_key(fmt)
 
     if fmt is ConfigFileFormat.JSON:
@@ -173,6 +188,8 @@ def is_installed(fmt: ConfigFileFormat, text: str, *, container_key: str | None 
     """Whether a ``coffer`` MCP-server entry is present in the config text."""
     if not text.strip():
         return False
+    if fmt is ConfigFileFormat.YAML:
+        return mcp_cordis.coffer_row(text) is not None
     ck = container_key or default_container_key(fmt)
     if fmt is ConfigFileFormat.JSON:
         servers = _json_container(_parse_json(text), ck)
@@ -189,12 +206,29 @@ def installed_command(
     fmt: ConfigFileFormat, text: str, *, container_key: str | None = None
 ) -> str | None:
     """The shim path of the installed coffer entry, or ``None`` if absent."""
+    entry = _installed_raw(fmt, text, container_key)
+    return None if entry is None else _coffer_command(entry)
+
+
+def _installed_raw(
+    fmt: ConfigFileFormat, text: str, container_key: str | None
+) -> MutableMapping[str, Any] | None:
+    """The installed coffer entry as a ``command``/``args`` mapping, or ``None``.
+
+    A DeepSeek Harness row keeps its command under ``config``; it is read
+    through that, so every caller compares one shape."""
     ck = container_key or default_container_key(fmt)
     if not is_installed(fmt, text, container_key=ck):
         return None
+    if fmt is ConfigFileFormat.YAML:
+        row = mcp_cordis.coffer_row(text) or {}
+        config = row.get("config")
+        return dict(config) if isinstance(config, MutableMapping) else {}
     if fmt is ConfigFileFormat.JSON:
-        return _coffer_command(_json_container(_parse_json(text), ck)[COFFER_SERVER_KEY])
-    return _coffer_command(_parse_toml_readonly(text)[ck][COFFER_SERVER_KEY])
+        entry = _json_container(_parse_json(text), ck)[COFFER_SERVER_KEY]
+    else:
+        entry = _parse_toml_readonly(text)[ck][COFFER_SERVER_KEY]
+    return entry if isinstance(entry, MutableMapping) else {}
 
 
 def _plain(value: Any) -> Any:
@@ -226,20 +260,13 @@ def installed_entry(
     ``args`` reads as ``[]``. Raises ``ConfigFileFormatInvalid`` for text that
     does not parse, like the other readers here.
     """
-    ck = container_key or default_container_key(fmt)
-    if not is_installed(fmt, text, container_key=ck):
+    entry = _installed_raw(fmt, text, container_key)
+    if entry is None:
         return None
-    if fmt is ConfigFileFormat.JSON:
-        entry = _json_container(_parse_json(text), ck)[COFFER_SERVER_KEY]
-    else:
-        entry = _parse_toml_readonly(text)[ck][COFFER_SERVER_KEY]
-    args = entry.get("args") if isinstance(entry, MutableMapping) else None
-    params: dict[str, Any] = {
-        "command": _coffer_command(entry),
-        "args": [str(a) for a in args] if isinstance(args, (list, tuple)) else [],
-    }
+    command, args = _split_command(entry)
+    params: dict[str, Any] = {"command": command, "args": list(args)}
     for key in extra_keys:
-        params[key] = _plain(entry.get(key)) if isinstance(entry, MutableMapping) else None
+        params[key] = _plain(entry.get(key))
     return params
 
 
@@ -249,6 +276,7 @@ def desired_entry(
     """What :func:`apply_install` writes for ``agent_uid``, in the shape
     :func:`installed_entry` reads — so the two compare directly."""
     fields = _entry_fields(shim_path or "", McpEntryStyle.COMMAND_MAP, agent_uid, extras)
+    # Every style reads back through ``_split_command``, so one shape compares.
     params = {"command": shim_path, "args": list(fields.get("args", []))}
     for key, _ in extras:
         params[key] = _plain(fields[key])
@@ -262,18 +290,10 @@ def installed_agent_uid(
     argument), or ``None`` when there is no entry or it carries no uid (a
     hand-edit). Raises ``ConfigFileFormatInvalid``
     for text that does not parse, like the other readers here."""
-    ck = container_key or default_container_key(fmt)
-    if not is_installed(fmt, text, container_key=ck):
+    entry = _installed_raw(fmt, text, container_key)
+    if entry is None:
         return None
-    if fmt is ConfigFileFormat.JSON:
-        entry = _json_container(_parse_json(text), ck)[COFFER_SERVER_KEY]
-    else:
-        entry = _parse_toml_readonly(text)[ck][COFFER_SERVER_KEY]
-    if not isinstance(entry, MutableMapping):
-        return None
-    args = entry.get("args")
-    if not isinstance(args, (list, tuple)):
-        return None
+    _command, args = _split_command(entry)
     for flag, value in pairwise(args):
         if flag == "--agent-uid" and isinstance(value, str) and value:
             return value

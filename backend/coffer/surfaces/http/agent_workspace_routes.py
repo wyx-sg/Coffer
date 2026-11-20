@@ -19,8 +19,9 @@ from pydantic import BaseModel, Field
 from coffer.application.agent.mcp_entry_service import McpEntryDetail, ParseErrorInfo
 from coffer.application.agent.plugin_views import PluginDetailView, PluginView
 from coffer.domain.agent.config import AgentConfig
-from coffer.domain.agent.mcp_entries import McpEntry, masked_extra, secret_env_keys
+from coffer.domain.agent.mcp_entries import McpEntry
 from coffer.domain.agent.mcp_entry_redact import redacted_config
+from coffer.domain.agent.mcp_entry_secrets import masked_extra, secret_env_keys
 from coffer.domain.agent.plugin_bundle import PluginComponent
 from coffer.domain.agent.plugin_state import MarketplaceInfo
 from coffer.domain.errors import ResourceAlreadyExists

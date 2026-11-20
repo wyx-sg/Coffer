@@ -1985,6 +1985,7 @@
     "MCP_ENTRY_NOT_FOUND": "MCP entry not found",
     "MCP_ENTRY_PROTECTED": "This MCP entry is protected and can't be changed",
     "MCP_SSE_NOT_SUPPORTED": "This entry uses the old SSE transport, which Coffer doesn't support. Keep it in the agent, or switch it to the server's Streamable HTTP URL.",
+    "MCP_ENTRY_NOT_EDITABLE": "This entry is kept in a file Coffer reads but doesn't rewrite. Edit or remove it in the agent's own file.",
     "MCP_ENTRY_SOURCE_AMBIGUOUS": "The MCP entry's source is ambiguous — specify which one",
     "MCP_INSTALL_UNSUPPORTED": "This agent does not support installing Coffer's MCP entry",
     "MEMORY_UNSAFE_PATH": "That path isn't allowed in the memory store",
@@ -2753,7 +2754,10 @@
         "creates": "Coffer creates {{dir}} for it, holding only these entries.",
         "keeps": {
           "claude_code": "Its own servers and hooks stay as they are.",
-          "codex": "Its own servers, hooks and provider stay as they are."
+          "codex": "Its own servers, hooks and provider stay as they are.",
+          "cursor": "Its own servers, hooks and rules stay as they are.",
+          "opencode": "Its own servers, agents and provider stay as they are.",
+          "deepseek_harness": "Its own patch rows stay as they are; Coffer only adds its marked block."
         },
         "loses": "Loses Coffer’s MCP servers and skills. Its own servers, hooks and settings stay as they are."
       },
@@ -2781,13 +2785,17 @@
       "role": {
         "settings": "Model, hooks and permissions",
         "instructions": "Instructions",
-        "skills": "Skill folders",
-        "mcpAt": "MCP entries — Coffer writes its entry to {{path}}",
-        "codexConfig": "Model, provider and MCP entries",
         "mcpServers": "MCP entries",
         "appSettings": "Plugins and permissions",
         "rules": "Rules",
-        "hooks": "Hooks"
+        "skills": "Skill folders",
+        "mcpAt": "MCP entries — Coffer writes its entry to {{path}}",
+        "codexConfig": "Model, provider and MCP entries",
+        "hooks": "Hooks",
+        "mcp": "MCP entries",
+        "cliConfig": "Permissions and CLI settings",
+        "opencodeConfig": "Model, provider and MCP entries",
+        "dshPatch": "Plugin rows, MCP entries among them"
       }
     }
   },

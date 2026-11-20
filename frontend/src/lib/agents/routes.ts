@@ -10,8 +10,8 @@ import type { AgentType } from "@/lib/api/agents";
 import { detailTabPath } from "@/lib/detailTabs";
 
 /**
- * The eight detail tabs, in the order the page shows them: the six in the strip,
- * then the two behind More. The value is the path segment. There is no Model
+ * The seven detail tabs, in the order the page shows them: the six in the strip,
+ * then Plugins behind More. The value is the path segment. There is no Model
  * tab: the model is a section of Overview.
  */
 export const AGENT_PRIMARY_TABS = [
@@ -27,8 +27,29 @@ export const AGENT_TABS = [...AGENT_PRIMARY_TABS, ...AGENT_MORE_TABS] as const;
 export type AgentTab = (typeof AGENT_TABS)[number];
 export const DEFAULT_AGENT_TAB: AgentTab = "overview";
 
+/** The feature a tab needs; a tab not listed here is always shown. */
+const TAB_FEATURE: Partial<Record<AgentTab, string>> = {
+  "mcp-servers": "mcp",
+  plugins: "plugins",
+  hooks: "hooks",
+  sessions: "sessions",
+};
+
+/** Whether the agent's type has what `tab` shows. */
+export function agentHasTab(agent: { features: readonly string[] }, tab: AgentTab): boolean {
+  const feature = TAB_FEATURE[tab];
+  return !feature || agent.features.includes(feature);
+}
+
 /** The supported types, in the Agents page's order. */
-export const AGENT_TYPES: readonly AgentType[] = ["claude_code", "codex", "antigravity"];
+export const AGENT_TYPES: readonly AgentType[] = [
+  "claude_code",
+  "codex",
+  "antigravity",
+  "cursor",
+  "opencode",
+  "deepseek_harness",
+];
 
 export function isAgentType(value: string | undefined): value is AgentType {
   return value !== undefined && (AGENT_TYPES as readonly string[]).includes(value);

@@ -129,6 +129,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `SHIM_NOT_FOUND` | 422 | 在 `PATH` 上和打包位置都找不到 `coffer-mcp-shim` 二进制。 | 重新安装 Coffer，让 `~/.coffer/bin` 中有 shim。见[安装](/zh/start/install)。 |
 | `MCP_INSTALL_UNSUPPORTED` | 422 | 这个类型的智能体没有地方安装 Coffer 的 MCP 条目。 | 手动连接客户端；见[连接客户端](/zh/guides/connect-a-client)。 |
 | `MCP_ENTRY_NOT_FOUND` | 404 | 智能体的配置文件中没有这个名字的 MCP 条目。 | 刷新智能体的 MCP 列表。 |
+| `MCP_ENTRY_NOT_EDITABLE` | 422 | 这个条目所在的文件 Coffer 只列出不改（DeepSeek Harness 的补丁行），所以不能移除或纳入托管。 | 自己编辑智能体的文件。 |
 | `MCP_ENTRY_PROTECTED` | 422 | 该条目是 Coffer 自己的网关条目。 | 用安装和卸载操作，不要直接编辑它。 |
 | `MCP_ENTRY_SOURCE_AMBIGUOUS` | 422 | 该条目存在于多个配置文件中。 | 指明来源文件。 |
 | `ADOPT_SECRET_UNRESOLVED` | 422 | 纳入托管一个 MCP 条目时，发现了没有密钥映射的、疑似密钥的环境变量键。 | 纳入托管时把列出的每个键映射到一个密钥 ref。 |

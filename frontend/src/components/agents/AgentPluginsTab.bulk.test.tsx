@@ -16,6 +16,7 @@ import type { AgentOut } from "@/lib/api/agents";
 import type { PluginOut, PluginsResponse } from "@/lib/api/agents-workspace";
 import { ApiError } from "@/lib/api/errors";
 import { acceptance } from "@/test/acceptance";
+import { FULL_AGENT_FEATURES } from "@/test/agentFeatures";
 
 vi.mock("@/lib/api/agents", () => ({
   agentsApi: {
@@ -30,6 +31,7 @@ const { agentsApi } = await import("@/lib/api/agents");
 const api = vi.mocked(agentsApi);
 
 const AGENT: AgentOut = {
+  features: FULL_AGENT_FEATURES,
   uid: "u-cc",
   name: "claude_code",
   type: "claude_code",

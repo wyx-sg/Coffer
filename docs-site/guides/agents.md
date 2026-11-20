@@ -1,11 +1,11 @@
 ---
 title: Agents
-description: Register Claude Code, Codex and Antigravity with Coffer, connect them to Coffer, and manage their config files, MCP entries, plugins, hooks, models, memory and sessions.
+description: Register Claude Code, Codex, Antigravity, Cursor, OpenCode and DeepSeek Harness with Coffer, connect them to Coffer, and manage their config files, MCP entries, plugins, hooks, models, memory and sessions.
 ---
 
 # Agents
 
-An agent is a coding agent installed on your machine that Coffer delivers to: Claude Code, Codex or Antigravity. This page covers registering agents, installing Coffer's MCP entry into them, and everything Coffer lets you see and change in an agent's own files.
+An agent is a coding agent installed on your machine that Coffer delivers to: Claude Code, Codex, Antigravity, Cursor, OpenCode or DeepSeek Harness. This page covers registering agents, installing Coffer's MCP entry into them, and everything Coffer lets you see and change in an agent's own files.
 
 ## What agents are for
 
@@ -16,15 +16,20 @@ Everything Coffer shares — MCP servers, skills, knowledge, memory, model provi
 - project a [model provider](/guides/providers) into its native config;
 - show you its config files, MCP entries, plugins and sessions in one place.
 
-Coffer supports three agent types:
+Coffer supports six agent types:
 
 | Type | Product | Default config directory | Program Coffer looks for |
 | --- | --- | --- | --- |
 | `claude_code` | Claude Code (CLI and IDE/desktop forms) | `~/.claude` | `claude` |
 | `codex` | OpenAI Codex (CLI and IDE forms) | `~/.codex` | `codex` |
 | `antigravity` | Google Antigravity (App, CLI and IDE) | `~/.gemini/config` | `agy`, or the `Antigravity.app` bundle |
+| `cursor` | Cursor (the editor and its `cursor-agent` CLI) | `~/.cursor` | `cursor-agent` |
+| `opencode` | OpenCode | `~/.config/opencode` | `opencode` |
+| `deepseek_harness` | DeepSeek Harness, DeepSeek's open-source agent | `~/.dsh` | `dsh` |
 
 The CLI and IDE forms of each product read the same config directory, so one registered agent covers both. The Claude Desktop chat app has its own configuration and is not a supported agent.
+
+Not every type gets everything. Claude Code and Codex get all of it. Antigravity gets what its config folder allows; see [What Antigravity gets](#what-antigravity-gets). Cursor, OpenCode and DeepSeek Harness get Coffer's gateway MCP entry, skills, their config files and a listing of their own MCP entries; a [model provider](/guides/providers), [chat](/guides/chat) and [channels](/guides/channels), [memory](/guides/memory), sessions, plugins and hooks are not available for them yet. Their agent page shows only the tabs that apply. See [Cursor, OpenCode and DeepSeek Harness](#cursor-opencode-and-deepseek-harness).
 
 ### What Antigravity gets
 
@@ -34,9 +39,9 @@ Antigravity runs only Google's hosted models, offers no session-start hook, and 
 
 ### One agent per type
 
-A machine has at most one registered agent of each type, and the agent's name **is** its type: `claude-code`, `codex` or `antigravity`. You do not choose a name, and an agent has no title or description. Everywhere Coffer asks which agent you mean — the reach of a skill or MCP server, and every `/api/v1/agents/{uid}/…` route — you can give the type (`claude-code`; `claude_code` also reads) or the agent's uid.
+A machine has at most one registered agent of each type, and the agent's name **is** its type: `claude-code`, `codex`, `antigravity`, `cursor`, `opencode` or `deepseek-harness`. You do not choose a name, and an agent has no title or description. Everywhere Coffer asks which agent you mean — the reach of a skill or MCP server, and every `/api/v1/agents/{uid}/…` route — you can give the type (`claude-code`; `claude_code` also reads) or the agent's uid.
 
-Besides its type, the only setting an agent has is its **config directory**, plus the [model binding](#models). Registering uses the type's standard directory (`~/.claude`, `~/.codex`, `~/.gemini/config`) unless you say otherwise. Pointing Coffer at a different directory moves the one agent there; it never adds a second one. Registering a type that is already registered is refused with `409 AGENT_TYPE_REGISTERED`.
+Besides its type, the only setting an agent has is its **config directory**, plus the [model binding](#models). Registering uses the type's standard directory (see the table above) unless you say otherwise. Pointing Coffer at a different directory moves the one agent there; it never adds a second one. Registering a type that is already registered is refused with `409 AGENT_TYPE_REGISTERED`.
 
 ::: info The agent's files are the source of truth
 Coffer never copies an agent's configuration into its own store. Config files, MCP entries and plugins are read from disk every time you look at them, and sessions are listed by the agent itself. The agent record itself holds only the type, the config directory and the model binding.
@@ -59,9 +64,9 @@ Coffer reports every supported type, registered or not, in one of these states:
 | **Not installed** | missing | present | Nothing to add: the directory is left from an earlier install. Reinstall the agent, or ignore it. |
 | **Missing** | missing | absent | Nothing on this machine. The type is still listed, so every type always has a row. |
 
-For each type Coffer looks at its standard directory and, when the daemon's environment sets the type's own variable (`CLAUDE_CONFIG_DIR` for Claude Code, `CODEX_HOME` for Codex), at the directory that names. That second directory is never a second agent: when the standard one exists it is offered as **use a different config directory** for the one agent, and when only the named one exists it is the directory Connect registers. Coffer does not search the rest of your disk; to use any other directory, see [Use a different config directory](#use-a-different-config-directory). A type already registered is not offered again.
+For each type Coffer looks at its standard directory and, when the daemon's environment sets the type's own variable (`CLAUDE_CONFIG_DIR` for Claude Code, `CODEX_HOME` for Codex, `CURSOR_CONFIG_DIR` for Cursor, `OPENCODE_CONFIG_DIR` for OpenCode, `DSH_HOME` for DeepSeek Harness), at the directory that names. That second directory is never a second agent: when the standard one exists it is offered as **use a different config directory** for the one agent, and when only the named one exists it is the directory Connect registers. Coffer does not search the rest of your disk; to use any other directory, see [Use a different config directory](#use-a-different-config-directory). A type already registered is not offered again.
 
-**Web UI:** the **Agents** page always has exactly three rows, Claude Code, Codex, then Antigravity, whether or not each is installed. Detection is automatic — when the page opens, when the window regains focus, and every few minutes — so there is no Detect button and no Add-agent dialog. Each row reads one state and offers the one action it calls for:
+**Web UI:** the **Agents** page always has one row per supported type, in the order of the table above, whether or not each is installed. Detection is automatic — when the page opens, when the window regains focus, and every few minutes — so there is no Detect button and no Add-agent dialog. Each row reads one state and offers the one action it calls for:
 
 | Row reads | Meaning | Action |
 | --- | --- | --- |
@@ -75,11 +80,11 @@ A row whose agent is not installed shows no version, and says **Not on this Mac*
 
 Coffer does not install agents, and installing one depends on the machine, so a row whose program is not found hands the job to an agent instead of naming an install command. The row carries the hand-off split button, **Hand off to &lt;Agent&gt; ▾**, before its **⋯**. It works with a prompt the daemon writes: install (or reinstall) this agent on this machine, keep its existing config directory, make sure its program is found on the `PATH` Coffer looks on (the prompt lists it) and confirm with `claude --version` or `codex --version`, then come back and choose **Check again** — leaving the login to you. **Hand off to &lt;Agent&gt;** starts your hand-off agent in your preferred terminal with the prompt as its first message; behind the chevron, **Hand off to** the other agent (when it is available) and **Copy prompt**, which copies it for any assistant outside Coffer. While no managed agent is available to run it — the missing agent cannot run its own install — the row offers **Copy prompt** alone. The **⋯** menu never repeats it. The agent's page offers the same prompt on its Overview tab's problem states. You can still install the agent yourself the way its maker documents; the row updates on its own once the program is on your `PATH`.
 
-**Connect** on a newly found agent registers it at its standard directory and connects it. It first opens **Review changes** — every file it will write and the lines it adds — and writes nothing until you apply it. On a first run, when no agent is connected and at least two are installed, **Connect all** reviews and connects every installed agent in one confirmation. A registered row also shows its provider — the Coffer connection it runs on, or its built-in login — its default model, read from the agent's own config (**Built-in default** when that names none, so the agent runs whatever its maker defaults to, with the model named in brackets when the agent reports it, as Codex does), and how many skills, MCP servers and plugins reach it, and opens the agent's page. A line under the table says what the counts mean.
+**Connect** on a newly found agent registers it at its standard directory and connects it. It first opens **Review changes** — every file it will write and the lines it adds — and writes nothing until you apply it. On a first run with more than one agent installed and none connected, **Connect all** reviews and connects every installed one in one confirmation. A registered row also shows its provider — the Coffer connection it runs on, or its built-in login — its default model, read from the agent's own config (**Built-in default** when that names none, so the agent runs whatever its maker defaults to, with the model named in brackets when the agent reports it, as Codex does), and how many skills, MCP servers and plugins reach it, and opens the agent's page. A line under the table says what the counts mean.
 
 ### Use a different config directory
 
-Claude Code reads another directory when started with `CLAUDE_CONFIG_DIR`, Codex when started with `CODEX_HOME`. If that is how you run an agent, tell Coffer the directory, at registration or later.
+Claude Code reads another directory when started with `CLAUDE_CONFIG_DIR`, Codex with `CODEX_HOME`, Cursor with `CURSOR_CONFIG_DIR`, OpenCode with `OPENCODE_CONFIG_DIR` and DeepSeek Harness with `DSH_HOME`. If that is how you run an agent, tell Coffer the directory, at registration or later.
 
 For an agent that is already registered, the same menu entry moves it.
 
@@ -91,7 +96,7 @@ When Coffer itself starts an agent registered on a directory other than the stan
 
 ### Edit and disconnect
 
-The **⋯** menu on an agent's row and on its page carries **Use a different config directory…**, **Reveal config directory**, **Copy uid**, and **Disconnect…** (while any part is installed). There is no **Remove**: the list always holds a row for each supported agent, and disconnecting is how you take Coffer's entry out of one.
+The **⋯** menu on an agent's row and on its page carries **Use a different config directory…**, **Reveal config directory**, **Copy uid**, and **Disconnect…** (while any part is installed). There is no **Remove**: the list always holds a row for every supported agent, and disconnecting is how you take Coffer's entry out of one.
 
 - **Edit** changes the config directory or the [model binding](#models). The name is the type and cannot change. Everything that refers to an agent — reach lists, a channel's default agent, the installed MCP entry — holds the agent's immutable `uid`.
 - **Disconnect…** removes Coffer's gateway entry from the agent and leaves everything else in its files as it was (see [Connect an agent to Coffer](#connect-an-agent-to-coffer)). The agent stays registered, so the skills [reach](/guides/skills) grants it keep being delivered.
@@ -119,6 +124,10 @@ Restart the agent (or reload its MCP servers) after connecting so it starts the 
 | Claude Code, default directory | `~/.claude.json` | `mcpServers.coffer` |
 | Claude Code, custom directory | `<config_dir>/.claude.json` | `mcpServers.coffer` |
 | Codex | `<config_dir>/config.toml` | `[mcp_servers.coffer]` |
+| Antigravity | `<config_dir>/mcp_config.json` | `mcpServers.coffer`, with `"timeoutSeconds": 86400` |
+| Cursor | `<config_dir>/mcp.json` | `mcpServers.coffer`, the same shape as Claude Code |
+| OpenCode | `<config_dir>/opencode.json` (or `opencode.jsonc`) | `mcp.coffer`, a `local` entry with a command array |
+| DeepSeek Harness | `<config_dir>/cordis.patch.yml` | a `coffer-mcp` row in a block Coffer marks |
 
 For Claude Code the entry looks like this:
 
@@ -139,6 +148,34 @@ For Codex:
 [mcp_servers.coffer]
 command = "/Users/you/.coffer/bin/coffer-mcp-shim"
 args = ["--agent-uid", "9a006a32d0bf5787955c43d54e4b44e9"]
+```
+
+For OpenCode:
+
+```json
+{
+  "mcp": {
+    "coffer": {
+      "type": "local",
+      "command": ["/Users/you/.coffer/bin/coffer-mcp-shim", "--agent-uid", "9a006a32d0bf5787955c43d54e4b44e9"]
+    }
+  }
+}
+```
+
+For DeepSeek Harness, Coffer appends one marked block to the home patch layer, which applies to every profile:
+
+```yaml
+# >>> coffer: managed by Coffer, edits inside this block are replaced >>>
+- insert:
+    - id: coffer-mcp
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: coffer
+        transport: stdio
+        command: '/Users/you/.coffer/bin/coffer-mcp-shim'
+        args: ['--agent-uid', '9a006a32d0bf5787955c43d54e4b44e9']
+# <<< coffer <<<
 ```
 
 Connecting is idempotent: connecting again rewrites each entry in place and never adds a second one. Disconnecting when nothing is installed succeeds and changes nothing. Every write is backed up and audited (`agent_mcp_installed` / `agent_mcp_uninstalled`). The connection status is read from the files each time; Coffer does not store it.
@@ -206,6 +243,16 @@ Each type has a fixed allowlist:
 | | `instructions` | `<config_dir>/AGENTS.md` |
 | | `rules` | `<config_dir>/rules/` — a directory, one Markdown file per rule |
 | | `hooks` | `<config_dir>/hooks.json` |
+| `cursor` | `mcp` | `<config_dir>/mcp.json` |
+| | `cli_config` | `<config_dir>/cli-config.json` |
+| | `hooks` | `<config_dir>/hooks.json` |
+| `opencode` | `config` | `<config_dir>/opencode.json` (`opencode.jsonc` when only that exists) |
+| | `instructions` | `<config_dir>/AGENTS.md` |
+| `deepseek_harness` | `patch` | `<config_dir>/cordis.patch.yml` |
+| | `web_patch` | `<config_dir>/profiles/web/cordis.patch.yml` |
+| | `instructions` | `~/.agents/AGENTS.md` |
+
+Cursor keeps its user rules inside the app, not in a file, so it has no `instructions` file.
 
 **Web UI:** open the agent and choose **Config files**. The tab is a file tree on the left and a read-only preview on the right, with a draggable divider between them. The tree lists the agent's config files; a directory entry such as `agents/` expands to the files inside it. Only files that exist are listed: one the agent has not created yet does not appear, because Coffer creates no config file. Choose a file to preview it as it is on disk — the first file is open when you arrive, and the open file is kept in the page address. The preview's toolbar shows the file's path and size, with **Open in editor** and **Reveal in Finder**; the icon at the top of the tree reveals the whole config folder. To change a file, use **Open in editor**. Coffer has no editor, **New file** or **Delete**: you change a config file in your own editor (the one chosen in **Settings › General**), or ask the agent to. Coffer's own changes to these files — connecting, repairing, a plugin switch, an MCP entry, a provider switch — go through **Review changes** first.
 
@@ -223,6 +270,9 @@ Agents often carry MCP servers configured directly in their own files. The **MCP
 | --- | --- |
 | Claude Code | `mcpServers` in `.claude.json` (the `global` file) and in `settings.json` |
 | Codex | `[mcp_servers.*]` in `config.toml` (the `enabled` flag is shown but never written) |
+| Cursor | `mcpServers` in `mcp.json` |
+| OpenCode | `mcp` in `opencode.json`, in both the 1.x shape (`mcp.<name>`) and the 2.x shape (`mcp.servers.<name>`) |
+| DeepSeek Harness | `@deepseek-ai/dsh-mcp-client` rows in `cordis.patch.yml` and `profiles/web/cordis.patch.yml`; listed only, see below |
 
 Click a direct server's row (or its name) to open its entry in a dialog. It shows, read-only, everything the agent's file holds for that server: the transport, the command and each argument (or the URL), the working directory, the `enabled` flag where the format has one, the names of its environment variables and HTTP headers, any other keys the entry carries, and the config file it lives in. Secret values never leave the daemon: environment and header values are shown only as *set* or *secret · hidden*, and any other key whose name looks secret (the pattern below) shows as *hidden*. Coffer does not start a direct server to show this, so it lists no tools. The dialog's footer carries the two actions of the row around **Close**: **Remove** (or **Remove duplicate**) on the left, **Adopt** on the right.
 
@@ -232,6 +282,15 @@ You can do two things with a direct entry:
 - **Adopt**: Coffer registers the entry as an `mcp_server` resource, checks that it reads back, and only then removes the direct entry. Any failure rolls the new resource back and leaves the agent's file byte-identical. The server is then served to every agent through the gateway. An entry on the old SSE transport (`"type": "sse"`) is marked **Old SSE transport** and cannot be adopted or imported, since Coffer reaches remote servers over Streamable HTTP only: keep it in the agent, or switch it to the server's Streamable HTTP URL (often `/mcp` in place of `/sse`).
 
 When the entry's environment or headers carry a non-empty value under a secret-looking key (containing `TOKEN`, `SECRET`, `PASSWORD`, `PASSWD`, `API_KEY`, `APIKEY`, `CREDENTIAL` or `AUTHORIZATION`), the Adopt dialog lists each one under **Store as**, preset to **Secret**. Coffer stores the current value in its [encrypted secret store](/guides/secret-store), and the new resource config carries only a reference. A header value such as `Authorization: Bearer abc…` is split: `abc…` is stored as the secret and the header row's auth scheme is set to Bearer. A name collision is refused: choose another **Name in Coffer**. For a Claude Code name that appears in both files, the entry you opened is the one adopted. The `coffer` entry itself is never removable or adoptable this way.
+
+## Cursor, OpenCode and DeepSeek Harness
+
+These three types are supported for the parts that work the same way for every agent: Coffer's gateway MCP entry, skills, the config-file listing and the agent's own MCP entries. What differs:
+
+- **Skills go to `~/.agents/skills`.** All three read personal skills from there (Cursor and OpenCode also read `~/.claude/skills`), and so does Codex. Coffer keeps one link per skill in that shared folder, and delivers a skill there when its [reach](/guides/skills) includes any agent that reads the folder. A skill whose reach names only Codex is therefore also seen by Cursor, OpenCode and DeepSeek Harness when they are installed.
+- **OpenCode** 1.x and 2.x name the MCP table differently. Coffer writes its entry in the 1.x shape (`mcp.coffer`), which 2.x still reads, and lists entries of both shapes. A 2.x entry under `mcp.servers` can be removed and adopted like any other.
+- **DeepSeek Harness** composes its configuration from YAML patch layers that may hold `!!js` expressions, so Coffer never rewrites the whole file. Its own row lives in the marked block shown in [What gets written where](#what-gets-written-where), and connecting or disconnecting replaces only that block. The other MCP rows are listed but cannot be removed or adopted from Coffer (`MCP_ENTRY_NOT_EDITABLE`): edit `cordis.patch.yml` yourself. Coffer only adds its block to a file whose top level is a block-style list (`- …`); a flow-style file is refused with `CONFIG_FILE_FORMAT_INVALID`.
+- **Not yet available:** pointing these agents at a Coffer [model provider](/guides/providers), running them from [chat](/guides/chat), [channels](/guides/channels) or [scheduled tasks](/guides/scheduled-tasks), the [memory](/guides/memory) hook, the sessions list, plugins and hooks. Their agent page has no Model section and no Plugins, Hooks or Sessions tab.
 
 ## Plugins
 
@@ -283,7 +342,7 @@ The agent record carries the model binding that provider projection writes into 
 
 ## The agent page in the web UI
 
-The agent page is addressed by the agent's type (`/agents/claude_code`, `/agents/codex`, `/agents/antigravity`). Its header holds the agent's mark, its name, one status pill and a **⋯** menu — no line under the name — and it never turns into a fix button. Below it are seven tabs, none carrying a count. Six sit in the strip, each at its own address: **Overview** (`/agents/<type>`), **Skills**, **MCP servers**, **Hooks**, **Config files** and **Sessions** (`…/skills`, `…/mcp-servers`, `…/hooks`, `…/config`, `…/sessions`). **More** holds the least used, **Plugins** (`…/plugins`); while it is open, **More** reads its name and carries the underline, and a warning dot on **More** says it needs a look. There is no Model tab.
+The agent page is addressed by the agent's type (`/agents/claude_code`, `/agents/codex`, `/agents/antigravity`, `/agents/cursor`, `/agents/opencode`, `/agents/deepseek_harness`). Its header holds the agent's mark, its name, one status pill and a **⋯** menu — no line under the name — and it never turns into a fix button. Below it are seven tabs, none carrying a count. Six sit in the strip, each at its own address: **Overview** (`/agents/<type>`), **Skills**, **MCP servers**, **Hooks**, **Config files** and **Sessions** (`…/skills`, `…/mcp-servers`, `…/hooks`, `…/config`, `…/sessions`). **More** holds the least used, **Plugins** (`…/plugins`); while it is open, **More** reads its name and carries the underline, and a warning dot on **More** says it needs a look. There is no Model tab.
 
 **Overview** is one column, top to bottom:
 
