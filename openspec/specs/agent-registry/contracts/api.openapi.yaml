@@ -2231,6 +2231,7 @@ components:
       enum:
       - claude_code
       - codex
+      - antigravity
       title: AgentType
       type: string
     AgentTypeOut:

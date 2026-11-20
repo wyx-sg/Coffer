@@ -35,7 +35,7 @@ daemon started (pid=48213)
 
 Coffer 从不自行注册智能体；由你在**智能体**页面上选择。每种类型只有一个智能体，名字就是它的类型 `claude-code`。它注册在 `~/.claude`；如果你的 Claude Code 配置在别处，在智能体页面上修改它的配置目录。装了 Claude Code 但从没运行过也没关系：注册时会创建 `~/.claude`。
 
-**在 Web 界面中：** 打开**智能体**。这个页面总会列出 Claude Code 和 Codex；在 Claude Code 那一行选择**连接**，检查 Coffer 将要写入的内容，然后应用。如果两个智能体都装了、都还没连接，**全部连接**可以一次连两个。
+**在 Web 界面中：** 打开**智能体**。这个页面总会列出 Claude Code、Codex 和 Antigravity；在 Claude Code 那一行选择**连接**，检查 Coffer 将要写入的内容，然后应用。如果至少装了两个、且都还没连接，**全部连接**可以一次全部连上。
 
 ### 把 Claude Code 连到 Coffer {#connect-claude-code-to-coffer}
 
@@ -59,7 +59,7 @@ Coffer 从不自行注册智能体；由你在**智能体**页面上选择。每
 Coffer 靠 `--agent-uid` 参数知道一个会话属于哪个智能体，之后你就可以把某个服务器或技能限定给特定智能体。命令路径是绝对路径，因为从图形界面启动的智能体不会继承你 shell 的 `PATH`。
 
 ::: tip 为什么不用 `claude mcp add`？
-你可以手动把 `coffer-mcp-shim` 加到任何 MCP 客户端。但手写的条目没有 `--agent-uid`，Coffer 就分不清会话属于哪个智能体，限定给特定智能体的服务器对它也就一直不可见。对于 Claude Code 和 Codex，请用**连接**。其他客户端见[连接客户端](/zh/guides/connect-a-client)。
+你可以手动把 `coffer-mcp-shim` 加到任何 MCP 客户端。但手写的条目没有 `--agent-uid`，Coffer 就分不清会话属于哪个智能体，限定给特定智能体的服务器对它也就一直不可见。对于 Claude Code、Codex 和 Antigravity，请用**连接**。其他客户端见[连接客户端](/zh/guides/connect-a-client)。
 :::
 
 ### 注册一个上游 MCP 服务器 {#register-an-upstream-mcp-server}

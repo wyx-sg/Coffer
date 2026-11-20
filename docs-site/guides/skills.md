@@ -19,7 +19,7 @@ Coffer manages skills in the open [AgentSkills](https://agentskills.io) format. 
 
 - The Coffer daemon is running (see [Running the daemon](/guides/daemon)).
 - To add from a Git repository, `git` is installed on this machine.
-- At least one agent is registered (see [Agents](/guides/agents)). Coffer delivers skills to Claude Code and Codex.
+- At least one agent is registered (see [Agents](/guides/agents)). Coffer delivers skills to Claude Code, Codex and Antigravity.
 
 ## The skill format
 

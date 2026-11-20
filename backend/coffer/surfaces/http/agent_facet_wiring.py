@@ -24,7 +24,9 @@ def build_agent_catalog(*, user_path: UserPath | None = None) -> AgentCatalog:
     path = user_path or UserPath()
 
     def _probe(d: AgentDescriptor) -> DependencyProbe | None:
-        return ProgramProbe(d.program, user_path=path) if d.program else None
+        if not d.program:
+            return None
+        return ProgramProbe(d.program, user_path=path, app_bundle=d.app_bundle)
 
     return bind_facets(
         AGENT_DESCRIPTORS,

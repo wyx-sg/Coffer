@@ -33,11 +33,18 @@ interface Props {
   agent: AgentOut;
 }
 
-/** Where the agent writes its memory, for the empty state. */
-function memoryLocation(agent: AgentOut): string {
+/** Where the agent writes its memory, for the empty state; null when it keeps none. */
+function memoryLocation(agent: AgentOut): string | null {
   const dir = abbreviateHomePath(agent.config_dir);
+  if (agent.type === "antigravity") return null;
   return agent.type === "codex" ? `${dir}/memories/MEMORY.md` : `${dir}/projects/<project>/memory/`;
 }
+
+const OWN_DESCRIPTION: Record<AgentOut["type"], string> = {
+  claude_code: "agents.memoryTab.own.descriptionClaude",
+  codex: "agents.memoryTab.own.descriptionCodex",
+  antigravity: "agents.memoryTab.own.descriptionNone",
+};
 
 /** The project a store belongs to: its real directory when Coffer resolved one. */
 function projectLabel(store: NativeMemoryStore): string {
@@ -72,13 +79,15 @@ export function AgentMemoryTab({ agent }: Props) {
   } else if (native.isPending) {
     body = <Skeleton className="h-28 w-full" />;
   } else if (all.length === 0) {
+    const location = memoryLocation(agent);
     body = (
       <TabEmpty
         title={t("agents.memoryTab.emptyTitle", { agent: agentName })}
-        description={t("agents.memoryTab.emptyBody", {
-          agent: agentName,
-          path: memoryLocation(agent),
-        })}
+        description={
+          location
+            ? t("agents.memoryTab.emptyBody", { agent: agentName, path: location })
+            : t("agents.memoryTab.emptyNoStore")
+        }
       />
     );
   } else {
@@ -171,12 +180,7 @@ export function AgentMemoryTab({ agent }: Props) {
         testId="own-memory-section"
       >
         <p className="mb-1 text-xs text-text-muted">
-          {t(
-            agent.type === "codex"
-              ? "agents.memoryTab.own.descriptionCodex"
-              : "agents.memoryTab.own.descriptionClaude",
-            { agent: agentName },
-          )}
+          {t(OWN_DESCRIPTION[agent.type], { agent: agentName })}
         </p>
         {body}
       </Section>

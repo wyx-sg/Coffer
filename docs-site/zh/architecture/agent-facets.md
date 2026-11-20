@@ -5,7 +5,7 @@ description: Coffer 如何把编程智能体之间的所有差异放在每个智
 
 # 智能体切面 {#agent-facets}
 
-Coffer 管理的编程智能体并不归它所有：目前是 Claude Code 和 Codex。Coffer 做的几乎每件事最终都落在其中一个上——写进其配置的 MCP 条目、链接到其技能目录的技能、投影到其设置里的模型提供商、为记忆同步读取的记忆、通过它驱动的一轮对话。本页说明 Coffer 如何把智能体之间的差异集中在一处，让支持一个新智能体，或把一种新资产放进已有智能体，变成一次添加而不是一次全局搜索。在写任何按智能体表现不同的代码之前，先读这一页。这个决定以及权衡过的备选方案记录在决策记录（ADR）[Agent Mechanisms Are Optional Facets on the Descriptor](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/agent-mechanisms-are-optional-facets-on-the-descriptor.md) 中。
+Coffer 管理的编程智能体并不归它所有：目前是 Claude Code、Codex 和 Antigravity。Coffer 做的几乎每件事最终都落在其中一个上——写进其配置的 MCP 条目、链接到其技能目录的技能、投影到其设置里的模型提供商、为记忆同步读取的记忆、通过它驱动的一轮对话。本页说明 Coffer 如何把智能体之间的差异集中在一处，让支持一个新智能体，或把一种新资产放进已有智能体，变成一次添加而不是一次全局搜索。在写任何按智能体表现不同的代码之前，先读这一页。这个决定以及权衡过的备选方案记录在决策记录（ADR）[Agent Mechanisms Are Optional Facets on the Descriptor](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/agent-mechanisms-are-optional-facets-on-the-descriptor.md) 中。
 
 ## 问题 {#the-problem}
 
@@ -78,7 +78,7 @@ Coffer 通过各厂商提供的结构化协议驱动每个智能体：Claude Cod
 
 ## Hook 只读取，从不写入 {#hooks-are-read}
 
-智能体会运行来自自身设置文件和插件的 Hook；Coffer 自己不安装任何 Hook。Coffer 以只读方式读取所有这些 Hook：每个 Hook 的事件、matcher、命令以及声明它的文件。两个智能体保存 Hook 的格式相同，所以一个读取器就能同时服务两者；哪些文件带 Hook 是每个智能体记录上的一个值，每个已启用插件的 Hook 文件则通过插件列表找到。项目自己的设置不读，因为 Coffer 不知道智能体在哪些仓库里使用。
+智能体会运行来自自身设置文件和插件的 Hook；Coffer 自己不安装任何 Hook。Coffer 以只读方式读取所有这些 Hook：每个 Hook 的事件、matcher、命令以及声明它的文件。Claude Code 和 Codex 保存 Hook 的格式相同，所以一个读取器就能同时服务两者；哪些文件带 Hook 是每个智能体记录上的一个值，每个已启用插件的 Hook 文件则通过插件列表找到。项目自己的设置不读，因为 Coffer 不知道智能体在哪些仓库里使用。
 
 ## 这条规则如何受保护 {#how-the-rule-is-protected}
 

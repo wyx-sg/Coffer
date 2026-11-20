@@ -19,7 +19,7 @@ Coffer 按开放的 [AgentSkills](https://agentskills.io) 格式管理技能。�
 
 - Coffer 守护进程正在运行（见[运行守护进程](/zh/guides/daemon)）。
 - 要从 Git 仓库添加，这台机器上需要装有 `git`。
-- 至少注册了一个智能体（见[智能体](/zh/guides/agents)）。Coffer 把技能投递给 Claude Code 和 Codex。
+- 至少注册了一个智能体（见[智能体](/zh/guides/agents)）。Coffer 把技能投递给 Claude Code、Codex 和 Antigravity。
 
 ## 技能格式 {#the-skill-format}
 

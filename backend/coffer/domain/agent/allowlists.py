@@ -87,3 +87,33 @@ def _codex_files(cfg: pathlib.Path) -> tuple[ConfigFileSpec, ...]:
         ),
         ConfigFileSpec("hooks", "Hooks (hooks.json)", cfg / "hooks.json", ConfigFileFormat.JSON),
     )
+
+
+def _antigravity_files(cfg: pathlib.Path) -> tuple[ConfigFileSpec, ...]:
+    """Antigravity's personal config layer, ``~/.gemini/config/``, which its
+    App, CLI and IDE all read (spec agent-registry/antigravity "Allowlist
+    exactly Antigravity's shared config files"). Each surface's own data
+    directory beside it (``~/.gemini/antigravity*/``) holds conversations and
+    OAuth tokens and is never listed."""
+    return (
+        ConfigFileSpec(
+            "mcp", "MCP servers (mcp_config.json)", cfg / "mcp_config.json", ConfigFileFormat.JSON
+        ),
+        ConfigFileSpec(
+            "config", "Settings (config.json)", cfg / "config.json", ConfigFileFormat.JSON
+        ),
+        ConfigFileSpec(
+            "instructions",
+            "Global instructions (AGENTS.md)",
+            cfg / "AGENTS.md",
+            ConfigFileFormat.MARKDOWN,
+        ),
+        ConfigFileSpec(
+            "rules",
+            "Global rules (rules/)",
+            cfg / "rules",
+            ConfigFileFormat.MARKDOWN,
+            kind=ConfigFileKind.DIRECTORY,
+        ),
+        ConfigFileSpec("hooks", "Hooks (hooks.json)", cfg / "hooks.json", ConfigFileFormat.JSON),
+    )

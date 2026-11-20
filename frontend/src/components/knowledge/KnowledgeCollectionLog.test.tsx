@@ -112,6 +112,16 @@ describe("the Change log", () => {
 });
 
 describe("a tidy in the Change log", () => {
+  // The entries are timed minutes before now and read as "Today"; pin now to
+  // midday so a run just after midnight does not push one into yesterday.
+  beforeEach(() => {
+    const midday = new Date();
+    midday.setHours(12, 0, 0, 0);
+    vi.useFakeTimers({ toFake: ["Date"], now: midday });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
   const TIDY = change({
     version: "t1dy",
     writer: "agent",

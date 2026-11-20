@@ -42,7 +42,9 @@ def _req(
 
 def test_each_facet_declares_its_agent_file_and_protocols() -> None:
     by_type = {p.agent_type: p for p in PROVIDER_PROJECTIONS}
-    assert set(by_type) == set(AgentType)
+    # Antigravity has no model setting to project into (spec
+    # agent-registry/antigravity "Leave Antigravity's models, memory and sessions to Antigravity").
+    assert set(by_type) == set(AgentType) - {AgentType.ANTIGRAVITY}
     assert by_type[AgentType.CLAUDE_CODE].config_key == "settings"
     assert by_type[AgentType.CLAUDE_CODE].protocols == ("anthropic",)
     assert by_type[AgentType.CODEX].config_key == "config"

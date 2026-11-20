@@ -2124,7 +2124,7 @@
         "matcherAny": "任意",
         "noMatches": "没有匹配的钩子。",
         "emptyTitle": "{{agent}} 没有自己的钩子",
-        "emptyBody": "{{agent}} 自己配置里的钩子会只读显示在这里。"
+      "emptyBody": "{{agent}} 自己配置里的钩子会只读显示在这里。"
       },
       "details": {
         "title": "{{event}} 钩子",
@@ -2261,11 +2261,13 @@
       "files_one": "{{count}} 个文件",
       "files_other": "{{count}} 个文件",
       "emptyTitle": "{{agent}} 还没有记忆文件",
+      "emptyNoStore": "这里没有 Coffer 能读的内容。",
       "emptyBody": "{{agent}} 在学习过程中会写入 {{path}}。文件出现后会显示在这里。",
       "own": {
         "title": "{{agent}} 自己的记忆",
         "descriptionClaude": "每个项目一个记忆库，由 {{agent}} 写入，另有 Coffer 从你其他智能体同步来的副本。这里只读。",
-        "descriptionCodex": "由 {{agent}} 写入；Coffer 把副本放在 memories/extensions/coffer/ 下。这里只读。"
+        "descriptionCodex": "由 {{agent}} 写入；Coffer 把副本放在 memories/extensions/coffer/ 下。这里只读。",
+        "descriptionNone": "{{agent}} 没有自己的记忆库：它学到的东西经你同意后存成规则和技能。Coffer 不向它同步记忆。"
       },
       "cols": {
         "project": "项目",
@@ -2730,8 +2732,8 @@
       }
     },
     "list": {
-      "subtitle": "这台 Mac 上的 Claude Code 和 Codex，以及通过 Coffer 送达各自的内容。",
-      "connectBoth": "全部连接",
+      "subtitle": "这台 Mac 上的编程智能体，以及通过 Coffer 送达各自的内容。",
+      "connectAll": "全部连接",
       "countsHelp": "数量是通过 Coffer 实际送达每个智能体的内容。要选择谁能用某个资源，请到它自己的页面（<mcp>MCP 服务器</mcp>、<skills>技能</skills>）。",
       "empty": "没有可显示的智能体。",
       "col": {
@@ -2824,6 +2826,9 @@
         "skills": "技能文件夹",
         "mcpAt": "MCP 条目 — Coffer 会把它的条目写到 {{path}}",
         "codexConfig": "模型、提供商和 MCP 条目",
+        "mcpServers": "MCP 条目",
+        "appSettings": "插件和权限",
+        "rules": "规则",
         "hooks": "钩子"
       }
     }
