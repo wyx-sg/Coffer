@@ -178,31 +178,6 @@ timestamp column that appear in its allowlists.
 | `display_name`           | `str`         | UI label                                                                       |
 | `description`            | `str`         | UI tooltip                                                                     |
 
-### `UpkeepRun` (`application/upkeep_runs.py`)
-
-Frozen dataclass, held in an in-process registry (`UPKEEP_RUNS`, an
-`UpkeepRunRegistry`) keyed by `(kind, name)` and read by `GET
-/api/v1/upkeep/runs`, which leaves out a run whose kind's experimental feature
-is off. Not
-persisted, and deliberately so: there is no queue, no row and no lease, so a
-daemon restart ends any pass it was running and the registry comes back empty.
-A claim that outlived the process holding it would wedge a target forever with
-no runner left to release it.
-
-| Field        | Type       | Notes                                          |
-| ------------ | ---------- | ---------------------------------------------- |
-| `kind`       | `str`      | the layer whose pass this is, e.g. `memory`    |
-| `name`       | `str`      | the target being rewritten, e.g. `sync`        |
-| `started_at` | `datetime` | when this daemon started the pass              |
-| `done`       | `int \| None` | for a run that works through several items one pass at a time, how many it has done; `None` for a one-unit pass |
-| `total`      | `int \| None` | for such a run, how many items were pending when it started |
-
-A pass claims its key (`claim` / `release`, or `guard`, which refuses a busy
-target with `UpkeepAlreadyRunning` → 409) and reports progress with
-`progress`. The memory sync (spec memory) holds `("memory", "sync")` while a
-sync, a preview write or an undo runs; it refuses a second one with its own
-lock first, so that key is never refused here.
-
 ## Storage
 
 ### The resource file

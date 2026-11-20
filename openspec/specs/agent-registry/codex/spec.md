@@ -1,7 +1,7 @@
 # Agent Registry — Codex
 
 ## Purpose
-This child of [`agent-registry`](../spec.md) says how the `codex` agent type realises each facet its parent defines: where its config directory is, which of its files Coffer may read and write and which it must never touch, the shape of the MCP entry Coffer installs, where its plugin entries and cache live, how its model catalogue is read back, where it keeps its own memory, and where it writes its transcripts. It is the prose reading of that type's one `AGENT_DESCRIPTORS` record — default config dir `~/.codex/`, its allowlist and secret exclusion, its injection spec, a `PluginCapability` whose uninstall strategy is a config edit, its native-memory layout, its transcript location and its catalogue sources. Everything the two supported types share, and everything the parent assumes, lives in the parent and is not restated here.
+This child of [`agent-registry`](../spec.md) says how the `codex` agent type realises each facet its parent defines: where its config directory is, which of its files Coffer may read and write and which it must never touch, the shape of the MCP entry Coffer installs, where its plugin entries and cache live, how its model catalogue is read back, where Coffer's session-start hook goes (`hooks.json`, which Codex runs only after the person reviews it once), and where it writes its transcripts. It is the prose reading of that type's one `AGENT_DESCRIPTORS` record — default config dir `~/.codex/`, its allowlist and secret exclusion, its injection spec, a `PluginCapability` whose uninstall strategy is a config edit, the place for its session-start hook, its transcript location and its catalogue sources. Everything the two supported types share, and everything the parent assumes, lives in the parent and is not restated here.
 
 "Codex" is the product: its CLI and its IDE form together, because they read one shared config directory. `config.toml` is the single file behind most of this type's facets — MCP entries, plugins, marketplaces, configured models — so one parse failure degrades all of them at once to the parent's parse-error state. Codex keeps its plugin entries and marketplaces in that same file, with each plugin's content in a cache directory; Coffer toggles one documented field and, on uninstall, removes the entry and the cache together.
 
@@ -92,14 +92,6 @@ The catalogue sources of [agent-registry](../spec.md) "Read the model catalogue 
 - **WHEN** the Codex catalogue sources are read for it
 - **THEN** the `model/list` app-server is started with `CODEX_HOME` set to that `config_dir`, the rest of the daemon's environment intact
 - **AND** a probe for the default `~/.codex` starts with the environment untouched, and neither directory's answer is served for the other
-
-### Requirement: Scan Codex's global task-grouped memory
-The native-memory layout of [agent-registry](../spec.md) "Scan an agent's own native memory stores read-only" for this type MUST be a single GLOBAL task-grouped document at `<config_dir>/memories/MEMORY.md`, where each `# Task Group` block carries an `applies_to: cwd=…` line routing it to one or more project working directories. The scan MUST parse it into one row per distinct routed cwd, with `path` and `project` that cwd, `item_count` the number of Task Groups routed there, and `memory_dir` the one shared global store repeated on every row. An absent document yields an empty list, and a Task Group with no `applies_to: cwd=` line routes to no project and produces no row.
-
-#### Scenario: the native memory scan lists Codex's global memory by project
-- **GIVEN** a registered `codex` agent whose `<config_dir>/memories/MEMORY.md` holds `# Task Group` blocks, each with an `applies_to: cwd=…` line routing it to one or more project working directories
-- **WHEN** the user scans the agent's native memory
-- **THEN** Coffer parses the single global document into one store row per distinct routed cwd — `project`/`path` the cwd, `item_count` the number of Task Groups routed there, and `memory_dir` the one shared global store — read-only and emitting no audit event; with no `memories/MEMORY.md` the list is empty
 
 ### Requirement: Leave Codex's internal-state tables untouched
 The internal-state tables this type keeps in `config.toml` — `[marketplaces.*]`, `[hooks.state.*]` and `[projects.*]` — are the Codex side of the parent's "internal state files are read as inputs and never written". They MUST be read where a facet needs them ("Read Codex plugins from config.toml and the cache directory" reads the marketplaces) and MUST be byte-identical before and after every write Coffer makes to that file; every such write also preserves the user's comments and key ordering.

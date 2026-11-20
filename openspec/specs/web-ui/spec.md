@@ -1672,8 +1672,8 @@ word a user navigates by:
   holds setup, status and settings only.
 - **MCP servers** and **Skills** are filed under Capabilities; **Knowledge** under
   Context.
-- **Memory** is not a resource kind: its entry is the memory sync's page
-  ([memory](../memory/spec.md) "Manage memory sync in the web UI and on the command line"), filed under Context beside Knowledge.
+- **Memory** is not a resource kind: its entry is the Memory page
+  ([memory](../memory/spec.md) "Show and edit memory on the Memory page"), filed under Context beside Knowledge.
 - **Custom tools** are `mcp_server` resources of the HTTP API transport, one per
   group of tools. They share the gateway's machinery with every
   other server but get their own entry under Capabilities, so a user looking for

@@ -1,7 +1,6 @@
 """Which repository a directory belongs to, read off the disk.
 
-See spec memory "Identify a project by a key that does not depend on the
-machine".
+See spec memory "Keep memory in one place in the vault".
 
 :mod:`coffer.domain.memory.repository` decides what a repository's *identity*
 is once you know its root and its remote. This module is the half that has to
@@ -34,8 +33,7 @@ a file cannot be made to do anything but read a file.
 **Nothing here raises for a broken repository.** A ``gitdir:`` pointing at a
 directory that was deleted, a ``commondir`` climbing past the filesystem root, a
 ``config`` that is unreadable or is not UTF-8 — each is an ordinary state of a
-developer's disk, not an error in Coffer, and spec memory "Identify a project
-by a key that does not depend on the machine" already says that *not being in a
+developer's disk, not an error in Coffer, and spec memory "Keep memory in one place in the vault" already says that *not being in a
 repository* is a normal answer with a normal consequence (no project). A sync
 that crashed on one of them would stop publishing every other agent's memory
 over a stale pointer in a directory nobody has opened in a year.
@@ -98,7 +96,7 @@ def resolve_repository(directory: str | pathlib.Path) -> Repository | None:
 
     ``None`` is not an error: a dated scratch folder a session happened to run
     in gets no project, and nothing learned there is published (spec memory
-    "Identify a project by a key that does not depend on the machine"). The
+    "Keep memory in one place in the vault"). The
     previous design keyed projects on the raw working directory and turned six
     such folders on the maintainer's machine into six permanent projects whose
     contents could never reach the project they were actually about.

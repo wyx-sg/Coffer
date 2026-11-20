@@ -1,6 +1,5 @@
 """The fence every memory file goes through, and the two exactness rules that
-are load-bearing rather than cosmetic (spec memory "Keep every agent's memories
-in a hub in the vault").
+are load-bearing rather than cosmetic (spec memory "Keep memory in one place in the vault").
 
 ``render_frontmatter``/``split_frontmatter`` are the only reader and writer of
 the ``---``-fenced block of a hub entry or a Claude Code copy, and two of their

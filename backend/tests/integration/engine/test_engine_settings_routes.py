@@ -135,6 +135,33 @@ async def test_moving_the_transcribe_flag_drops_an_uncurated_model_only(
     assert (await _config(api))["transcribe_model"] is None
 
 
+@pytest.mark.acceptance(
+    spec="internal-engine",
+    scenario="the speech-to-text model changes without touching the rest of the row",
+)
+async def test_the_transcribe_model_leaves_the_rest_of_the_row_alone(
+    api: AsyncClient,
+) -> None:
+    assert (
+        await api.put("/internal-engine-config/transcribe-model", json={"model": "first"})
+    ).status_code == 200
+    path = vault_writer().repo.root / _DOC
+    doc = json.loads(path.read_text())
+    doc["written_by_a_newer_build"] = {"kept": True}
+    path.write_text(json.dumps(doc, indent=2) + "\n")
+    vault_writer().settle([_DOC])
+
+    r = await api.put("/internal-engine-config/transcribe-model", json={"model": "hears"})
+    assert r.status_code == 200, r.text
+    assert r.json()["transcribe_model"] == "hears"
+    assert _doc()["written_by_a_newer_build"] == {"kept": True}
+    entries = (
+        await api.get("/audit", params={"event_type": "internal_engine_model_set", "limit": 50})
+    ).json()["entries"]
+    assert [e["details"]["transcribe_model"] for e in entries][:1] == ["hears"]
+    assert len(entries) == 2
+
+
 async def test_the_call_bound_route_is_gone(api: AsyncClient) -> None:
     assert (await api.put("/internal-engine-config/timeout", json={"seconds": 90})).status_code in (
         404,

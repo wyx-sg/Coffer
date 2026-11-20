@@ -78,10 +78,9 @@ Gates act at request time, on every surface:
   and puts it back when switched on (spec experimental-features "Withdraw what a
   switched-off feature put in front of agents"): `knowledge` withdraws
   the knowledge sections of `coffer-guide` and the channel `/kb`; `models` withdraws the provider projection from agents' own
-  configuration and empties the model proxy. `memory` withdraws nothing: the
-  copies it wrote are memory the agents already hold, so switching it off
-  only stops the sync, and **Undo sync** is the explicit removal
-  ([Sync Memory Into Each Agent's Own Memory](sync-memory-into-each-agents-own-memory.md)).
+  configuration and empties the model proxy. `memory` withdraws its
+  session-start hook from every agent; the topic files stay in the vault
+  ([Keep Memory in One Place](keep-memory-in-one-place-agents-write-themselves.md)).
 
 One security detail survives from the earlier channel design and is not a
 feature default: a build made from a tag carries a stamp

@@ -1,6 +1,6 @@
 """Repository identity — what a project is actually keyed on.
 
-Spec memory "Identify a project by a key that does not depend on the machine".
+Spec memory "Keep memory in one place in the vault".
 
 A project used to be keyed on the working directory a fact was learned in.
 Measured on the maintainer's live vault, that produced three distinct
@@ -80,8 +80,7 @@ def repository_key(*, remote_url: str, root_path: str) -> str:
     land in one project. A repository with no usable remote falls back to
     its own root path, which is the only thing that can distinguish it.
     Returns ``""`` when neither is usable — the caller is not looking at a
-    repository, and spec memory "Identify a project by a key that does not
-    depend on the machine" says that gets no project.
+    repository, and spec memory "Keep memory in one place in the vault" says that gets no project.
     """
     remote = normalise_remote(remote_url)
     if remote:

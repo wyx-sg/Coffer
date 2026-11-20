@@ -233,10 +233,7 @@ is `stop` then `start`, and is how a setting read before the bind takes effect; 
 not exit within the period is forced out (see "Force out a wedged daemon on an explicit restart"). `status` MUST only look: with no
 daemon answering — no `daemon.json`, or one whose port nothing answers on — it MUST report the
 daemon as not running (`{"status": "stopped"}` under `--json`) and exit non-zero, and MUST NOT
-start one. With a daemon answering, `status` MUST also report the passes in flight — the list
-[resource-framework](../resource-framework/spec.md) "Report the passes in flight in one cross-kind read"
-defines, each with its kind, its target and when it started — in its own section of the table form,
-which says so when nothing is running, and as part of the object under `--json`. It MUST also list
+start one. With a daemon answering, `status` MUST list
 every other daemon process serving the same vault — a start still booting or waiting on the lock,
 or a stray — by pid (`other_daemon_pids` under `--json`), counting a one-file daemon's bootloader
 and child once and never the model proxy, because one serving daemon is the rule and an extra one
@@ -259,12 +256,6 @@ running (see "Bind a fixed, settable port").
 - **WHEN** the user runs `coffer daemon status`, or `coffer daemon status --json`,
 - **THEN** it reports the daemon as not running (`{"status": "stopped"}` under `--json`) and exits non-zero,
 - **AND** no daemon is spawned and no `daemon.json` is written.
-
-#### Scenario: status names the passes in flight
-- **GIVEN** a running daemon with two passes under way, one of them over a knowledge collection,
-- **WHEN** the user runs `coffer daemon status --json`, and again `coffer daemon status` once both passes have ended,
-- **THEN** the JSON reports the daemon as ready and lists both passes with their kind, target and start time, oldest first,
-- **AND** the later table form carries a passes section saying that no pass is running, and neither call starts a pass.
 
 #### Scenario: status names other daemon processes of the vault
 - **GIVEN** a serving daemon and a second daemon process of the same vault still starting,

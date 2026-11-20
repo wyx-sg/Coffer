@@ -4,8 +4,7 @@
 
 The resource framework is the kind-agnostic half of Coffer's resource model: the kind
 registry and the immutable `uid` identity, the lifecycle surface every kind is managed
-through, per-agent reach, the audit log, per-table retention and its background prune,
-the cross-kind read of the passes in flight, and the test that the CLI holds only the
+through, per-agent reach, the audit log, per-table retention and its background prune, and the test that the CLI holds only the
 commands that need it, each recorded with its reason, while everything else is managed in
 the web UI over REST. A user relies on it for one place
 that lists everything Coffer holds, one way to turn a thing on or off, one way to say
@@ -30,16 +29,13 @@ nothing to manage should do. *Enforcing* reach is each kind's own seam at its ow
 point, where the asking identity is known (mcp-gateway at the per-session capability
 listing, skill-manager at delivery); a second central gate would be unreachable. The
 invocation log is mcp-gateway's; it registers here as a prunable table and nothing more.
-Whether the passes this spec reports run on a timer is internal-engine's, and what each
-pass does is memory's. `GET /api/v1/upkeep/runs`, the read of the passes
-in flight, is a live, read-only status; a terminal reads it in `coffer daemon status`.
 
 It is a spec, not a rule in the principles, because it owns state and operable surfaces.
 Resource files (`vault/resources/<kind>/<name>.json`, or `<uid>.json` for a provider; agents and channels under `local/`),
 reach (`local/reach.json`), the `audit_log` table in `runs.db` and the retention
 policies (`local/retention.json`) are its state: every kind writes the audit
 log, and this spec seeds, reads, configures and prunes it. Its route family is
-`/api/v1/resources*`, `/api/v1/audit`, `/api/v1/retention/*`, `/api/v1/upkeep/runs`
+`/api/v1/resources*`, `/api/v1/audit`, `/api/v1/retention/*`
 and the daemon-wide change feed `/api/v1/events`;
 its packages are `domain/{resource,scope,audit,retention}.py`, the kind-agnostic
 services beside them in `application/`, and their surfaces; an import-linter contract
@@ -471,30 +467,6 @@ are older than `n` days, and deletes nothing.
 - **GIVEN** the `skill_data` policy at 30 days and four files under `skill-data`, two of them older than 7 days
 - **WHEN** a client asks for the preview for 7 days
 - **THEN** the answer carries 4 now and 2 to delete, and every file is still there
-
-### Requirement: Report the passes in flight in one cross-kind read
-The system MUST answer, in one cross-kind read, which long passes this
-daemon is running right now — each named by its kind, its target and when it started, and, for a run that works through several items one pass at a time, how many of them it has done of how many —
-so that a surface can tell whether a pass is under way without every kind growing a
-near-identical endpoint of its own. The read MUST start nothing, and the registry MUST
-NOT outlive the process: a restart ends any pass it was running and the list comes back
-empty, which is the truth rather than a lost record. Whether a pass runs on a timer at
-all is internal-engine's; what a pass *does* is its own kind's. The read is served over
-REST (`GET /api/v1/upkeep/runs`) and on the command line as the "passes in flight" section
-of `coffer daemon status`, which prints the same list, says so when nothing is running, and
-carries the list under `--json`.
-
-#### Scenario: the daemon names the passes in flight
-- **GIVEN** a long pass over one knowledge collection is running,
-- **WHEN** any surface reads the in-flight list,
-- **THEN** that pass is named with its kind, its target and when it started,
-- **AND** a target absent from the list has no pass running, and the read starts nothing.
-
-#### Scenario: the command line reads the passes in flight
-- **GIVEN** passes over two knowledge collections are running
-- **WHEN** the operator runs `coffer daemon status --json`, and again once both have ended
-- **THEN** the first lists both passes with their kind, target and start time, oldest first,
-- **AND** the second lists none, and the table form of `coffer daemon status` says that no pass is running.
 
 ### Requirement: Name a provider or a channel with free text
 The `provider` and `channel` kinds MUST name a resource with **free text**: whatever a person types

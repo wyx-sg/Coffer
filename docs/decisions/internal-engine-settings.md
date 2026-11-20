@@ -3,15 +3,16 @@
 **Status**: Accepted
 **Date**: 2026-10-04
 **Deciders**: Yuxing Wu
-**Related**: [Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](tidying-knowledge-is-the-agents-job.md), [Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault](sync-memory-into-each-agents-own-memory.md), [Provider Connections Projected Into Agent Config](provider-connections-projected-into-agent-config.md), [Sync Withholds Derived Output](sync-withholds-derived-output.md), [Kind Plugin Contract](kind-plugin-contract.md), spec internal-engine "Keep the engine's settings in one vault document", spec internal-engine "Transcribe speech on its own connection and model", spec internal-engine "Drop the speech-to-text model when its connection moves", spec internal-engine "Publish no document while the defaults hold", spec provider-switching "Keep an independent speech-to-text default"
+**Related**: [Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](tidying-knowledge-is-the-agents-job.md), [Keep Memory in One Place in the Vault, Written by the Agents Themselves](keep-memory-in-one-place-agents-write-themselves.md), [Provider Connections Projected Into Agent Config](provider-connections-projected-into-agent-config.md), [Sync Withholds Derived Output](sync-withholds-derived-output.md), [Kind Plugin Contract](kind-plugin-contract.md), spec internal-engine "Keep the engine's settings in one vault document", spec internal-engine "Transcribe speech on its own connection and model", spec internal-engine "Drop the speech-to-text model when its connection moves", spec internal-engine "Publish no document while the defaults hold", spec provider-switching "Keep an independent speech-to-text default"
 
 ## Context
 
 Transcribing a voice message is the one model call Coffer makes on its own
 behalf ([Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](tidying-knowledge-is-the-agents-job.md)
 puts every other judgement in the person's agent). The call needs two
-things: an endpoint with a key and a model id. Coffer also runs one mechanical pass on a timer, the memory sync
-([Sync Memory Into Each Agent's Own Memory](sync-memory-into-each-agents-own-memory.md)), with a switch and an interval.
+things: an endpoint with a key and a model id. Coffer runs no unattended pass
+with a switch or an interval: memory is files the agents write themselves
+([Keep Memory in One Place](keep-memory-in-one-place-agents-write-themselves.md)).
 
 The endpoints and keys already exist. They are the user's LLM connections
 (`kind='provider'`, [Provider Connections Projected Into Agent Config](provider-connections-projected-into-agent-config.md)),
@@ -49,8 +50,7 @@ Forces on the shape:
 The settings are one vault state document, `state/settings/internal-engine.json`
 (read and written by `infrastructure/persistence/internal_engine_repo.py`, typed
 by `domain/internal_engine_config.py`), holding the speech-to-text
-`transcribe_model`, and each mechanical pass's switch and interval (today one
-pass, `memory_sync`, on by default). A key the
+`transcribe_model`. A key the
 document does not carry reads as that key's default, and the time of the last
 write is not in it (two machines stamping it would conflict on every edit): it
 is this machine's own record, `local/engine.json`. The endpoint and key come
@@ -146,29 +146,16 @@ configuration once lived.
 ## Decision
 
 Coffer's own operating settings are one global vault document that owns the
-speech-to-text model, each mechanical pass's switch and interval. The endpoint and key are borrowed from the connection flagged
+speech-to-text model. The endpoint and key are borrowed from the connection flagged
 `transcribe_default`. The shape carries these rules:
 
 - **A missing half resolves to `None`, not an error.** Both halves return the
   same `None`, so no consumer has to know which half was missing.
 - **A moved flag drops a model the new connection does not curate.** Nothing is
   probed to decide.
-- **Switches are per pass, not per collection or project.** The question is
-  what Coffer may do on a timer. A per-target setting would multiply rows,
-  surfaces and defaults.
-- **One value per write.** `PUT /api/v1/internal-engine-config/upkeep`
-  and `…/transcribe-model` each change one pass or one value, so a toggle is
-  never a read-modify-write over state another machine may be changing through
-  sync. `use_default_interval` exists because JSON cannot tell "use the default"
-  from "not sent".
-- **Defaults are reported, not stored.** An unchosen interval is
-  absent or `null` in the document and reported beside the default that applies
-  (`application/upkeep_schedule.py`), so raising
-  a default later reaches every vault that never chose one.
-- **The schedule polls in slices.** Workers wait in 30-second slices and
-  re-read the interval each slice (`SLICE_S`). A change that arrives through a
-  converge round has no local event to subscribe to, so re-reading is the only
-  wait that covers both local and remote writes.
+- **One value per write.** `PUT /api/v1/internal-engine-config/transcribe-model`
+  changes the one value, so a write is never a read-modify-write over state
+  another machine may be changing through sync.
 - **The document is a decision, not a row.** A machine that holds every default
   writes no document, and a change back to all defaults removes it, so "the
   defaults" is always the absence of one. Deleting the document anywhere means
@@ -185,9 +172,8 @@ behaviour.
 
 ## Consequences
 
-- Surfaces: `/api/v1/internal-engine-config` (plus `/upkeep` and
-  `/transcribe-model`) and Settings › General → Speech-to-text. The Memory page
-  carries the memory sync's switch and interval. The connection flag is set on the
+- Surfaces: `/api/v1/internal-engine-config` (plus `/transcribe-model`) and
+  Settings › General → Speech-to-text. The connection flag is set on the
   provider kind's own route.
 - Every write to the settings records `internal_engine_model_set` with the values
   after the write (spec internal-engine "Audit every write to the engine

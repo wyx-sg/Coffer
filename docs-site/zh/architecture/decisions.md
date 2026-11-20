@@ -131,7 +131,7 @@ Coffer 保留三类设计文本，各司其职：
 | 知识集自己决定格式，Coffer 只检查链接 | [`knowledge-collections-own-their-format`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-collections-own-their-format.md) |
 | 知识来源保留其中的图片，原文件留在这台 Mac 上 | [`knowledge-sources-keep-their-images-and-originals-stay-on-this-mac`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-sources-keep-their-images-and-originals-stay-on-this-mac.md) |
 | 接入的外部知识文件夹原地共享，对 Coffer 只读，记录只留在本机 | [`linked-knowledge-folders-are-read-only-and-machine-local`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/linked-knowledge-folders-are-read-only-and-machine-local.md) |
-| 通过保险库里的中心库，把记忆同步进每个智能体自己的记忆 | [`sync-memory-into-each-agents-own-memory`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-memory-into-each-agents-own-memory.md) |
+| 把记忆集中放在保险库里，由智能体自己写 | [`keep-memory-in-one-place-agents-write-themselves`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/keep-memory-in-one-place-agents-write-themselves.md) |
 
 ## 同步与密钥 {#sync-secrets}
 

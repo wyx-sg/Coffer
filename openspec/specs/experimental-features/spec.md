@@ -28,7 +28,7 @@ and its custom tools, Skills, Secrets, Activity, Settings, Conversations,
 Channels, vault sync, Model providers (with its Usage tab) and the local model
 proxy, the agent list and model catalogue routes (`/api/v1/agent-providers`),
 the internal engine's settings, the vault's own routes and an agent's own
-transcripts and native memory files. A capability outside the registry is
+transcripts. A capability outside the registry is
 always on.
 
 A feature MUST join the registry by adding one entry that names its route
@@ -312,26 +312,23 @@ tasks (`scheduled_tasks`).
 
 ### Requirement: Close the memory feature's surfaces
 While `memory` is off, `/api/v1/memory` MUST answer 404 `FEATURE_DISABLED`,
-and the memory sync worker MUST skip its rounds, so nothing is read from an
-agent, published to the hub or written into an agent. Switching `memory` off
-MUST leave the hub and every copy already written into an agent where they are;
-switching it on again MUST resume syncing at the next round, with no daemon
-restart. The feature owns no resource kind and puts nothing in front of agents
-of its own: there is no memory tool, no memory directory named in the gateway's
-instructions or the `coffer-guide` skill, no hook, and no memory in a channel
-turn, whether the feature is on or off
-([memory](../memory/spec.md) "Deliver no memory into a session").
+the reconciler MUST remove Coffer's session-start hook from every agent, and
+the `coffer-guide` skill MUST carry no memory rules, so nothing puts memory in
+front of a session. Coffer's own turns MUST carry no memory either. Switching
+`memory` off MUST leave the memory files in the vault where they are;
+switching it on again MUST put the hooks back at once, with no daemon restart.
+The feature owns no resource kind and gives agents no memory tool
+([memory](../memory/spec.md) "Hand a session its project's memories at start").
 
 #### Scenario: memory off closes the memory routes
 - **GIVEN** `memory` off
 - **WHEN** a route under `/api/v1/memory` is requested
 - **THEN** it answers 404 `FEATURE_DISABLED` naming `memory`
 
-#### Scenario: memory off skips the memory sync
-- **GIVEN** `memory` off
-- **WHEN** the memory sync worker's round comes due
-- **THEN** it skips the round and syncs nothing
-- **AND** once `memory` is switched on, the next round runs
+#### Scenario: memory off removes the hook from every agent
+- **GIVEN** `memory` on and Claude Code registered, carrying Coffer's session-start hook
+- **WHEN** `memory` is switched off
+- **THEN** the hook is removed from the agent's settings and everything else in them is kept
 
 ### Requirement: Close the scheduled tasks feature's surfaces
 While `scheduled_tasks` is off, `/api/v1/scheduled-tasks` MUST answer 404

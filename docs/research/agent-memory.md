@@ -1,6 +1,6 @@
 # Agent memory: how other products do it
 
-**Feature**: long-term memory for coding agents — capturing what an agent learned across sessions, consolidating it, and handing it back at session start · **Coffer spec**: [memory](../../openspec/specs/memory/spec.md) · **Related ADRs**: [sync-memory-into-each-agents-own-memory](../decisions/sync-memory-into-each-agents-own-memory.md)
+**Feature**: long-term memory for coding agents — capturing what an agent learned across sessions, consolidating it, and handing it back at session start · **Coffer spec**: [memory](../../openspec/specs/memory/spec.md) · **Related ADRs**: [keep-memory-in-one-place-agents-write-themselves](../decisions/keep-memory-in-one-place-agents-write-themselves.md)
 **Researched**: 2026-09 · **Method**: web research, primary sources (official docs, repository source and READMEs); star counts from the GitHub API on 2026-09-24
 
 ---
@@ -265,7 +265,7 @@ Notable details: Codex keeps a **git baseline** of its memory folder and feeds t
 
 ### Memory page layouts
 
-Surveyed 2026-10-12 for the Memory page (ADR [The Memory Page Lists the Memories by Scope](../decisions/memory-page-lists-memories-by-scope.md)). Sources: help.openai.com/en/articles/8590148, support.claude.com/en/articles/11817273, code.claude.com/docs/en/memory, docs.devin.ai/desktop/cascade/memories, docs.github.com/en/copilot/concepts/agents/copilot-memory, code.visualstudio.com/docs/agents/memory, support.google.com/gemini/answer/16413516, manual.raycast.com/ai/personalization, docs.letta.com/guides/ade/core-memory, docs.mem0.ai/openmemory, docs.pieces.app/products/desktop/long-term-memory.
+Surveyed 2026-10-12 for the Memory page. Sources: help.openai.com/en/articles/8590148, support.claude.com/en/articles/11817273, code.claude.com/docs/en/memory, docs.devin.ai/desktop/cascade/memories, docs.github.com/en/copilot/concepts/agents/copilot-memory, code.visualstudio.com/docs/agents/memory, support.google.com/gemini/answer/16413516, manual.raycast.com/ai/personalization, docs.letta.com/guides/ade/core-memory, docs.mem0.ai/openmemory, docs.pieces.app/products/desktop/long-term-memory.
 
 | Product | Layout | Per item | Settings |
 | --- | --- | --- | --- |

@@ -131,7 +131,7 @@ Explained in: [Knowledge](/architecture/knowledge), [Memory](/architecture/memor
 | Knowledge Collections Own Their Format; Coffer Checks Only Links | [`knowledge-collections-own-their-format`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-collections-own-their-format.md) |
 | Knowledge Sources Keep Their Images; Originals Stay on This Mac | [`knowledge-sources-keep-their-images-and-originals-stay-on-this-mac`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-sources-keep-their-images-and-originals-stay-on-this-mac.md) |
 | A Linked Knowledge Folder Is Shared in Place, Read-Only to Coffer, and Recorded Machine-Local | [`linked-knowledge-folders-are-read-only-and-machine-local`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/linked-knowledge-folders-are-read-only-and-machine-local.md) |
-| Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault | [`sync-memory-into-each-agents-own-memory`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-memory-into-each-agents-own-memory.md) |
+| Keep Memory in One Place in the Vault, Written by the Agents Themselves | [`keep-memory-in-one-place-agents-write-themselves`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/keep-memory-in-one-place-agents-write-themselves.md) |
 
 ## Sync & secrets
 

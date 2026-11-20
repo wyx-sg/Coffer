@@ -157,6 +157,9 @@ def _commands(home: pathlib.Path) -> list[str]:
 @pytest.mark.acceptance(
     spec="memory", scenario="the hook is installed while memory is on and removed when it is off"
 )
+@pytest.mark.acceptance(
+    spec="experimental-features", scenario="memory off removes the hook from every agent"
+)
 def test_the_hook_follows_the_memory_switch(home: pathlib.Path) -> None:
     (home / ".claude" / "settings.json").write_text(json.dumps({"theme": "dark"}))
     with _client() as c:
