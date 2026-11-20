@@ -20,8 +20,11 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from coffer.application.memory.hook_target import strip_hook
 from coffer.application.reconcile.reconciler import Reconciler
 from coffer.application.uninstall import FileStep, MachineSteps, UninstallService
+from coffer.domain.resource import Resource
+from coffer.infrastructure.agent.config_file_store import ConfigFileStore
 from coffer.infrastructure.daemon import data_purge, uninstall_files
 from coffer.surfaces.http.agent_dependencies import (
     get_agent_connection_service,
@@ -53,6 +56,10 @@ def machine_steps() -> MachineSteps:
         path_lines=uninstall_files.remove_path_lines,
         binaries=uninstall_files.remove_binaries,
     )
+
+
+async def _strip_memory_hook(agent: Resource) -> bool:
+    return await asyncio.to_thread(strip_hook, ConfigFileStore(), agent)
 
 
 async def _blocking(step: FileStep) -> Sequence[str]:
@@ -90,6 +97,7 @@ async def uninstall(
         reconciler=reconciler,
         machine=machine_steps(),
         run_blocking=_blocking,
+        memory_hooks=_strip_memory_hook,
     )
     report = await service.run(actor=actor)
     if body.delete_data:

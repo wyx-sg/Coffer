@@ -1536,6 +1536,7 @@
           "provider_routing": "已撤回智能体里的模型路由",
           "agent_connections": "已断开智能体",
           "skill_links": "已移除技能链接",
+          "memory_hooks": "已移除记忆钩子",
           "login_job": "已关闭开机自启动",
           "terminal_files": "已移除终端启动文件",
           "path_lines": "已移除安装脚本加的 PATH 行",

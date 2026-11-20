@@ -14,7 +14,7 @@ Everything Coffer shares — MCP servers, skills, knowledge, memory, model provi
 - write a `coffer` MCP entry into it, so the agent reaches every upstream MCP server through [one gateway](/guides/mcp-servers);
 - link [skills](/guides/skills) into its `skills/` folder;
 - project a [model provider](/guides/providers) into its native config;
-- show you its config files, MCP entries, plugins, native memory and sessions in one place.
+- show you its config files, MCP entries, plugins and sessions in one place.
 
 Coffer supports two agent types:
 
@@ -32,7 +32,7 @@ A machine has at most one registered agent of each type, and the agent's name **
 Besides its type, the only setting an agent has is its **config directory**, plus the [model binding](#models). Registering uses the type's standard directory (`~/.claude`, `~/.codex`) unless you say otherwise. Pointing Coffer at a different directory moves the one agent there; it never adds a second one. Registering a type that is already registered is refused with `409 AGENT_TYPE_REGISTERED`.
 
 ::: info The agent's files are the source of truth
-Coffer never copies an agent's configuration into its own store. Config files, MCP entries, plugins and native memory are read from disk every time you look at them, and sessions are listed by the agent itself. The agent record itself holds only the type, the config directory and the model binding.
+Coffer never copies an agent's configuration into its own store. Config files, MCP entries and plugins are read from disk every time you look at them, and sessions are listed by the agent itself. The agent record itself holds only the type, the config directory and the model binding.
 :::
 
 ## Register an agent
@@ -165,7 +165,8 @@ Coffer touches an agent's files through a short list of documented surfaces:
 | MCP entries in the agent's config | yes | install/uninstall of `coffer`, remove, adopt |
 | Plugins | inventory and enabled state | the enabled switch; uninstall by the type's own strategy |
 | Model provider keys | yes (checked on every reconcile pass) | when you switch a [provider](/guides/providers), and to bring a projection whose values went stale back in line |
-| Native memory stores | yes | only its own copies, while [memory sync](/guides/memory) is on |
+| Hooks in `settings.json` / `hooks.json` | only to find its own | one `SessionStart` hook, while [memory](/guides/memory) is on |
+| The agent's own memory | never | never |
 | Sessions (the agent's own conversation records) | yes, through the agent | rename and delete, through the agent, when you ask |
 | Codex `auth.json` | never | never |
 
@@ -246,7 +247,7 @@ Claude Code's own inventory files are never written by Coffer. When the `claude`
 
 ## Hooks
 
-The **Hooks** tab shows every hook the agent will run, read straight from the agent's files: each hook's event, matcher, command and where it comes from — one of the agent's own settings files, or a plugin (by name). Only plugins that are switched on are included, since a disabled plugin's hooks do not run. Hooks set in a project's own settings are not shown, because Coffer does not know which repositories you use the agent in. Coffer installs no hook of its own.
+The **Hooks** tab shows every hook the agent will run, read straight from the agent's files: each hook's event, matcher, command and where it comes from — one of the agent's own settings files, or a plugin (by name). Only plugins that are switched on are included, since a disabled plugin's hooks do not run. Hooks set in a project's own settings are not shown, because Coffer does not know which repositories you use the agent in. While [memory](/guides/memory) is on, the list includes Coffer's one session-start hook, which runs `coffer memory session-start`.
 
 | | Claude Code | Codex |
 | --- | --- | --- |
@@ -270,12 +271,12 @@ The agent record carries the model binding that provider projection writes into 
 
 ## The agent page in the web UI
 
-The agent page is addressed by the agent's type (`/agents/claude_code`, `/agents/codex`). Its header holds the agent's mark, its name, one status pill and a **⋯** menu — no line under the name — and it never turns into a fix button. Below it are eight tabs, none carrying a count. Six sit in the strip, each at its own address: **Overview** (`/agents/<type>`), **Skills**, **MCP servers**, **Hooks**, **Config files** and **Sessions** (`…/skills`, `…/mcp-servers`, `…/hooks`, `…/config`, `…/sessions`). **More** holds the two least used, **Plugins** and **Memory** (`…/plugins`, `…/memory`); while one of them is open, **More** reads its name and carries the underline, and a warning dot on **More** says a tab inside it needs a look. There is no Model tab.
+The agent page is addressed by the agent's type (`/agents/claude_code`, `/agents/codex`). Its header holds the agent's mark, its name, one status pill and a **⋯** menu — no line under the name — and it never turns into a fix button. Below it are seven tabs, none carrying a count. Six sit in the strip, each at its own address: **Overview** (`/agents/<type>`), **Skills**, **MCP servers**, **Hooks**, **Config files** and **Sessions** (`…/skills`, `…/mcp-servers`, `…/hooks`, `…/config`, `…/sessions`). **More** holds the least used, **Plugins** (`…/plugins`); while it is open, **More** reads its name and carries the underline, and a warning dot on **More** says it needs a look. There is no Model tab.
 
 **Overview** is one column, top to bottom:
 
 1. **Connection** — the [connection's](#connect-an-agent-to-coffer) gateway entry and the one button the state calls for.
-2. **What this agent can use** — six tiles, three by two: **MCP servers**, **Skills**, **Config files**, **Plugins**, **Hooks** and **Memory**. Each shows its count, one fact and, when something of the agent's own waits for a look, a warning "N to review"; the whole tile opens its tab.
+2. **What this agent can use** — five tiles: **MCP servers**, **Skills**, **Config files**, **Plugins** and **Hooks**. Each shows its count, one fact and, when something of the agent's own waits for a look, a warning "N to review"; the whole tile opens its tab.
 3. **Model** — **Provider**, **Model** and **Route** (through Coffer's proxy, with **Test**, or direct), and **Change…**.
 4. **Details** — **Version**, **Config directory**, **UID** and **Registered**. An agent's name is its type, so there is no name or title to edit.
 
@@ -291,14 +292,7 @@ The agent page is addressed by the agent's type (`/agents/claude_code`, `/agents
 
 Under **Model**, Coffer tests the provider with the chosen model by itself, the way the agent will call it (Claude Code always over the Anthropic-compatible API, so a provider that serves only the OpenAI-compatible one fails here) — **Testing connection…**, then **Connection OK** with how long it took, or **Connection failed** with the reason and **Retry**. **Review changes** stays off until the test for exactly this provider and model has passed (the built-in login needs none), and a line beside it says why. It then opens the exact lines each file will gain or lose, with a note that only those lines change and a backup copy is kept in Coffer's folder; **Apply** writes them.  If a file changed on disk after the review was drawn — the agent rewrote it, or you edited it — Apply refuses, writes nothing, says which file changed and offers **Reload preview**. After a successful Apply, a notice says the change takes effect once you restart that agent; sessions already open keep the old setting. A link from a provider's **Used by** list (**Codex › Change model**) opens this form on arrival.
 
-### Native memory and sessions
-
-The **Memory** tab lists the agent's own memory stores, read-only:
-
-- **Claude Code:** one store per project at `<config_dir>/projects/<slug>/memory/`, labelled with the real project directory.
-- **Codex:** the global `<config_dir>/memories/MEMORY.md`, split into one row per project it routes task groups to (shown here, though memory sync does not read it), and, for v2 memory, `<config_dir>/memories_v2/memory_summary.md`, one row per project its listed work was done in.
-
-Opening a row shows the store's files in a file tree with a read-only preview. While [memory sync](/guides/memory) is on, the stores also hold what Coffer wrote from your other agents: a marked block in `MEMORY.md` for Claude Code, `extensions/coffer/` in each of Codex's memory folders. What Coffer syncs, and where each copy went, is on the **Memory** page.
+### Sessions
 
 The **Sessions** tab lists the agent's own sessions — the ones you ran in a terminal or an app, and the ones a [channel](/guides/channels) started — with title, agent, working directory and last activity. Coffer asks the agent itself for the list (Claude Code's session listing, Codex's `thread/list`) and does not parse the agent's files. Search matches the title and the directory. A session that belongs to a channel conversation also shows its channel, **Running** while its turn runs, with an inline **Stop**.
 
@@ -308,9 +302,7 @@ The **⋯** menu has **Rename** and **Delete…**, both done by the agent on its
 
 Claude Code deletes sessions it has not touched for `cleanupPeriodDays` (about 30 days by default), and a session that is gone drops off this list. Raise it in Claude Code's `settings.json` to keep sessions longer; see [Conversations](/guides/chat#chat-and-the-agent-s-own-sessions).
 
-Native memory stores are plain files; the **Memory** tab shows each store's folder, and you can read the files with your own tools.
-
-Coffer shows no session text: the agent's own interface is where a session is read. Coffer never writes, stores or sends sessions anywhere, and in native memory it writes only its own memory-sync copies.
+Coffer shows no session text: the agent's own interface is where a session is read. Coffer never writes, stores or sends sessions anywhere, and never reads or writes an agent's own memory.
 
 ## Skills on an agent
 

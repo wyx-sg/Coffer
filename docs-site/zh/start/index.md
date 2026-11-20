@@ -41,7 +41,7 @@ Coffer 管理的一切都是**资源**，共六种**类型**。每个资源都�
 | `channel` | 一个 Telegram 或 SeaTalk 机器人，让你在手机上和智能体聊天 | [消息渠道](/zh/guides/channels) |
 | `provider` | 一份模型提供商配置（协议、base URL、密钥），由 Coffer 写入每个智能体的配置 | [模型提供商](/zh/guides/providers) |
 
-Coffer 还提供一些不属于资源类型的能力：加密的[密钥存储](/zh/guides/secret-store)、一个 Web 版[对话](/zh/guides/chat)页面、[活动与审计](/zh/guides/activity)记录、智能体之间的[记忆同步](/zh/guides/memory)，以及通过你自己的 git 远端进行的[保险库同步](/zh/guides/vault-sync)。
+Coffer 还提供一些不属于资源类型的能力：加密的[密钥存储](/zh/guides/secret-store)、一个 Web 版[对话](/zh/guides/chat)页面、[活动与审计](/zh/guides/activity)记录、你所有智能体共用的一份[记忆](/zh/guides/memory)，以及通过你自己的 git 远端进行的[保险库同步](/zh/guides/vault-sync)。
 
 ## 在哪里使用 {#where-you-use-it}
 

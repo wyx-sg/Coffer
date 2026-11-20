@@ -90,7 +90,7 @@ Not every event is audited. The log keeps changes that land outside Coffer (a fi
 coffer log audit                                   # newest 50
 coffer log audit --kind mcp_server --name filesystem
 coffer log audit --event-type secret_resolved --since 2026-09-01T00:00:00Z
-coffer log audit --event-type memory_synced --limit 20
+coffer log audit --event-type memory_hook_installed --limit 20
 coffer log audit --nature use --since 1d          # only secret uses
 coffer log audit --trace 44e10b60da1b4f26         # one request's or turn's rows
 coffer log audit --json

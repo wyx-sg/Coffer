@@ -1301,7 +1301,8 @@ newest release it MUST say so and change nothing.
 `~/.coffer` and then stop the daemon, so uninstalling is one action instead of a
 list of manual steps. In order, it MUST take the model-provider routing out of
 every agent's settings, disconnect every agent (its MCP entry),
-remove every skill link Coffer delivered with its delivery records, keep any
+remove every skill link Coffer delivered with its delivery records, remove
+Coffer's memory hook from every agent, keep any
 reconcile pass from restoring them, remove the start-at-login job, remove the
 terminal launch files Coffer wrote, remove the installer's `PATH` lines (the
 `# Added by Coffer installer` marker and the line after it) from the shell
@@ -1325,9 +1326,9 @@ daemon has exited. The command line MUST NOT touch the Keychain, which only the
 daemon owns: it MUST say that the master key's Keychain items stay.
 
 #### Scenario: uninstall removes every footprint and keeps the vault
-- **GIVEN** a connected agent with a provider switch, two delivered skills, start at login on and the installer's `PATH` line in `~/.zshrc`
+- **GIVEN** a connected agent with a provider switch, two delivered skills, Coffer's memory hook, start at login on and the installer's `PATH` line in `~/.zshrc`
 - **WHEN** `POST /api/v1/daemon/uninstall` is called without `delete_data`
-- **THEN** the agent's MCP entry and provider keys are gone, the skill links are gone, the launch agent is gone, the `PATH` line and its marker are gone and `~/.coffer/bin` is gone
+- **THEN** the agent's MCP entry and provider keys are gone, the skill links are gone, the memory hook is gone while the agent's own hooks stay, the launch agent is gone, the `PATH` line and its marker are gone and `~/.coffer/bin` is gone
 - **AND** the answer lists each step and the daemon stops, while `~/.coffer/vault` is unchanged
 
 #### Scenario: deleting the data needs a presence grant

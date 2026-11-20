@@ -29,7 +29,7 @@ This page explains the decisions that shape Coffer, for readers deciding whether
 
 - You can keep editing `~/.claude/settings.json` or `~/.codex/config.toml` by hand, and Coffer shows your changes straight away.
 - Removing Coffer leaves your agents working. Uninstall Coffer's MCP entry and the agents go back to their own configuration.
-- Coffer never edits a memory an agent wrote. When memory sync is on, it adds only files of its own beside the agent's memories, and **Undo sync** removes them.
+- Coffer never reads or writes an agent's own memory. With memory on, it adds one session-start hook to each agent, beside the agent's own hooks, and removes it when memory is off.
 
 ## One MCP endpoint instead of one config per agent
 

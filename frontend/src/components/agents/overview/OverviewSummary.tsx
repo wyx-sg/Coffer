@@ -1,6 +1,6 @@
-// src/components/agents/overview/OverviewSummary.tsx — "What this agent can use": six tiles, each opening its tab (board 2.1.08).
+// src/components/agents/overview/OverviewSummary.tsx — "What this agent can use": five tiles, each opening its tab (board 2.1.08).
 //
-// MCP servers, Skills, Config files, Plugins, Hooks and Memory — a 3×2 grid of
+// MCP servers, Skills, Config files, Plugins and Hooks — a grid of
 // cards, each a name with its icon and a chevron, the count in big type, one
 // fact line and, when something of the agent's own waits for a look, a warning
 // "N to review". Every number comes from useAgentCounts, the same queries the

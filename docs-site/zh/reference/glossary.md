@@ -73,7 +73,7 @@ Coffer 自带并自行维护的技能。它是 Coffer 给智能体的说明书�
 
 ### 守护进程（Daemon） {#daemon}
 
-在 `127.0.0.1` 上长期运行的 Coffer 进程。它拥有全部状态，提供管理 API、Web 界面和 MCP 端点，并运行各项维护任务。CLI 和 [shim](#shim) 发现它没在运行时会启动它。见[运行守护进程](/zh/guides/daemon)和[守护进程与进程](/zh/architecture/daemon)。
+在 `127.0.0.1` 上长期运行的 Coffer 进程。它拥有全部状态，提供管理 API、Web 界面和 MCP 端点，并运行各项后台任务。CLI 和 [shim](#shim) 发现它没在运行时会启动它。见[运行守护进程](/zh/guides/daemon)和[守护进程与进程](/zh/architecture/daemon)。
 
 ### `daemon.json` {#daemon-json}
 
@@ -81,7 +81,7 @@ Coffer 自带并自行维护的技能。它是 Coffer 给智能体的说明书�
 
 ### 投递（Delivery） {#delivery}
 
-把 Coffer 保存的东西送进智能体：[技能](#skill)通过[绑定](#binding)送达。记忆不投递进会话：[记忆同步](#memory-sync)把它写进智能体自己的[原生记忆](#native-memory)，由智能体自己加载。见[技能](/zh/guides/skills)。
+把 Coffer 保存的东西送进智能体：[技能](#skill)通过[绑定](#binding)送达。记忆在每个会话开始时由[记忆钩子](#memory-hook)交给会话。见[技能](/zh/guides/skills)。
 
 ### 目的地（Destination） {#destination}
 
@@ -101,7 +101,7 @@ Coffer 发送密钥明文的地方：MCP 服务器的环境变量或 HTTP 请求
 
 ### 中心库（Hub） {#hub}
 
-[保险库](#vault)里的 `memory/` 文件夹，保存你的智能体在任意一台机器上为自己写下的每条记忆：每条记忆一个 Markdown 文件，放在它所属的项目（以仓库的远端命名）下。[保险库同步](#vault-sync)在机器之间传送它；只有记忆来源的那台机器会修改它的文件。见[记忆](/zh/guides/memory#the-hub)。
+[保险库](#vault)里的 `memory/projects/` 文件夹，保存所有智能体共用的记忆：每个项目（以仓库的远端命名）一个文件夹，每个主题一个 Markdown 文件，由智能体自己写。[保险库同步](#vault-sync)在机器之间传送它。见[记忆](/zh/guides/memory#the-hub)。
 
 ## I {#i}
 
@@ -147,15 +147,15 @@ Coffer 发送密钥明文的地方：MCP 服务器的环境变量或 HTTP 请求
 
 你在 Coffer 中注册的上游 Model Context Protocol 服务器，通过 stdio 或 HTTP 连接。它是类型为 `mcp_server` 的[资源](#resource)，它的工具以 `<server>__<tool>` 的形式到达智能体。见 [MCP 服务器](/zh/guides/mcp-servers)。
 
-### 记忆同步（Memory sync） {#memory-sync}
+### 记忆钩子（Memory hook） {#memory-hook}
 
-一种[维护任务](#upkeep-pass)：读取每个已注册智能体的[原生记忆](#native-memory)，把每个智能体在本机写下的内容发布到[中心库](#hub)，并把其他智能体和其他机器的记忆写进每个智能体自己的记忆，成为智能体自己加载和整理的文件。Coffer 只碰自己的副本。默认开启，每小时一次，也可以用**立即同步**随时运行；首次或大量同步会先作为预览等待确认。见[记忆](/zh/guides/memory)。
+记忆开启时，Coffer 在每个已注册智能体里保留的那一个 `SessionStart` 钩子。它运行 `coffer memory session-start`，把会话所在项目的记忆从[中心库](#hub)打印出来，最多约 4 KB。Coffer 把它加在智能体自己的钩子旁边，只移除自己的那个。见[记忆](/zh/guides/memory)。
 
 ## N {#n}
 
 ### 原生记忆（Native memory） {#native-memory}
 
-智能体保存在自己文件里的记忆，比如 Claude Code 按项目划分的记忆目录。[记忆同步](#memory-sync)读取它，把智能体写下的内容发布到[中心库](#hub)，并在旁边写入其他智能体记忆的副本。智能体页面以只读方式显示它。见[记忆](/zh/guides/memory)。
+智能体保存在自己文件里的记忆，比如 Claude Code 的自动记忆。Coffer 不读也不写它；是否在[中心库](#hub)之外继续开着它，由你决定。见[记忆](/zh/guides/memory#your-agents-own-memory)。
 
 ## O {#o}
 
@@ -237,7 +237,7 @@ Coffer 保存的五类状态之一，每类在 `~/.coffer` 下有自己的位置
 
 ### 整理（Tidy） {#tidy}
 
-[知识集](#collection)上的按钮（列表页上还有**整理全部**），它会在你的首选终端里启动默认的交接智能体，并把一条提示作为第一条消息发给它，让它按 `coffer-guide` 技能，依照知识集自己的[规则文件](#rules-file)整理它，并修好失效链接。没有可用的托管智能体时，它提供可复制的提示。智能体的编辑记成一次带着汇报的改动，**撤销这次整理…**可以把它放回去。整理由你的智能体来做，Coffer 自己从不主动整理。记忆没有整理按钮：每个智能体整理自己的记忆。见[知识](/zh/guides/knowledge)。
+[知识集](#collection)上的按钮（列表页上还有**整理全部**），以及记忆页上的按钮，它会在你的首选终端里启动默认的交接智能体，并把一条提示作为第一条消息发给它，让它按 `coffer-guide` 技能，依照知识集自己的[规则文件](#rules-file)整理它，并修好失效链接。没有可用的托管智能体时，它提供可复制的提示。智能体的编辑记成一次带着汇报的改动，**撤销这次整理…**可以把它放回去。整理由你的智能体来做，Coffer 自己从不主动整理。记忆的整理以同样的方式作用于[中心库](#hub)。见[知识](/zh/guides/knowledge)和[记忆](/zh/guides/memory#tidying)。
 
 ### 分层（Tiering） {#tiering}
 
@@ -263,7 +263,7 @@ Coffer 保存的五类状态之一，每类在 `~/.coffer` 下有自己的位置
 
 ### 维护任务（Upkeep pass） {#upkeep-pass}
 
-Coffer 按定时器、无需要求就做的机械性工作：[记忆同步](#memory-sync)，以及知识的扫描（重新渲染指南、提交磁盘上的编辑）。它们都不调用模型。记忆同步可以在记忆页面**立即同步**的 **▾** 里关闭或调整时间。见[记忆](/zh/architecture/memory#the-sync-pass)和[知识](/zh/architecture/knowledge#the-sweep)。
+Coffer 按定时器、无需要求就做的机械性工作：知识的扫描（重新渲染指南、提交磁盘上的编辑）。它不调用模型，也没有开关。见[知识](/zh/architecture/knowledge#the-sweep)。
 
 ### 上传文件夹（Uploads folder） {#uploads-folder}
 

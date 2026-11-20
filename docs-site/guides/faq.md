@@ -22,7 +22,7 @@ See [Security model](/architecture/security).
 
 ## Which agents does Coffer support?
 
-Coffer manages **Claude Code** and **Codex**: it detects them, installs its MCP entry into them, delivers skills, syncs memory between them, projects model providers into their configuration, and can run them from [Conversations](/guides/chat) and [Channels](/guides/channels).
+Coffer manages **Claude Code** and **Codex**: it detects them, installs its MCP entry into them, delivers skills, keeps one memory for them, projects model providers into their configuration, and can run them from [Conversations](/guides/chat) and [Channels](/guides/channels).
 
 Any other MCP client that can launch a stdio server can still use Coffer's gateway by running `coffer-mcp-shim`. Such a session reports no agent identity, so it sees only servers whose reach is not restricted to particular agents. See [Connect a client](/guides/connect-a-client).
 
@@ -32,9 +32,9 @@ Releases, the one-line installer and the desktop app are built for **macOS on Ap
 
 ## Does Coffer run a language model?
 
-No model runs inside Coffer, with one optional exception: transcribing voice messages, which calls a model provider you pick under **Settings › General → Speech to text**. Until you pick one, voice messages reach the agent as audio files. Tidying knowledge is your agent's job: **Tidy** on a knowledge collection opens a conversation with your default agent and sends it the instructions. Curating memory is each agent's own, with its own model and on its own schedule; Coffer does not start it.
+No model runs inside Coffer, with one optional exception: transcribing voice messages, which calls a model provider you pick under **Settings › General → Speech to text**. Until you pick one, voice messages reach the agent as audio files. Tidying knowledge is your agent's job: **Tidy** on a knowledge collection opens a conversation with your default agent and sends it the instructions. Tidying memory works the same way: **Tidy** on the Memory page hands the prompt to your agent.
 
-Everything else is deterministic and local. `coffer__search_tools` ranks tools by keyword, agents find knowledge with their own file tools and memory in their own memory, and nothing is embedded. See [Model providers](/guides/providers).
+Everything else is deterministic and local. `coffer__search_tools` ranks tools by keyword, agents find knowledge and memory with their own file tools, and nothing is embedded. See [Model providers](/guides/providers).
 
 ## What does it cost?
 
@@ -51,11 +51,11 @@ With per-agent configuration you register, update and secure every server once p
 - every call is recorded (without its arguments) for [Activity](/guides/activity);
 - a large catalogue is listed within a budget, and agents find the rest with `coffer__search_tools`.
 
-Skills, knowledge and model providers work the same way: kept once, delivered to every agent. Memory is synced: what one agent learns is copied into the others' own memory. See [Why Coffer](/start/why-coffer).
+Skills, knowledge and model providers work the same way: kept once, delivered to every agent. Memory too: what one agent learns is in one place every agent reads. See [Why Coffer](/start/why-coffer).
 
 ## Does Coffer change my agents' configuration files?
 
-Only when you ask it to, and each change is recorded in the audit log. Connecting an agent to Coffer writes one MCP server entry into the agent's configuration. Delivering a skill places a link to it in the agent's skills directory (for Claude Code, `~/.claude/skills`). Switching a model provider writes the provider's settings into the agent's own configuration. With the experimental Memory feature on, [memory sync](/guides/memory) writes copies of your other agents' memories into each agent's memory, in files Coffer owns, and never changes a memory the agent wrote itself; **Undo sync…** removes the copies. See [Agents](/guides/agents).
+Only when you ask it to, and each change is recorded in the audit log. Connecting an agent to Coffer writes one MCP server entry into the agent's configuration. Delivering a skill places a link to it in the agent's skills directory (for Claude Code, `~/.claude/skills`). Switching a model provider writes the provider's settings into the agent's own configuration. With the experimental Memory feature on, Coffer adds one session-start hook to each agent, beside your own hooks, that hands a session its project's [memories](/guides/memory); it never reads or writes the agent's own memory. See [Agents](/guides/agents).
 
 ## Do I have to start the daemon myself?
 

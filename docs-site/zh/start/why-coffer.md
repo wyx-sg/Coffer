@@ -29,7 +29,7 @@ description: Coffer 背后的设计决策（本地优先、智能体文件是事
 
 - 你可以继续手动编辑 `~/.claude/settings.json` 或 `~/.codex/config.toml`，Coffer 会立刻显示你的改动。
 - 移除 Coffer 后，智能体照常工作。卸掉 Coffer 的 MCP 条目，智能体就回到它们自己的配置。
-- Coffer 从不修改智能体自己写的记忆。开启记忆同步后，它只在智能体的记忆旁边添加自己的文件，**撤销同步**会把它们移除。
+- Coffer 从不读写智能体自己的记忆。开启记忆后，它在每个智能体里加一个会话开始钩子，放在智能体自己的钩子旁边，关闭记忆时移除。
 
 ## 一个 MCP 端点，而不是每个智能体一份配置 {#one-mcp-endpoint-instead-of-one-config-per-agent}
 

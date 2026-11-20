@@ -1,7 +1,7 @@
 // src/components/agents/AgentOverviewTab.tsx — the agent detail page's Overview tab (boards 2.1.08–2.1.14).
 //
 // One column, 920 wide: Connection (its one fix at the title's right) → What
-// this agent can use (six tiles) → Model (with Change…) → Details. Detection
+// this agent can use (five tiles) → Model (with Change…) → Details. Detection
 // wins: an agent whose program is gone replaces the tab with the config-left-
 // behind or not-found sections. Every write goes through `actions`, which the
 // page wires to its dialogs.

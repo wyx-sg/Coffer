@@ -21,8 +21,8 @@ integrations against Coffer. For how the gateway works internally, see
 | [`coffer__channel_notify`](#coffer-channel-notify) | Send the owner a message, and files, in their direct chat with a channel. | Always. |
 
 Those three are the whole list. There is no tool for asking the owner a question: an agent asks in its reply, and the owner's next message is the answer. Coffer's knowledge, memory and its own records have no
-tool: agents change and read knowledge with their own file tools, reach memory through their
-own native memory, and read the records with the `coffer` command line. See
+tool: agents change and read knowledge and memory with their own file tools, and read the
+records with the `coffer` command line. See
 [Knowledge, memory and logs without a tool](#memory-and-logs-without-a-tool).
 
 ::: tip Names inside your agent
@@ -283,9 +283,8 @@ Coffer has no tool for knowledge, memory or its own records, because an agent ca
 already do all of them with what it has. To add knowledge, write a Markdown file into a
 collection where its rules file says, as the `coffer-guide` skill describes. Coffer
 moves no file: a document stays where it was written. To change a document,
-edit the file in place. Memory needs no tool at all: an agent
-keeps writing its own memory, and [memory sync](/guides/memory) writes what your other agents
-learned into that same memory, which the agent loads itself.
+edit the file in place. Memory is the same: an agent writes a line into a topic file
+in the memory hub, and each session is handed its project's memories at start by a hook.
 
 | To find | Do this |
 | --- | --- |

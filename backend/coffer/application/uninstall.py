@@ -103,6 +103,7 @@ class UninstallService:
         reconciler: _Reconciler,
         machine: MachineSteps,
         run_blocking: Callable[[FileStep], Awaitable[Sequence[str]]],
+        memory_hooks: Callable[[Resource], Awaitable[bool]] | None = None,
     ) -> None:
         self._agents = agents
         self._providers = providers
@@ -111,6 +112,7 @@ class UninstallService:
         self._reconciler = reconciler
         self._machine = machine
         self._blocking = run_blocking
+        self._memory_hooks = memory_hooks
 
     async def run(self, *, actor: str) -> UninstallReport:
         report = UninstallReport()
@@ -119,6 +121,8 @@ class UninstallService:
             await self._each_agent(report, "provider_routing", agents, self._unroute(actor))
             await self._each_agent(report, "agent_connections", agents, self._disconnect(actor))
             await self._each_agent(report, "skill_links", agents, self._unlink)
+            if self._memory_hooks is not None:
+                await self._each_agent(report, "memory_hooks", agents, self._memory_hooks)
             self._reconciler.freeze()
         for key, step in (
             ("login_job", self._machine.login_job),

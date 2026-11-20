@@ -115,7 +115,7 @@ is a [resource](#resource) of kind `provider`. See [Model providers](/guides/pro
 ### Daemon
 
 The long-running Coffer process on `127.0.0.1`. It owns all state, serves the management
-API, the web UI and the MCP endpoint, and runs the upkeep workers. The CLI and the
+API, the web UI and the MCP endpoint, and runs the background workers. The CLI and the
 [shim](#shim) start it when it is not running. See [Running the daemon](/guides/daemon) and
 [Daemon and processes](/architecture/daemon).
 
@@ -129,8 +129,7 @@ name and the experimental-feature switches. See [Files and directories](/referen
 ### Delivery
 
 Getting something Coffer holds into an agent: a [skill](#skill) by [binding](#binding). Memory
-is not delivered into a session: [memory sync](#memory-sync) writes it into the agent's own
-[native memory](#native-memory), which the agent loads itself. See [Skills](/guides/skills).
+is handed to each session at start by the [memory hook](#memory-hook). See [Skills](/guides/skills).
 
 ### Destination
 
@@ -158,10 +157,9 @@ A capability that ships switched off and can be switched on per machine. Two are
 
 ### Hub
 
-The folder `memory/` in the [vault](#vault) that holds every memory your agents wrote for
-themselves, on any of your machines: one Markdown file per memory, under its
-project (named by its repository's remote). [Vault sync](#vault-sync) carries it between
-machines; only the machine a memory came from changes its file. See [Memory](/guides/memory#the-hub).
+The folder `memory/projects/` in the [vault](#vault) that holds the memory every agent shares:
+one folder per project (named by its repository's remote) and one Markdown file per topic,
+written by the agents themselves. [Vault sync](#vault-sync) carries it between machines. See [Memory](/guides/memory#the-hub).
 
 ## I
 
@@ -229,23 +227,20 @@ An upstream Model Context Protocol server you register with Coffer, over stdio o
 is a [resource](#resource) of kind `mcp_server`, and its tools reach agents as
 `<server>__<tool>`. See [MCP servers](/guides/mcp-servers).
 
-### Memory sync
+### Memory hook
 
-The [upkeep pass](#upkeep-pass) that reads every registered agent's
-[native memory](#native-memory), publishes what each agent wrote on this machine to the
-[hub](#hub), and writes every other agent's and machine's memories into each agent's own
-memory, as files the agent loads and curates itself. Coffer touches only its own copies. On by
-default, hourly, and on demand with **Sync now**; the first or a large sync waits as a preview.
+The one `SessionStart` hook Coffer keeps in each registered agent while memory is on. It runs
+`coffer memory session-start`, which prints the session's project memories from the [hub](#hub),
+up to about 4 KB. Coffer adds it beside the agent's own hooks and removes only its own.
 See [Memory](/guides/memory).
 
 ## N
 
 ### Native memory
 
-The memory an agent keeps in its own files, such as Claude Code's per-project memory
-directory. [Memory sync](#memory-sync) reads it, publishes what the agent wrote to the
-[hub](#hub), and writes copies of other agents' memories beside it. The agent's page shows it
-read-only. See [Memory](/guides/memory).
+The memory an agent keeps in its own files, such as Claude Code's auto memory. Coffer neither
+reads nor writes it; whether to keep it on beside the [hub](#hub) is your choice.
+See [Memory](/guides/memory#your-agents-own-memory).
 
 ## O
 
@@ -381,11 +376,11 @@ the target asks again. See [Secrets](/guides/secrets#approvals).
 ### Tidy
 
 The button on a knowledge [collection](#collection) (and
-**Tidy all** on the list page) that starts your default hand-off agent in your preferred terminal,
+**Tidy all** on the list page), and on the Memory page, that starts your default hand-off agent in your preferred terminal,
 with a prompt to tidy the collection by its own [rules file](#rules-file) and fix its broken links, following the `coffer-guide`
 skill, sent as the session's first message. When no managed agent is available, it offers the prompt to copy. The agent's edits land as
 one change carrying its report, which **Undo this tidy…** puts back. Coffer does the
-tidying through your agent, never on its own. Memory has no Tidy: each agent curates its own. See [Knowledge](/guides/knowledge).
+tidying through your agent, never on its own. Memory's Tidy works the same way over the [hub](#hub). See [Knowledge](/guides/knowledge) and [Memory](/guides/memory#tidying).
 
 ### Tiering
 
@@ -420,10 +415,9 @@ agent's page lists them so you can [adopt](#adopt) or discard them. See [Skills]
 
 ### Upkeep pass
 
-Mechanical work Coffer does on a timer, without being asked: the [memory sync](#memory-sync),
-and the sweep for knowledge (re-render the guide, commit edits made on disk). None of them calls a model. The memory sync can be switched
-off or retimed from the **▾** on **Sync now** on the Memory page.
-See [Memory](/architecture/memory#the-sync-pass) and [Knowledge](/architecture/knowledge#the-sweep).
+Mechanical work Coffer does on a timer, without being asked: the sweep for knowledge
+(re-render the guide, commit edits made on disk). It calls no model and has no switch.
+See [Knowledge](/architecture/knowledge#the-sweep).
 
 ### Uploads folder
 

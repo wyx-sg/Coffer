@@ -152,10 +152,11 @@ Claude Code 会删除超过 `cleanupPeriodDays` 没有动过的会话，**默认
 
 在智能体自己的系统提示词之后，Coffer 按以下顺序追加：
 
-1. 一段说明，告诉智能体它在聊天渠道上，怎么发文件、要在回复里一次问完所有问题，以及它不能点你电脑上的对话框；接着在 "Reply style:" 标题下追加这类聊天的回复风格：Coffer 的默认风格，或者你改写的版本（见[系统提示词和回复风格](/zh/guides/channels#your-own-system-prompts)）。
-2. 说明 Coffer 让智能体用的是哪个模型。
+1. 项目的[记忆](/zh/guides/memory)：记忆开启、工作目录在一个有记忆的仓库里时。这时智能体自己的会话开始钩子不输出，记忆不会交两次。
+2. 一段说明，告诉智能体它在聊天渠道上，怎么发文件、要在回复里一次问完所有问题，以及它不能点你电脑上的对话框；接着在 "Reply style:" 标题下追加这类聊天的回复风格：Coffer 的默认风格，或者你改写的版本（见[系统提示词和回复风格](/zh/guides/channels#your-own-system-prompts)）。
+3. 说明 Coffer 让智能体用的是哪个模型。
 
-从对话页面打开或用**新建对话**开启的会话在你的终端里运行，在 Coffer 之外，所以这两段说明都不追加。两种情况下记忆都以同样的方式到达智能体：通过智能体自己的记忆，[记忆同步](/zh/guides/memory)把你其他智能体学到的东西写进去。
+从对话页面打开或用**新建对话**开启的会话在你的终端里运行，在 Coffer 之外，所以这些都不追加；它的记忆通过 Coffer 加到智能体里的钩子到达。
 
 ::: danger 完全权限
 消息渠道的轮次以 `bypassPermissions` 运行 Claude Code，以 `approvalPolicy: never` 和 `sandbox: danger-full-access` 运行 Codex。Coffer 不会让你逐个批准工具调用。把消息渠道配对到你自己的账号，就是来自 IM 的轮次的关卡；见[消息渠道](/zh/guides/channels#security)。

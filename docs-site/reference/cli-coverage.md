@@ -25,8 +25,6 @@ Every management operation a person does on a Coffer page or in the desktop app 
 | Command line only · import several agents' entries at once | `POST /agents/mcp-import/apply` | `coffer agent mcp-import apply` | `test_cli_parity.py` |
 | MCP servers · first-run · the agents' own servers | `POST /agents/mcp-import/plan` | `coffer agent mcp-import plan` | `test_cli_parity.py` |
 | Agents · model picker | `GET /agent-providers/{agent_key}/models` | `coffer agent models` | `test_cli_parity.py` |
-| Agents · Memory tab · files | `GET /agents/{uid}/native-memory/files` | `coffer agent native-memory files` | `test_cli_parity.py` |
-| Agents · Memory tab | `GET /agents/{uid}/native-memory` | `coffer agent native-memory list` | `test_cli_parity.py` |
 | Agents · Plugins tab | `GET /agents/{uid}/plugins` | `coffer agent plugin list` | `test_cli_parity.py` |
 | Agents · Plugins tab · switch on or off | `PATCH /agents/{uid}/plugins/{plugin_id}` | `coffer agent plugin set` | `test_cli_parity.py` |
 | Agents · Plugins tab · open | `GET /agents/{uid}/plugins/{plugin_id}` | `coffer agent plugin show` | `test_cli_parity.py` |
@@ -149,11 +147,9 @@ Every management operation a person does on a Coffer page or in the desktop app 
 | Settings · Daemon · Rotate token | `POST /daemon/rotate-token` | `coffer daemon rotate-token` | `test_cli_parity.py` |
 | Setup · Check again | `POST /daemon/setup/check` | `coffer daemon setup-check` | `test_cli_parity.py` |
 | Settings · Daemon · status | `GET /daemon/status` | `coffer daemon status` | `test_daemon_status_cmd.py` |
-| Settings · Daemon · passes in flight | `GET /upkeep/runs` | `coffer daemon status` | `test_daemon_status_cmd.py` |
 | Settings · Daemon · upgrade | `GET /daemon/upgrade` | `coffer daemon upgrade` | `test_cli_parity.py` |
 | Settings · About · Check automatically (installer binaries) | `PUT /daemon/upgrade/auto-check` | `coffer daemon upgrade-auto-check` | `test_cli_parity.py` |
 | Settings · About · Check for updates (installer binaries) | `POST /daemon/upgrade/check` | `coffer daemon upgrade-check` | `test_cli_parity.py` |
-| Settings · Daemon · passes in flight | `GET /upkeep/runs` | `coffer daemon upkeep` | `test_cli_parity.py` |
 
 ## `coffer knowledge` {#knowledge}
 
@@ -220,14 +216,11 @@ Every management operation a person does on a Coffer page or in the desktop app 
 
 | UI operation | Route | Command | Acceptance |
 | --- | --- | --- | --- |
-| Memory · Codex imports Claude Code's memories itself | `PUT /memory/sync/codex-import` | `coffer memory codex-import` | `test_cli_parity.py` |
-| Memory · a project's memories | `GET /memory/sync/entries` | `coffer memory entries` | `test_cli_parity.py` |
-| Memory · preview · Cancel | `POST /memory/sync/preview/cancel` | `coffer memory preview-cancel` | `test_cli_parity.py` |
-| Memory · preview · Write | `POST /memory/sync/preview/write` | `coffer memory preview-write` | `test_cli_parity.py` |
-| Memory · a memory | `GET /memory/sync/entries/{entry_id}` | `coffer memory show` | `test_cli_parity.py` |
-| Memory · the page | `GET /memory/sync/state` | `coffer memory state` | `test_cli_parity.py` |
-| Memory · Sync now | `POST /memory/sync/run` | `coffer memory sync` | `test_cli_parity.py` |
-| Memory · Undo sync… | `POST /memory/sync/undo` | `coffer memory undo` | `test_cli_parity.py` |
+| Memory · a memory file | `GET /memory/projects/{project}/{name}` | `coffer memory show` | `test_cli_parity.py` |
+| Memory · the page | `GET /memory` | `coffer memory state` | `test_cli_parity.py` |
+| Memory · Tidy (an agent finishes it) | `POST /memory/tidy/finish` | `coffer memory tidy-finish` | `test_cli_parity.py` |
+| Memory · Tidy (an agent starts it) | `POST /memory/tidy/start` | `coffer memory tidy-start` | `test_cli_parity.py` |
+| Memory · a project's memories | `GET /memory/projects/{project}` | `coffer memory topics` | `test_cli_parity.py` |
 
 ## `coffer model` {#model}
 
@@ -309,7 +302,6 @@ Every management operation a person does on a Coffer page or in the desktop app 
 | Settings · Data · History · Record tool call content | `GET /settings/call-content` | `coffer settings call-content show` | `test_cli_parity.py` |
 | Settings · Engine | `GET /internal-engine-config` | `coffer settings engine show` | `test_cli_parity.py` |
 | Settings · Engine · transcription | `PUT /internal-engine-config/transcribe-model` | `coffer settings engine transcribe-model` | `test_cli_parity.py` |
-| Settings · Engine · upkeep | `PUT /internal-engine-config/upkeep` | `coffer settings engine upkeep` | `test_cli_parity.py` |
 | Settings · Experimental · back to default | `DELETE /daemon/features/{key}` | `coffer settings feature reset` | `test_cli_parity.py` |
 | Settings · Experimental | `PUT /daemon/features/{key}` | `coffer settings feature set` | `test_cli_parity.py` |
 | Settings · Experimental | `GET /daemon/features` | `coffer settings features` | `test_cli_parity.py` |
@@ -437,7 +429,6 @@ Plain files are read and edited with your own tools, and a few acts only make se
 | Route | Why |
 | --- | --- |
 | `GET /agents/{uid}/config-files/{key}/content` | plain file: an agent's config file is its own plain file |
-| `GET /agents/{uid}/native-memory/files/content` | plain file: an agent's native memory is its own plain file |
 | `GET /fs/browse` | the window: the folder picker's own listing |
 | `GET /fs/editors` | the window: which editors the Open in… menu offers |
 | `POST /fs/open` | the window: opens a file in the person's editor |
@@ -449,6 +440,8 @@ Plain files are read and edited with your own tools, and a few acts only make se
 | `GET /knowledge/asset` | plain file: a knowledge picture is a plain file |
 | `DELETE /knowledge/file` | plain file: a knowledge document is a plain file |
 | `GET /knowledge/file` | plain file: a knowledge document is a plain file |
+| `DELETE /memory/projects/{project}/{name}` | plain file: a memory topic is a plain file |
+| `PUT /memory/projects/{project}/{name}` | plain file: a memory topic is a plain file |
 | `GET /secrets/approvals` | the window: a secret's approval is answered on the app's own page |
 | `POST /secrets/approvals/reject` | the window: a secret's approval is answered on the app's own page |
 | `POST /secrets/approvals/{approval_id}/ask-again` | the window: a secret's approval is answered on the app's own page |

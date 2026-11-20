@@ -6,8 +6,9 @@ that renders or splits that block (PyYAML lives in infrastructure).
 
 It is deliberately **not** ``infrastructure/knowledge/frontmatter.py``, which
 strips the body's surrounding newlines and re-adds exactly one. A memory's body
-is an agent's own words carried as they stand (spec memory "Keep memory in one place in the vault"), so ``split(render(fm, body))`` gives that body
-back **byte for byte**, and an unchanged memory never looks changed. The
+is an agent's own words carried as they stand (spec memory "Keep memory in
+one place in the vault"), so ``split(render(fm, body))`` gives that body back
+**byte for byte**, and an unchanged memory never looks changed. The
 import-linter fence between kinds forbids borrowing knowledge's module anyway.
 """
 

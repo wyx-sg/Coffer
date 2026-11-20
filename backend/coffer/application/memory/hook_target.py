@@ -145,6 +145,26 @@ def apply_hook(text: str | None, event: str, command: str | None) -> str:
     return json.dumps(doc, indent=2, ensure_ascii=False) + "\n"
 
 
+def strip_hook(store: _Store, agent: Resource) -> bool:
+    """Take Coffer's hook out of one agent's hooks file, leaving every other
+    hook; whether there was one. The uninstall runs it (spec daemon "Uninstall
+    Coffer from this machine"), after which no reconcile pass puts it back."""
+    cfg = AgentConfig.model_validate(agent.config)
+    hook = descriptor_for(cfg.type).session_hook
+    if hook is None:
+        return False
+    path = spec_for(cfg.type, hook.config_key, cfg.resolved_config_dir()).path
+    before = store.read_text(path)
+    if not installed_commands(before, hook.event):
+        return False
+    store.write_text_atomic(
+        path,
+        apply_hook(before, hook.event, None),
+        expected_fingerprint=store.fingerprint(before),
+    )
+    return True
+
+
 class MemoryHookTarget:
     """Implements ``ReconcileTarget`` for Coffer's session-start hook."""
 
@@ -260,4 +280,5 @@ __all__ = [
     "hook_command",
     "installed_commands",
     "is_ours",
+    "strip_hook",
 ]

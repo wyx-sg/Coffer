@@ -19,7 +19,6 @@ GROUP_HELP: dict[str, str] = {
     "agent plugin": "An agent's plugins: list, show, switch on or off, uninstall.",
     "agent session": "An agent's native sessions: list, rename, delete.",
     "agent unmanaged-skill": "Skills an agent holds that Coffer does not manage.",
-    "agent native-memory": "What an agent keeps in its own memory files (read-only).",
     "app": "The Coffer desktop app.",
     "app update": "Check for, and install, a new version of the desktop app.",
     "attention": "What needs you (the Overview list): list, ignore, un-ignore.",

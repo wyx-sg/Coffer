@@ -13,7 +13,7 @@ Coffer keeps configuration in five places, and each one exists for a reason:
 | --- | --- | --- |
 | Environment variables | Operator escape hatches, test and dev overrides | Read by one process at start-up; nothing persists them |
 | `~/.coffer/daemon-config.json` | Daemon and model-proxy ports, machine name and id, experimental features | Needed before anything else is opened, and machine-local |
-| The vault (`~/.coffer/vault/state/settings/internal-engine.json`) | The speech-to-text model, the memory sync's switch and interval | Settings every machine shares; they travel with [vault sync](/guides/vault-sync) |
+| The vault (`~/.coffer/vault/state/settings/internal-engine.json`) | The speech-to-text model | Settings every machine shares; they travel with [vault sync](/guides/vault-sync) |
 | Local state (`~/.coffer/local/`) | Retention policies, the sync remote, reach | True of this machine only; never synced |
 | Browser `localStorage` | Web UI preferences | Per browser, never sent to the daemon |
 
@@ -201,12 +201,6 @@ The settings for Coffer's own work are one vault document, `state/settings/inter
 | **Transcription provider** / **Transcription model** | off | The connection and model voice messages are transcribed with before an agent sees them. While either is unset, Coffer transcribes nothing. |
 | **Check skills for updates** (Settings → General) | every 6 hours | How often this machine checks Git-imported skills for newer commits in the background: every 6 hours, every day, every week or only when you ask. **Machine-local** (kept in `daemon-config.json`), not synced, and takes effect at once; a skill's own **Check for updates** works in every setting. |
 | **Refresh model prices** | on | Once a day, fetch the latest model price list from genai-prices; off, price from the list shipped in the build. This one is **machine-local** (`price_refresh` in `daemon-config.json`), not synced. |
-
-The memory sync is not in Settings. It is switched and retimed from the **▾** on **Sync now** on the **Memory** page; the interval list runs from 15 minutes to 1 day, and a shorter interval can be set through the settings API down to a floor of 60 seconds.
-
-| Pass | Where | Default | Effect |
-| --- | --- | --- | --- |
-| `memory_sync` | **Memory** header → **▾** on **Sync now** → **Sync memory automatically** | on, every 1 h | Publishes what each agent wrote on this machine to the vault's memory hub and writes the hub into each agent's own memory. The first sync on a machine, and one that would write more than 50 copies, waits as a preview. It calls no model. See [Memory](/guides/memory). |
 
 The knowledge sweep has no setting. While the **Knowledge** [experimental feature](#experimental-features) is on, it runs when a file under `knowledge/` changes and otherwise every 10 minutes: it re-renders the `coffer-guide` skill and commits edits made on disk. It moves no file.
 

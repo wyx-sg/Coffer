@@ -861,8 +861,8 @@ The Agents page in the web UI MUST expose all of these. It renders within the we
 #### Scenario: the agent detail page carries six tabs and a More menu
 - **GIVEN** a registered Claude Code agent with a managed skill, a direct MCP entry, an installed plugin and a `CLAUDE.md` instructions file
 - **WHEN** the user opens `/agents/claude_code`
-- **THEN** the strip reads Overview, Skills, MCP servers, Hooks, Config files and Sessions with no counts, followed by More holding Plugins and Memory, and opening `/agents/claude_code/skills` selects Skills
-- **AND** opening Memory from More makes the trigger read Memory with the underline, and a Plugins tab whose files are gone puts a warning dot on More
+- **THEN** the strip reads Overview, Skills, MCP servers, Hooks, Config files and Sessions with no counts, followed by More holding Plugins, and opening `/agents/claude_code/skills` selects Skills
+- **AND** opening Plugins from More makes the trigger read Plugins with the underline, and a Plugins tab whose files are gone puts a warning dot on More
 - **AND** there is no Model tab, and `/agents/claude_code/model` opens the Overview
 - **AND** Overview shows no Title or Name field, and its tiles for MCP servers, Skills and Plugins each open their tab; Config files lists the instructions file beside the settings files
 

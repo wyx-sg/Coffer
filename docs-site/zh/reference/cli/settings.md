@@ -1,12 +1,12 @@
 ---
 title: coffer settings
-description: "Settings: approvals, secret storage, features, data, upkeep."
+description: "Settings: approvals, secret storage, features, data, engine."
 pageClass: cli-ref
 ---
 
 # coffer settings
 
-Settings: approvals, secret storage, features, data, upkeep.
+Settings: approvals, secret storage, features, data, engine.
 
 ```sh
 coffer settings [OPTIONS] COMMAND [ARGS]...
@@ -28,10 +28,9 @@ coffer settings [OPTIONS] COMMAND [ARGS]...
 | [`settings feature`](#settings-feature) | Switch one experimental feature on this machine. |
 | [`settings feature set`](#settings-feature-set) | Switch a feature. |
 | [`settings feature reset`](#settings-feature-reset) | Forget this machine's choice. |
-| [`settings engine`](#settings-engine) | Coffer's own model: transcription and upkeep passes. |
-| [`settings engine show`](#settings-engine-show) | The engine's transcription model and upkeep passes. |
+| [`settings engine`](#settings-engine) | Coffer's own model: transcription. |
+| [`settings engine show`](#settings-engine-show) | The engine's transcription model. |
 | [`settings engine transcribe-model`](#settings-engine-transcribe-model) | Choose the transcription model. |
-| [`settings engine upkeep`](#settings-engine-upkeep) | Switch or schedule an upkeep pass. |
 | [`settings retention`](#settings-retention) | How long each log is kept. |
 | [`settings retention list`](#settings-retention-list) | How long each log is kept. |
 | [`settings retention set`](#settings-retention-set) | Set how long a log is kept. |
@@ -201,7 +200,7 @@ coffer settings feature reset [OPTIONS] KEY
 
 ## settings engine
 
-Coffer's own model: transcription and upkeep passes.
+Coffer's own model: transcription.
 
 <p class="cli-label">概要</p>
 
@@ -209,11 +208,11 @@ Coffer's own model: transcription and upkeep passes.
 coffer settings engine [OPTIONS] COMMAND [ARGS]...
 ```
 
-子命令：`show`, `transcribe-model`, `upkeep`。
+子命令：`show`, `transcribe-model`。
 
 ## settings engine show
 
-The engine's transcription model and upkeep passes.
+The engine's transcription model.
 
 <p class="cli-label">概要</p>
 
@@ -235,24 +234,6 @@ Choose the transcription model. Body: model.
 
 ```sh
 coffer settings engine transcribe-model [OPTIONS]
-```
-
-<p class="cli-label">参数与选项</p>
-
-| 名称 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- |
-| `--data, -d` <span class="cli-chip">选项</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
-| `--set` <span class="cli-chip">选项</span> | text（可重复） |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
-| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
-
-## settings engine upkeep
-
-Switch or schedule an upkeep pass. Body: pass, enabled, interval_s, use_default_interval.
-
-<p class="cli-label">概要</p>
-
-```sh
-coffer settings engine upkeep [OPTIONS]
 ```
 
 <p class="cli-label">参数与选项</p>

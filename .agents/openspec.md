@@ -163,7 +163,7 @@ nothing about **whose spec** a mechanism is:
 | Retention | `domain/retention.py`, `application/retention_registry.py` / `retention_service.py` / `retention_worker.py` | `resource-framework` |
 | Structured logging | `infrastructure/logging/` | — (the `daemon.log` file itself is `daemon`'s) |
 | Change feed | `application/events/` (`broker.py`, `attention_watch.py`), behind `GET /api/v1/events` | `resource-framework` |
-| Kind-agnostic adapters and vocabulary two kinds share | `infrastructure/net/`, `infrastructure/agent_files/`, `domain/hook_trust.py`, `domain/channel_turn.py` | — |
+| Kind-agnostic adapters and vocabulary two kinds share | `infrastructure/net/`, `domain/channel_turn.py` | — |
 
 Everything else is a per-kind package (`mcp`, `agent`, `skill`, `knowledge`, `channel`, `chat`, `provider`, `memory`, `sync`, plus `secret`, `usage`, `model_proxy` and `vault`) with its own subdir per layer; `chat` and `sync` register no resource kind. There is no `jobs` or `session` module — don't import one.
 

@@ -33,10 +33,11 @@ a file cannot be made to do anything but read a file.
 **Nothing here raises for a broken repository.** A ``gitdir:`` pointing at a
 directory that was deleted, a ``commondir`` climbing past the filesystem root, a
 ``config`` that is unreadable or is not UTF-8 — each is an ordinary state of a
-developer's disk, not an error in Coffer, and spec memory "Keep memory in one place in the vault" already says that *not being in a
-repository* is a normal answer with a normal consequence (no project). A sync
-that crashed on one of them would stop publishing every other agent's memory
-over a stale pointer in a directory nobody has opened in a year.
+developer's disk, not an error in Coffer, and spec memory "Keep memory in one
+place in the vault" already says that *not being in a repository* is a normal
+answer with a normal consequence (no project). A hook that crashed on one of
+them would fail a session over a stale pointer in a directory nobody has opened
+in a year.
 """
 
 from __future__ import annotations

@@ -106,6 +106,7 @@ REMOVED: tuple[tuple[str, str], ...] = (
     ("coffer memory undo", "the Memory page's History (restore a version)"),
     ("coffer memory codex-import", "nothing: Coffer reads no agent's own memory"),
     ("coffer memory entries", "coffer memory topics"),
+    ("coffer agent native-memory", "nothing: Coffer reads no agent's own memory"),
     ("coffer daemon upkeep", "coffer daemon status"),
     ("coffer settings engine upkeep", "nothing: Coffer runs no timed memory pass"),
     ("coffer daemon service", "coffer daemon residency set"),

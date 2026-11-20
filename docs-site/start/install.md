@@ -243,6 +243,7 @@ Either way Coffer takes back everything it wrote outside `~/.coffer`, then stops
 
 - Coffer's MCP entry and model routing in each agent's config;
 - the skill links it delivered into the agents' skill folders;
+- the session-start hook it added to each agent for [memory](/guides/memory);
 - start at login;
 - the command-line tools in `~/.coffer/bin` and the `PATH` lines the installer added to your shell profile;
 - `Coffer.app`, which moves itself to the Trash.

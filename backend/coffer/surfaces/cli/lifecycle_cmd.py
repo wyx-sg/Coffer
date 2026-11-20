@@ -41,6 +41,7 @@ _STEP_LABELS = {
     "provider_routing": "take Coffer's model routing out of the agents",
     "agent_connections": "disconnect the agents",
     "skill_links": "remove the skill links",
+    "memory_hooks": "remove the memory hook",
     "login_job": "turn off start at login",
     "terminal_files": "remove terminal launch files",
     "path_lines": "remove the installer's PATH lines",

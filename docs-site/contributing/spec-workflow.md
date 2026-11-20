@@ -37,7 +37,7 @@ A capability is named and never numbered. Its id is its path under `openspec/spe
 
 | Capability | What it owns |
 | --- | --- |
-| [`agent-registry`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/agent-registry/spec.md) | Registered agents, their config files, MCP install, plugins, model catalogue, native memory and transcripts |
+| [`agent-registry`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/agent-registry/spec.md) | Registered agents, their config files, MCP install, plugins, model catalogue and transcripts |
 | `agent-registry/claude-code`, `agent-registry/codex` | How each agent type realises those facets |
 | [`channels`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/channels/spec.md) | Messaging channels to agents, independent of platform |
 | `channels/telegram`, `channels/seatalk` | The per-platform mechanics |
@@ -46,10 +46,10 @@ A capability is named and never numbered. Its id is its path under `openspec/spe
 | [`daemon`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/daemon/spec.md) | The Coffer process: one per vault, discovery, the loopback HTTP guard, serving the UI, logs, terminal install |
 | [`desktop-app`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/desktop-app/spec.md) | The macOS shell: window, tray, handshake, detect-or-spawn, the `.dmg` |
 | [`experimental-features`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/experimental-features/spec.md) | The feature registry, per-machine switches, closing surfaces |
-| [`internal-engine`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/internal-engine/spec.md) | The speech-to-text model and Coffer's mechanical upkeep passes |
+| [`internal-engine`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/internal-engine/spec.md) | The speech-to-text model |
 | [`knowledge`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/knowledge/spec.md) | Plain-file knowledge collections and tidying |
 | [`mcp-gateway`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/mcp-gateway/spec.md) | Upstream MCP servers aggregated behind one endpoint |
-| [`memory`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/memory/spec.md) | Syncing each agent's native memory into the others' own memory, through a hub in the vault |
+| [`memory`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/memory/spec.md) | One memory for every agent: topic files in the vault the agents write, handed to each session by a hook |
 | [`provider-switching`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/provider-switching/spec.md) | Model provider connections projected into each agent's config |
 | [`resource-framework`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/resource-framework/spec.md) | The kind-agnostic resource model, scope, audit log, retention, the minimal-CLI rule |
 | [`skill-manager`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/skill-manager/spec.md) | The master skill store and delivery to agents |

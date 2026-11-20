@@ -97,7 +97,7 @@ Besides upstream tools, the gateway always offers Coffer's own tool, prefixed `c
 
 Inside a turn Coffer runs (from the **Conversations** page or a channel), the session also gets a turn-scoped tool, `coffer__channel_read_thread`, which reads a chat thread's earlier messages. An agent started in a terminal never sees it. When an agent needs something from you, it asks in its reply and your next message is the answer; there is no ask tool.
 
-There is no knowledge, memory or log tool. Agents read and change knowledge pages, which are Markdown files, with their own file tools, reach memory through their own native memory, and Coffer's records are read with `coffer log audit|mcp|daemon`.
+There is no knowledge, memory or log tool. Agents read and change knowledge pages, which are Markdown files, with their own file tools, read and write memory files the same way, and Coffer's records are read with `coffer log audit|mcp|daemon`.
 
 The gateway takes the calling agent's identity from the MCP handshake. It is not an argument the agent can set.
 
@@ -115,9 +115,9 @@ A **collection** is a folder under `~/.coffer/vault/knowledge/<collection>/` hol
 
 Guide: [Knowledge](/guides/knowledge). Architecture: [Knowledge](/architecture/knowledge).
 
-## Memory sync {#memory-sync}
+## Memory {#memory}
 
-Coffer **syncs** what your agents learned into each other's own memory. Each machine reads its registered agents' native memory and publishes every memory an agent wrote itself into the **hub**, `~/.coffer/vault/memory/`, one file per memory, filed by project (the repository's remote); a memory learned outside any repository stays with its agent; vault sync carries the hub to your other machines. Each machine then writes every hub memory into its other agents, in a form each loads itself: for Claude Code, the text in a marked block of the project's `MEMORY.md`; for Codex, a memory extension folder. Memory is about you, knowledge about the world: to keep a task note as knowledge, ask an agent to write it into a collection. Coffer touches only its own files and never edits a memory an agent wrote; merging and forgetting are each agent's own curation. Coffer puts no memory into a session itself: each agent loads its memory as it always does.
+Coffer keeps one **memory** for every agent: Markdown files in the **hub**, `~/.coffer/vault/memory/projects/<project>/`, one folder per repository (named after its remote) and one file per topic. Agents write the files themselves with their own file tools, following the rules in the `coffer-guide` skill; the format is Coffer's and fixed. When a session starts in a repository, a hook Coffer adds to each agent hands it that project's memories, up to about 4 KB; Coffer's own turns carry the same text in their system prompt. **Tidy** hands an agent a prompt to merge and prune the files, recorded as one change. Vault sync carries the hub to your other machines. Memory is about you, knowledge about the world. Coffer never reads or writes an agent's own memory.
 
 Guide: [Memory](/guides/memory). Architecture: [Memory](/architecture/memory).
 

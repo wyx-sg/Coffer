@@ -225,7 +225,7 @@ class UninstallIn(BaseModel):
 class UninstallStepOut(BaseModel):
     """One step of an uninstall: done, nothing to do, or failed with the reason."""
 
-    #: provider_routing, agent_connections, skill_links, login_job,
+    #: provider_routing, agent_connections, skill_links, memory_hooks, login_job,
     #: terminal_files, path_lines, binaries (and agents when listing failed).
     key: str
     outcome: str
