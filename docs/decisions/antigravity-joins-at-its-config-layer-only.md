@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-11-19
 **Deciders**: Yuxing Wu
-**Related**: [Per-Agent Behaviour Lives in One Descriptor Record per Agent](agent-descriptor-manifest.md), [Agent Mechanisms Are Optional Facets on the Descriptor](agent-mechanisms-are-optional-facets-on-the-descriptor.md), [Coffer Drives Claude Code Through the Agent SDK and Codex Through `codex app-server`](driving-agents-through-sdk-and-app-server.md), [Skills Reach an Agent as a Directory Link to One Master Folder](cross-platform-skill-delivery.md), [Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault](sync-memory-into-each-agents-own-memory.md), spec agent-registry "Support exactly the Claude Code, Codex and Antigravity agent types", spec agent-registry/antigravity
+**Related**: [Per-Agent Behaviour Lives in One Descriptor Record per Agent](agent-descriptor-manifest.md), [Agent Mechanisms Are Optional Facets on the Descriptor](agent-mechanisms-are-optional-facets-on-the-descriptor.md), [Coffer Drives Claude Code Through the Agent SDK and Codex Through `codex app-server`](driving-agents-through-sdk-and-app-server.md), [Skills Reach an Agent as a Directory Link to One Master Folder](cross-platform-skill-delivery.md), [Keep Memory in One Place in the Vault, Written by the Agents Themselves](keep-memory-in-one-place-agents-write-themselves.md), spec agent-registry "Support exactly the Claude Code, Codex and Antigravity agent types", spec agent-registry/antigravity
 
 ## Context
 
