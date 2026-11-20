@@ -93,7 +93,15 @@ def live(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Li
     set_active_token(_TOKEN)
     set_port(port)
     server = uvicorn.Server(
-        uvicorn.Config(app, host="127.0.0.1", port=port, log_level="error", access_log=False)
+        uvicorn.Config(
+            app,
+            host="127.0.0.1",
+            port=port,
+            log_level="error",
+            access_log=False,
+            # A test may leave a notification stream open; do not wait on it for ever.
+            timeout_graceful_shutdown=2,
+        )
     )
     thread = threading.Thread(target=server.run, daemon=True)
     thread.start()
@@ -127,7 +135,10 @@ def live(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Li
         yield Live(base, ledger)
     finally:
         server.should_exit = True
-        thread.join(timeout=10)
+        # The lifespan's shutdown clears the process-wide token, so a server still
+        # winding down would clear the next test's: wait for it, never time out quietly.
+        thread.join(timeout=60)
+        assert not thread.is_alive(), "the daemon thread did not stop"
         set_active_token(None)
 
 
