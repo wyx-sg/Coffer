@@ -40,7 +40,7 @@ Coffer 是一个本地进程，把这些资产只存一份，再通过智能体�
 
 | 部件 | 是什么 |
 | --- | --- |
-| 编程智能体 | Claude Code 和 Codex，Coffer 注册的两种智能体。每个智能体通过 Coffer 写进它配置里的一条 MCP 服务器条目连到 Coffer，并读取 Coffer 投递到它技能目录里的技能。 |
+| 编程智能体 | Claude Code、Codex、Antigravity、Cursor、OpenCode 和 DeepSeek Harness，Coffer 注册的六种智能体。每个智能体通过 Coffer 写进它配置里的一条 MCP 服务器条目连到 Coffer，并读取 Coffer 投递到它技能目录里的技能。 |
 | `coffer-mcp-shim` | 一个很小的 stdio 转 HTTP 转发器，智能体把它当作 MCP 服务器启动。它找到（或启动）守护进程，把 JSON-RPC 转发到 `/mcp`，并在握手里盖上智能体的身份。 |
 | `coffer` CLI | 一个 Typer 应用，界面上的每个操作都有一条对应命令，都从同一个命令注册表登记，另有守护进程的生命周期、`coffer update` 和 `coffer uninstall`、日志和 `coffer run`。每条读写状态的命令都是一次对守护进程的 HTTP 调用；CLI 自己从不打开数据库或密钥存储。 |
 | Web 界面 | 一个 React 单页应用，构建成静态文件，由守护进程在自己的源上提供。 |

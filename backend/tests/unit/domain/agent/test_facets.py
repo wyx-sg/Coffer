@@ -144,6 +144,6 @@ def test_the_probe_is_built_from_the_record_program_name() -> None:
 
     catalog = bind_facets(AGENT_DESCRIPTORS, probe_for=lambda d: _Probe(d.program))
     assert sorted(seen) == sorted(d.program for d in AGENT_DESCRIPTORS.values())
-    assert {"claude", "codex", "cursor-agent", "opencode", "dsh"} <= set(seen)
+    assert {"agy", "claude", "codex", "cursor-agent", "opencode", "dsh"} <= set(seen)
     probe = catalog.dependency_probe(AgentType.CODEX)
     assert probe is not None and probe.program == "codex"

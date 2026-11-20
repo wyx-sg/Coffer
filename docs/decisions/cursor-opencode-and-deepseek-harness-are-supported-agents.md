@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-11-19
 **Deciders**: Yuxing Wu
-**Related**: [Per-Agent Behaviour Lives in One Descriptor Record per Agent](agent-descriptor-manifest.md), [Agent Mechanisms Are Optional Facets on the Descriptor](agent-mechanisms-are-optional-facets-on-the-descriptor.md), [A Shared Skills Directory Holds One Link for Every Agent That Reads It](a-shared-skills-directory-holds-one-link-for-every-reader.md), [DeepSeek Harness's MCP Row Lives in a Block Coffer Owns](deepseek-harness-mcp-row-lives-in-a-block-coffer-owns.md), [OpenCode Gets Its MCP Entry in the 1.x Shape](opencode-gets-its-mcp-entry-in-the-1x-shape.md), spec agent-registry "Support exactly the Claude Code, Codex, Cursor, OpenCode and DeepSeek Harness agent types", PR #87, PR #309
+**Related**: [Per-Agent Behaviour Lives in One Descriptor Record per Agent](agent-descriptor-manifest.md), [Agent Mechanisms Are Optional Facets on the Descriptor](agent-mechanisms-are-optional-facets-on-the-descriptor.md), [A Shared Skills Directory Holds One Link for Every Agent That Reads It](a-shared-skills-directory-holds-one-link-for-every-reader.md), [DeepSeek Harness's MCP Row Lives in a Block Coffer Owns](deepseek-harness-mcp-row-lives-in-a-block-coffer-owns.md), [OpenCode Gets Its MCP Entry in the 1.x Shape](opencode-gets-its-mcp-entry-in-the-1x-shape.md), spec agent-registry "Support exactly the Claude Code, Codex, Antigravity, Cursor, OpenCode and DeepSeek Harness agent types", PR #87, PR #309
 
 ## Context
 

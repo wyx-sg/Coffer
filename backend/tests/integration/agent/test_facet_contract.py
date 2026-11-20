@@ -6,8 +6,9 @@ projection entry lands inside the agent's own directory through the
 config-file allowlist; a provider projection round-trips (apply, detect,
 remove) and leaves the user's own keys alone; the memory reader reads an empty
 directory without failing; the driver and the probe name the agent they serve.
-A facet an agent lacks is absent, and then nothing may claim it (no provider
-entry in the projection). A new agent passes this file before it ships.
+A facet an agent lacks is simply absent, and its promises hold vacuously —
+except the probe, which every agent has. A new agent passes this file before
+it ships.
 """
 
 from __future__ import annotations
@@ -68,11 +69,10 @@ def test_the_provider_projection_round_trips_and_keeps_user_keys(
     agent: FakeAgentDir, catalog: AgentCatalog
 ) -> None:
     facet = catalog.provider_projection(agent.agent_type)
-    if facet is None:
-        projection = catalog.projection(agent.agent_type)
-        assert projection is None or projection.entry(AssetType.PROVIDER) is None
-        return
     entry = catalog.projection(agent.agent_type).entry(AssetType.PROVIDER)  # type: ignore[union-attr]
+    if facet is None:
+        assert entry is None, "no provider entry without a provider projection"
+        return
     assert entry is not None and entry.config_key == facet.config_key
     path = agent.path(facet.config_key)
     original = path.read_text(encoding="utf-8") if path.exists() else ""

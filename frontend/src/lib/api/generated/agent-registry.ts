@@ -767,7 +767,7 @@ export interface components {
          * @description Supported agent products.
          * @enum {string}
          */
-        AgentType: "claude_code" | "codex" | "cursor" | "opencode" | "deepseek_harness";
+        AgentType: "claude_code" | "codex" | "antigravity" | "cursor" | "opencode" | "deepseek_harness";
         /**
          * AgentTypeOut
          * @description One supported type, registered or not — a row the Agents page always

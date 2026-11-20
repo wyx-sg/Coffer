@@ -1,11 +1,11 @@
 ---
 title: 智能体
-description: 把 Claude Code、Codex、Cursor、OpenCode 和 DeepSeek Harness 注册到 Coffer、接入 Coffer，并管理它们的配置文件、MCP 条目、插件、Hook、模型、记忆和会话。
+description: 把 Claude Code、Codex、Antigravity、Cursor、OpenCode 和 DeepSeek Harness 注册到 Coffer、接入 Coffer，并管理它们的配置文件、MCP 条目、插件、Hook、模型、记忆和会话。
 ---
 
 # 智能体 {#agents}
 
-智能体是装在你机器上、由 Coffer 向其投递资源的编程智能体：Claude Code、Codex、Cursor、OpenCode 或 DeepSeek Harness。本页讲如何注册智能体、如何把 Coffer 的 MCP 条目装进去，以及 Coffer 让你在智能体自己的文件里能看到和改动的一切。
+智能体是装在你机器上、由 Coffer 向其投递资源的编程智能体：Claude Code、Codex、Antigravity、Cursor、OpenCode 或 DeepSeek Harness。本页讲如何注册智能体、如何把 Coffer 的 MCP 条目装进去，以及 Coffer 让你在智能体自己的文件里能看到和改动的一切。
 
 ## 智能体的用途 {#what-agents-are-for}
 
@@ -16,23 +16,30 @@ Coffer 共享的一切——MCP 服务器、技能、知识、记忆、模型提
 - 把[模型提供商](/zh/guides/providers)投射到它的原生配置里；
 - 在一个地方展示它的配置文件、MCP 条目、插件、原生记忆和会话。
 
-Coffer 支持五种智能体类型：
+Coffer 支持六种智能体类型：
 
 | 类型 | 产品 | 默认配置目录 | Coffer 查找的程序 |
 | --- | --- | --- | --- |
 | `claude_code` | Claude Code（CLI 和 IDE/桌面形态） | `~/.claude` | `claude` |
 | `codex` | OpenAI Codex（CLI 和 IDE 形态） | `~/.codex` | `codex` |
+| `antigravity` | Google Antigravity（App、CLI 和 IDE） | `~/.gemini/config` | `agy`，或 `Antigravity.app` 应用包 |
 | `cursor` | Cursor（编辑器和它的 `cursor-agent` CLI） | `~/.cursor` | `cursor-agent` |
 | `opencode` | OpenCode | `~/.config/opencode` | `opencode` |
 | `deepseek_harness` | DeepSeek Harness，DeepSeek 的开源智能体 | `~/.dsh` | `dsh` |
 
 同一产品的 CLI 和 IDE 形态读的是同一个配置目录，所以注册一个智能体就能覆盖两者。Claude Desktop 聊天应用有自己的配置，不属于受支持的智能体。
 
-并非每种类型现在都能用上全部功能。Claude Code 和 Codex 全部都有。Cursor、OpenCode 和 DeepSeek Harness 有 Coffer 的网关 MCP 条目、技能、配置文件和它们自己 MCP 条目的列表；[模型提供商](/zh/guides/providers)、[对话](/zh/guides/chat)和[消息渠道](/zh/guides/channels)、[记忆](/zh/guides/memory)、会话、插件和 Hook 暂时还不支持。它们的智能体页面只显示适用的 tab。见 [Cursor、OpenCode 和 DeepSeek Harness](#cursor-opencode-and-deepseek-harness)。
+并非每种类型都能用上全部功能。Claude Code 和 Codex 全部都有。Antigravity 能用上它的配置文件夹允许的部分，见 [Antigravity 能得到什么](#what-antigravity-gets)。Cursor、OpenCode 和 DeepSeek Harness 有 Coffer 的网关 MCP 条目、技能、配置文件和它们自己 MCP 条目的列表；[模型提供商](/zh/guides/providers)、[对话](/zh/guides/chat)和[消息渠道](/zh/guides/channels)、[记忆](/zh/guides/memory)、会话、插件和 Hook 暂时还不支持。它们的智能体页面只显示适用的 tab。见 [Cursor、OpenCode 和 DeepSeek Harness](#cursor-opencode-and-deepseek-harness)。
+
+### Antigravity 能得到什么 {#what-antigravity-gets}
+
+Antigravity 的 App、`agy` CLI 和 IDE 读的是同一个个人配置文件夹 `~/.gemini/config`。Coffer 只在这里工作：把 `coffer` 条目写进 `mcp_config.json`，把技能链接进 `skills/`，并在智能体的**配置文件** tab 里展示 `mcp_config.json`、`config.json`、`AGENTS.md`、`rules/` 和 `hooks.json`。Coffer 的条目带 `"timeoutSeconds": 86400`，因为 Antigravity 默认三分钟就会中止一次工具调用，而 Coffer 的工具可能要等你处理。Antigravity 第一次调用 Coffer 的工具时会问你；在那里允许与否由你决定，Coffer 不替它写权限规则。
+
+Antigravity 只能用 Google 托管的模型，没有存放学到的记忆的地方，也没有公开它把对话存在哪里，所以它在 Coffer 里没有[模型提供商](/zh/guides/providers)、没有记忆同步、也没有会话列表。Google 不支持在个人套餐下把 `agy` 包进其他工具里运行，所以[对话](/zh/guides/chat)、[消息渠道](/zh/guides/channels)和定时任务里都不提供 Antigravity。Coffer 从不读取 Antigravity 自己的数据文件夹（`~/.gemini/antigravity`、`antigravity-cli`、`antigravity-ide`），那里存着它的对话和登录信息。原因见[决策记录](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/antigravity-joins-at-its-config-layer-only.md)。
 
 ### 每种类型一个智能体 {#one-agent-per-type}
 
-一台机器上每种类型最多注册一个智能体，智能体的名字**就是**它的类型：`claude-code`、`codex`、`cursor`、`opencode` 或 `deepseek-harness`。你不用起名，智能体也没有标题或描述。凡是 Coffer 问你指哪个智能体的地方——技能或 MCP 服务器的生效范围，以及所有 `/api/v1/agents/{uid}/…` 路由——都可以填类型（`claude-code`；`claude_code` 也能识别）或智能体的 uid。
+一台机器上每种类型最多注册一个智能体，智能体的名字**就是**它的类型：`claude-code`、`codex`、`antigravity`、`cursor`、`opencode` 或 `deepseek-harness`。你不用起名，智能体也没有标题或描述。凡是 Coffer 问你指哪个智能体的地方——技能或 MCP 服务器的生效范围，以及所有 `/api/v1/agents/{uid}/…` 路由——都可以填类型（`claude-code`；`claude_code` 也能识别）或智能体的 uid。
 
 除了类型，智能体唯一的设置就是**配置目录**，外加[模型绑定](#models)。注册时默认使用该类型的标准目录（见上表），除非你另行指定。把 Coffer 指向别的目录，是把这唯一的智能体挪过去，绝不会新增第二个。注册一个已注册过的类型会被拒绝，返回 `409 AGENT_TYPE_REGISTERED`。
 
@@ -46,7 +53,7 @@ Coffer 从不把智能体的配置复制进自己的存储。配置文件、MCP 
 
 ### 从检测到的智能体注册 {#from-detected-agents}
 
-Coffer 靠两个信号检测智能体：`PATH` 上的程序——用的是你登录 shell 给出的 `PATH`，所以即使守护进程是从 Dock 启动的，用 Homebrew 或 Node 版本管理器装的智能体也能被找到——以及它的配置目录。顺带会读取程序版本（`claude --version`、`codex --version`）。Coffer 从不自行注册任何东西，守护进程启动时也不会自动注册智能体。
+Coffer 靠两个信号检测智能体：`PATH` 上的程序——用的是你登录 shell 给出的 `PATH`，所以即使守护进程是从 Dock 启动的，用 Homebrew 或 Node 版本管理器装的智能体也能被找到——以及它的配置目录。顺带会读取程序版本（`claude --version`、`codex --version`、`agy --version`）。Antigravity 常常只装了 App、没有 `agy`：`agy` 不在 `PATH` 上时，Coffer 会在 `/Applications` 和 `~/Applications` 里找 `Antigravity.app`，并从应用里读出版本。Coffer 从不自行注册任何东西，守护进程启动时也不会自动注册智能体。
 
 Coffer 会报告每一种受支持的类型（无论是否已注册），状态是以下之一：
 
@@ -117,6 +124,7 @@ Claude Code 用 `CLAUDE_CONFIG_DIR` 启动时会读取另一个目录，Codex �
 | Claude Code，默认目录 | `~/.claude.json` | `mcpServers.coffer` |
 | Claude Code，自定义目录 | `<config_dir>/.claude.json` | `mcpServers.coffer` |
 | Codex | `<config_dir>/config.toml` | `[mcp_servers.coffer]` |
+| Antigravity | `<config_dir>/mcp_config.json` | `mcpServers.coffer`，带 `"timeoutSeconds": 86400` |
 | Cursor | `<config_dir>/mcp.json` | `mcpServers.coffer`，和 Claude Code 同一形状 |
 | OpenCode | `<config_dir>/opencode.json`（或 `opencode.jsonc`） | `mcp.coffer`，一个带命令数组的 `local` 条目 |
 | DeepSeek Harness | `<config_dir>/cordis.patch.yml` | Coffer 标记的一段里的一行 `coffer-mcp` |
@@ -229,6 +237,11 @@ Coffer 的每次写入：
 | `codex` | `config` | `<config_dir>/config.toml` |
 | | `instructions` | `<config_dir>/AGENTS.md` |
 | | `hooks` | `<config_dir>/hooks.json` |
+| `antigravity` | `mcp` | `<config_dir>/mcp_config.json` |
+| | `config` | `<config_dir>/config.json` |
+| | `instructions` | `<config_dir>/AGENTS.md` |
+| | `rules` | `<config_dir>/rules/`——一个目录，每条规则一个 Markdown 文件 |
+| | `hooks` | `<config_dir>/hooks.json` |
 | `cursor` | `mcp` | `<config_dir>/mcp.json` |
 | | `cli_config` | `<config_dir>/cli-config.json` |
 | | `hooks` | `<config_dir>/hooks.json` |
@@ -328,7 +341,7 @@ Coffer 从不写 Claude Code 自己的清单文件。当 `claude` CLI 不在 `PA
 
 ## Web 界面中的智能体页面 {#the-agent-page-in-the-web-ui}
 
-智能体页面以智能体类型寻址（`/agents/claude_code`、`/agents/codex`）。页面头部有智能体的图标、名字、一个状态标签和 **⋯** 菜单——名字下面没有说明行——它也永远不会变成修复按钮。下面是八个 tab，都不带数量。六个在标签栏里，各有自己的地址：**总览**（`/agents/<type>`）、**技能**、**MCP 服务器**、**Hooks**、**配置文件**和**会话**（`…/skills`、`…/mcp-servers`、`…/hooks`、`…/config`、`…/sessions`）。**更多**里放最少用的两个，**插件**和**记忆**（`…/plugins`、`…/memory`）；其中一个打开时，**更多**会显示它的名字并带下划线，**更多**上的警告点表示里面有 tab 需要处理。没有模型 tab。
+智能体页面以智能体类型寻址（`/agents/claude_code`、`/agents/codex`、`/agents/antigravity`、`/agents/cursor`、`/agents/opencode`、`/agents/deepseek_harness`）。页面头部有智能体的图标、名字、一个状态标签和 **⋯** 菜单——名字下面没有说明行——它也永远不会变成修复按钮。下面是八个 tab，都不带数量。六个在标签栏里，各有自己的地址：**总览**（`/agents/<type>`）、**技能**、**MCP 服务器**、**Hooks**、**配置文件**和**会话**（`…/skills`、`…/mcp-servers`、`…/hooks`、`…/config`、`…/sessions`）。**更多**里放最少用的两个，**插件**和**记忆**（`…/plugins`、`…/memory`）；其中一个打开时，**更多**会显示它的名字并带下划线，**更多**上的警告点表示里面有 tab 需要处理。没有模型 tab。
 
 **总览**是单列，从上到下：
 

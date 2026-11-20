@@ -41,6 +41,7 @@ function join(dir: string, name: string): string {
  *  (Claude Code is the exception: its ~/.claude.json sits beside the directory). */
 const MCP_FILE_IN_CONFIG_DIR: Partial<Record<string, string>> = {
   codex: "config.toml",
+  antigravity: "mcp_config.json",
   cursor: "mcp.json",
   opencode: "opencode.json",
   deepseek_harness: "cordis.patch.yml",
@@ -112,6 +113,18 @@ function entryLines(agent: PlanAgent, opts: PlanOptions): { hunk: string; lines:
         "        transport: stdio",
         `        command: '${shim}'`,
         `        args: ['--agent-uid', '${uid}']`,
+      ],
+    };
+  }
+  if (agent.row.type === "antigravity") {
+    return {
+      hunk: "mcpServers",
+      lines: [
+        `"coffer": {`,
+        `  "command": "${shim}",`,
+        `  "args": ["--agent-uid", "${uid}"],`,
+        `  "timeoutSeconds": 86400`,
+        `},`,
       ],
     };
   }

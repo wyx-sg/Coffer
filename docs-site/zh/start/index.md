@@ -69,7 +69,7 @@ Coffer 还提供一些不属于资源类型的能力：加密的[密钥存储](/
 | 智能体 | Claude Code（`claude_code`）和 Codex（`codex`） |
 | 预编译二进制和桌面应用 | Apple 芯片（arm64）的 macOS |
 | 从源码 | Python 3.12 或更高版本。发布构建和登录服务面向 macOS。 |
-| MCP 客户端 | 任何能运行 stdio MCP 服务器的客户端都能用 `coffer-mcp-shim`。只有 Claude Code 和 Codex 支持一步安装、技能投递和提供商切换。 |
+| MCP 客户端 | 任何能运行 stdio MCP 服务器的客户端都能用 `coffer-mcp-shim`。只有 Claude Code、Codex、Antigravity、Cursor、OpenCode 和 DeepSeek Harness 支持一步安装和技能投递，提供商切换只支持 Claude Code 和 Codex。 |
 
 ## 下一步 {#next-steps}
 

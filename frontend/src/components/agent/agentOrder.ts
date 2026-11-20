@@ -4,7 +4,7 @@
 // every list of agents sorts through here: known types first in a fixed order,
 // anything else after, then by name.
 
-const TYPE_ORDER = ["claude_code", "codex", "cursor", "opencode", "deepseek_harness"];
+const TYPE_ORDER = ["claude_code", "codex", "antigravity", "cursor", "opencode", "deepseek_harness"];
 
 function typeRank(type: string): number {
   const i = TYPE_ORDER.indexOf(type);

@@ -27,6 +27,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from coffer.domain.agent.allowlists import (
+    _antigravity_files,
     _claude_code_files,
     _codex_files,
     _cursor_files,
@@ -92,6 +93,10 @@ class AgentDescriptor:
     #: The executable the agent runs as (``claude``, ``codex``) — what the
     #: dependency probe looks for on the agent's ``PATH``.
     program: str = ""
+    #: The desktop app bundle the product also ships as (``Antigravity.app``),
+    #: found where the operating system keeps applications when ``program``
+    #: is not on the agent's ``PATH``. Empty when the product is its program.
+    app_bundle: str = ""
     #: The product's official install page — where the Overview's first-run
     #: card sends a person whose machine does not have the program.
     install_url: str = ""
@@ -195,6 +200,28 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
             can_uninstall=True,
         ),
     ),
+    AgentType.ANTIGRAVITY: AgentDescriptor(
+        type=AgentType.ANTIGRAVITY,
+        display_name="Antigravity",
+        # The personal config layer the Antigravity App, CLI and IDE share;
+        # each surface keeps its own data beside it (ADR
+        # antigravity-joins-at-its-config-layer-only).
+        config_subpath=".gemini/config",
+        config_files=_antigravity_files,
+        program="agy",
+        # Most people run the desktop App without the agy CLI.
+        app_bundle="Antigravity.app",
+        install_url="https://antigravity.google/docs/install",
+        mcp=McpInjectionSpec(
+            config_key="mcp",
+            container_key="mcpServers",
+            format=ConfigFileFormat.JSON,
+            entry_style=McpEntryStyle.COMMAND_MAP,
+            # Antigravity cuts a tool call off after 180 s; a Coffer tool can
+            # wait on the person (an approval) for longer.
+            entry_extras=(("timeoutSeconds", 24 * 60 * 60),),
+        ),
+    ),
     AgentType.CURSOR: AgentDescriptor(
         type=AgentType.CURSOR,
         display_name="Cursor",
@@ -205,6 +232,8 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
         # The CLI installs as `agent` with a `cursor-agent` link to the same
         # launcher; the longer name cannot be mistaken for another program.
         program="cursor-agent",
+        # Many people run the Cursor editor without its CLI.
+        app_bundle="Cursor.app",
         install_url="https://cursor.com/docs/cli/installation",
         # Cursor reads ~/.agents/skills (and ~/.cursor/skills); Coffer
         # delivers to the shared directory once for every agent reading it.

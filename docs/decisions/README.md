@@ -191,6 +191,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`deepseek-harness-mcp-row-lives-in-a-block-coffer-owns`](deepseek-harness-mcp-row-lives-in-a-block-coffer-owns.md) | DeepSeek Harness's MCP Row Lives in a Block Coffer Owns |
 | [`opencode-gets-its-mcp-entry-in-the-1x-shape`](opencode-gets-its-mcp-entry-in-the-1x-shape.md) | OpenCode Gets Its MCP Entry in the 1.x Shape |
 | [`agent-mechanisms-are-optional-facets-on-the-descriptor`](agent-mechanisms-are-optional-facets-on-the-descriptor.md) | Agent Mechanisms Are Optional Facets on the Descriptor, and Projection Is One Registry |
+| [`antigravity-joins-at-its-config-layer-only`](antigravity-joins-at-its-config-layer-only.md) | Antigravity Joins Coffer Through Its Config Layer Only |
 | [`writing-agent-native-config-safely`](writing-agent-native-config-safely.md) | Writing Agent-Native Config Safely |
 | [`provider-connections-projected-into-agent-config`](provider-connections-projected-into-agent-config.md) | LLM Connections Are Projected Into Each Agent's Own Config File |
 | [`api-key-providers-are-reached-through-a-separate-local-model-proxy`](api-key-providers-are-reached-through-a-separate-local-model-proxy.md) | API-Key Providers Are Reached Through a Separate Local Model Proxy That Relays Bytes Unchanged |

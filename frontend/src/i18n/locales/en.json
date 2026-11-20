@@ -2263,10 +2263,12 @@
       "files_other": "{{count}} files",
       "emptyTitle": "No memory files from {{agent}} yet",
       "emptyBody": "{{agent}} writes {{path}} as it learns. It shows here once it exists.",
+      "emptyNoStore": "Nothing for Coffer to read here.",
       "own": {
         "title": "{{agent}}’s own memory",
         "descriptionClaude": "One store per project, written by {{agent}}, with the copies Coffer syncs in from your other agents. Read-only here.",
-        "descriptionCodex": "Written by {{agent}}; Coffer adds its copies under memories/extensions/coffer/. Read-only here."
+        "descriptionCodex": "Written by {{agent}}; Coffer adds its copies under memories/extensions/coffer/. Read-only here.",
+        "descriptionNone": "{{agent}} keeps no memory store of its own: what it learns it saves as rules and skills, with your approval. Coffer syncs no memory into it."
       },
       "cols": {
         "project": "Project",
@@ -2731,7 +2733,7 @@
       }
     },
     "list": {
-      "subtitle": "Claude Code and Codex on this Mac, and what reaches each through Coffer.",
+      "subtitle": "The coding agents on this Mac, and what reaches each through Coffer.",
       "connectAll": "Connect all",
       "countsHelp": "Counts are what reaches each agent through Coffer. Choose who gets a resource on its own page (<mcp>MCP servers</mcp>, <skills>Skills</skills>).",
       "empty": "No agents to show.",
@@ -2825,6 +2827,9 @@
       "role": {
         "settings": "Model, hooks and permissions",
         "instructions": "Instructions",
+        "mcpServers": "MCP entries",
+        "appSettings": "Plugins and permissions",
+        "rules": "Rules",
         "skills": "Skill folders",
         "mcpAt": "MCP entries — Coffer writes its entry to {{path}}",
         "codexConfig": "Model, provider and MCP entries",

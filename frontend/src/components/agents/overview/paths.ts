@@ -42,6 +42,7 @@ export function mcpConfigPath(
 
 const MAIN_FILE: Partial<Record<string, string>> = {
   codex: "config.toml",
+  antigravity: "mcp_config.json",
   cursor: "cli-config.json",
   opencode: "opencode.json",
   deepseek_harness: "cordis.patch.yml",

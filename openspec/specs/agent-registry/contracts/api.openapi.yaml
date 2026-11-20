@@ -2238,6 +2238,7 @@ components:
       enum:
       - claude_code
       - codex
+      - antigravity
       - cursor
       - opencode
       - deepseek_harness

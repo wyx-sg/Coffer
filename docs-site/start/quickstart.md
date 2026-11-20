@@ -59,7 +59,7 @@ Connecting adds one entry to `mcpServers` in `~/.claude.json`. Coffer writes the
 The `--agent-uid` argument is how Coffer knows which agent a session belongs to. It lets you restrict a server or a skill to particular agents later. The command path is absolute because agents launched from a GUI do not inherit your shell's `PATH`.
 
 ::: tip Why not `claude mcp add`?
-You can add `coffer-mcp-shim` to any MCP client by hand. However, a hand-written entry has no `--agent-uid`, so Coffer cannot tell which agent the session belongs to, and servers restricted to particular agents stay hidden from it. For Claude Code and Codex, use **Connect**. See [Connect a client](/guides/connect-a-client) for other clients.
+You can add `coffer-mcp-shim` to any MCP client by hand. However, a hand-written entry has no `--agent-uid`, so Coffer cannot tell which agent the session belongs to, and servers restricted to particular agents stay hidden from it. For Claude Code, Codex and Antigravity, use **Connect**. See [Connect a client](/guides/connect-a-client) for other clients.
 :::
 
 ### Register an upstream MCP server

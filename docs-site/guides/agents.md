@@ -1,11 +1,11 @@
 ---
 title: Agents
-description: Register Claude Code, Codex, Cursor, OpenCode and DeepSeek Harness with Coffer, connect them to Coffer, and manage their config files, MCP entries, plugins, hooks, models, memory and sessions.
+description: Register Claude Code, Codex, Antigravity, Cursor, OpenCode and DeepSeek Harness with Coffer, connect them to Coffer, and manage their config files, MCP entries, plugins, hooks, models, memory and sessions.
 ---
 
 # Agents
 
-An agent is a coding agent installed on your machine that Coffer delivers to: Claude Code, Codex, Cursor, OpenCode or DeepSeek Harness. This page covers registering agents, installing Coffer's MCP entry into them, and everything Coffer lets you see and change in an agent's own files.
+An agent is a coding agent installed on your machine that Coffer delivers to: Claude Code, Codex, Antigravity, Cursor, OpenCode or DeepSeek Harness. This page covers registering agents, installing Coffer's MCP entry into them, and everything Coffer lets you see and change in an agent's own files.
 
 ## What agents are for
 
@@ -16,23 +16,30 @@ Everything Coffer shares — MCP servers, skills, knowledge, memory, model provi
 - project a [model provider](/guides/providers) into its native config;
 - show you its config files, MCP entries, plugins, native memory and sessions in one place.
 
-Coffer supports five agent types:
+Coffer supports six agent types:
 
 | Type | Product | Default config directory | Program Coffer looks for |
 | --- | --- | --- | --- |
 | `claude_code` | Claude Code (CLI and IDE/desktop forms) | `~/.claude` | `claude` |
 | `codex` | OpenAI Codex (CLI and IDE forms) | `~/.codex` | `codex` |
+| `antigravity` | Google Antigravity (App, CLI and IDE) | `~/.gemini/config` | `agy`, or the `Antigravity.app` bundle |
 | `cursor` | Cursor (the editor and its `cursor-agent` CLI) | `~/.cursor` | `cursor-agent` |
 | `opencode` | OpenCode | `~/.config/opencode` | `opencode` |
 | `deepseek_harness` | DeepSeek Harness, DeepSeek's open-source agent | `~/.dsh` | `dsh` |
 
 The CLI and IDE forms of each product read the same config directory, so one registered agent covers both. The Claude Desktop chat app has its own configuration and is not a supported agent.
 
-Not every type gets everything yet. Claude Code and Codex get all of it. Cursor, OpenCode and DeepSeek Harness get Coffer's gateway MCP entry, skills, their config files and a listing of their own MCP entries; a [model provider](/guides/providers), [chat](/guides/chat) and [channels](/guides/channels), [memory](/guides/memory), sessions, plugins and hooks are not available for them yet. Their agent page shows only the tabs that apply. See [Cursor, OpenCode and DeepSeek Harness](#cursor-opencode-and-deepseek-harness).
+Not every type gets everything. Claude Code and Codex get all of it. Antigravity gets what its config folder allows; see [What Antigravity gets](#what-antigravity-gets). Cursor, OpenCode and DeepSeek Harness get Coffer's gateway MCP entry, skills, their config files and a listing of their own MCP entries; a [model provider](/guides/providers), [chat](/guides/chat) and [channels](/guides/channels), [memory](/guides/memory), sessions, plugins and hooks are not available for them yet. Their agent page shows only the tabs that apply. See [Cursor, OpenCode and DeepSeek Harness](#cursor-opencode-and-deepseek-harness).
+
+### What Antigravity gets
+
+Antigravity's App, its `agy` CLI and its IDE all read one personal config folder, `~/.gemini/config`. Coffer works only there: it writes the `coffer` entry into `mcp_config.json`, links skills into `skills/`, and shows `mcp_config.json`, `config.json`, `AGENTS.md`, `rules/` and `hooks.json` on the agent's **Files** tab. Coffer's entry sets `"timeoutSeconds": 86400`, because Antigravity otherwise ends a tool call after three minutes and a Coffer tool can wait on you. The first time Antigravity calls a Coffer tool it asks you; allowing it there is your choice, and Coffer writes no permission rule for it.
+
+Antigravity runs only Google's hosted models, keeps no store of learned memories, and does not document where it keeps conversations, so it has no [model provider](/guides/providers), no memory sync and no session list in Coffer. Google does not support running `agy` inside other tools on a personal plan, so Antigravity is not offered in [chat](/guides/chat), [channels](/guides/channels) or scheduled tasks. Coffer never reads Antigravity's own data folders (`~/.gemini/antigravity`, `antigravity-cli`, `antigravity-ide`), which hold its conversations and sign-ins. The [decision record](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/antigravity-joins-at-its-config-layer-only.md) explains why.
 
 ### One agent per type
 
-A machine has at most one registered agent of each type, and the agent's name **is** its type: `claude-code` or `codex`. Its name is `claude-code`, `codex`, `cursor`, `opencode` or `deepseek-harness`. You do not choose a name, and an agent has no title or description. Everywhere Coffer asks which agent you mean — the reach of a skill or MCP server, and every `/api/v1/agents/{uid}/…` route — you can give the type (`claude-code`; `claude_code` also reads) or the agent's uid.
+A machine has at most one registered agent of each type, and the agent's name **is** its type: `claude-code`, `codex`, `antigravity`, `cursor`, `opencode` or `deepseek-harness`. You do not choose a name, and an agent has no title or description. Everywhere Coffer asks which agent you mean — the reach of a skill or MCP server, and every `/api/v1/agents/{uid}/…` route — you can give the type (`claude-code`; `claude_code` also reads) or the agent's uid.
 
 Besides its type, the only setting an agent has is its **config directory**, plus the [model binding](#models). Registering uses the type's standard directory (see the table above) unless you say otherwise. Pointing Coffer at a different directory moves the one agent there; it never adds a second one. Registering a type that is already registered is refused with `409 AGENT_TYPE_REGISTERED`.
 
@@ -46,7 +53,7 @@ Coffer never copies an agent's configuration into its own store. Config files, M
 
 ### From detected agents
 
-Coffer detects an agent from two signals: its program on your `PATH` — the `PATH` your login shell gives you, so an agent installed with Homebrew or a Node version manager is found even when the daemon was started from the Dock — and its config directory. It reads the program's version (`claude --version`, `codex --version`) along the way. It never registers anything on its own, and the daemon does not auto-register agents at startup.
+Coffer detects an agent from two signals: its program on your `PATH` — the `PATH` your login shell gives you, so an agent installed with Homebrew or a Node version manager is found even when the daemon was started from the Dock — and its config directory. It reads the program's version (`claude --version`, `codex --version`, `agy --version`) along the way. Antigravity is often installed as the App alone, without `agy`: when `agy` is not on your `PATH`, Coffer looks for `Antigravity.app` in `/Applications` and `~/Applications` and reads the version from the app. It never registers anything on its own, and the daemon does not auto-register agents at startup.
 
 Coffer reports every supported type, registered or not, in one of these states:
 
@@ -117,6 +124,7 @@ Restart the agent (or reload its MCP servers) after connecting so it starts the 
 | Claude Code, default directory | `~/.claude.json` | `mcpServers.coffer` |
 | Claude Code, custom directory | `<config_dir>/.claude.json` | `mcpServers.coffer` |
 | Codex | `<config_dir>/config.toml` | `[mcp_servers.coffer]` |
+| Antigravity | `<config_dir>/mcp_config.json` | `mcpServers.coffer`, with `"timeoutSeconds": 86400` |
 | Cursor | `<config_dir>/mcp.json` | `mcpServers.coffer`, the same shape as Claude Code |
 | OpenCode | `<config_dir>/opencode.json` (or `opencode.jsonc`) | `mcp.coffer`, a `local` entry with a command array |
 | DeepSeek Harness | `<config_dir>/cordis.patch.yml` | a `coffer-mcp` row in a block Coffer marks |
@@ -229,6 +237,11 @@ Each type has a fixed allowlist:
 | `codex` | `config` | `<config_dir>/config.toml` |
 | | `instructions` | `<config_dir>/AGENTS.md` |
 | | `hooks` | `<config_dir>/hooks.json` |
+| `antigravity` | `mcp` | `<config_dir>/mcp_config.json` |
+| | `config` | `<config_dir>/config.json` |
+| | `instructions` | `<config_dir>/AGENTS.md` |
+| | `rules` | `<config_dir>/rules/` — a directory, one Markdown file per rule |
+| | `hooks` | `<config_dir>/hooks.json` |
 | `cursor` | `mcp` | `<config_dir>/mcp.json` |
 | | `cli_config` | `<config_dir>/cli-config.json` |
 | | `hooks` | `<config_dir>/hooks.json` |
@@ -328,7 +341,7 @@ The agent record carries the model binding that provider projection writes into 
 
 ## The agent page in the web UI
 
-The agent page is addressed by the agent's type (`/agents/claude_code`, `/agents/codex`). Its header holds the agent's mark, its name, one status pill and a **⋯** menu — no line under the name — and it never turns into a fix button. Below it are eight tabs, none carrying a count. Six sit in the strip, each at its own address: **Overview** (`/agents/<type>`), **Skills**, **MCP servers**, **Hooks**, **Config files** and **Sessions** (`…/skills`, `…/mcp-servers`, `…/hooks`, `…/config`, `…/sessions`). **More** holds the two least used, **Plugins** and **Memory** (`…/plugins`, `…/memory`); while one of them is open, **More** reads its name and carries the underline, and a warning dot on **More** says a tab inside it needs a look. There is no Model tab.
+The agent page is addressed by the agent's type (`/agents/claude_code`, `/agents/codex`, `/agents/antigravity`, `/agents/cursor`, `/agents/opencode`, `/agents/deepseek_harness`). Its header holds the agent's mark, its name, one status pill and a **⋯** menu — no line under the name — and it never turns into a fix button. Below it are eight tabs, none carrying a count. Six sit in the strip, each at its own address: **Overview** (`/agents/<type>`), **Skills**, **MCP servers**, **Hooks**, **Config files** and **Sessions** (`…/skills`, `…/mcp-servers`, `…/hooks`, `…/config`, `…/sessions`). **More** holds the two least used, **Plugins** and **Memory** (`…/plugins`, `…/memory`); while one of them is open, **More** reads its name and carries the underline, and a warning dot on **More** says a tab inside it needs a look. There is no Model tab.
 
 **Overview** is one column, top to bottom:
 

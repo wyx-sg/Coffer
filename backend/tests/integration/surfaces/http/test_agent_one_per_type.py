@@ -189,7 +189,14 @@ def test_list_every_supported_type_whether_added_or_not(home: pathlib.Path) -> N
         assert r.status_code == 200, r.text
         rows = r.json()["types"]
         assert [row["type"] for row in rows] == [t.value for t in AgentType]
-        claude, codex = rows[:2]
+        by_type = {row["type"]: row for row in rows}
+        claude, codex, antigravity = (
+            by_type["claude_code"],
+            by_type["codex"],
+            by_type["antigravity"],
+        )
+        assert (antigravity["uid"], antigravity["state"]) == (None, "missing")
+        assert antigravity["standard_config_dir"] == str(home / ".gemini" / "config")
 
         assert (claude["uid"], claude["name"], claude["config_dir"], claude["addable"]) == (
             uid,

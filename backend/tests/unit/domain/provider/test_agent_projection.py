@@ -42,7 +42,8 @@ def _req(
 
 def test_each_facet_declares_its_agent_file_and_protocols() -> None:
     by_type = {p.agent_type: p for p in PROVIDER_PROJECTIONS}
-    # Claude Code and Codex project providers; the other types lack the facet.
+    # Claude Code and Codex project providers; the other types lack the facet
+    # (Antigravity has no model setting to project into).
     assert set(by_type) == {AgentType.CLAUDE_CODE, AgentType.CODEX}
     assert by_type[AgentType.CLAUDE_CODE].config_key == "settings"
     assert by_type[AgentType.CLAUDE_CODE].protocols == ("anthropic",)

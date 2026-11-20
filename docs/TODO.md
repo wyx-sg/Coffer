@@ -29,20 +29,48 @@ threads appending at once rarely conflict:
 
 ## Agents and model providers
 
-### Support a third coding agent
+### Support a fourth coding agent
 
-- **Added:** 2026-11-06, from the thread "梳理智能体与模型提供商的缺口和缺陷"
-- **What:** register, connect and deliver to a third coding agent such as Gemini
-  CLI or OpenCode, the way Claude Code and Codex are today (MCP entry, skills,
-  memory, provider projection, sessions).
+- **Added:** 2026-11-06, from the thread "梳理智能体与模型提供商的缺口和缺陷"; updated 2026-11-19 when Antigravity became the third
+- **What:** register, connect and deliver to another coding agent such as Gemini
+  CLI, Cursor or OpenCode, the way the three supported agents are today.
 - **Why later:** serving every agent through one Coffer is what the project is
-  for, but only Claude Code and Codex are used now. The code is already shaped
-  for it: one enum value, one `AGENT_DESCRIPTORS` record and one child spec under
-  `openspec/specs/agent-registry/`.
+  for, but no other agent is used now. Antigravity showed the shape: one enum
+  value, one `AGENT_DESCRIPTORS` record, one child spec under
+  `openspec/specs/agent-registry/`, and only the facets the product can provide.
 - **Sketch:** start from the agent's own config format and session API. CC
   Switch manages Gemini CLI and OpenCode next to Claude Code and Codex, so it is
-  a reference for their config files. Discussion:
-  `agents-providers-gaps/讨论稿.md` in the project files.
+  a reference for their config files.
+
+### Drive Antigravity through its SDK with an API key
+
+- **Added:** 2026-11-19, from the thread "调研 Coffer 支持 Antigravity 的可行性"
+- **What:** a driver over Google's `google-antigravity` Python SDK, so
+  Antigravity can answer in Coffer chat, channels and scheduled tasks.
+- **Why later:** Google does not support wrapping `agy` in third-party tools on
+  a personal plan; the SDK is the route it names, but it needs a Gemini API key
+  or Vertex (billed separately) and reads no `~/.gemini/config`. Nobody needs
+  Antigravity chat in Coffer yet. See ADR
+  `antigravity-joins-at-its-config-layer-only`, option D.
+- **Sketch:** the API key is a Coffer secret; the driver passes the skills and
+  Coffer's MCP entry to the SDK itself.
+
+### Read Antigravity sessions
+
+- **Added:** 2026-11-19, from the thread "调研 Coffer 支持 Antigravity 的可行性"
+- **What:** list Antigravity conversations in Coffer's session list.
+- **Why later:** its conversation store (`conversation_summaries.db`,
+  per-conversation SQLite with protobuf blobs) is undocumented and moved once
+  already; only the hook payload's `transcript.jsonl` path is documented. Do it
+  when Google documents the store.
+
+### Sync memory into Antigravity as rules
+
+- **Added:** 2026-11-19, from the thread "调研 Coffer 支持 Antigravity 的可行性"
+- **What:** write hub memories into Antigravity as global rules
+  (`~/.gemini/config/rules/*.md` with `trigger: glob`, one per project).
+- **Why later:** Antigravity has no memory store of its own, so this is a new
+  writer shape rather than a copy, and nobody has asked for it.
 
 ### Keep Codex's model capabilities on a provider
 

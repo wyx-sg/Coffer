@@ -46,6 +46,7 @@ export function agentHasTab(agent: { features: readonly string[] }, tab: AgentTa
 export const AGENT_TYPES: readonly AgentType[] = [
   "claude_code",
   "codex",
+  "antigravity",
   "cursor",
   "opencode",
   "deepseek_harness",

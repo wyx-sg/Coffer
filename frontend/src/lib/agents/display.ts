@@ -7,6 +7,7 @@ import type { AgentType } from "@/lib/api/agents";
 const AGENT_TYPE_LABELS: Record<AgentType, string> = {
   claude_code: "Claude Code",
   codex: "Codex",
+  antigravity: "Antigravity",
   cursor: "Cursor",
   opencode: "OpenCode",
   deepseek_harness: "DeepSeek Harness",
@@ -51,6 +52,7 @@ export function agentProgramName(type: AgentType): string {
 const AGENT_PROGRAMS: Record<AgentType, string> = {
   claude_code: "claude",
   codex: "codex",
+  antigravity: "agy",
   cursor: "cursor-agent",
   opencode: "opencode",
   deepseek_harness: "dsh",
