@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-06-14
 **Deciders**: Yuxing Wu
-**Related**: [Writing Agent-Native Config Safely](writing-agent-native-config-safely.md), [Agent Mechanisms Are Optional Facets on the Descriptor](agent-mechanisms-are-optional-facets-on-the-descriptor.md), [Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md), [Kind Plugin Contract](kind-plugin-contract.md), [Cross-Platform Skill Delivery](cross-platform-skill-delivery.md), [Stdio Shim Bridge](stdio-shim-bridge.md), [Provider Connections Projected Into Agent Config](provider-connections-projected-into-agent-config.md), [Model Catalogue Read From the Agent](model-catalogue-read-from-the-agent.md), [Driving Agents Through the SDK and App Server](driving-agents-through-sdk-and-app-server.md), [History Is One SQLite File, `runs.db`, Written Only by the Daemon and Migrated Forward at Startup Through One Alembic Lineage](history-is-one-sqlite-file-written-only-by-the-daemon.md), spec agent-registry "Support exactly the Claude Code and Codex agent types", spec agent-registry "Define a curated config-file allowlist per type", spec agent-registry "Install Coffer's MCP server into an agent in one action", spec agent-registry "Uninstall a plugin by the type's own strategy", PR #87, PR #309
+**Related**: [Writing Agent-Native Config Safely](writing-agent-native-config-safely.md), [Agent Mechanisms Are Optional Facets on the Descriptor](agent-mechanisms-are-optional-facets-on-the-descriptor.md), [Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md), [Kind Plugin Contract](kind-plugin-contract.md), [Cross-Platform Skill Delivery](cross-platform-skill-delivery.md), [Stdio Shim Bridge](stdio-shim-bridge.md), [Provider Connections Projected Into Agent Config](provider-connections-projected-into-agent-config.md), [Model Catalogue Read From the Agent](model-catalogue-read-from-the-agent.md), [Driving Agents Through the SDK and App Server](driving-agents-through-sdk-and-app-server.md), [History Is One SQLite File, `runs.db`, Written Only by the Daemon and Migrated Forward at Startup Through One Alembic Lineage](history-is-one-sqlite-file-written-only-by-the-daemon.md), spec agent-registry "Support exactly the Claude Code, Codex and Antigravity agent types", spec agent-registry "Define a curated config-file allowlist per type", spec agent-registry "Install Coffer's MCP server into an agent in one action", spec agent-registry "Uninstall a plugin by the type's own strategy", PR #87, PR #309
 
 ## Context
 
@@ -21,7 +21,7 @@ over. The answers are static facts about a product, not behaviour that varies at
 runtime, so the question was where to keep them.
 
 The agent set has since moved twice. The four extra types were cut in 2026-06,
-brought back, and cut again in 2026-09 by PR #309. `AgentType` is now exactly `claude_code` and `codex`.
+brought back, and cut again in 2026-09 by PR #309. `AgentType` then held exactly `claude_code` and `codex`; `antigravity` joined on 2026-11-19.
 
 ## Options Considered
 
@@ -120,8 +120,9 @@ removing it from `AgentType` and the table, which is what both cuts did.
 Keep one frozen `AgentDescriptor` record per supported agent in
 `AGENT_DESCRIPTORS`, and route every per-agent answer about location, config
 files, MCP injection, skill delivery and plugins through `descriptor_for()`.
-`AgentType` is the persisted identity and nothing more. There are exactly two
-records, `claude_code` and `codex`. The table is code, not user data.
+`AgentType` is the persisted identity and nothing more. There are three
+records, `claude_code`, `codex` and `antigravity` (see
+[Antigravity Joins Coffer Through Its Config Layer Only](antigravity-joins-at-its-config-layer-only.md)). The table is code, not user data.
 
 ## Consequences
 

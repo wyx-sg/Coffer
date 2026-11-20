@@ -1,11 +1,11 @@
 ---
 title: 智能体
-description: 把 Claude Code 和 Codex 注册到 Coffer、接入 Coffer，并管理它们的配置文件、MCP 条目、插件、Hook、模型、记忆和会话。
+description: 把 Claude Code、Codex 和 Antigravity 注册到 Coffer、接入 Coffer，并管理它们的配置文件、MCP 条目、插件、Hook、模型、记忆和会话。
 ---
 
 # 智能体 {#agents}
 
-智能体是装在你机器上、由 Coffer 向其投递资源的编程智能体：Claude Code 或 Codex。本页讲如何注册智能体、如何把 Coffer 的 MCP 条目装进去，以及 Coffer 让你在智能体自己的文件里能看到和改动的一切。
+智能体是装在你机器上、由 Coffer 向其投递资源的编程智能体：Claude Code、Codex 或 Antigravity。本页讲如何注册智能体、如何把 Coffer 的 MCP 条目装进去，以及 Coffer 让你在智能体自己的文件里能看到和改动的一切。
 
 ## 智能体的用途 {#what-agents-are-for}
 
@@ -16,20 +16,27 @@ Coffer 共享的一切——MCP 服务器、技能、知识、记忆、模型提
 - 把[模型提供商](/zh/guides/providers)投射到它的原生配置里；
 - 在一个地方展示它的配置文件、MCP 条目、插件和会话。
 
-Coffer 支持两种智能体类型：
+Coffer 支持三种智能体类型：
 
 | 类型 | 产品 | 默认配置目录 | Coffer 查找的程序 |
 | --- | --- | --- | --- |
 | `claude_code` | Claude Code（CLI 和 IDE/桌面形态） | `~/.claude` | `claude` |
 | `codex` | OpenAI Codex（CLI 和 IDE 形态） | `~/.codex` | `codex` |
+| `antigravity` | Google Antigravity（App、CLI 和 IDE） | `~/.gemini/config` | `agy`，或 `Antigravity.app` 应用包 |
 
 同一产品的 CLI 和 IDE 形态读的是同一个配置目录，所以注册一个智能体就能覆盖两者。Claude Desktop 聊天应用有自己的配置，不属于受支持的智能体。
 
+### Antigravity 能得到什么 {#what-antigravity-gets}
+
+Antigravity 的 App、`agy` CLI 和 IDE 读的是同一个个人配置文件夹 `~/.gemini/config`。Coffer 只在这里工作：把 `coffer` 条目写进 `mcp_config.json`，把技能链接进 `skills/`，并在智能体的**配置文件** tab 里展示 `mcp_config.json`、`config.json`、`AGENTS.md`、`rules/` 和 `hooks.json`。Coffer 的条目带 `"timeoutSeconds": 86400`，因为 Antigravity 默认三分钟就会中止一次工具调用，而 Coffer 的工具可能要等你处理。Antigravity 第一次调用 Coffer 的工具时会问你；在那里允许与否由你决定，Coffer 不替它写权限规则。
+
+Antigravity 只能用 Google 托管的模型，没有会话开始钩子，也没有公开它把对话存在哪里，所以它在 Coffer 里没有[模型提供商](/zh/guides/providers)、拿不到[记忆](/zh/guides/memory)、也没有会话列表。Google 不支持在个人套餐下把 `agy` 包进其他工具里运行，所以[对话](/zh/guides/chat)、[消息渠道](/zh/guides/channels)和定时任务里都不提供 Antigravity。Coffer 从不读取 Antigravity 自己的数据文件夹（`~/.gemini/antigravity`、`antigravity-cli`、`antigravity-ide`），那里存着它的对话和登录信息。原因见[决策记录](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/antigravity-joins-at-its-config-layer-only.md)。
+
 ### 每种类型一个智能体 {#one-agent-per-type}
 
-一台机器上每种类型最多注册一个智能体，智能体的名字**就是**它的类型：`claude-code` 或 `codex`。你不用起名，智能体也没有标题或描述。凡是 Coffer 问你指哪个智能体的地方——技能或 MCP 服务器的生效范围，以及所有 `/api/v1/agents/{uid}/…` 路由——都可以填类型（`claude-code`；`claude_code` 也能识别）或智能体的 uid。
+一台机器上每种类型最多注册一个智能体，智能体的名字**就是**它的类型：`claude-code`、`codex` 或 `antigravity`。你不用起名，智能体也没有标题或描述。凡是 Coffer 问你指哪个智能体的地方——技能或 MCP 服务器的生效范围，以及所有 `/api/v1/agents/{uid}/…` 路由——都可以填类型（`claude-code`；`claude_code` 也能识别）或智能体的 uid。
 
-除了类型，智能体唯一的设置就是**配置目录**，外加[模型绑定](#models)。注册时默认使用该类型的标准目录（`~/.claude`、`~/.codex`），除非你另行指定。把 Coffer 指向别的目录，是把这唯一的智能体挪过去，绝不会新增第二个。注册一个已注册过的类型会被拒绝，返回 `409 AGENT_TYPE_REGISTERED`。
+除了类型，智能体唯一的设置就是**配置目录**，外加[模型绑定](#models)。注册时默认使用该类型的标准目录（`~/.claude`、`~/.codex`、`~/.gemini/config`），除非你另行指定。把 Coffer 指向别的目录，是把这唯一的智能体挪过去，绝不会新增第二个。注册一个已注册过的类型会被拒绝，返回 `409 AGENT_TYPE_REGISTERED`。
 
 ::: info 智能体自己的文件才是真相来源
 Coffer 从不把智能体的配置复制进自己的存储。配置文件、MCP 条目和插件，每次查看时都从磁盘读取，会话则由智能体自己列出。智能体记录本身只保存类型、配置目录和模型绑定。
@@ -41,7 +48,7 @@ Coffer 从不把智能体的配置复制进自己的存储。配置文件、MCP 
 
 ### 从检测到的智能体注册 {#from-detected-agents}
 
-Coffer 靠两个信号检测智能体：`PATH` 上的程序——用的是你登录 shell 给出的 `PATH`，所以即使守护进程是从 Dock 启动的，用 Homebrew 或 Node 版本管理器装的智能体也能被找到——以及它的配置目录。顺带会读取程序版本（`claude --version`、`codex --version`）。Coffer 从不自行注册任何东西，守护进程启动时也不会自动注册智能体。
+Coffer 靠两个信号检测智能体：`PATH` 上的程序——用的是你登录 shell 给出的 `PATH`，所以即使守护进程是从 Dock 启动的，用 Homebrew 或 Node 版本管理器装的智能体也能被找到——以及它的配置目录。顺带会读取程序版本（`claude --version`、`codex --version`、`agy --version`）。Antigravity 常常只装了 App、没有 `agy`：`agy` 不在 `PATH` 上时，Coffer 会在 `/Applications` 和 `~/Applications` 里找 `Antigravity.app`，并从应用里读出版本。Coffer 从不自行注册任何东西，守护进程启动时也不会自动注册智能体。
 
 Coffer 会报告每一种受支持的类型（无论是否已注册），状态是以下之一：
 
@@ -54,7 +61,7 @@ Coffer 会报告每一种受支持的类型（无论是否已注册），状态�
 
 对每种类型，Coffer 会查看它的标准目录；如果守护进程的环境设置了该类型自己的变量（Claude Code 是 `CLAUDE_CONFIG_DIR`，Codex 是 `CODEX_HOME`），还会查看变量指向的目录。第二个目录永远不会成为第二个智能体：标准目录存在时，它作为这唯一智能体的**使用其他配置目录**选项提供；只有它存在时，它就是「连接」注册的目录。Coffer 不会搜索磁盘的其他位置；要使用别的目录，见[使用其他配置目录](#use-a-different-config-directory)。已注册的类型不会再次提供。
 
-**Web 界面：** **智能体**页面始终恰好有两行，先 Claude Code 后 Codex，不管各自是否安装。检测是自动的——打开页面时、窗口重新获得焦点时，以及每隔几分钟——所以没有「检测」按钮，也没有「添加智能体」对话框。每一行显示一种状态，并提供它对应的那一个操作：
+**Web 界面：** **智能体**页面始终恰好有三行，依次是 Claude Code、Codex 和 Antigravity，不管各自是否安装。检测是自动的——打开页面时、窗口重新获得焦点时，以及每隔几分钟——所以没有「检测」按钮，也没有「添加智能体」对话框。每一行显示一种状态，并提供它对应的那一个操作：
 
 | 行显示 | 含义 | 操作 |
 | --- | --- | --- |
@@ -68,7 +75,7 @@ Coffer 会报告每一种受支持的类型（无论是否已注册），状态�
 
 Coffer 不负责安装智能体，而安装又依赖具体机器，所以找不到程序的行会把活交给一个智能体，而不是给出安装命令。该行在 **⋯** 前面放着交接拆分按钮**交给 &lt;Agent&gt; ▾**，用的是守护进程写的一段提示词：在这台机器上安装（或重装）这个智能体，保留它现有的配置目录，确保它的程序能在 Coffer 查找的 `PATH` 上被找到（提示词里列出了这个 `PATH`），并用 `claude --version` 或 `codex --version` 确认，然后回来点**再检查一次**——登录留给你自己。**交给 &lt;Agent&gt;**会在你的首选终端里启动默认的交接智能体，把提示词作为它的第一条消息；▾ 后面是**交给**另一个智能体（它可用时）和**复制提示词**，后者复制它，给 Coffer 之外的任意助手用。没有受管智能体可以执行时（缺失的智能体自己装不了自己），该行只提供**复制提示词**。**⋯** 菜单不会重复它。智能体页面概览 tab 的问题状态里也提供同样的提示词。你仍然可以按厂商文档自己安装智能体；程序一出现在 `PATH` 上，这一行会自动更新。
 
-对新发现的智能体点**连接**，会在标准目录注册它并连接它。它会先打开**审阅改动**——列出将写入的每个文件和新增的行——在你应用之前什么都不写。首次运行时，如果两个智能体都已安装且都没连接，**全部连接**会在一次确认里审阅并连接两者。已注册的行还会显示它的提供商（它所用的 Coffer 连接，或它的内置登录）、从智能体自己的配置里读出的默认模型（配置里没写时显示**内置默认**，即智能体按厂商的默认走；智能体自己报告了默认模型时（Codex 会报告）括号里写出它），以及有多少技能、MCP 服务器和插件送达它，点开进入智能体的页面。表格下方有一行说明这些数量的含义。
+对新发现的智能体点**连接**，会在标准目录注册它并连接它。它会先打开**审阅改动**——列出将写入的每个文件和新增的行——在你应用之前什么都不写。首次运行时，如果还没有任何智能体连接、且至少装了两个，**全部连接**会在一次确认里审阅并连接所有已安装的智能体。已注册的行还会显示它的提供商（它所用的 Coffer 连接，或它的内置登录）、从智能体自己的配置里读出的默认模型（配置里没写时显示**内置默认**，即智能体按厂商的默认走；智能体自己报告了默认模型时（Codex 会报告）括号里写出它），以及有多少技能、MCP 服务器和插件送达它，点开进入智能体的页面。表格下方有一行说明这些数量的含义。
 
 ### 使用其他配置目录 {#use-a-different-config-directory}
 
@@ -84,7 +91,7 @@ Claude Code 用 `CLAUDE_CONFIG_DIR` 启动时会读取另一个目录，Codex �
 
 ### 编辑和断开连接 {#edit-and-disconnect}
 
-智能体行和智能体页面上的 **⋯** 菜单包含**使用其他配置目录…**、**在访达中显示配置目录**、**复制 uid**、和**断开连接…**（只要有任何部分已安装）。没有**移除**：列表里始终有两个受支持智能体各一行，想把 Coffer 的条目从某个智能体里拿掉，就断开它。
+智能体行和智能体页面上的 **⋯** 菜单包含**使用其他配置目录…**、**在访达中显示配置目录**、**复制 uid**、和**断开连接…**（只要有任何部分已安装）。没有**移除**：列表里始终为每个受支持的智能体各留一行，想把 Coffer 的条目从某个智能体里拿掉，就断开它。
 
 - **编辑**修改配置目录或[模型绑定](#models)。名字就是类型，不能改。所有引用智能体的地方——生效范围列表、消息渠道的默认智能体、已安装的 MCP 条目——保存的都是智能体不可变的 `uid`。
 - **断开连接…**会从智能体里删掉 Coffer 的网关条目，文件里的其他内容原样保留（见[把智能体接入 Coffer](#connect-an-agent-to-coffer)）。智能体仍保持已注册，所以[生效范围](/zh/guides/skills)授予它的技能会继续投递。
@@ -194,6 +201,11 @@ Coffer 的每次写入：
 | `codex` | `config` | `<config_dir>/config.toml` |
 | | `instructions` | `<config_dir>/AGENTS.md` |
 | | `hooks` | `<config_dir>/hooks.json` |
+| `antigravity` | `mcp` | `<config_dir>/mcp_config.json` |
+| | `config` | `<config_dir>/config.json` |
+| | `instructions` | `<config_dir>/AGENTS.md` |
+| | `rules` | `<config_dir>/rules/`——一个目录，每条规则一个 Markdown 文件 |
+| | `hooks` | `<config_dir>/hooks.json` |
 
 **Web 界面：** 打开智能体，选择**配置文件**。这个 tab 左边是文件树，右边是只读预览，中间的分隔条可以拖动。文件树列出智能体的配置文件；`agents/` 这样的目录条目可展开，列出里面的文件。只列出已存在的文件：智能体还没创建的文件不会出现，因为 Coffer 不创建配置文件。选中一个文件即可按磁盘上的原样预览——进入时默认打开第一个文件，当前打开的文件记在页面地址里。预览顶部的工具栏显示文件路径和大小，并有**在编辑器中打开**和**在访达中显示**；文件树顶部的图标可在访达中显示整个配置文件夹。要修改文件，用**在编辑器中打开**。Coffer 没有编辑器、**新建文件**或**删除**：配置文件要在你自己的编辑器里改（在**设置 › 通用**里选择），或者让智能体去改。Coffer 自己对这些文件的改动——接入、修复、插件开关、MCP 条目、切换提供商——都会先经过**审阅改动**。
 
@@ -271,7 +283,7 @@ Coffer 从不写 Claude Code 自己的清单文件。当 `claude` CLI 不在 `PA
 
 ## Web 界面中的智能体页面 {#the-agent-page-in-the-web-ui}
 
-智能体页面以智能体类型寻址（`/agents/claude_code`、`/agents/codex`）。页面头部有智能体的图标、名字、一个状态标签和 **⋯** 菜单——名字下面没有说明行——它也永远不会变成修复按钮。下面是七个 tab，都不带数量。六个在标签栏里，各有自己的地址：**总览**（`/agents/<type>`）、**技能**、**MCP 服务器**、**Hooks**、**配置文件**和**会话**（`…/skills`、`…/mcp-servers`、`…/hooks`、`…/config`、`…/sessions`）。**更多**里放最少用的**插件**（`…/plugins`）；它打开时，**更多**会显示它的名字并带下划线，**更多**上的警告点表示它需要处理。没有模型 tab。
+智能体页面以智能体类型寻址（`/agents/claude_code`、`/agents/codex`、`/agents/antigravity`）。页面头部有智能体的图标、名字、一个状态标签和 **⋯** 菜单——名字下面没有说明行——它也永远不会变成修复按钮。下面是七个 tab，都不带数量。六个在标签栏里，各有自己的地址：**总览**（`/agents/<type>`）、**技能**、**MCP 服务器**、**Hooks**、**配置文件**和**会话**（`…/skills`、`…/mcp-servers`、`…/hooks`、`…/config`、`…/sessions`）。**更多**里放最少用的**插件**（`…/plugins`）；它打开时，**更多**会显示它的名字并带下划线，**更多**上的警告点表示它需要处理。没有模型 tab。
 
 **总览**是单列，从上到下：
 

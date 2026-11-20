@@ -38,7 +38,11 @@ def members(gate: ModuleType) -> dict[str, str]:
 
 
 def test_the_members_are_read_from_the_enum(members: dict[str, str]) -> None:
-    assert members == {"CLAUDE_CODE": "claude_code", "CODEX": "codex"}
+    assert members == {
+        "CLAUDE_CODE": "claude_code",
+        "CODEX": "codex",
+        "ANTIGRAVITY": "antigravity",
+    }
 
 
 @pytest.mark.parametrize(

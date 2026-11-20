@@ -40,7 +40,7 @@ What each box is:
 
 | Part | What it is |
 | --- | --- |
-| Coding agents | Claude Code and Codex, the two agent types Coffer registers. Each reaches Coffer through an MCP server entry Coffer writes into its config, and reads skills Coffer delivers into its skills directory. |
+| Coding agents | Claude Code, Codex and Antigravity, the three agent types Coffer registers. Each reaches Coffer through an MCP server entry Coffer writes into its config, and reads skills Coffer delivers into its skills directory. |
 | `coffer-mcp-shim` | A small stdio-to-HTTP forwarder the agent launches as an MCP server. It finds (or starts) the daemon and relays JSON-RPC to `/mcp`, stamping the agent's identity onto the handshake. |
 | `coffer` CLI | A Typer application with a command for every operation the UI offers, each registered from one command registry, plus the daemon's lifecycle, `coffer update` and `coffer uninstall`, the logs and `coffer run`. Each command that reads or writes state is an HTTP call to the daemon; the CLI never opens the database or the secret store itself. |
 | Web UI | A React single-page app, built to static files that the daemon serves from its own origin. |

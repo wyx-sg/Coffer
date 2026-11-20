@@ -168,7 +168,7 @@ def test_the_manual_names_one_tool_and_the_log_reader() -> None:
     assert "coffer path knowledge" not in text
     assert "coffer path memory" not in text
     assert "trigger" not in text
-    # Memory reaches an agent through its own native memory: no root is named.
+    # Memory reaches a session through the memory hook: no derived root is named.
     assert "derived/memory" not in text
     assert "<MEMORY_ROOT>" not in text
     # Coffer's own logs are read with ``coffer log`` and located with ``coffer path logs``.

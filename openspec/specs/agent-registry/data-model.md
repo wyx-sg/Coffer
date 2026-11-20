@@ -557,7 +557,7 @@ the routers are mounted in `surfaces/http/routing.py`. Together they:
    `agent_connection_wiring` builds over the agent and MCP services once the
    kinds are wired),
    `agent_workspace_routes` (MCP entries + plugins),
-   `agent_native_memory_routes`, `agent_session_routes`,
+   `agent_session_routes`,
    and `agent_unmanaged_skill_routes`. The `/fs/*` routes the picker and the
    open/reveal affordances call are mounted by spec daemon, not here.
 

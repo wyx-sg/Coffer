@@ -28,7 +28,7 @@ export type AgentTab = (typeof AGENT_TABS)[number];
 export const DEFAULT_AGENT_TAB: AgentTab = "overview";
 
 /** The supported types, in the Agents page's order. */
-export const AGENT_TYPES: readonly AgentType[] = ["claude_code", "codex"];
+export const AGENT_TYPES: readonly AgentType[] = ["claude_code", "codex", "antigravity"];
 
 export function isAgentType(value: string | undefined): value is AgentType {
   return value !== undefined && (AGENT_TYPES as readonly string[]).includes(value);

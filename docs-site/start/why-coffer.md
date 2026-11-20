@@ -21,7 +21,7 @@ This page explains the decisions that shape Coffer, for readers deciding whether
 
 ## The agent's own files stay the source of truth
 
-**The decision.** Coffer never copies an agent's configuration, MCP entries, plugins or transcripts into its own store. It reads them from the agent's files each time it needs them. When Coffer writes, it writes only documented, allowlisted entries: its own `coffer` MCP entry, a config file you edit in the UI, a plugin switch, and, with memory sync on, its own copies of your other agents' memories. Each write is atomic and first copies the previous version to `~/.coffer/config-backups`, outside the agent's directory. Codex's TOML is edited in a way that keeps your comments and ordering.
+**The decision.** Coffer never copies an agent's configuration, MCP entries, plugins or transcripts into its own store. It reads them from the agent's files each time it needs them. When Coffer writes, it writes only documented, allowlisted entries: its own `coffer` MCP entry, a config file you edit in the UI, a plugin switch, and, with memory on, one session-start hook that hands a session its project's memories. Each write is atomic and first copies the previous version to `~/.coffer/config-backups`, outside the agent's directory. Codex's TOML is edited in a way that keeps your comments and ordering.
 
 **Why.** A second copy of an agent's settings goes stale the moment you edit the original, and then someone has to decide which copy wins. Reading from the original means there is nothing to reconcile.
 

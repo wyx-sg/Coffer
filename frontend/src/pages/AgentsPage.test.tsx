@@ -110,7 +110,7 @@ describe("AgentsPage", () => {
         fakeDaemon({ types: [typeRow({ type: "claude_code" }), typeRow({ type: "codex" })] }),
       );
       renderPage();
-      const addBoth = await screen.findByRole("button", { name: "Connect both" });
+      const addBoth = await screen.findByRole("button", { name: "Connect all" });
       // One off state: a newly found agent reads Not connected, with Connect.
       expect(within(rowOf("Claude Code")).getByText("Not connected")).toBeInTheDocument();
       expect(
@@ -140,9 +140,9 @@ describe("AgentsPage", () => {
       expect(writes()[0].body).toEqual({ type: "claude_code" });
       fireEvent.click(within(dialog).getByRole("button", { name: "Done" }));
       await waitFor(() =>
-        expect(screen.queryByRole("button", { name: "Connect both" })).not.toBeInTheDocument(),
+        expect(screen.queryByRole("button", { name: "Connect all" })).not.toBeInTheDocument(),
       );
-      expect(screen.queryByRole("button", { name: "Connect both" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Connect all" })).not.toBeInTheDocument();
     },
   );
 
@@ -159,7 +159,7 @@ describe("AgentsPage", () => {
       return undefined;
     };
     renderPage();
-    fireEvent.click(await screen.findByRole("button", { name: "Connect both" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Connect all" }));
     const dialog = await screen.findByRole("dialog");
     fireEvent.click(within(dialog).getByRole("button", { name: "Apply 2 changes" }));
     const retry = await within(dialog).findByRole("button", { name: "Retry 1 change" });
@@ -346,7 +346,7 @@ describe("AgentsPage", () => {
     daemon.fail = undefined;
     daemon.types = [typeRow({ type: "claude_code" }), typeRow({ type: "codex" })];
     fireEvent.click(screen.getByRole("button", { name: /retry/i }));
-    expect(await screen.findByRole("button", { name: "Connect both" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Connect all" })).toBeInTheDocument();
   });
 
   it("a built-in login shows the agent's own default, never a stale provider model", async () => {

@@ -127,10 +127,15 @@ function renderPage(at = "/memory") {
   return render(ui);
 }
 
+// The list renders before its topics load, so a row is waited for, never read at once.
 const rowOf = (scope: HTMLElement, text: string) =>
-  within(scope)
-    .getAllByRole("row")
-    .find((r) => r.textContent?.includes(text)) as HTMLElement;
+  waitFor(() => {
+    const row = within(scope)
+      .queryAllByRole("row")
+      .find((r) => r.textContent?.includes(text));
+    expect(row).toBeDefined();
+    return row as HTMLElement;
+  });
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -150,10 +155,10 @@ describe("MemoryPage", () => {
     const list = await screen.findByTestId("memory-list");
     expect(list).toHaveTextContent(FOLDER);
     expect(list).toHaveTextContent("2 files");
-    expect(rowOf(list, "Testing")).toHaveTextContent("How to work");
-    expect(rowOf(list, "Testing")).toHaveTextContent("Run only the failing tests.");
+    expect(await rowOf(list, "Testing")).toHaveTextContent("How to work");
+    expect(await rowOf(list, "Testing")).toHaveTextContent("Run only the failing tests.");
     expect(
-      within(rowOf(list, "notes")).getByLabelText("Doesn't follow the memory format"),
+      within(await rowOf(list, "notes")).getByLabelText("Doesn't follow the memory format"),
     ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /scratch/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Tidy" })).toHaveAttribute(
