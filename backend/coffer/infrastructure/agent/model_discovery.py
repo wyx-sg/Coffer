@@ -29,15 +29,16 @@ from typing import Any
 from coffer.application.agent.model_catalogue import ModelDiscoveryPort
 from coffer.domain.agent.allowlists import claude_global_config, opencode_config_file
 from coffer.domain.agent.model_catalogue import AgentModel
-from coffer.domain.provider.opencode_projection import OPENCODE_PROVIDER_ID
 
 _log = logging.getLogger(__name__)
 
 #: Claude Code's cache of the extra model options its own picker offers, e.g.
 #: ``[{"value": "…[1m]", "label": "…", "description": "…"}]``.
 _CLAUDE_CACHE_KEY = "additionalModelOptionsCache"
-#: The prefix of a model OpenCode runs on Coffer's own provider.
-_OPENCODE_COFFER = OPENCODE_PROVIDER_ID + "/"
+#: The prefix of a model OpenCode runs on Coffer's own provider: the
+#: ``provider.coffer`` block the provider projection writes. Spelled out here
+#: because the agent kind does not import the provider kind.
+_OPENCODE_COFFER = "coffer/"
 
 
 class ChainedModelDiscovery:
