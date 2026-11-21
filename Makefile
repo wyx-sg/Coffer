@@ -212,6 +212,7 @@ lint: node-check
 	$(PY) scripts/check_coffer_paths.py
 	$(PY) scripts/check_agent_type_branches.py
 	$(PY) scripts/check_frontend_colors.py
+	$(PY) scripts/check_frontend_agent_types.py
 	$(PY) scripts/check_ignored_sources.py
 # Every Python tree is checked under the project's rules. `backend/**` gets them
 # from backend/pyproject.toml; `evals/**` used to get ruff's built-in defaults

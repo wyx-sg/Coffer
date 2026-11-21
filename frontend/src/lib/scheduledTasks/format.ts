@@ -10,6 +10,7 @@ import type {
   ScheduledTask,
   ScheduledTaskConfig,
 } from "@/lib/api/scheduledTasks";
+import { agentTypeLabel } from "@/lib/agents/display";
 import type { StatusTone } from "@/lib/statusTone";
 
 /** A schedule in words: "Every day at 18:00", "Fridays at 17:30", with its
@@ -23,16 +24,10 @@ export function scheduleText(t: TFunction, schedule: Schedule, lang: string): st
 /** How many of a task's latest runs its History shows (the route's own ceiling). */
 export const RUNS_SHOWN = 200;
 
-/** The agents a task may run on, by key, as the page names them. */
-export const AGENTS = [
-  { key: "claude_code", label: "Claude Code" },
-  { key: "codex", label: "Codex" },
-] as const;
-
 /** The agent a task runs on, with its model when it names one. */
 export function agentText(task: ScheduledTask): string {
   const c = task.config;
-  const agent = AGENTS.find((a) => a.key === c.agent)?.label ?? c.agent;
+  const agent = agentTypeLabel(c.agent);
   return c.model ? `${agent} · ${c.model}` : agent;
 }
 
@@ -155,7 +150,7 @@ export function formFrom(task?: ScheduledTask): TaskForm {
     expr: s?.kind === "cron" ? s.expr : "0 9 * * 1-5",
     timezone: s && "timezone" in s ? (s.timezone ?? "") : "",
     at: s?.kind === "once" ? localInput(s.at) : "",
-    agent: c?.agent ?? "claude_code",
+    agent: c?.agent ?? "",
     model: c?.model ?? "",
     cwd: c?.cwd ?? null,
     catchUp: c?.catch_up ?? true,

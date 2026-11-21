@@ -61,7 +61,7 @@ AgentSkills 规范把 `description` 限制在 1024 个字符以内，但 Claude 
 | `~/.coffer/vault/skills/<name>/` | 主文件夹。这是你唯一需要编辑的副本。 |
 | `~/.claude/skills/<name>`（Claude Code）和 `~/.agents/skills/<name>`（Codex） | 每个智能体技能文件夹中投递的链接，指向主文件夹。配置目录不是默认位置的 Claude Code 智能体，链接在 `<config_dir>/skills/<name>`。 |
 
-`~/.agents/skills/` 由 Codex、Cursor、OpenCode 和 DeepSeek Harness 共用，所以 Coffer 在那里每个技能只放一个链接，只要技能的生效范围包含任何一个读这个文件夹的智能体就放。生效范围没法让其中一个看到、另一个看不到：只生效于 Codex 的技能，Cursor、OpenCode 和 DeepSeek Harness 也会看到。
+`~/.agents/skills/` 由 Codex、Cursor、OpenCode 和 DeepSeek Harness 共用，所以 Coffer 在那里每个技能只放一个链接，只要技能的生效范围包含任何一个读这个文件夹的智能体就放。生效范围没法让其中一个看到、另一个看不到：只生效于 Codex 的技能，Cursor、OpenCode 和 DeepSeek Harness 也会看到。Cursor 和 OpenCode 还会读 `~/.claude/skills`，所以生效于 Claude Code 的技能它们也会看到。生效范围面板会在智能体列表下用一行说明这一点：哪些已添加的智能体共用一个文件夹，哪些还会看到投递给别的智能体的技能。
 
 Codex 仍会读取旧的 `~/.codex/skills/` 文件夹，但已经把它标为弃用；Coffer 投递到 Codex 文档写明的 `~/.agents/skills/`，并在下一轮把以前放在旧文件夹里的链接挪过去，所以 Codex 不会把同一个技能列出两次。
 

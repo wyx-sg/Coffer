@@ -3143,6 +3143,11 @@
     "history": {
       "builtinTitle": "Coffer’s own skill has no history",
       "builtinBody": "Its files are rebuilt from the running build at every start, so there is no earlier version to go back to."
+    },
+    "reach": {
+      "sharedFolder": "{{agents}} read one skills folder, so a skill that reaches one of them reaches them all.",
+      "sharedFolderAlso": "{{agents}} read one skills folder, and {{also}} read it too, so a skill that reaches one of them reaches them all.",
+      "alsoSeen": "A skill that reaches {{agent}} is also seen by {{others}}, which read its skills folder."
     }
   },
   "knowledge": {
@@ -6512,6 +6517,7 @@
       "timezone": "Timezone",
       "timezonePlaceholder": "This Mac's time",
       "timezoneHint": "In the timezone you name (an IANA name such as Asia/Singapore), or this Mac's local time.",
+      "noAgent": "No agent on this Mac can run a task. The agents guide lists which ones Coffer can run.",
       "agentDefaultNamed": "Agent default ({{model}})",
       "editBody": "The prompt is the task's PROMPT.md: edit it on the Overview tab.",
       "prompt": "Prompt",

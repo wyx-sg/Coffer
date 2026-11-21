@@ -43,6 +43,7 @@ const AGENT: AgentOut = {
 };
 const TYPE_ROW: AgentTypeOut = {
   features: FULL_AGENT_FEATURES,
+  skill_dirs_read: ["/Users/me/.claude/skills"],
   type: "claude_code",
   name: "claude-code",
   display_name: "Claude Code",

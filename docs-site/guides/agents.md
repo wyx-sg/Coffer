@@ -29,7 +29,25 @@ Coffer supports six agent types:
 
 The CLI and IDE forms of each product read the same config directory, so one registered agent covers both. The Claude Desktop chat app has its own configuration and is not a supported agent.
 
-Not every type gets everything. Claude Code and Codex get all of it. Antigravity gets what its config folder allows; see [What Antigravity gets](#what-antigravity-gets). Cursor, OpenCode and DeepSeek Harness get Coffer's gateway MCP entry, skills, their config files and a listing of their own MCP entries; a [model provider](/guides/providers), [chat](/guides/chat) and [channels](/guides/channels), [memory](/guides/memory), sessions, plugins and hooks are not available for them yet. Their agent page shows only the tabs that apply. See [Cursor, OpenCode and DeepSeek Harness](#cursor-opencode-and-deepseek-harness).
+### What each agent gets
+
+Not every type gets everything. The table says what Coffer does for each one, and for each gap, why:
+
+- **✓**: Coffer does it.
+- **not offered**: the product has no way for Coffer to do it, such as a custom model endpoint.
+- **terms**: the product's terms do not allow it.
+- **not yet**: the product could, and Coffer does not do it yet.
+
+| Type | MCP gateway | Skills | Model provider | Chat, channels, scheduled tasks | Sessions | Plugins | Hooks | Memory at session start |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `claude_code` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `codex` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `antigravity` | ✓ | ✓ | not offered | terms | not offered | not yet | not yet | not offered |
+| `cursor` | ✓ | ✓ | not offered | not yet | not yet | not yet | not yet | not yet |
+| `opencode` | ✓ | ✓ | not yet | not yet | not yet | not yet | not yet | not yet |
+| `deepseek_harness` | ✓ | ✓ | not yet | not yet | not yet | not yet | not yet | not yet |
+
+A column maps to a page: [MCP gateway](/guides/mcp-servers), [skills](/guides/skills), [model provider](/guides/providers), [chat](/guides/chat) and [channels](/guides/channels), sessions and plugins and hooks on the agent's own page (below), and [memory](/guides/memory). Coffer leaves out what an agent lacks rather than greying it out: its page has no tab for it, and a picker, such as the agent of a chat or a scheduled task, lists only the agents that can do the thing on this Mac. See [What Antigravity gets](#what-antigravity-gets) and [Cursor, OpenCode and DeepSeek Harness](#cursor-opencode-and-deepseek-harness). The [decision record](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/what-coffer-does-for-an-agent-follows-from-its-facets.md) explains why.
 
 ### What Antigravity gets
 
@@ -290,7 +308,7 @@ These three types are supported for the parts that work the same way for every a
 - **Skills go to `~/.agents/skills`.** All three read personal skills from there (Cursor and OpenCode also read `~/.claude/skills`), and so does Codex. Coffer keeps one link per skill in that shared folder, and delivers a skill there when its [reach](/guides/skills) includes any agent that reads the folder. A skill whose reach names only Codex is therefore also seen by Cursor, OpenCode and DeepSeek Harness when they are installed.
 - **OpenCode** 1.x and 2.x name the MCP table differently. Coffer writes its entry in the 1.x shape (`mcp.coffer`), which 2.x still reads, and lists entries of both shapes. A 2.x entry under `mcp.servers` can be removed and adopted like any other.
 - **DeepSeek Harness** composes its configuration from YAML patch layers that may hold `!!js` expressions, so Coffer never rewrites the whole file. Its own row lives in the marked block shown in [What gets written where](#what-gets-written-where), and connecting or disconnecting replaces only that block. The other MCP rows are listed but cannot be removed or adopted from Coffer (`MCP_ENTRY_NOT_EDITABLE`): edit `cordis.patch.yml` yourself. Coffer only adds its block to a file whose top level is a block-style list (`- …`); a flow-style file is refused with `CONFIG_FILE_FORMAT_INVALID`.
-- **Not yet available:** pointing these agents at a Coffer [model provider](/guides/providers), running them from [chat](/guides/chat), [channels](/guides/channels) or [scheduled tasks](/guides/scheduled-tasks), the [memory](/guides/memory) hook, the sessions list, plugins and hooks. Their agent page has no Model section and no Plugins, Hooks or Sessions tab.
+- **Not yet available:** pointing OpenCode and DeepSeek Harness at a Coffer [model provider](/guides/providers) (Cursor offers no custom model endpoint, so it never takes one), running them from [chat](/guides/chat), [channels](/guides/channels) or [scheduled tasks](/guides/scheduled-tasks), the [memory](/guides/memory) hook, the sessions list, plugins and hooks. Their agent page has no Model section and no Plugins, Hooks or Sessions tab.
 
 ## Plugins
 

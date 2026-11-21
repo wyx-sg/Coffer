@@ -56,6 +56,7 @@ export function typeRow(over: Partial<AgentTypeOut> & Pick<AgentTypeOut, "type">
     install_handoff: null,
     install_url: "",
     features: [...FULL_AGENT_FEATURES],
+    skill_dirs_read: [`${dir}/skills`],
     ...over,
   };
 }

@@ -80,6 +80,11 @@ class AgentDescriptor:
     #: agent's older location, still scanned for skills it holds (ADR
     #: codex-skills-go-to-agents-skills).
     skill_home_subpath: str | None = None
+    #: Other skills directories, relative to ``$HOME``, the agent also reads on
+    #: its own (Cursor and OpenCode read ``~/.claude/skills``). Coffer never
+    #: delivers there for this agent; the list only lets the reach panel say
+    #: which agents see a skill delivered to another agent's directory.
+    skill_also_reads: tuple[str, ...] = ()
     #: The environment variable the agent's own runtime reads a non-default
     #: config directory from (``CLAUDE_CONFIG_DIR``, ``CODEX_HOME``). Every
     #: process Coffer spawns to run the agent carries it for a custom
@@ -125,6 +130,11 @@ class AgentDescriptor:
         if self.skill_home_subpath is not None:
             return _home() / self.skill_home_subpath
         return self.default_config_dir() / self.skill_subpath
+
+    def skill_dirs_read(self) -> tuple[pathlib.Path, ...]:
+        """Every skills directory the agent reads at its standard location:
+        the one Coffer delivers to, then the ones it also reads on its own."""
+        return (self.default_skill_dir(), *(_home() / p for p in self.skill_also_reads))
 
     def skill_dir_for(self, config_dir: pathlib.Path) -> pathlib.Path:
         """Where skills are delivered for an agent whose config dir is ``config_dir``."""
@@ -242,6 +252,9 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
         # Cursor reads ~/.agents/skills (and ~/.cursor/skills); Coffer
         # delivers to the shared directory once for every agent reading it.
         skill_home_subpath=".agents/skills",
+        # It also loads Claude Code's folder, and its CLI offers no way to stop
+        # that (cursor.com docs/skills; Cursor forum thread 166558).
+        skill_also_reads=(".claude/skills",),
         mcp=McpInjectionSpec(
             config_key="mcp",
             container_key="mcpServers",
@@ -258,6 +271,8 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
         program="opencode",
         install_url="https://opencode.ai/docs",
         skill_home_subpath=".agents/skills",
+        # It also loads Claude Code's folder (opencode.ai docs/skills).
+        skill_also_reads=(".claude/skills",),
         mcp=McpInjectionSpec(
             config_key="config",
             # The 1.x shape (servers directly under `mcp`), which 2.x still

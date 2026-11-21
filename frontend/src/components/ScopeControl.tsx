@@ -43,9 +43,18 @@ interface Props {
   scope?: Scope | null;
   /** The resource's name, shown in the popover head. */
   resourceName?: string;
+  /** A quiet line under the agent list (a skill's "also seen by …"). */
+  footnote?: string;
 }
 
-export function ScopeControl({ kind, uid, enabled, scope: presetScope, resourceName }: Props) {
+export function ScopeControl({
+  kind,
+  uid,
+  enabled,
+  scope: presetScope,
+  resourceName,
+  footnote,
+}: Props) {
   const { t } = useTranslation();
   const prefetched = presetScope !== undefined;
   const { data: fetchedScope } = useResourceScope(uid, !prefetched);
@@ -75,6 +84,7 @@ export function ScopeControl({ kind, uid, enabled, scope: presetScope, resourceN
       initialScope={shown.scope}
       note={note}
       resourceName={resourceName}
+      footnote={footnote}
       saveState={writes.state}
       failure={writes.failure}
       onClose={writes.flush}
