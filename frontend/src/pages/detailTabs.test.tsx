@@ -36,7 +36,10 @@ vi.mock("@/lib/hooks/useScope", () => ({
   useUpdateResourceScope: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useBulkReach: vi.fn(() => ({ disable: vi.fn(), enable: vi.fn(), isPending: false })),
 }));
-vi.mock("@/lib/hooks/useAgents", () => ({ useAgents: vi.fn(() => ({ data: [] })) }));
+vi.mock("@/lib/hooks/useAgents", () => ({
+  useAgents: vi.fn(() => ({ data: [] })),
+  useAgentTypes: vi.fn(() => ({ data: [] })),
+}));
 vi.mock("@/lib/hooks/useResourceMutations", () => ({
   useRenameResource: vi.fn(() => ({
     mutate: vi.fn(),

@@ -291,7 +291,9 @@ it took and its conversation, searchable and filtered by outcome and by what
 started it). It offers Run now (refused while it runs), Pause or Resume, Edit
 (through a dialog, for everything but the prompt) and Delete. **New task** asks
 for a name, the prompt, the schedule (with a timezone for a repeating one), the
-agent, the model — the agent's default or one of the models the agent offers —
+agent — one Coffer can run a turn on here, the first of them chosen for a new
+task, so a type with no driver or not installed is never offered — the model —
+the agent's default or one of the models the agent offers —
 and, optionally, the folder its runs work in, picked with the folder picker;
 once created, the task is open on its Overview. The CLI
 mirrors the page: `coffer task
@@ -306,6 +308,11 @@ list|show|add|prompt|update|enable|disable|delete|run|runs`.
 - **GIVEN** no channel at all
 - **WHEN** the owner presses New task, names it, writes its prompt, picks Claude Code and "Every day" at 08:30
 - **THEN** the task is listed on Claude Code, enabled, and opens on its Overview with that prompt
+
+#### Scenario: the agent picker offers only agents that can run here
+- **GIVEN** Claude Code is installed and Codex is not
+- **WHEN** the owner presses New task
+- **THEN** the agent is Claude Code, and Codex is not offered
 
 #### Scenario: the owner reads and edits a task's prompt on its page
 - **GIVEN** a task

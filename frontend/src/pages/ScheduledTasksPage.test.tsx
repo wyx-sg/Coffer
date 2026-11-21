@@ -31,6 +31,17 @@ vi.mock("@/lib/api/agentModels", () => ({
     }),
   },
 }));
+// Codex is not installed here, so the agent picker offers Claude Code only.
+vi.mock("@/lib/api/agentProviders", () => ({
+  agentProvidersApi: {
+    list: vi.fn().mockResolvedValue({
+      agents: [
+        { agent_key: "claude_code", display_name: "Claude Code", available: true },
+        { agent_key: "codex", display_name: "Codex", available: false },
+      ],
+    }),
+  },
+}));
 vi.mock("@/lib/api/resources", () => ({
   resourcesApi: { update: vi.fn(), enable: vi.fn(), disable: vi.fn(), remove: vi.fn() },
 }));
@@ -270,4 +281,20 @@ describe("ScheduledTasksPage", () => {
       expect(screen.getByTestId("where")).toHaveTextContent("/scheduled-tasks/t-new"),
     );
   });
+
+  acceptance(
+    "scheduled-tasks",
+    "the agent picker offers only agents that can run here",
+    async () => {
+      api.list.mockResolvedValue([]);
+      renderPage();
+      fireEvent.click((await screen.findAllByRole("button", { name: "New task" }))[0]);
+      const dialog = await screen.findByRole("dialog");
+      const agent = within(dialog).getByRole("combobox", { name: "Agent" });
+      await waitFor(() => expect(agent).toHaveTextContent("Claude Code"));
+      fireEvent.keyDown(agent, { key: "ArrowDown" });
+      expect(await screen.findByRole("option", { name: "Claude Code" })).toBeInTheDocument();
+      expect(screen.queryByRole("option", { name: "Codex" })).toBeNull();
+    },
+  );
 });

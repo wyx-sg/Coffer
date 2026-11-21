@@ -15,6 +15,7 @@ import { useTranslation } from "react-i18next";
 import { GitBranch, GitCommitHorizontal, Sparkle } from "lucide-react";
 
 import { ScopeControl } from "@/components/ScopeControl";
+import { useSharedReadersNote } from "@/lib/skills/sharedReaders";
 import { SkillActionsMenu } from "@/components/skills/SkillActionsMenu";
 import { StatusPill } from "@/components/status/StatusPill";
 import { abbreviateHomePath } from "@/lib/agents/display";
@@ -125,6 +126,7 @@ function MetaLine({ skill, masterMissing }: { skill: SkillOut; masterMissing: bo
 
 export function SkillDetailHeader({ skill, status, onDeleted }: Props) {
   const { t } = useTranslation();
+  const sharedNote = useSharedReadersNote();
   const tone = TONE[status];
   const masterMissing = status === "masterMissing";
   return (
@@ -160,7 +162,13 @@ export function SkillDetailHeader({ skill, status, onDeleted }: Props) {
         </p>
       </div>
       <span className="inline-flex shrink-0 items-center gap-2">
-        <ScopeControl kind="skill" uid={skill.uid} enabled={skill.enabled} scope={skill.scope} />
+        <ScopeControl
+          kind="skill"
+          uid={skill.uid}
+          enabled={skill.enabled}
+          scope={skill.scope}
+          footnote={sharedNote}
+        />
         <SkillActionsMenu skill={skill} onDeleted={onDeleted} />
       </span>
     </header>

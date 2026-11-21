@@ -60,6 +60,8 @@ interface Props {
   note?: string;
   /** The resource's name, shown in mono at the right of the panel's head. */
   resourceName?: string;
+  /** A quiet line under the agent list (a skill's "also seen by …"). */
+  footnote?: string;
   onDisabled: () => void;
   onEverywhere: () => void;
   /** Fired on every switch to Chosen agents and every tick, with the whole
@@ -85,6 +87,7 @@ export function ReachControl({
   initialScope = null,
   note,
   resourceName,
+  footnote,
   onDisabled,
   onEverywhere,
   onRestricted,
@@ -180,6 +183,7 @@ export function ReachControl({
             selected={selected}
             onToggle={toggle}
             lockLast
+            footnote={footnote}
             summary={summary}
             saveState={saveState}
             failure={failure}

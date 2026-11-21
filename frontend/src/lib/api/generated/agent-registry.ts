@@ -738,6 +738,11 @@ export interface components {
             name: string;
             /** Other Config Dir */
             other_config_dir: string | null;
+            /**
+             * Skill Dirs Read
+             * @default []
+             */
+            skill_dirs_read: string[];
             /** Standard Config Dir */
             standard_config_dir: string;
             state: components["schemas"]["DetectionState"];

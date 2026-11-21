@@ -247,6 +247,7 @@ make verify-installed-cli OUT=<dir> COFFER=<path>/coffer
 | `scripts/check_platform_calls.py` | 基础设施层平台部分以外的代码都不询问自己运行在哪个操作系统上。测试不受此限制。见[平台端口](/zh/architecture/platform) |
 | `scripts/check_coffer_paths.py` | 每个 `~/.coffer` 路径都在 `infrastructure/vault/home.py` 里构造，它是唯一知道目录布局并遵循 `HOME` 的模块；其他模块自己构造路径就会失败。迁移和真实 home 的测试守卫不受此限制 |
 | `scripts/check_agent_type_branches.py` | 智能体描述符及其切面以外的代码都不按智能体类型分支。见[智能体切面](/zh/architecture/agent-facets) |
+| `scripts/check_frontend_agent_types.py` | 网页界面只在智能体模块和脚本里列明原因的文件中写智能体类型名；其他地方都按智能体的 `features` 渲染 |
 | `scripts/check_frontend_colors.py` | 前端在 `src/index.css` 之外没有颜色字面量；每种颜色都是主题 token |
 | `scripts/check_ignored_sources.py` | 没有 `.gitignore` 规则隐藏源码树中的文件，也没有未锚定的模式命中 `lib/` 或 `env/` 这类常见源码文件夹名（那样会在任意深度隐藏该文件夹） |
 | `scripts/check_bare_tasks.py` | `backend/coffer/` 下的模块启动的裸 `asyncio.create_task` / `ensure_future` 不得超出脚本中列出的额度。后台工作一律走 supervisor（它给任务命名、记录崩溃并在关停时取消）；在原地被 await 的任务连同理由登记在脚本里 |

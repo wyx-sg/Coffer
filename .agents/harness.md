@@ -64,6 +64,7 @@ line each:
 | `scripts/check_platform_calls.py`            | `make lint`           | Code outside `infrastructure/platform/` asks which operating system it runs on                                              |
 | `scripts/check_coffer_paths.py`              | `make lint`           | A `~/.coffer` path is built outside `infrastructure/vault/home.py` (allowed: migrations, the tests' isolated homes and real-home guard) |
 | `scripts/check_agent_type_branches.py`       | `make lint`           | Code outside the agent descriptor and its facets branches on an agent type (tests: `test_agent_type_gate.py`)              |
+| `scripts/check_frontend_agent_types.py`      | `make lint`           | An agent type is named in `frontend/src/` outside `lib/agents/`, `components/agent/` and the files listed with a reason in the script (tests: `test_frontend_agent_types_gate.py`) |
 | `scripts/check_frontend_colors.py`           | `make lint`           | A colour literal appears in `frontend/src/` outside `index.css` (tests: `test_frontend_colors_gate.py`)                     |
 | `scripts/check_ignored_sources.py`           | `make lint`           | A `.gitignore` rule hides a path in a source tree, or an unanchored pattern names a source-folder word such as `lib/`      |
 | `scripts/check_bare_tasks.py`                | `make lint`           | A module under `backend/coffer/` makes more `create_task` / `ensure_future` calls than its allowance in the script (background work goes through `application/runtime/supervisor`; tests: `test_bare_tasks_gate.py`) |

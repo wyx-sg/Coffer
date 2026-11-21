@@ -183,6 +183,14 @@ No other flag decides which agents a skill is FOR: neither the delivery bookkeep
 - **WHEN** the user edits the skill's scope to exclude this agent and the next reconcile runs,
 - **THEN** the delivered symlink is removed and the delivery record is cleared — scope is a hard grant, and no per-agent state can hold the copy against it.
 
+### Requirement: Name the agents that also see a skill
+Some skills folders are read by more than one agent: several types read the same delivery folder (`~/.agents/skills`), and some products also read another agent's folder on their own (Cursor and OpenCode read `~/.claude/skills`), which none of them can be told to stop ([A Shared Skills Directory Holds One Link for Every Agent That Reads It](../../../docs/decisions/a-shared-skills-directory-holds-one-link-for-every-reader.md)). So a scope that names one of those agents cannot keep the skill from the others. Every panel that sets a skill's reach MUST say so in one line under its agent list, built from the added agents' `skill_dirs_read` (spec agent-registry "Report every supported type's detection state"): the agents that read one delivery folder, and the agents that also see a skill delivered to another agent's folder. The panel shows no line when no folder is read by two added agents, and it offers no choice it cannot honour.
+
+#### Scenario: the reach panel names who else sees a skill
+- **GIVEN** Claude Code, Codex, Cursor and OpenCode are added
+- **WHEN** the owner opens a skill's reach panel
+- **THEN** a line under the agents says Codex, Cursor and OpenCode read one skills folder, and that a skill reaching Claude Code is also seen by Cursor and OpenCode
+
 ### Requirement: Report skill drift on request
 The system MUST provide a `verify` operation — a read-only facility on REST (`POST /skills/verify`) and on the Skills page (**Check copies**) — that compares each enabled binding to its on-disk target — and each delivery the rule wants whose path a folder Coffer did not put there already occupies — and reports drift categories (missing link, tampered link, foreign content at the link path, missing master, orphan master), Asking for the report MUST NOT itself repair anything. The drift report is ephemeral: each binding whose on-disk target disagrees with the binding state, categorized by drift type. A report entry carries the skill, the agent, the kind and the path, and no remedy text: the Skills page says what to do about a kind in its own words — that **Repair** puts a missing or repointed link back. An entry of a kind no repair settles also carries the hand-off of "Hand unsettled skill drift to an agent with a prompt". The Skills page lists the report's findings with the skill, the agent, the path and what the kind means, and offers the repair of "Repair repairable drift from master" for the findings it covers; the other findings stay listed for the user to act on.
 
