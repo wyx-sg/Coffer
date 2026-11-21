@@ -8,6 +8,7 @@ import { useTranslation } from "react-i18next";
 import { ReachControl } from "@/components/reach/ReachControl";
 import { Label } from "@/components/ui/label";
 import { EVERY_AGENT, type SkillReachDraft } from "@/lib/skills/reach";
+import { useSharedReadersNote } from "@/lib/skills/sharedReaders";
 
 interface Props {
   value: SkillReachDraft;
@@ -18,6 +19,7 @@ interface Props {
 
 export function SkillAddReach({ value, onChange, busy }: Props) {
   const { t } = useTranslation();
+  const footnote = useSharedReadersNote();
   return (
     <div className="flex flex-col items-start gap-1.5">
       <Label>{t("skills.addReach.availableTo")}</Label>
@@ -27,6 +29,7 @@ export function SkillAddReach({ value, onChange, busy }: Props) {
         busy={busy}
         ariaLabel={t("skills.addReach.availableTo")}
         testId="skill-add-reach"
+        footnote={footnote}
         onDisabled={() => onChange({ mode: "disabled", scope: value.scope })}
         onEverywhere={() => onChange(EVERY_AGENT)}
         onRestricted={(scope) => onChange({ mode: "restricted", scope })}

@@ -2136,6 +2136,12 @@ components:
           - type: string
           - type: 'null'
           title: Other Config Dir
+        skill_dirs_read:
+          default: []
+          items:
+            type: string
+          title: Skill Dirs Read
+          type: array
         standard_config_dir:
           title: Standard Config Dir
           type: string
@@ -2167,6 +2173,7 @@ components:
       - other_config_dir
       - install_handoff
       - install_url
+      - skill_dirs_read
       - features
       title: AgentTypeOut
       type: object

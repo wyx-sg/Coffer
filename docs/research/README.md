@@ -14,6 +14,7 @@ the ADRs the research informs. What Coffer decided, and why, lives in
 | --- | --- | --- |
 | [MCP gateways](./mcp-gateways.md) | Aggregating many upstream MCP servers behind one endpoint: curation, tool overload, auth, isolation, tool-definition integrity | `mcp-gateway` |
 | [Agent skills](./agent-skills.md) | Managing SKILL.md bundles once and delivering them into several agents | `skill-manager` |
+| [Multi-agent feature gaps](./multi-agent-feature-gaps.md) | Saying which features apply to which of several agents, and how surfaces show the gaps | `agent-registry`, `skill-manager` |
 | [Agent plugins](./agent-plugins.md) | Seeing and managing the plugins installed in a coding agent from outside it | `agent-registry` |
 | [Agent transcript history](./agent-transcript-history.md) | Browsing and reusing the session transcripts agents store locally | `agent-registry` |
 | [Provider switching](./provider-switching.md) | Switching the model provider, endpoint and key a coding agent uses | `provider-switching` |

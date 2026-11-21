@@ -304,6 +304,7 @@ make format              # ruff format + ruff --fix (backend, evals, e2e/install
 `scripts/check_docs_locales.py`,
 `scripts/check_removed_commands.py`, `scripts/check_platform_calls.py`,
 `scripts/check_coffer_paths.py`, `scripts/check_agent_type_branches.py`, `scripts/check_frontend_colors.py`,
+`scripts/check_frontend_agent_types.py`,
 `scripts/check_ignored_sources.py`, `scripts/check_error_codes_reference.py`,
 `scripts/check_bare_tasks.py`,
 `ruff check` and `ruff format --check` (over `backend/`, `evals/` and `e2e/installed/`), `mypy`

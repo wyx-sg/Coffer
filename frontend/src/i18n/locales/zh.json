@@ -3147,6 +3147,11 @@
     "history": {
       "builtinTitle": "Coffer 自带的技能没有历史",
       "builtinBody": "它的文件每次启动都按当前版本重建，没有更早的版本可以回退。"
+    },
+    "reach": {
+      "sharedFolder": "{{agents}} 读同一个技能文件夹：技能给了其中一个，其余几个也都能用。",
+      "sharedFolderAlso": "{{agents}} 读同一个技能文件夹，{{also}} 也会读它：技能给了其中一个，其余几个也都能用。",
+      "alsoSeen": "给了 {{agent}} 的技能，{{others}} 也能看到，因为它们也读 {{agent}} 的技能文件夹。"
     }
   },
   "knowledge": {
@@ -6516,6 +6521,7 @@
       "timezone": "时区",
       "timezonePlaceholder": "这台 Mac 的时间",
       "timezoneHint": "按你填的时区（IANA 名称，例如 Asia/Singapore），不填就按这台 Mac 的本地时间。",
+      "noAgent": "这台 Mac 上没有能运行任务的智能体。智能体指南里列出了 Coffer 能运行哪些。",
       "agentDefaultNamed": "智能体默认（{{model}}）",
       "editBody": "提示词是任务的 PROMPT.md，在「概览」里修改。",
       "prompt": "提示词",

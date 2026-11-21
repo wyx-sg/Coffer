@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from coffer.application.agent.auto_detect import AgentTypeDetection, AutoDetectService
 from coffer.application.agent.service import AgentService
 from coffer.domain.agent.config import AgentConfig
+from coffer.domain.agent.descriptor import descriptor_for
 from coffer.domain.agent.detection import DetectionState
 from coffer.domain.agent.types import AgentType
 from coffer.domain.resource import Resource
@@ -143,6 +144,11 @@ class AgentTypeOut(BaseModel):
     install_handoff: HandoffOut | None = None
     #: The product's official install page (the Overview's first-run "Install").
     install_url: str = ""
+    #: Every skills directory the type reads at its standard location: the one
+    #: Coffer delivers to first, then the ones it also reads on its own. A
+    #: skill delivered to any of them is seen by this type, which is how the
+    #: reach panel names the agents that also see a skill.
+    skill_dirs_read: list[str] = []
     #: What Coffer can do with this type (``mcp``, ``skills``, ``provider``,
     #: ``chat``, ``sessions``, ``plugins``,
     #: ``hooks``), derived from its descriptor and facets. Surfaces show a
@@ -181,6 +187,7 @@ async def _type_out(row: AgentTypeDetection, detect: AutoDetectService) -> Agent
         other_config_dir=row.other_config_dir,
         install_handoff=handoff_out(prompt),
         install_url=row.install_url,
+        skill_dirs_read=[str(p) for p in descriptor_for(row.type).skill_dirs_read()],
         features=detect.features(row.type),
     )
 

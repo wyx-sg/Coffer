@@ -1,8 +1,11 @@
 // src/components/scheduled-tasks/TaskSessionFields.tsx — the agent, model and folder every run of a task opens its new conversation with.
 //
-// The agent is required; the model lists the agent's catalogue, with the
+// The agent is required and is one Coffer can run a turn on here (the agents
+// the turn platform lists as available, so a type without a driver or not
+// installed is never offered); the model lists the agent's catalogue, with the
 // agent's own default first. The folder is optional: left empty, every run
 // works in the task's own folder, where its PROMPT.md is either way.
+import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 
 import { FolderPickerField } from "@/components/FolderPickerField";
@@ -18,7 +21,8 @@ import { useQuery } from "@tanstack/react-query";
 import { agentModelsApi } from "@/lib/api/agentModels";
 import { agentProviderModelsKey } from "@/lib/api/queryKeys";
 import { useAgentResolvedDefault } from "@/lib/hooks/useAgentModels";
-import { AGENTS, type TaskForm } from "@/lib/scheduledTasks/format";
+import { useAgentProviders } from "@/lib/hooks/useAgentProviders";
+import type { TaskForm } from "@/lib/scheduledTasks/format";
 
 // Radix Select forbids an empty item value, so "the agent's default" is this sentinel.
 const AGENT_DEFAULT = "__agent_default__";
@@ -30,6 +34,13 @@ interface Props {
 
 export function TaskSessionFields({ form, set }: Props) {
   const { t } = useTranslation();
+  const providers = useAgentProviders().data ?? [];
+  const runnable = providers.filter((a) => a.available || a.agent_key === form.agent);
+  // A new task starts on the first agent that can run it.
+  const first = providers.find((a) => a.available)?.agent_key;
+  useEffect(() => {
+    if (form.agent === "" && first) set({ agent: first });
+  }, [form.agent, first, set]);
   const catalogue = useQuery({
     queryKey: agentProviderModelsKey(form.agent),
     queryFn: () => agentModelsApi.list(form.agent),
@@ -55,13 +66,16 @@ export function TaskSessionFields({ form, set }: Props) {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {AGENTS.map((a) => (
-                <SelectItem key={a.key} value={a.key}>
-                  {a.label}
+              {runnable.map((a) => (
+                <SelectItem key={a.agent_key} value={a.agent_key}>
+                  {a.display_name}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
+          {providers.length > 0 && runnable.length === 0 ? (
+            <p className="text-xs text-text-muted">{t("scheduledTasks.dialog.noAgent")}</p>
+          ) : null}
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="task-model">{t("scheduledTasks.dialog.model")}</Label>

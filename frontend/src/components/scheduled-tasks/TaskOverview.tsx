@@ -5,7 +5,8 @@ import { useTranslation } from "react-i18next";
 
 import { Section } from "@/components/Section";
 import type { ScheduledTask } from "@/lib/api/scheduledTasks";
-import { AGENTS, scheduleText } from "@/lib/scheduledTasks/format";
+import { agentTypeLabel } from "@/lib/agents/display";
+import { scheduleText } from "@/lib/scheduledTasks/format";
 import { formatMoment } from "@/lib/time";
 import { TaskPromptFile } from "./TaskPromptFile";
 
@@ -21,7 +22,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 export function TaskOverview({ task }: { task: ScheduledTask }) {
   const { t, i18n } = useTranslation();
   const c = task.config;
-  const agent = AGENTS.find((a) => a.key === c.agent)?.label ?? c.agent;
+  const agent = agentTypeLabel(c.agent);
   return (
     <div className="flex flex-col gap-5">
       <Section title={t("scheduledTasks.detail.what")}>

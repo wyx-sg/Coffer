@@ -61,7 +61,7 @@ The AgentSkills specification caps `description` at 1024 characters, but neither
 | `~/.coffer/vault/skills/<name>/` | The master folder. This is the only copy you edit. |
 | `~/.claude/skills/<name>` (Claude Code) and `~/.agents/skills/<name>` (Codex) | The delivered link in each agent's skill folder. It points at the master folder. A Claude Code agent with another config directory gets `<config_dir>/skills/<name>`. |
 
-`~/.agents/skills/` is shared by Codex, Cursor, OpenCode and DeepSeek Harness, so Coffer keeps one link per skill there and places it when the skill's reach includes any of the agents that read the folder. Reach cannot hide a skill from one of them while another sees it: a skill that reaches only Codex is also seen by Cursor, OpenCode and DeepSeek Harness.
+`~/.agents/skills/` is shared by Codex, Cursor, OpenCode and DeepSeek Harness, so Coffer keeps one link per skill there and places it when the skill's reach includes any of the agents that read the folder. Reach cannot hide a skill from one of them while another sees it: a skill that reaches only Codex is also seen by Cursor, OpenCode and DeepSeek Harness. Cursor and OpenCode read `~/.claude/skills` too, so a skill that reaches Claude Code is seen by them as well. The Reach panel says so in a line under the agents, naming the added agents that share a folder and the ones that also see a skill delivered for another.
 
 Codex still reads its old `~/.codex/skills/` folder but has deprecated it; Coffer delivers to `~/.agents/skills/`, the folder Codex documents, and moves any link it once made in the old folder on its next pass, so Codex never lists a skill twice.
 

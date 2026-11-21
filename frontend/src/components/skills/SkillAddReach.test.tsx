@@ -14,7 +14,10 @@ import { useApplySkillReach } from "@/lib/hooks/useSkillCopies";
 import { EVERY_AGENT } from "@/lib/skills/reach";
 import { SkillAddReach } from "./SkillAddReach";
 
-vi.mock("@/lib/hooks/useAgents", () => ({ useAgents: vi.fn(() => ({ data: [] })) }));
+vi.mock("@/lib/hooks/useAgents", () => ({
+  useAgents: vi.fn(() => ({ data: [] })),
+  useAgentTypes: vi.fn(() => ({ data: [] })),
+}));
 vi.mock("@/lib/api/resources", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api/resources")>()),
   resourcesApi: { disable: vi.fn(async () => undefined), enable: vi.fn(async () => undefined) },
