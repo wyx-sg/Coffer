@@ -32,10 +32,12 @@ from coffer.application.reconcile.reconciler import Reconciler
 from coffer.application.runtime.supervisor import spawn
 from coffer.application.secret.presence import derive_purpose_key
 from coffer.domain.model_proxy.state import ProxyState, proxy_root
+from coffer.domain.provider.agent_projection import token_file_agents
 from coffer.domain.secrets import PROXY_ATTEST_KEY_CONTEXT
 from coffer.infrastructure.daemon.config import effective_proxy_port
 from coffer.infrastructure.model_proxy.supervisor import ProxySupervisor
-from coffer.infrastructure.vault.home import coffer_home
+from coffer.infrastructure.model_proxy.token_files import TokenFileMirror
+from coffer.infrastructure.vault.home import coffer_home, proxy_token_dir
 from coffer.surfaces.http.proxy_dependencies import ProxyFacade, set_proxy_facade
 from coffer.surfaces.http.secret_composition import get_master_key_manager
 
@@ -99,7 +101,11 @@ def wire_model_proxy(
 ) -> ModelProxyWiring:
     """Build the supervisor, publish the management facade, and start
     supervising unless ``COFFER_MODEL_PROXY=off``."""
-    tokens = ProxyTokenService(secret_store)
+    tokens = ProxyTokenService(
+        secret_store,
+        files=TokenFileMirror(proxy_token_dir()),
+        file_agents=token_file_agents(),
+    )
 
     async def state() -> ProxyState:
         return await build_proxy_state(provider_svc, tokens)

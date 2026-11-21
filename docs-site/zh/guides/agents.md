@@ -29,7 +29,7 @@ Coffer 支持六种智能体类型：
 
 同一产品的 CLI 和 IDE 形态读的是同一个配置目录，所以注册一个智能体就能覆盖两者。Claude Desktop 聊天应用有自己的配置，不属于受支持的智能体。
 
-并非每种类型都能用上全部功能。Claude Code 和 Codex 全部都有。Antigravity 能用上它的配置文件夹允许的部分，见 [Antigravity 能得到什么](#what-antigravity-gets)。Cursor、OpenCode 和 DeepSeek Harness 有 Coffer 的网关 MCP 条目、技能、配置文件和它们自己 MCP 条目的列表；[模型提供商](/zh/guides/providers)、[对话](/zh/guides/chat)和[消息渠道](/zh/guides/channels)、[记忆](/zh/guides/memory)、会话、插件和 Hook 暂时还不支持。它们的智能体页面只显示适用的 tab。见 [Cursor、OpenCode 和 DeepSeek Harness](#cursor-opencode-and-deepseek-harness)。
+并非每种类型都能用上全部功能。Claude Code 和 Codex 全部都有。Antigravity 能用上它的配置文件夹允许的部分，见 [Antigravity 能得到什么](#what-antigravity-gets)。Cursor、OpenCode 和 DeepSeek Harness 有 Coffer 的网关 MCP 条目、技能、配置文件和它们自己 MCP 条目的列表，OpenCode 还能用[模型提供商](/zh/guides/providers)；[对话](/zh/guides/chat)和[消息渠道](/zh/guides/channels)、[记忆](/zh/guides/memory)、会话、插件和 Hook 暂时还不支持。它们的智能体页面只显示适用的 tab。见 [Cursor、OpenCode 和 DeepSeek Harness](#cursor-opencode-and-deepseek-harness)。
 
 ### Antigravity 能得到什么 {#what-antigravity-gets}
 
@@ -290,7 +290,8 @@ Coffer 会把它写入的每个文件的上一版内容保存在 `~/.coffer/conf
 - **技能投递到 `~/.agents/skills`。** 三者都从那里读个人技能（Cursor 和 OpenCode 还读 `~/.claude/skills`），Codex 也是。Coffer 在这个共享文件夹里每个技能只放一个链接，只要技能的[生效范围](/zh/guides/skills)包含任何一个读这个文件夹的智能体，就投递过去。所以一个生效范围只写了 Codex 的技能，在装了 Cursor、OpenCode 或 DeepSeek Harness 时也会被它们看到。
 - **OpenCode** 1.x 和 2.x 的 MCP 表名字不同。Coffer 用 1.x 形状（`mcp.coffer`）写自己的条目，2.x 仍然能读；两种形状的条目都会列出。`mcp.servers` 下的 2.x 条目可以像其他条目一样移除和纳入托管。
 - **DeepSeek Harness** 用 YAML 补丁层组合配置，里面可能有 `!!js` 表达式，所以 Coffer 从不重写整个文件。它自己的那一行放在[各写到哪里](#what-gets-written-where)里那段带标记的内容中，连接和断开只替换这一段。其他 MCP 行会列出，但不能在 Coffer 里移除或纳入托管（`MCP_ENTRY_NOT_EDITABLE`）：请自己编辑 `cordis.patch.yml`。Coffer 只往顶层是块状列表（`- …`）的文件里加这一段；流式写法的文件会被拒绝，返回 `CONFIG_FILE_FORMAT_INVALID`。
-- **暂不支持：** 让这些智能体使用 Coffer 的[模型提供商](/zh/guides/providers)，从[对话](/zh/guides/chat)、[消息渠道](/zh/guides/channels)或[定时任务](/zh/guides/scheduled-tasks)运行它们，[记忆](/zh/guides/memory)钩子，会话列表，插件和 Hook。它们的智能体页面没有模型部分，也没有插件、Hook 或会话 tab。
+- **OpenCode 能用提供商。** 在它总览的**模型**下点**更改…**，可以把它切到一个有 OpenAI 兼容地址的 Coffer [模型提供商](/zh/guides/providers)上，或切回它自己的提供商。Coffer 会在 `opencode.json` 里写一个 `coffer` 提供商，它从 Coffer 保管的令牌文件读取 key，见[写入了什么](/zh/guides/providers#what-gets-written)。
+- **暂不支持：** 让 Cursor 或 DeepSeek Harness 使用 Coffer 的模型提供商，从[对话](/zh/guides/chat)、[消息渠道](/zh/guides/channels)或[定时任务](/zh/guides/scheduled-tasks)运行它们，[记忆](/zh/guides/memory)钩子，会话列表，插件和 Hook。它们的智能体页面没有插件、Hook 或会话 tab，只有 OpenCode 的页面有模型部分。
 
 ## 插件 {#plugins}
 

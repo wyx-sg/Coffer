@@ -26,6 +26,12 @@ from coffer.domain.agent.types import AgentType
 from coffer.domain.provider.codex_projection import CodexAuthCommand
 from coffer.domain.provider.config import Protocol
 from coffer.domain.provider.model_binding import ModelBinding, ProjectedModel
+from coffer.domain.provider.opencode_projection import (
+    apply_opencode_provider,
+    opencode_provider_present,
+    remove_opencode_provider,
+    set_opencode_model,
+)
 from coffer.domain.provider.projection import (
     apply_anthropic_settings,
     apply_codex_provider,
@@ -62,6 +68,9 @@ class ProviderProjectionRequest:
     #: The window the bound model resolves to on the connection (you set →
     #: endpoint → bundled list), curated or not; ``None``: unknown.
     context_window: int | None = None
+    #: The file holding the agent's proxy token, for an agent that reads its
+    #: key from a file instead of running a command (OpenCode).
+    token_file: pathlib.Path | None = None
 
     @property
     def model_ids(self) -> tuple[str, ...]:
@@ -237,18 +246,77 @@ class CodexProviderProjection:
         return set_codex_model(text, model)
 
 
-PROVIDER_PROJECTIONS: tuple[ClaudeCodeProviderProjection | CodexProviderProjection, ...] = (
+@dataclass(frozen=True)
+class OpenCodeProviderProjection:
+    """``opencode.json``: a ``provider.coffer`` block and the top-level
+    ``model``. OpenCode runs no key command, so the key is a ``{file:…}``
+    reference to the agent's proxy token file (ADR
+    opencode-reads-its-proxy-token-from-a-file)."""
+
+    agent_type: AgentType = AgentType.OPENCODE
+    config_key: str = "config"
+    protocols: tuple[str, ...] = (Protocol.OPENAI.value,)
+    #: The proxy token must be mirrored to a file for this agent.
+    token_in_file: bool = True
+
+    def apply(
+        self, text: str, req: ProviderProjectionRequest, config_file: pathlib.Path
+    ) -> ProjectionPlan:
+        if req.token_file is None:
+            raise ValueError("OpenCode's projection needs the proxy token file")
+        return ProjectionPlan(
+            apply_opencode_provider(
+                text,
+                display_name=f"Coffer ({req.connection_name})",
+                base_url=req.base_url,
+                token_file=req.token_file,
+                models=req.models,
+                model=req.binding.model,
+                context_window=req.context_window,
+            )
+        )
+
+    def remove(
+        self, text: str, config_file: pathlib.Path, binding: ModelBinding | None = None
+    ) -> ProjectionPlan:
+        return ProjectionPlan(remove_opencode_provider(text))
+
+    def is_present(self, text: str) -> bool:
+        if not text.strip():
+            return False
+        return opencode_provider_present(text)
+
+    def set_native_model(self, text: str, model: str | None) -> str:
+        return set_opencode_model(text, model)
+
+
+PROVIDER_PROJECTIONS: tuple[
+    ClaudeCodeProviderProjection | CodexProviderProjection | OpenCodeProviderProjection, ...
+] = (
     ClaudeCodeProviderProjection(),
     CodexProviderProjection(),
+    OpenCodeProviderProjection(),
 )
+
+
+def token_file_agents() -> frozenset[str]:
+    """The names of the agents that read their proxy token from a file."""
+    return frozenset(
+        p.agent_type.default_name()
+        for p in PROVIDER_PROJECTIONS
+        if getattr(p, "token_in_file", False)
+    )
+
 
 __all__ = [
     "PROVIDER_PROJECTIONS",
     "ClaudeCodeProviderProjection",
     "CodexProviderProjection",
+    "OpenCodeProviderProjection",
     "ProjectedFile",
     "ProjectionPlan",
     "ProviderProjection",
     "ProviderProjectionRequest",
     "claude_tiers",
+    "token_file_agents",
 ]

@@ -606,8 +606,8 @@ def test_openai_connection_scoped_to_claude_code(tmp_path, monkeypatch):
         assert r.status_code == 201, r.text
         uid = r.json()["uid"]
         assert r.json()["anthropic_base_url"] == "https://agnes"
-        assert r.json()["served_agents"] == ["claude_code", "codex"]
-        assert r.json()["compatible_agents"] == ["claude_code", "codex"]
+        assert r.json()["served_agents"] == ["claude_code", "codex", "opencode"]
+        assert r.json()["compatible_agents"] == ["claude_code", "codex", "opencode"]
 
         act = _activate(c, uid)
         assert act.status_code == 200, act.text
@@ -1085,7 +1085,10 @@ def test_clearing_the_anthropic_address_retires_claude_codes_reach(tmp_path, mon
         assert r.status_code == 200, r.text
         assert r.json()["anthropic_base_url"] is None
         assert cc not in _route_keys(c)
-        assert c.get(f"/api/v1/providers/{uid}").json()["compatible_agents"] == ["codex"]
+        assert c.get(f"/api/v1/providers/{uid}").json()["compatible_agents"] == [
+            "codex",
+            "opencode",
+        ]
 
 
 async def _flag(uid: str) -> bool:
@@ -1159,6 +1162,7 @@ def test_each_agent_is_relayed_to_the_address_of_its_wire(tmp_path, monkeypatch)
         assert c.get(f"/api/v1/providers/{uid}").json()["served_agents"] == [
             "claude_code",
             "codex",
+            "opencode",
         ]
         assert _activate(c, uid).status_code == 200
         assert _activate(c, uid, "codex").status_code == 200

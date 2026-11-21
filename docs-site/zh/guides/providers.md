@@ -1,6 +1,6 @@
 ---
 title: 模型提供商
-description: 把模型接入地址和它的 key 存一次，把 Claude Code 或 Codex 切换过去，整理它的模型，查看经过它的请求花了多少，并选择 Coffer 转写语音所用的模型。
+description: 把模型接入地址和它的 key 存一次，把 Claude Code、Codex 或 OpenCode 切换过去，整理它的模型，查看经过它的请求花了多少，并选择 Coffer 转写语音所用的模型。
 ---
 
 # 模型提供商 {#model-providers}
@@ -9,7 +9,7 @@ description: 把模型接入地址和它的 key 存一次，把 Claude Code 或 
 
 ## 提供商的用途 {#what-providers-are-for}
 
-Claude Code 从 `settings.json` 读取接入地址；Codex 从 `config.toml` 读取。手动把智能体换到另一个网关，意味着要逐个编辑文件、以明文粘贴 key，而且改了什么没有任何记录。在 Coffer 里配置提供商后，你可以：
+Claude Code 从 `settings.json` 读取接入地址，Codex 从 `config.toml` 读取，OpenCode 从 `opencode.json` 读取。手动把智能体换到另一个网关，意味着要逐个编辑文件、以明文粘贴 key，而且改了什么没有任何记录。在 Coffer 里配置提供商后，你可以：
 
 - 把接入地址和 key 加密存一次；
 - 一个操作把智能体切换过去，另一个操作切回智能体自己的登录；
@@ -25,7 +25,7 @@ Claude Code 从 `settings.json` 读取接入地址；Codex 从 `config.toml` 读
 **模型提供商**是一个页面、一个页头——标题、一行说明这个页面是做什么的，以及**添加提供商**——下面有两个 tab，**提供商**和**用量**。页头和它的**添加提供商**按钮在两个 tab 上是同一个。本节讲的是**提供商** tab，一个列表加一个提供商详情；**用量** tab（`/model-providers?tab=usage`）见[用量](/zh/guides/usage)。
 
 - **列表**（左侧）有一个**筛选**框，每个提供商一行，按名字排序：图标、名字、协议和它提供的内容（「9 models」或**全部模型**），以及运行在它上面的智能体的图标。接入地址无法连接或密钥被拒的提供商，会在自己那一行用红字写明——用**无法连接**或**密钥被拒**代替协议和模型——不管你有没有打开过它（见[健康状态](#health)）。标签会标出负责语音转写的提供商（**Coffer 自用 · 语音转写**）；它在**设置 › 通用**里修改。打开页面时会打开第一个提供商。
-- 打开的提供商的**头部**显示它的健康状态——打开时通过列出接入地址的模型得出——**可连接**、**密钥被拒**或**无法连接**，API 密钥在等你批准时则是**等待批准**或**已拒绝**，以及哪些智能体能用它（「Claude Code、Codex 可用」）、主机，以及接入地址有应答时用了多久、**测试**、**编辑**，和一个包含**删除提供商**的 **⋯** 菜单。
+- 打开的提供商的**头部**显示它的健康状态——打开时通过列出接入地址的模型得出——**可连接**、**密钥被拒**或**无法连接**，API 密钥在等你批准时则是**等待批准**或**已拒绝**，以及哪些智能体能用它（「Claude Code、Codex、OpenCode 可用」）、主机，以及接入地址有应答时用了多久、**测试**、**编辑**，和一个包含**删除提供商**的 **⋯** 菜单。
 - **详情**是单栏的，没有 tab：**使用方**、**接入地址**和**模型**。问题只显示在头部的标签和它所属的区块里——接入地址无法连接或密钥被拒在**接入地址**里，等待批准的密钥也在那里并附**打开批准列表**（已拒绝的附**重新申请**，在桌面应用里会要求 Touch ID 并批准），列出失败在**模型**里——不会再逐行出现在**使用方**的每一行上。**使用方**列出运行在该提供商上的每个智能体及其模型，写成**Codex › 更改模型**的链接，打开该智能体的页面并直接弹出它的更改模型表单（见[更改智能体的模型](/zh/guides/agents#change-an-agent-s-model)），以及该提供商承担时的**语音转文字**，它会打开**设置 › 通用**。这个列表是只读的。**接入地址**显示提供商的地址，每个都写明哪个智能体用它（本地提供商显示运行时和它的地址）、**路由**（智能体经由 Coffer 的中转 `127.0.0.1:38471` 访问它）、以所存密钥形式显示的 API 密钥——从不显示 key 本身——附带**更换密钥**和指向**密钥**页面的链接。**模型**是整理后的列表，带每个模型的价格（见[下文](#curate-the-models-a-provider-offers)）。
 
 提供商的地址是 `/model-providers/<uid>`。
@@ -82,11 +82,13 @@ Coffer 把这些地址存成一种协议加一到两个 URL：
 提供商有哪个智能体要的地址，就能给哪个智能体用：
 
 - Claude Code 说 Anthropic API，需要 Anthropic 兼容地址。
-- Codex 说 OpenAI API，需要 OpenAI 兼容地址。
+- Codex 和 OpenCode 说 OpenAI API，需要 OpenAI 兼容地址。
 
-提供商的头部会写明（「Claude Code、Codex 可用」），智能体的**更改模型**表单也只列出能给它用的提供商。除此之外没有要设置的：提供商没有生效范围，也没有开关。智能体用哪个提供商由智能体自己选，不想要的提供商直接删除。
+Antigravity、Cursor 和 DeepSeek Harness 不能切到提供商上：Antigravity 和 Cursor 只能用它们厂商自己的模型，DeepSeek Harness 暂时还不支持。
 
-Coffer 的中转把 Claude Code 的请求原样发到 Anthropic 兼容地址，把 Codex 的请求原样发到 OpenAI 兼容地址。Coffer 不在协议之间做转换。
+提供商的头部会写明（「Claude Code、Codex、OpenCode 可用」），智能体的**更改模型**表单也只列出能给它用的提供商。除此之外没有要设置的：提供商没有生效范围，也没有开关。智能体用哪个提供商由智能体自己选，不想要的提供商直接删除。
+
+Coffer 的中转把 Claude Code 的请求原样发到 Anthropic 兼容地址，把 Codex 和 OpenCode 的请求原样发到 OpenAI 兼容地址。Coffer 不在协议之间做转换。
 
 旧版本保存的提供商会在 Coffer 启动时自动调整：
 
@@ -102,7 +104,7 @@ Coffer 的中转把 Claude Code 的请求原样发到 Anthropic 兼容地址，�
 2. 选一个**提供商**。除了智能体的内置登录，只会列出能给这个智能体用的提供商。
 3. 选一个**模型**；Claude Code 还有**各档位的模型**。默认预选接入地址返回的第一个模型，各档位预填建议值。
 4. 看**模型**下面那一行：Coffer 会自动用选中的模型测试提供商，显示**连接正常**及用时，或**连接失败**及原因和**重试**。测试通过之前**审阅改动**不可用；内置登录不需要测试。
-5. 点**审阅改动**。Coffer 逐个文件列出它将写入的行——Claude Code 是 `settings.json`；Codex 是 `config.toml` 和 Coffer 自己的模型列表文件。
+5. 点**审阅改动**。Coffer 逐个文件列出它将写入的行——Claude Code 是 `settings.json`；Codex 是 `config.toml` 和 Coffer 自己的模型列表文件；OpenCode 是 `opencode.json`。
 6. 点**应用**。Coffer 写入这些文件，并一次性把模型和提供商记到智能体上。如果审阅画出之后某个文件变了，什么都不会写，审阅会提供**重新加载预览**。应用成功后会提示：重启该智能体后生效，已打开的会话仍用原来的设置。
 
 选择**内置登录**会把智能体切回它自己的登录；表单这时只问它的**模型**——智能体自己的默认，或它自己的某个模型。表单的细节见[更改智能体的模型](/zh/guides/agents#change-an-agent-s-model)。
@@ -177,6 +179,31 @@ auth = { command = "/Users/you/.coffer/bin/coffer", args = ["proxy", "token", "-
 
 切回内置登录会精确移除 Coffer 写入的那些键。那里的表单还能设置智能体自己的 `model`（或清除为内置默认）；你之后用 `/model` 改过的 `model` 属于你，会保留，早期版本写下的推理强度键也一样。
 
+### OpenCode — `<config_dir>/opencode.json` {#opencode-—-config-dir-opencode-json}
+
+```json
+{
+  "model": "coffer/deepseek-flash",
+  "provider": {
+    "coffer": {
+      "npm": "@ai-sdk/openai",
+      "name": "Coffer (deepseek)",
+      "options": {
+        "baseURL": "http://127.0.0.1:38471/openai/v1",
+        "apiKey": "{file:/Users/you/.coffer/local/proxy-tokens/opencode}"
+      },
+      "models": {
+        "deepseek-flash": { "name": "deepseek-flash", "limit": { "context": 1000000, "output": 32000 } }
+      }
+    }
+  }
+}
+```
+
+Coffer 只写一个提供商 `coffer` 和顶层的 `model`，你自己的其他提供商和 key 保持原样。这个提供商列出提供商整理过的模型，知道窗口大小的模型会带上它。OpenCode 不能运行命令取 key，所以 Coffer 把这个智能体的中转令牌放在 `~/.coffer/local/proxy-tokens/opencode`，这个文件只有你能读；`opencode.json` 里只写这个文件的路径，不写令牌本身。OpenCode 启动时读这个文件，轮换令牌后要重启 OpenCode。原因见[决策记录](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/opencode-reads-its-proxy-token-from-a-file.md)。Coffer 写的是 OpenCode 1.x 文档里的格式，OpenCode 2.x 也能读。
+
+切回它自己的提供商时，Coffer 移除 `provider.coffer` 和以 `coffer/` 开头的 `model`。那里的表单也会设置 OpenCode 自己的 `model`（写成 `provider/model`），或者清掉它。
+
 ## 本地模型运行时 {#local-model-runtimes}
 
 提供商可以是这台机器上的模型运行时：**Ollama**（Claude Code 需 ≥ 0.14.0，Codex 需 ≥ 0.13.4）、**LM Studio**（≥ 0.4.1 / ≥ 0.3.29）、**vLLM**（≥ 0.11.1 / ≥ 0.10.0），或 llama.cpp 的 **llama-server**（Codex 支持为实验性）。Coffer 通过中转用每个运行时自己的原生协议与之通信——不做转换——所以只支持 Chat Completions 的 `mlx_lm.server` 不受支持；请用 LM Studio 的 MLX 引擎。
@@ -212,7 +239,7 @@ auth = { command = "/Users/you/.coffer/bin/coffer", args = ["proxy", "token", "-
 
 ### 上下文窗口 {#context-windows}
 
-**窗口**一列显示每个模型的上下文窗口（「1M」「128K」）和它的来源。Coffer 会把这个窗口告诉 Claude Code 和 Codex，让它们在合适的位置压缩上下文：
+**窗口**一列显示每个模型的上下文窗口（「1M」「128K」）和它的来源。Coffer 会把这个窗口告诉 Claude Code、Codex 和 OpenCode，让它们在合适的位置压缩上下文：
 
 - **你设置**——你在这个提供商上为模型记录的窗口；它优先。点击窗口或**设置窗口…**，打开一个只有一个字段的表单，按 token 数填写（`128000`、`128k` 或 `1m`），左下角是**恢复默认**，它会移除你设的值。
 - **来自接口**——列出模型时提供商报告的窗口（Anthropic、OpenRouter、部分网关和本地运行时会报告）。

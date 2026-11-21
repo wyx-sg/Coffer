@@ -293,7 +293,7 @@ verify-contract:
 # Each supported agent's own command line reads the entry Coffer writes for it.
 # Needs the agent installed (CI's agent-cli job does that); a missing one skips.
 verify-agent-cli:
-	COFFER_AGENT_CLI_SMOKE=1 $(PY) -m pytest -n 0 -q -rs $(BACKEND)/tests/agent_cli
+	COFFER_SMOKE_AGENT_CLI=1 $(PY) -m pytest -n 0 -q -rs $(BACKEND)/tests/agent_cli
 
 # `npx playwright test` runs BOTH projects in e2e/playwright.config.ts: `web`
 # (browser specs under e2e/web/specs/) and `mcp` (cross-process shim+daemon

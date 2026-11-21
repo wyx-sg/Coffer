@@ -895,7 +895,9 @@ how it works is [The local model proxy](../../../docs-site/architecture/model-pr
 Each managed agent MUST have its own random 256-bit local proxy token, minted by Coffer on first
 use, kept as ciphertext in the secret store under a machine-local ref vault sync never
 carries, and printed by `coffer proxy token --agent-uid <uid>` (`GET /api/v1/proxy/tokens/{agent_uid}`)
-— the command both agents' projected config runs. The proxy MUST accept a model request only with
+— the command Claude Code's and Codex's projected config runs. OpenCode, which runs no key command,
+reads a copy Coffer keeps in its token file (see "Project into OpenCode config without overwriting
+it"). The proxy MUST accept a model request only with
 one of those tokens, as `Authorization: Bearer` or `x-api-key`, compared in constant time, and MUST
 refuse anything else — no token, a claude.ai OAuth token (`sk-ant-oat…`), a provider key — with 401
 in the wire's own error shape, forwarding nothing. The token names the agent, which is how usage is
@@ -1333,6 +1335,39 @@ not used).
 - **THEN** the `auth` table carries `timeout_ms = 30000`
 - **AND** a `config.toml` whose `auth` table lacks `timeout_ms` is re-projected on the next reconcile pass
 
+### Requirement: Project into OpenCode config without overwriting it
+The system MUST project into OpenCode's `opencode.json` (in the agent's config directory) by writing
+one custom provider, `provider.coffer`, and nothing else of the user's: other providers, `mcp`,
+`theme` and every other key stay as they were, and a file that does not exist is created with only
+the managed keys. The provider uses the `@ai-sdk/openai` package, so OpenCode sends the Responses
+API the local model proxy relays, with `options.baseURL = "http://127.0.0.1:<proxy port>/openai/v1"`
+and `options.apiKey = "{file:<path>}"`, where the path is the agent's proxy token file,
+`~/.coffer/local/proxy-tokens/opencode` (ADR opencode-reads-its-proxy-token-from-a-file). OpenCode
+runs no command for a key, so this file is how it gets its token: Coffer keeps it equal to the
+stored token, writes it with mode `0600` in a `0700` directory, rewrites it when the token is minted
+or rotated, and deletes it with the agent. Neither the token nor a provider key is written into
+`opencode.json`. The shape is the one OpenCode 1.x documents, which OpenCode 2.x also reads.
+
+The provider's `models` are the connection's curated `text` models, each named by its id, with
+`limit.context` set to the model's window and `limit.output` to the smaller of 32000 and that window
+when the window is known; an uncurated connection lists only the agent's bound model. The agent's
+bound model becomes the top-level `model` as `coffer/<id>`; without a binding a top-level `model`
+starting `coffer/` is dropped and any other is left alone. De-projection removes `provider.coffer`,
+an empty `provider` table it leaves, and a top-level `model` starting `coffer/`. OpenCode reads its
+config and the token file when it starts, so a switch or a token rotation takes effect in the next
+OpenCode session.
+
+#### Scenario: switching OpenCode onto a connection writes one provider reading its token from a file
+- **GIVEN** an OpenCode agent whose `opencode.json` holds the user's own `theme` and `model`, and a connection with an OpenAI address
+- **WHEN** the user binds the agent to model `gpt-x` and switches it onto the connection
+- **THEN** `opencode.json` keeps `theme`, sets `model` to `coffer/gpt-x`, and holds `provider.coffer` with the `@ai-sdk/openai` package, the proxy's `/openai/v1` base URL and an `apiKey` of `{file:~/.coffer/local/proxy-tokens/opencode}`
+- **AND** that file holds the agent's proxy token with mode `0600`, and neither the token nor the connection's key appears in `opencode.json`
+
+#### Scenario: switching OpenCode back to its own providers keeps the user's keys
+- **GIVEN** an OpenCode agent switched onto a connection, whose `opencode.json` also holds the user's own `theme` and a provider of their own
+- **WHEN** the user switches it back to its built-in login
+- **THEN** `opencode.json` holds exactly the user's `theme` and provider again
+
 ### Requirement: Offer every connection operation over REST and in the web UI
 Create, switch, revert-to-built-in, rename, edit and delete MUST be
 available via (a) the REST API and (b) the web surfaces — the Model providers library for create and
@@ -1704,7 +1739,9 @@ OpenAI address when there is one, else the Anthropic address.
 
 A connection MUST serve exactly the agents whose wire it has an address for (ADR
 provider-reach-is-what-its-addresses-serve): Claude Code needs an Anthropic address (an `anthropic`
-connection's base URL, or an `openai` connection's `anthropic_base_url`), Codex an OpenAI one. A
+connection's base URL, or an `openai` connection's `anthropic_base_url`), Codex and OpenCode an
+OpenAI one. An agent type without a provider projection (Antigravity, Cursor, DeepSeek Harness) is
+served by no connection. A
 local runtime serves the wires detection found; an `unknown` connection serves both, since the probe
 could not tell and the switch test decides; a stored `ollama` connection serves none. Every read
 carries the answer as `served_agents`, and `compatible_agents` is the same list. A scope stored before
@@ -1714,7 +1751,7 @@ dialog offers only the connections that serve it.
 #### Scenario: a connection with no Anthropic address does not serve Claude Code
 - **GIVEN** an `openai` connection with no Anthropic address and a registered Claude Code agent
 - **WHEN** the user reads the connection and previews switching Claude Code onto it
-- **THEN** `served_agents` is `["codex"]` and the preview is refused with 409 `PROVIDER_DOES_NOT_REACH_AGENT`
+- **THEN** `served_agents` is `["codex", "opencode"]` and the preview is refused with 409 `PROVIDER_DOES_NOT_REACH_AGENT`
 
 ### Requirement: Fill in the Anthropic address of an existing connection
 

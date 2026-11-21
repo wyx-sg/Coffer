@@ -143,16 +143,24 @@ def test_the_reach_is_what_the_addresses_serve_whatever_a_stored_scope_says() ->
     # ADR provider-reach-is-what-its-addresses-serve: a scope stored before
     # the rule neither narrows nor widens it.
     resource, cfg = _connection(scope=Scope(agents=[_CLAUDE_UID]))
-    assert scoped_targets(resource, cfg, _REGISTRY) == [AgentType.CLAUDE_CODE, AgentType.CODEX]
+    assert scoped_targets(resource, cfg, _REGISTRY) == [
+        AgentType.CLAUDE_CODE,
+        AgentType.CODEX,
+        AgentType.OPENCODE,
+    ]
     resource, cfg = _connection(scope=Scope(agents=[_CLAUDE_UID]), anthropic_base_url=None)
-    assert scoped_targets(resource, cfg, _REGISTRY) == [AgentType.CODEX]
+    assert scoped_targets(resource, cfg, _REGISTRY) == [AgentType.CODEX, AgentType.OPENCODE]
     assert not reaches(resource, cfg, _REGISTRY[0])
     assert reaches(resource, cfg, _REGISTRY[1])
 
 
 def test_the_configured_reach_survives_the_connection_being_off() -> None:
     resource, cfg = _connection(enabled=False)
-    assert scoped_targets(resource, cfg, _REGISTRY) == [AgentType.CLAUDE_CODE, AgentType.CODEX]
+    assert scoped_targets(resource, cfg, _REGISTRY) == [
+        AgentType.CLAUDE_CODE,
+        AgentType.CODEX,
+        AgentType.OPENCODE,
+    ]
     assert not reaches(resource, cfg, _REGISTRY[0])
 
 
