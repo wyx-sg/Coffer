@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-11-21
 **Deciders**: Yuxing Wu
-**Related**: [Agent Mechanisms Are Optional Facets on the Descriptor](agent-mechanisms-are-optional-facets-on-the-descriptor.md), [Antigravity Joins Coffer Through Its Config Layer Only](antigravity-joins-at-its-config-layer-only.md), [Cursor, OpenCode and DeepSeek Harness Are Supported Agents](cursor-opencode-and-deepseek-harness-are-supported-agents.md), [A Shared Skills Directory Holds One Link for Every Agent That Reads It](a-shared-skills-directory-holds-one-link-for-every-reader.md), research note [multi-agent feature gaps](../research/multi-agent-feature-gaps.md), spec agent-registry "Report what Coffer can do with each agent type", spec skill-manager "Name the agents that also see a skill", spec scheduled-tasks "Run a task from its page"
+**Related**: [Agent Mechanisms Are Optional Facets on the Descriptor](agent-mechanisms-are-optional-facets-on-the-descriptor.md), [Antigravity Joins Coffer Through Its Config Layer Only](antigravity-joins-at-its-config-layer-only.md), [Cursor, OpenCode and DeepSeek Harness Are Supported Agents](cursor-opencode-and-deepseek-harness-are-supported-agents.md), [A Shared Skills Directory Holds One Link for Every Agent That Reads It](a-shared-skills-directory-holds-one-link-for-every-reader.md), research note [multi-agent feature gaps](../research/multi-agent-feature-gaps.md), spec agent-registry "Report what Coffer can do with each agent type", spec skill-manager "Name the agents that also see a skill", spec scheduled-tasks "Manage scheduled tasks from the Scheduled tasks page"
 
 ## Context
 
