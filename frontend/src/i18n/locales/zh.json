@@ -2573,11 +2573,13 @@
         "reachable": "可连通",
         "routeDirect": {
           "claude_code": "直连 Anthropic，不经过 Coffer",
-          "codex": "直连 OpenAI，不经过 Coffer"
+          "codex": "直连 OpenAI，不经过 Coffer",
+          "opencode": "直连它自己的提供商，不经过 Coffer"
         },
         "builtin": {
           "claude_code": "内置登录（Anthropic 账号）",
-          "codex": "内置登录（ChatGPT 账号）"
+          "codex": "内置登录（ChatGPT 账号）",
+          "opencode": "它自己的提供商（opencode.json）"
         }
       },
       "details": {
@@ -2660,12 +2662,14 @@
         "none": "还没有其他兼容的提供商。<link>在「模型提供商」中添加</link>",
         "hint": {
           "claude_code": "内置登录，或来自「模型提供商」的提供商。只影响 Claude Code 命令行；Claude 桌面 App 使用它自己的模型设置，不跟随切换。",
-          "codex": "内置登录（ChatGPT 账号），或来自「模型提供商」的提供商。"
+          "codex": "内置登录（ChatGPT 账号），或来自「模型提供商」的提供商。",
+          "opencode": "opencode.json 里它自己的提供商，或来自「模型提供商」的提供商。"
         }
       },
       "builtinNote": {
         "claude_code": "使用自己的登录时，{{agent}} 运行它自己的配置里写的模型；选一个会写进那份配置，选“内置默认”则移除该项。<code>/model</code> 仍然可用。",
-        "codex": "使用自己的登录时，{{agent}} 运行它自己的配置里写的模型；选一个会写进那份配置，选“内置默认”则移除该项。<code>/model</code> 仍然可用。"
+        "codex": "使用自己的登录时，{{agent}} 运行它自己的配置里写的模型；选一个会写进那份配置，选“内置默认”则移除该项。<code>/model</code> 仍然可用。",
+        "opencode": "使用自己的提供商时，{{agent}} 运行它自己的配置里写的模型，格式是 <code>provider/model</code>；选一个会写进那份配置，选“内置默认”则移除该项。<code>/models</code> 仍然可用。"
       },
       "test": {
         "testing": "正在测试连接…",

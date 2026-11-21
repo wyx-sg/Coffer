@@ -27,7 +27,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from coffer.application.agent.model_catalogue import ModelDiscoveryPort
-from coffer.domain.agent.allowlists import claude_global_config
+from coffer.domain.agent.allowlists import claude_global_config, opencode_config_file
 from coffer.domain.agent.model_catalogue import AgentModel
 
 _log = logging.getLogger(__name__)
@@ -35,6 +35,10 @@ _log = logging.getLogger(__name__)
 #: Claude Code's cache of the extra model options its own picker offers, e.g.
 #: ``[{"value": "…[1m]", "label": "…", "description": "…"}]``.
 _CLAUDE_CACHE_KEY = "additionalModelOptionsCache"
+#: The prefix of a model OpenCode runs on Coffer's own provider: the
+#: ``provider.coffer`` block the provider projection writes. Spelled out here
+#: because the agent kind does not import the provider kind.
+_OPENCODE_COFFER = "coffer/"
 
 
 class ChainedModelDiscovery:
@@ -80,6 +84,8 @@ class NativeConfigModelDiscovery:
             return await asyncio.to_thread(self._claude_code, config_dir)
         if agent_key == "codex":
             return await asyncio.to_thread(self._codex, config_dir)
+        if agent_key == "opencode":
+            return await asyncio.to_thread(self._opencode, config_dir)
         return []
 
     # --- claude code ---------------------------------------------------------
@@ -136,6 +142,23 @@ class NativeConfigModelDiscovery:
                     found.append(AgentModel(id=model))
         return found
 
+    # --- opencode ------------------------------------------------------------
+
+    def _opencode(self, config_dir: pathlib.Path) -> list[AgentModel]:
+        """OpenCode names its models as ``provider/model`` in ``opencode.json``:
+        the top-level ``model`` and the ``small_model`` it titles sessions with.
+        A model of Coffer's own provider is not the agent's choice, so it is
+        left out."""
+        data = self._read_json(opencode_config_file(config_dir))
+        if data is None:
+            return []
+        found: list[AgentModel] = []
+        for key in ("model", "small_model"):
+            value = data.get(key)
+            if isinstance(value, str) and value.strip() and not value.startswith(_OPENCODE_COFFER):
+                found.append(AgentModel(id=value.strip()))
+        return found
+
     # --- IO ------------------------------------------------------------------
 
     @staticmethod
@@ -167,7 +190,8 @@ class NativeDefaultModel:
 
     Not a catalogue entry and not a guess: Codex names it as the top-level
     ``model`` in ``config.toml``; Claude Code as ``model`` (or the
-    ``ANTHROPIC_MODEL`` it exports) in ``settings.json``. Anything else — the
+    ``ANTHROPIC_MODEL`` it exports) in ``settings.json``; OpenCode as the
+    top-level ``model`` in ``opencode.json``. Anything else — the
     file missing, the key absent — is ``None``, because then the agent decides
     on its own (account, plan, CLI version) and Coffer cannot know.
     """
@@ -179,6 +203,8 @@ class NativeDefaultModel:
             return await asyncio.to_thread(self._claude_code, config_dir)
         if agent_key == "codex":
             return await asyncio.to_thread(self._codex, config_dir)
+        if agent_key == "opencode":
+            return await asyncio.to_thread(self._opencode, config_dir)
         return None
 
     @staticmethod
@@ -197,6 +223,16 @@ class NativeDefaultModel:
         data = NativeConfigModelDiscovery._read_toml(config_dir / "config.toml")
         model = None if data is None else data.get("model")
         return model.strip() if isinstance(model, str) and model.strip() else None
+
+    @staticmethod
+    def _opencode(config_dir: pathlib.Path) -> str | None:
+        """The top-level ``model``; a model on Coffer's own provider reads as
+        its bare id (``coffer/gpt-6`` -> ``gpt-6``), the way Codex's does."""
+        data = NativeConfigModelDiscovery._read_json(opencode_config_file(config_dir))
+        model = None if data is None else data.get("model")
+        if not isinstance(model, str) or not model.strip():
+            return None
+        return model.strip().removeprefix(_OPENCODE_COFFER)
 
 
 __all__ = ["ChainedModelDiscovery", "NativeConfigModelDiscovery", "NativeDefaultModel"]

@@ -42,13 +42,15 @@ def _req(
 
 def test_each_facet_declares_its_agent_file_and_protocols() -> None:
     by_type = {p.agent_type: p for p in PROVIDER_PROJECTIONS}
-    # Claude Code and Codex project providers; the other types lack the facet
-    # (Antigravity has no model setting to project into).
-    assert set(by_type) == {AgentType.CLAUDE_CODE, AgentType.CODEX}
+    # Claude Code, Codex and OpenCode project providers; the other types lack
+    # the facet (Antigravity and Cursor run only their makers' models).
+    assert set(by_type) == {AgentType.CLAUDE_CODE, AgentType.CODEX, AgentType.OPENCODE}
     assert by_type[AgentType.CLAUDE_CODE].config_key == "settings"
     assert by_type[AgentType.CLAUDE_CODE].protocols == ("anthropic",)
     assert by_type[AgentType.CODEX].config_key == "config"
     assert by_type[AgentType.CODEX].protocols == ("openai",)
+    assert by_type[AgentType.OPENCODE].config_key == "config"
+    assert by_type[AgentType.OPENCODE].protocols == ("openai",)
 
 
 def test_claude_code_plan_is_one_file_naming_the_agent_by_uid() -> None:

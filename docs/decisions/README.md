@@ -190,6 +190,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`cursor-opencode-and-deepseek-harness-are-supported-agents`](cursor-opencode-and-deepseek-harness-are-supported-agents.md) | Cursor, OpenCode and DeepSeek Harness Are Supported Agents, Each With Every Facet It Offers |
 | [`deepseek-harness-mcp-row-lives-in-a-block-coffer-owns`](deepseek-harness-mcp-row-lives-in-a-block-coffer-owns.md) | DeepSeek Harness's MCP Row Lives in a Block Coffer Owns |
 | [`opencode-gets-its-mcp-entry-in-the-1x-shape`](opencode-gets-its-mcp-entry-in-the-1x-shape.md) | OpenCode Gets Its MCP Entry in the 1.x Shape |
+| [`opencode-reads-its-proxy-token-from-a-file`](opencode-reads-its-proxy-token-from-a-file.md) | OpenCode Reads Its Proxy Token From a File Coffer Keeps |
 | [`agent-mechanisms-are-optional-facets-on-the-descriptor`](agent-mechanisms-are-optional-facets-on-the-descriptor.md) | Agent Mechanisms Are Optional Facets on the Descriptor, and Projection Is One Registry |
 | [`antigravity-joins-at-its-config-layer-only`](antigravity-joins-at-its-config-layer-only.md) | Antigravity Joins Coffer Through Its Config Layer Only |
 | [`what-coffer-does-for-an-agent-follows-from-its-facets`](what-coffer-does-for-an-agent-follows-from-its-facets.md) | What Coffer Does for an Agent Follows From Its Facets, and Surfaces Leave Out What It Lacks |

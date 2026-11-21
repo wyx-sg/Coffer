@@ -38,6 +38,13 @@ class _SecretStore(Protocol):
     def list_refs(self) -> list[tuple[str, str, str]]: ...
 
 
+class TokenFiles(Protocol):
+    """Copies of tokens for agents that read their key from a file."""
+
+    def write(self, agent: str, token: str) -> None: ...
+    def remove(self, agent: str) -> None: ...
+
+
 def token_ref(agent: str) -> str:
     """The secret ref an agent's proxy token lives under, by the agent's name."""
     return f"{PROXY_TOKEN_REF_PREFIX}{agent}"
@@ -52,8 +59,19 @@ def new_token() -> str:
 class ProxyTokenService:
     """Issues, reads, rotates and revokes agents' local proxy tokens."""
 
-    def __init__(self, secrets: _SecretStore) -> None:
+    def __init__(
+        self,
+        secrets: _SecretStore,
+        *,
+        files: TokenFiles | None = None,
+        file_agents: Iterable[str] = (),
+    ) -> None:
         self._secrets = secrets
+        # Agents that read their key from a file (OpenCode) get a copy of
+        # their token there, kept equal to the stored one (ADR
+        # opencode-reads-its-proxy-token-from-a-file).
+        self._files = files
+        self._file_agents = frozenset(file_agents)
         # One agent, one token: two concurrent first reads must not mint two.
         self._lock = asyncio.Lock()
 
@@ -68,24 +86,37 @@ class ProxyTokenService:
             ref = token_ref(agent)
             existing = await asyncio.to_thread(self._secrets.get, ref)
             if existing:
+                await self._mirror(agent, existing)
                 return existing, False
             token = new_token()
             await asyncio.to_thread(self._secrets.set, ref, token)
+            await self._mirror(agent, token)
             return token, True
+
+    async def _mirror(self, agent: str, token: str | None) -> None:
+        if self._files is None or agent not in self._file_agents:
+            return
+        if token is None:
+            await asyncio.to_thread(self._files.remove, agent)
+        else:
+            await asyncio.to_thread(self._files.write, agent, token)
 
     async def rotate(self, agent: str) -> str:
         """Replace the agent's token. The old one stops working at the next
-        state push; both agents re-run their token command on their own
-        cadence (Claude Code's helper cache is five minutes)."""
+        state push; Claude Code and Codex re-run their token command on their
+        own cadence (Claude Code's helper cache is five minutes), and OpenCode
+        reads the rewritten file when it next starts."""
         async with self._lock:
             token = new_token()
             await asyncio.to_thread(self._secrets.set, token_ref(agent), token)
+            await self._mirror(agent, token)
             return token
 
     async def revoke(self, agent: str) -> None:
         """Forget an agent's token (the agent was removed)."""
         async with self._lock:
             await asyncio.to_thread(self._secrets.delete, token_ref(agent))
+            await self._mirror(agent, None)
 
     async def digests(self, agents: Iterable[str]) -> dict[str, str]:
         """``agent name -> sha256(token)`` for the proxy, minting as needed."""
@@ -105,6 +136,7 @@ class ProxyTokenService:
             ]
             for ref in stale:
                 await asyncio.to_thread(self._secrets.delete, ref)
+                await self._mirror(ref.removeprefix(PROXY_TOKEN_REF_PREFIX), None)
         return stale
 
 

@@ -6,6 +6,7 @@ reads and writes; these are the pure builders it and the reconciler share.
 
 from __future__ import annotations
 
+import pathlib
 from collections.abc import Callable
 
 from coffer.domain.agent.config import AgentConfig
@@ -68,6 +69,7 @@ def projection_request(
     proxy_root: str,
     wire: Wire,
     window_of: WindowOf = recorded_window,
+    token_file: pathlib.Path | None = None,
 ) -> ProviderProjectionRequest:
     """The one construction of a projection request — what the switch writes
     and what the reconciler compares an agent's file against.
@@ -94,6 +96,7 @@ def projection_request(
         # unrestricted connection): the bundled list may still know it.
         context_window=window_of(cfg, agent_cfg.model) if agent_cfg.model else None,
         local=cfg.is_local,
+        token_file=token_file,
     )
 
 

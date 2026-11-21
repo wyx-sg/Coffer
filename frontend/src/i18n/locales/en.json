@@ -2573,11 +2573,13 @@
         "reachable": "reachable",
         "routeDirect": {
           "claude_code": "Straight to Anthropic, not through Coffer",
-          "codex": "Straight to OpenAI, not through Coffer"
+          "codex": "Straight to OpenAI, not through Coffer",
+          "opencode": "Straight to its own providers, not through Coffer"
         },
         "builtin": {
           "claude_code": "Built-in login (Anthropic account)",
-          "codex": "Built-in login (ChatGPT account)"
+          "codex": "Built-in login (ChatGPT account)",
+          "opencode": "Its own providers (opencode.json)"
         }
       },
       "details": {
@@ -2660,12 +2662,14 @@
         "none": "No other compatible provider yet. <link>Add one in Model providers</link>",
         "hint": {
           "claude_code": "Built-in login, or a provider from Model providers. It changes the Claude Code CLI only: the Claude desktop app keeps its own model settings.",
-          "codex": "Built-in login (ChatGPT account), or a provider from Model providers."
+          "codex": "Built-in login (ChatGPT account), or a provider from Model providers.",
+          "opencode": "Its own providers from opencode.json, or a provider from Model providers."
         }
       },
       "builtinNote": {
         "claude_code": "With its own login, {{agent}} runs the model its own config names; pick one to write it there, or the built-in default to remove it. <code>/model</code> still works.",
-        "codex": "With its own login, {{agent}} runs the model its own config names; pick one to write it there, or the built-in default to remove it. <code>/model</code> still works."
+        "codex": "With its own login, {{agent}} runs the model its own config names; pick one to write it there, or the built-in default to remove it. <code>/model</code> still works.",
+        "opencode": "With its own providers, {{agent}} runs the model its own config names, as <code>provider/model</code>; pick one to write it there, or the built-in default to remove it. <code>/models</code> still works."
       },
       "test": {
         "testing": "Testing connection…",

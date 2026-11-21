@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import pathlib
 from collections.abc import Callable
 from typing import Protocol as _Protocol
 
@@ -91,6 +92,7 @@ class ProviderService:
         hold: Callable[[], contextlib.AbstractAsyncContextManager[object]] | None = None,
         proxy_root: Callable[[], str] | None = None,
         window_of: WindowOf = recorded_window,
+        token_dir: Callable[[], pathlib.Path] | None = None,
     ) -> None:
         self._resources = resources
         self._secrets = secrets
@@ -103,10 +105,16 @@ class ProviderService:
         # are pointed at; the projector's default when not given.
         self._projector = (
             ProviderProjector(
-                config_store, agents=agent_catalog, proxy_root=proxy_root, window_of=window_of
+                config_store,
+                agents=agent_catalog,
+                proxy_root=proxy_root,
+                window_of=window_of,
+                token_dir=token_dir,
             )
             if proxy_root is not None
-            else ProviderProjector(config_store, agents=agent_catalog, window_of=window_of)
+            else ProviderProjector(
+                config_store, agents=agent_catalog, window_of=window_of, token_dir=token_dir
+            )
         )
         # Coffer's settings, told when the speech-to-text connection moves (spec
         # internal-engine "Drop the speech-to-text model when its connection

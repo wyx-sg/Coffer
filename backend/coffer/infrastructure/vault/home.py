@@ -154,6 +154,12 @@ def proxy_usage_dir(home: Path | None = None) -> Path:
     return coffer_home(home) / PROXY_USAGE_DIRNAME
 
 
+def proxy_token_dir(home: Path | None = None) -> Path:
+    """Where an agent that reads its key from a file (OpenCode) finds its
+    proxy token: machine-local, never synced."""
+    return local_root(home) / "proxy-tokens"
+
+
 __all__ = [
     "MACHINE_ID_FILENAME",
     "PROXY_INFO_FILENAME",
@@ -171,6 +177,7 @@ __all__ = [
     "logs_dir",
     "master_key_path",
     "proxy_info_path",
+    "proxy_token_dir",
     "proxy_usage_dir",
     "runs_db_path",
     "upstream_pids_dir",

@@ -96,8 +96,11 @@ class ProviderProjector:
         cli_resolver: Callable[[], str] = default_coffer_cli_resolver,
         proxy_root: Callable[[], str] = lambda: proxy_root_at(DEFAULT_PROXY_PORT),
         window_of: WindowOf = recorded_window,
+        token_dir: Callable[[], pathlib.Path] | None = None,
     ) -> None:
         self._config_store = config_store
+        # Where an agent that reads its key from a file finds its proxy token.
+        self._token_dir = token_dir
         self._catalog = agents
         # Where the ``coffer`` CLI is, for the ``apiKeyHelper`` line: asked at
         # each projection, so a CLI installed after the daemon started is found.
@@ -186,6 +189,11 @@ class ProviderProjector:
             proxy_root=self._proxy_root(),
             wire=wire,
             window_of=self._window_of,
+            token_file=(
+                self._token_dir() / agent.name
+                if self._token_dir is not None and getattr(facet, "token_in_file", False)
+                else None
+            ),
         )
 
     def plan_project(

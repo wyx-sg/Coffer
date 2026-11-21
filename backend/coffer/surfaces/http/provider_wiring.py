@@ -40,6 +40,7 @@ from coffer.infrastructure.usage.price_refresh import (
     PriceListSource,
     refresh_pinned_off,
 )
+from coffer.infrastructure.vault.home import proxy_token_dir
 from coffer.surfaces.http.engine_config_composition import (
     internal_default_model_guard,
 )
@@ -132,6 +133,8 @@ def wire_provider_kind(
         # daemon-config.json names at the moment of each projection.
         proxy_root=proxy_root_now,
         window_of=windows.tokens,
+        # OpenCode reads its proxy token from a file Coffer keeps here.
+        token_dir=proxy_token_dir,
     )
     windows.attach(provider_svc)
     set_provider_service(provider_svc)
@@ -154,6 +157,7 @@ def wire_provider_kind(
                 agents=agent_catalog,
                 proxy_root=proxy_root_now,
                 window_of=windows.tokens,
+                token_dir=proxy_token_dir,
             ),
             store=ConfigFileStore(),
             clear_choice=provider_svc.clear_agent_connection,
