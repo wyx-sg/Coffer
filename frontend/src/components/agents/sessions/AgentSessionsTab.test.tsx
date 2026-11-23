@@ -314,6 +314,8 @@ describe("AgentSessionsTab", () => {
             name: "More actions for Alpha rollout",
           }),
         ).toBeNull();
+        // The menu's place is kept, so the row's buttons line up with the others.
+        expect(within(row("Alpha rollout")).getByTestId("session-menu-spacer")).toBeInTheDocument();
         view.unmount();
       }
     },

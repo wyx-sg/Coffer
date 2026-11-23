@@ -242,7 +242,15 @@ export function SessionRow({
             label={t("sessions.row.moreActions", { title: row.title })}
             actions={actions}
           />
-        ) : null}
+        ) : (
+          // A row whose agent can neither rename nor delete keeps the menu's
+          // place, so its buttons line up with the rows above and below.
+          <span
+            aria-hidden
+            data-testid="session-menu-spacer"
+            className="size-control-sm shrink-0"
+          />
+        )}
       </span>
     </li>
   );
