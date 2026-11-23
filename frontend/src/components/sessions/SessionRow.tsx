@@ -1,21 +1,18 @@
 // src/components/sessions/SessionRow.tsx — one row of a session list, shared by
-// the Conversations page and an agent's Sessions tab (spec chat "Show every
-// agent's sessions on the Conversations page", agent-registry "Open an agent's
-// sessions from its Sessions tab"): the title with a status word, the channel
-// it came from, the agent (where the list spans agents), the working
-// directory, when it was last active, an inline Stop while a turn runs and a
-// ⋯ menu with Rename and Delete…. Rename edits the title in place — Enter
-// saves, Esc cancels. The row itself is not a click target: the only thing that
-// opens a terminal is the split button, whose main part runs `onPrimaryAction`
-// (Open in <terminal>, spec chat "Open a conversation in the terminal") in the
-// preferred terminal, named on the button; the ▾ menu holds Open in <other terminal> for each
-// other terminal on this machine, then Copy command — the same shape as Hand
-// off to <Agent>. The row's actions always show, less what its agent cannot do. A row with no native session
-// yet shows a muted "Not started" in the split button's place, with the reason
-// in a tooltip. The Source
-// column names the channel a conversation came from, and "This Mac" for a
-// session no channel started. A link from elsewhere (a scheduled run's
-// History) lands on one row: it is marked selected and scrolled into view.
+// the Conversations page and an agent's Sessions tab (spec chat "Show every agent's sessions on the
+// Conversations page", agent-registry "Open an agent's sessions from its Sessions tab"): the title
+// with a status word, the channel it came from, the agent (where the list spans agents), the
+// working directory, when it was last active, an inline Stop while a turn runs and a ⋯ menu with
+// Rename and Delete…. Rename edits the title in place — Enter saves, Esc cancels. The row itself is
+// not a click target: the only thing that opens a terminal is the split button, whose main part
+// runs `onPrimaryAction` (Open in <terminal>, spec chat "Open a conversation in the terminal") in
+// the preferred terminal, named on the button; the ▾ menu holds Open in <other terminal> for each
+// other terminal on this machine, then Copy command — the same shape as Hand off to <Agent>. The
+// row's actions always show, less what its agent cannot do. A row with no native session yet shows
+// a muted "Not started" in the split button's place, with the reason in a tooltip. The Source
+// column names the channel a conversation came from, and "This Mac" for a session no channel
+// started; a row without a ⋯ menu keeps its place. A link from elsewhere (a scheduled run's
+// History) lands on one row, marked selected and scrolled into view.
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Laptop, Pencil, Square, Trash2 } from "lucide-react";
@@ -31,6 +28,7 @@ import type { SessionRowData } from "@/lib/sessions/rows";
 import type { TerminalChoice } from "@/lib/hooks/useTerminals";
 import { cn } from "@/lib/utils";
 import { GRID, type SessionColumns } from "./columns";
+import { MenuSpacer } from "./MenuSpacer";
 import { SessionOpenButton } from "./SessionOpenButton";
 import { SourceBadge } from "./SourceBadge";
 
@@ -242,7 +240,9 @@ export function SessionRow({
             label={t("sessions.row.moreActions", { title: row.title })}
             actions={actions}
           />
-        ) : null}
+        ) : (
+          <MenuSpacer />
+        )}
       </span>
     </li>
   );
