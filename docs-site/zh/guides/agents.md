@@ -43,9 +43,9 @@ Coffer 支持六种智能体类型：
 | `claude_code` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `codex` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `antigravity` | ✓ | ✓ | 产品不支持 | 条款不允许 | 产品不支持 | 尚未支持 | 尚未支持 | 产品不支持 |
-| `cursor` | ✓ | ✓ | 产品不支持 | ✓ | 尚未支持 | 尚未支持 | 尚未支持 | 尚未支持 |
-| `opencode` | ✓ | ✓ | ✓ | ✓ | 尚未支持 | 尚未支持 | 尚未支持 | 尚未支持 |
-| `deepseek_harness` | ✓ | ✓ | 尚未支持 | ✓ | 尚未支持 | 尚未支持 | 尚未支持 | 尚未支持 |
+| `cursor` | ✓ | ✓ | 产品不支持 | ✓ | ✓ | 尚未支持 | 尚未支持 | 尚未支持 |
+| `opencode` | ✓ | ✓ | ✓ | ✓ | ✓ | 尚未支持 | 尚未支持 | 尚未支持 |
+| `deepseek_harness` | ✓ | ✓ | 尚未支持 | ✓ | ✓ | 尚未支持 | 尚未支持 | 尚未支持 |
 
 每一列对应一个页面：[MCP 网关](/zh/guides/mcp-servers)、[技能](/zh/guides/skills)、[模型提供商](/zh/guides/providers)、[对话](/zh/guides/chat)和[消息渠道](/zh/guides/channels)，会话、插件和 Hook 在智能体自己的页面上（见下文），以及[记忆](/zh/guides/memory)。智能体缺的功能，Coffer 直接不显示，而不是置灰：它的页面上没有对应的 tab，选择器（比如对话或定时任务的智能体）只列出在这台 Mac 上能做这件事的智能体。见 [Antigravity 能得到什么](#what-antigravity-gets)和 [Cursor、OpenCode 和 DeepSeek Harness](#cursor-opencode-and-deepseek-harness)。原因见[决策记录](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/what-coffer-does-for-an-agent-follows-from-its-facets.md)。
 
@@ -62,7 +62,7 @@ Antigravity 只能用 Google 托管的模型，没有会话开始钩子，也没
 除了类型，智能体唯一的设置就是**配置目录**，外加[模型绑定](#models)。注册时默认使用该类型的标准目录（见上表），除非你另行指定。把 Coffer 指向别的目录，是把这唯一的智能体挪过去，绝不会新增第二个。注册一个已注册过的类型会被拒绝，返回 `409 AGENT_TYPE_REGISTERED`。
 
 ::: info 智能体自己的文件才是真相来源
-Coffer 从不把智能体的配置复制进自己的存储。配置文件、MCP 条目和插件，每次查看时都从磁盘读取，会话则由智能体自己列出。智能体记录本身只保存类型、配置目录和模型绑定。
+Coffer 从不把智能体的配置复制进自己的存储。配置文件、MCP 条目和插件，每次查看时都从磁盘读取，会话则由智能体自己列出，或从它存会话的地方读取。智能体记录本身只保存类型、配置目录和模型绑定。
 :::
 
 ## 注册智能体 {#register-an-agent}
@@ -310,7 +310,8 @@ Coffer 会把它写入的每个文件的上一版内容保存在 `~/.coffer/conf
 - **DeepSeek Harness** 用 YAML 补丁层组合配置，里面可能有 `!!js` 表达式，所以 Coffer 从不重写整个文件。它自己的那一行放在[各写到哪里](#what-gets-written-where)里那段带标记的内容中，连接和断开只替换这一段。其他 MCP 行会列出，但不能在 Coffer 里移除或纳入托管（`MCP_ENTRY_NOT_EDITABLE`）：请自己编辑 `cordis.patch.yml`。Coffer 只往顶层是块状列表（`- …`）的文件里加这一段；流式写法的文件会被拒绝，返回 `CONFIG_FILE_FORMAT_INVALID`。
 - **OpenCode 能用提供商。** 在它总览的**模型**下点**更改…**，可以把它切到一个有 OpenAI 兼容地址的 Coffer [模型提供商](/zh/guides/providers)上，或切回它自己的提供商。Coffer 会在 `opencode.json` 里写一个 `coffer` 提供商，它从 Coffer 保管的令牌文件读取 key，见[写入了什么](/zh/guides/providers#what-gets-written)。
 - **对话、消息渠道和定时任务。** Coffer 用它们各自的一次性命令运行一个轮次：`opencode run`、`cursor-agent -p` 和 `dsh --profile headless`，每个轮次一个进程，和 Claude Code、Codex 一样拥有智能体的全部权限。它们的回复按整条消息到达，而不是边写边显示。Cursor 用它自己的账号登录（`cursor-agent login`），而且没有办法追加系统提示，所以 Coffer 给这个轮次的说明（用的是哪个模型、正在回复手机）放在消息前面。[决策记录](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/cursor-opencode-and-deepseek-harness-chat-through-their-one-shot-commands.md)解释了原因。
-- **暂不支持：** 让 DeepSeek Harness 使用 Coffer 的模型提供商（Cursor 不提供自定义模型地址，所以不会接入），[记忆](/zh/guides/memory)钩子，会话列表，插件和 Hook。它们的智能体页面没有插件、Hook 或会话 tab，只有 OpenCode 的页面有模型部分。
+- **会话。** 它们的**会话** tab 列出智能体存下的所有会话，不管是在哪个目录里跑的，从智能体自己的存储里读取；见[会话](#sessions)。
+- **暂不支持：** 让 DeepSeek Harness 使用 Coffer 的模型提供商（Cursor 不提供自定义模型地址，所以不会接入），[记忆](/zh/guides/memory)钩子，插件和 Hook。它们的智能体页面没有插件或 Hook tab，只有 OpenCode 的页面有模型部分。
 
 ## 插件 {#plugins}
 
@@ -385,11 +386,11 @@ Coffer 从不写 Claude Code 自己的清单文件。当 `claude` CLI 不在 `PA
 
 ### 会话 {#sessions}
 
-**会话** tab 列出智能体自己的会话——你在终端或应用里跑的，以及[消息渠道](/zh/guides/channels)发起的——带标题、智能体、工作目录和最近活动时间。Coffer 向智能体自己要这份列表（Claude Code 的会话列表，Codex 的 `thread/list`），不解析智能体的文件。搜索匹配标题和目录。属于某个消息渠道对话的会话还会显示它的消息渠道，轮次运行时显示**运行中**，并带行内**停止**。
+**会话** tab 列出智能体自己的会话——你在终端或应用里跑的，以及[消息渠道](/zh/guides/channels)发起的——带标题、智能体、工作目录和最近活动时间。能向智能体自己要的，Coffer 就向它要（Claude Code 的会话列表，Codex 的 `thread/list`）。OpenCode、DeepSeek Harness 和 Cursor 的命令行只能列出当前目录的会话，所以 Coffer 改为只读地读取它们各自的存储：OpenCode 的数据库（`~/.local/share/opencode/opencode.db`，1.x 和 2.x 都支持），DeepSeek Harness 在 `~/.dsh/sessions` 下的会话文件夹，以及 Cursor 在 `~/.cursor/chats` 下的对话。如果它们哪个新版本换了 Coffer 读不了的存法，这个 tab 会改为列出 Coffer 在它上面跑过的对话（来自消息渠道和定时任务），守护进程日志里会写明原因。搜索匹配标题和目录。属于某个消息渠道对话的会话还会显示它的消息渠道，轮次运行时显示**运行中**，并带行内**停止**。
 
-打开一行，就在你的首选终端里、会话所在的目录恢复这个会话：Claude Code 是 `claude --resume <id>`，Codex 是 `codex resume <id>`。分体按钮的**复制命令**是给 Coffer 不认识的终端用的替代方式。运行中的轮次会先询问：在消息渠道里继续，或停止轮次并在终端中继续。在**设置 › 通用 › 首选终端**里选择终端；见[对话](/zh/guides/chat#open-in-terminal)。
+打开一行，就在你的首选终端里、会话所在的目录恢复这个会话：Claude Code 是 `claude --resume <id>`，Codex 是 `codex resume <id>`，Cursor 是 `cursor-agent --resume <id>`，OpenCode 是 `opencode --session <id>`。DeepSeek Harness 没有终端界面，它的行打不开。分体按钮的**复制命令**是给 Coffer 不认识的终端用的替代方式。运行中的轮次会先询问：在消息渠道里继续，或停止轮次并在终端中继续。在**设置 › 通用 › 首选终端**里选择终端；见[对话](/zh/guides/chat#open-in-terminal)。
 
-**⋯** 菜单有**重命名**和**删除…**，都由智能体对它自己的会话执行（Claude Code 的 `rename_session` 和 `delete_session`，Codex 的 `thread/name/set` 和 `thread/delete`）。删除会先确认，而且是永久的。删除某个消息渠道对话在用的会话，也会移除该对话的那一行，消息渠道的下一条消息会开始一个新的。如果会话已经不存在，错误是 `NATIVE_SESSION_NOT_FOUND`，刷新列表即可。无法列出会话的智能体类型会返回 `AGENT_TYPE_UNSUPPORTED`。
+**⋯** 菜单有**重命名**和**删除…**，都由智能体对它自己的会话执行（Claude Code 的 `rename_session` 和 `delete_session`，Codex 的 `thread/name/set` 和 `thread/delete`）。OpenCode 只能**删除…**（`opencode session delete`）；DeepSeek Harness 和 Cursor 两样都没有命令，所以它们的行没有 **⋯** 菜单，Coffer 也不会自己去改它们的存储。删除会先确认，而且是永久的。删除某个消息渠道对话在用的会话，也会移除该对话的那一行，消息渠道的下一条消息会开始一个新的。如果会话已经不存在，错误是 `NATIVE_SESSION_NOT_FOUND`，刷新列表即可。无法列出会话的智能体类型会返回 `AGENT_TYPE_UNSUPPORTED`。
 
 Claude Code 会删除超过 `cleanupPeriodDays`（默认约 30 天）没有动过的会话，已经没有的会话会从这个列表里消失。想保留更久，请在 Claude Code 的 `settings.json` 里调大它；见[对话](/zh/guides/chat#chat-and-the-agent-s-own-sessions)。
 

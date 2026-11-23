@@ -32,6 +32,10 @@ Press **Open in *terminal*** on a row's split button, named after your preferred
 
 - Claude Code: `claude --resume <session id>`
 - Codex: `codex resume <session id>`
+- Cursor: `cursor-agent --resume <session id>`
+- OpenCode: `opencode --session <session id>`
+
+DeepSeek Harness ships no terminal interface, so its rows have no split button.
 
 **Copy command** puts the same command on your clipboard, to run in a terminal Coffer does not know or on another shell. The command starts with a change into the session's directory.
 

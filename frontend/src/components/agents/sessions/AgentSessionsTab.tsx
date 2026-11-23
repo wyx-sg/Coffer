@@ -20,7 +20,13 @@ import { useOpenSession } from "@/components/sessions/useOpenSession";
 import { LoadErrorRow } from "@/components/LoadErrorRow";
 import { SearchInput } from "@/components/SearchInput";
 import { LoadMoreFooter } from "@/components/ui/load-more";
-import { abbreviateHomePath, agentProgramName, agentTypeLabel } from "@/lib/agents/display";
+import {
+  agentProgramName,
+  agentTypeLabel,
+  opensInTerminal,
+  sessionActions,
+  sessionStore,
+} from "@/lib/agents/display";
 import type { AgentOut } from "@/lib/api/agents";
 import {
   useAgentSessions,
@@ -42,6 +48,9 @@ export function AgentSessionsTab({ agent }: { agent: AgentOut }) {
   const [deleting, setDeleting] = useState<SessionRowData | null>(null);
   const opener = useOpenSession(agent.type);
   const rows = useMemo(() => list.items.map(sessionRow), [list.items]);
+  // A new conversation starts in the agent's terminal interface.
+  const startable = opensInTerminal(agent.type);
+  const can = sessionActions(agent.type);
 
   const onRename = useCallback(
     (row: SessionRowData, title: string) => rename.mutateAsync({ sessionId: row.id, title }),
@@ -66,7 +75,7 @@ export function AgentSessionsTab({ agent }: { agent: AgentOut }) {
     );
   }
   if (!list.isLoading && drained && !searching) {
-    const dir = `${abbreviateHomePath(agent.config_dir)}/${agent.type === "codex" ? "sessions" : "projects"}`;
+    const dir = sessionStore(agent.type, agent.config_dir);
     return (
       <div className="rounded-xl border border-border px-6 py-8 text-center">
         <p className="text-sm font-semibold text-text">{t("agents.sessionsTab.emptyTitle")}</p>
@@ -77,9 +86,11 @@ export function AgentSessionsTab({ agent }: { agent: AgentOut }) {
             program: agentProgramName(agent.type),
           })}
         </p>
-        <div className="mt-4 flex justify-center">
-          <NewConversationButton agentKey={agent.type} />
-        </div>
+        {startable ? (
+          <div className="mt-4 flex justify-center">
+            <NewConversationButton agentKey={agent.type} />
+          </div>
+        ) : null}
       </div>
     );
   }
@@ -95,9 +106,11 @@ export function AgentSessionsTab({ agent }: { agent: AgentOut }) {
           shortcut="/"
           className="w-72"
         />
-        <div className="ml-auto">
-          <NewConversationButton agentKey={agent.type} />
-        </div>
+        {startable ? (
+          <div className="ml-auto">
+            <NewConversationButton agentKey={agent.type} />
+          </div>
+        ) : null}
       </div>
       {!list.isLoading && drained ? (
         <p className="rounded-xl border border-border px-6 py-8 text-center text-sm text-text-muted">
@@ -121,6 +134,8 @@ export function AgentSessionsTab({ agent }: { agent: AgentOut }) {
               canOpen={opener.canOpen}
               onRename={onRename}
               onDelete={setDeleting}
+              canRename={() => can.rename}
+              canDelete={() => can.delete}
               onStop={onStop}
             />
           </div>

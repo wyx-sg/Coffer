@@ -87,6 +87,13 @@ threads appending at once rarely conflict:
   fields may be omitted so Codex uses its own defaults), then write what the
   provider reports and leave the rest to Codex.
 
+### Put DeepSeek Harness on a model provider
+
+- **Added:** 2026-11-23, from thread "调研 Coffer 支持 DeepSeek、Cursor、OpenCode" (owner chose to defer)
+- **What:** a Coffer model connection serves DeepSeek Harness, the way it serves Claude Code, Codex and OpenCode.
+- **Why later:** DeepSeek Harness takes custom model routes only as the whole `config` of its `llm-pi-ai` row, and a later patch layer replaces an earlier one's row entirely. Coffer's row would have to live in `$DSH_HOME/cordis.patch.yml`, which outranks each profile's own layer, so it would silently hide every route the person saves in DeepSeek Harness's Models settings. A second `llm-pi-ai` row under another id does not register its routes (`NO_ADAPTER`). DeepSeek's own sign-in uses another plugin and is unaffected either way.
+- **Sketch:** checked on dsh 0.2.2-rc.5. The route that works is `api: openai-responses`, `baseURL` at the proxy's `/openai/v1`, and the key as `headers.Authorization: !!js "'Bearer ' + process.getBuiltinModule('node:fs').readFileSync('<token file>', 'utf8').trim()"`, which reuses OpenCode's token file (ADR opencode-reads-its-proxy-token-from-a-file). `agent-default-model` picks the model. Build it once DeepSeek Harness can add a route without replacing the row (a merge patch, or a plugin that registers one route), or if the owner accepts the clobbering with a clear warning.
+
 ## Channels and conversations
 
 ### Add more chat platforms

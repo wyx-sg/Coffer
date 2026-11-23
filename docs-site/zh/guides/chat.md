@@ -32,6 +32,10 @@ Coffer 负责的是轮次平台，让 IM 消息渠道能触达这台机器上的
 
 - Claude Code：`claude --resume <会话 id>`
 - Codex：`codex resume <会话 id>`
+- Cursor：`cursor-agent --resume <会话 id>`
+- OpenCode：`opencode --session <会话 id>`
+
+DeepSeek Harness 没有终端界面，所以它的行没有分体按钮。
 
 **复制命令**会把同一条命令放进剪贴板，供你在 Coffer 不认识的终端或别的 shell 里运行。命令以进入会话所在目录开头。
 

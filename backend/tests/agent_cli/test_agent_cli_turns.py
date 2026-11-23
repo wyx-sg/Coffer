@@ -4,7 +4,9 @@ turn through the agent's one-shot command").
 Runs in the ``agent-cli`` CI job with ``COFFER_SMOKE_AGENT_CLI=1``, like
 ``test_agent_cli_smoke``. OpenCode and DeepSeek Harness answer from a stand-in
 model server through the same adapter the daemon uses: one tool call, its
-result, an answer, and a second turn on the same session. Cursor signs in with
+result, an answer, and a second turn on the same session; then the session is
+found in the agent's own store (spec agent-registry "List the sessions an agent
+keeps in its own store"), and OpenCode deletes it through its own command. Cursor signs in with
 its own account, which CI has not got, so its test only proves the command
 line Coffer builds is one Cursor accepts.
 """
@@ -20,7 +22,12 @@ from typing import Any
 
 import pytest
 
+from coffer.domain.agent.native_sessions import NativeSessionNotFound
 from coffer.domain.chat.events import MessageEnd, TextDelta, ToolCall, ToolResult, TurnDone
+from coffer.infrastructure.agent.cli_native_sessions import (
+    DshNativeSessions,
+    OpenCodeNativeSessions,
+)
 from coffer.infrastructure.chat.cli_turn import CliAgent, CliTurnAdapter
 from coffer.infrastructure.chat.cursor_print import CursorPrint
 from coffer.infrastructure.chat.dsh_headless import DshHeadless
@@ -113,6 +120,19 @@ async def test_opencode_runs_a_turn_and_resumes_it(
         assert isinstance(again[-1], TurnDone), again
         assert saved_again == [], "the same session was continued"
 
+    # The session is in OpenCode's own list, and goes through its own delete.
+    sessions = OpenCodeNativeSessions(which=lambda _p: opencode, env=dict)
+    config_dir = tmp_path / ".config" / "opencode"
+    page = await sessions.list(config_dir, q=None, limit=10, position=None)
+    listed = {s.session_id: s for s in page.items}
+    assert saved[0] in listed, page
+    assert listed[saved[0]].cwd == str(work)
+    await sessions.delete(config_dir, saved[0])
+    after = await sessions.list(config_dir, q=None, limit=10, position=None)
+    assert saved[0] not in {s.session_id for s in after.items}
+    with pytest.raises(NativeSessionNotFound):
+        await sessions.delete(config_dir, saved[0])
+
 
 async def test_deepseek_harness_runs_a_turn_and_resumes_it(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
@@ -143,6 +163,13 @@ async def test_deepseek_harness_runs_a_turn_and_resumes_it(
         again, saved_again = await _turn(DshHeadless(), dsh, work, env, saved[0])
         assert isinstance(again[-1], TurnDone), again
         assert saved_again == []
+
+    # The session is in DeepSeek Harness's own store, with its folder.
+    page = await DshNativeSessions().list(home, q=None, limit=10, position=None)
+    listed = {s.session_id: s for s in page.items}
+    assert saved[0] in listed, page
+    assert listed[saved[0]].cwd == str(work)
+    assert listed[saved[0]].last_activity_at is not None
 
 
 async def test_cursor_accepts_the_command_coffer_builds(tmp_path: pathlib.Path) -> None:

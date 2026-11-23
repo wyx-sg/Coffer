@@ -38,7 +38,7 @@ const page = (rows: AgentSession[], next: string | null = null) => ({
   total: next ? null : rows.length,
 });
 
-function renderTab() {
+function renderTab(shown = agent) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -47,7 +47,7 @@ function renderTab() {
       <QueryClientProvider client={qc}>
         <ToastProvider>
           <TooltipProvider>
-            <AgentSessionsTab agent={agent} />
+            <AgentSessionsTab agent={shown} />
           </TooltipProvider>
         </ToastProvider>
       </QueryClientProvider>
@@ -290,4 +290,32 @@ describe("AgentSessionsTab", () => {
     expect(sessionCalls("DELETE")[0].path).toBe("/agents/ag-cc/sessions/abc-123");
     await waitFor(() => expect(screen.queryByText("Beta rollout")).toBeNull());
   });
+
+  acceptance(
+    "agent-registry",
+    "an agent without the command offers no rename or delete",
+    async () => {
+      const { unmount } = renderTab(makeAgent({ uid: "ag-cc", type: "opencode" }));
+      await screen.findByText("Alpha rollout");
+      fireEvent.click(
+        within(row("Alpha rollout")).getByRole("button", {
+          name: "More actions for Alpha rollout",
+        }),
+      );
+      expect(await screen.findByRole("menuitem", { name: "Delete…" })).toBeInTheDocument();
+      expect(screen.queryByRole("menuitem", { name: "Rename" })).toBeNull();
+      unmount();
+
+      for (const type of ["deepseek_harness", "cursor"] as const) {
+        const view = renderTab(makeAgent({ uid: "ag-cc", type }));
+        await screen.findByText("Alpha rollout");
+        expect(
+          within(row("Alpha rollout")).queryByRole("button", {
+            name: "More actions for Alpha rollout",
+          }),
+        ).toBeNull();
+        view.unmount();
+      }
+    },
+  );
 });

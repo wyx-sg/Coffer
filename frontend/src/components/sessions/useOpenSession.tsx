@@ -13,6 +13,7 @@ import { useTranslation } from "react-i18next";
 
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
+import { opensInTerminal } from "@/lib/agents/display";
 import type { AgentType } from "@/lib/api/agents";
 import { platformName } from "@/lib/channels/platformName";
 import { useInterruptConversation } from "@/lib/hooks/useConversations";
@@ -24,9 +25,9 @@ import {
 import type { SessionRowData } from "@/lib/sessions/rows";
 import { resumeCommand } from "@/lib/terminal/command";
 
-/** The agent type behind a registry key; null for one that has no terminal program. */
+/** The agent type behind a registry key; null for one that has no terminal interface. */
 function agentTypeOf(key: string | null | undefined): AgentType | null {
-  return key === "claude_code" || key === "codex" ? key : null;
+  return opensInTerminal(key) ? key : null;
 }
 
 /** The pieces of a list that opens its rows in a terminal. */
@@ -61,7 +62,7 @@ export function useOpenSession(agentType?: AgentType): SessionOpener {
   const busy = pending?.row ?? null;
 
   const typeOf = useCallback(
-    (row: SessionRowData) => agentType ?? agentTypeOf(row.agentKey),
+    (row: SessionRowData) => agentTypeOf(agentType ?? row.agentKey),
     [agentType],
   );
   const canOpen = useCallback(
