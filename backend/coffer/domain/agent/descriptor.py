@@ -255,6 +255,8 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
         # It also loads Claude Code's folder, and its CLI offers no way to stop
         # that (cursor.com docs/skills; Cursor forum thread 166558).
         skill_also_reads=(".claude/skills",),
+        # ~/.cursor/hooks.json, which the editor and the CLI both run.
+        hook_source_keys=("hooks",),
         mcp=McpInjectionSpec(
             config_key="mcp",
             container_key="mcpServers",

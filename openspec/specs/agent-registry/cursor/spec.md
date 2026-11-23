@@ -3,7 +3,7 @@
 ## Purpose
 This child of [`agent-registry`](../spec.md) says how the `cursor` agent type realises the facets its parent defines: where its config directory is, which of its files Coffer may read and write, the shape of the MCP entry Coffer installs, and where its skills are delivered. It is the prose reading of that type's one `AGENT_DESCRIPTORS` record. "Cursor" is the product: the editor and its command line (`cursor-agent`, also installed as `agent`), which read one shared `~/.cursor` directory and one shared `mcp.json`.
 
-Cursor offers no custom model endpoint, keeps no memory on disk and documents no session storage, so this type has no provider projection, memory reader or session source; the surfaces hide those tabs for it (ADR [Cursor, OpenCode and DeepSeek Harness Are Supported Agents](../../../../docs/decisions/cursor-opencode-and-deepseek-harness-are-supported-agents.md)).
+Cursor offers no custom model endpoint and keeps no memory on disk, so this type has no provider projection or memory reader; the surfaces hide those for it (ADR [Cursor, OpenCode and DeepSeek Harness Are Supported Agents](../../../../docs/decisions/cursor-opencode-and-deepseek-harness-are-supported-agents.md)). Its chats are read from their stores ([agent-registry](../spec.md) "List the sessions an agent keeps in its own store"), and its hooks from `hooks.json`.
 
 ## Requirements
 
@@ -40,3 +40,11 @@ Skills MUST be delivered to `~/.agents/skills`, which Cursor reads, as one link 
 - **GIVEN** a registered `cursor` agent and an enabled skill in scope for it
 - **WHEN** skills are reconciled
 - **THEN** `~/.agents/skills/<skill>` links to the skill's master folder
+
+### Requirement: List Cursor's hooks from hooks.json
+The `cursor` type's hook-carrying file MUST be `hooks.json` in its config directory (`~/.cursor/hooks.json`, run by the editor and its command line), read by [agent-registry](../spec.md) "List every hook in the agent's native config". Cursor lists each hook directly under its event, with the matcher on the hook (`{"version": 1, "hooks": {"<event>": [{"command": …, "matcher": …, "timeout": …}]}}`), so a hook's position is `hooks.<event>[i]`: its `group_index` is `i` and its `hook_index` is 0. A prompt hook (`"type": "prompt"`) is listed with its `prompt` where a command hook shows its command. Cursor's project, team and enterprise hook files are not read.
+
+#### Scenario: Cursor's hooks are listed from its hooks.json
+- **GIVEN** a Cursor `hooks.json` with a `beforeShellExecution` command hook that has a matcher and a timeout, and a `beforeSubmitPrompt` event holding a prompt hook and a command hook
+- **WHEN** the user lists the agent's hooks
+- **THEN** the three hooks are listed in file order with their events, matchers, timeouts and types, the prompt hook under its prompt, and their positions are `hooks.<event>[0]`, `[0]` and `[1]`
