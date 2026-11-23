@@ -9,6 +9,7 @@ the file changed since the page read it.
 from __future__ import annotations
 
 import asyncio
+import pathlib
 from dataclasses import dataclass
 
 from coffer.domain.memory.hub import Topic
@@ -36,7 +37,12 @@ class MemoryService:
         return self._hub
 
     def folder_path(self) -> str:
-        return str(self._hub.projects_root())
+        root = self._hub.projects_root()
+        home = pathlib.Path.home()
+        try:
+            return f"~/{root.relative_to(home).as_posix()}"
+        except ValueError:
+            return str(root)
 
     async def projects(self) -> list[ProjectSummary]:
         def _read() -> list[ProjectSummary]:

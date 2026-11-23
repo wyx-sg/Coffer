@@ -150,10 +150,11 @@ beforeEach(() => {
 describe("MemoryPage", () => {
   acceptance("memory", "the Memory page lists projects and their topics", async () => {
     renderPage();
-    expect(await screen.findByText("Kept in ~/.coffer/vault/memory/projects")).toBeInTheDocument();
+    expect(await screen.findByText("Folder: ~/.coffer/vault/memory/projects")).toBeInTheDocument();
     // The most recently updated project opens; the list says which files break the format.
     const list = await screen.findByTestId("memory-list");
-    expect(list).toHaveTextContent(FOLDER);
+    expect(list).toHaveTextContent("me-app");
+    expect(list).not.toHaveTextContent("github.com");
     expect(list).toHaveTextContent("2 files");
     expect(await rowOf(list, "Testing")).toHaveTextContent("How to work");
     expect(await rowOf(list, "Testing")).toHaveTextContent("Run only the failing tests.");

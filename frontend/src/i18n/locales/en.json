@@ -3434,7 +3434,7 @@
     "subtitle": "What your agents remember about you and your projects, one file per topic.",
     "loadFailed": "Couldn't read memory",
     "moreActions": "More memory actions",
-    "folder": "Kept in {{path}}",
+    "folder": "Folder: {{path}}",
     "tidy": {
       "button": "Tidy",
       "running": "An agent is tidying memory. Its edits show in History as one change when it finishes.",

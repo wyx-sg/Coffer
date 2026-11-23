@@ -38,7 +38,7 @@ test("the Memory page shows the hub", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "Memory", level: 1 }),
   ).toBeVisible();
-  await expect(page.getByText(`Kept in ${folder_path}`)).toBeVisible();
+  await expect(page.getByText(`Folder: ${folder_path}`)).toBeVisible();
   // Tidy hands off to a managed agent; an e2e run installs none, so the
   // handoff offers Copy prompt instead.
   await expect(
