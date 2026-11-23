@@ -1,6 +1,6 @@
 ---
 title: 消息渠道
-description: 把 Telegram 机器人或 SeaTalk 应用接入 Coffer，配对到你自己的账号，然后在你已经在用的 IM 应用里驱动 Claude Code 或 Codex。
+description: 把 Telegram 机器人或 SeaTalk 应用接入 Coffer，配对到你自己的账号，然后在你已经在用的 IM 应用里驱动你的编程智能体。
 ---
 
 # 消息渠道 {#channels}
@@ -17,7 +17,7 @@ description: 把 Telegram 机器人或 SeaTalk 应用接入 Coffer，配对到�
 
 你发的一条消息会成为一个普通 Coffer 对话里的一个轮次，智能体的回复再发回 IM 聊天。Web 界面的[对话](/zh/guides/chat)页面会列出它，并标明它来自哪个消息渠道，所以你可以在手机上开始一个任务，再到桌面前接着做：打开这一行，就在你的终端里恢复智能体的会话（见[在终端中打开对话](/zh/guides/chat#open-in-terminal)）。这个页面只是列表，没有回复框，你在那里做的任何事都不会发进聊天。
 
-一个机器人可以驱动所有托管的智能体。你在聊天里用 `/new <agent>` 在 Claude Code 和 Codex 之间切换，同一个群的不同话题可以同时运行不同的智能体。
+一个机器人可以驱动所有托管的智能体。你在聊天里用 `/new <agent>` 在智能体（Claude Code、Codex、Cursor、OpenCode、DeepSeek Harness）之间切换，同一个群的不同话题可以同时运行不同的智能体。
 
 ::: info 只管 Coffer 托管的消息渠道
 Coffer 只管理它自己托管的消息渠道。智能体自己的官方集成（Claude Code 的 Telegram 插件、厂商的 Slack 应用、智能体原生的网关）独立运行，Coffer 既不管理也不代理。

@@ -1,5 +1,7 @@
 """The driver facet implementations: Claude Code over the Agent SDK, Codex over
-``codex app-server`` (ADR agent-mechanisms-are-optional-facets-on-the-descriptor).
+``codex app-server``, and OpenCode, Cursor and DeepSeek Harness over their
+one-shot commands (ADR agent-mechanisms-are-optional-facets-on-the-descriptor;
+ADR cursor-opencode-and-deepseek-harness-chat-through-their-one-shot-commands).
 
 Each driver declares the agent it serves by ``agent_key`` and builds its
 ``AgentProvider`` from :class:`DriverDeps`, the chat kind's dependencies. The
@@ -24,7 +26,12 @@ from coffer.infrastructure.chat.claude_sdk_provider import (
     ClaudeSdkProvider,
     TranscriberFactory,
 )
+from coffer.infrastructure.chat.cli_provider import CliProvider
+from coffer.infrastructure.chat.cli_turn import CliAgent
 from coffer.infrastructure.chat.codex_provider import CodexAppServerProvider
+from coffer.infrastructure.chat.cursor_print import CursorPrint
+from coffer.infrastructure.chat.dsh_headless import DshHeadless
+from coffer.infrastructure.chat.opencode_run import OpenCodeRun
 
 if TYPE_CHECKING:
     from coffer.application.chat.ports import AgentProvider
@@ -84,9 +91,35 @@ class CodexAppServerDriver:
         )
 
 
-DRIVERS: tuple[ClaudeSdkDriver | CodexAppServerDriver, ...] = (
+class CliDriver:
+    """An agent driven through its one-shot command, one process per turn."""
+
+    def __init__(self, agent: CliAgent, *, program: str, display_name: str) -> None:
+        self._agent = agent
+        self.agent_key = agent.agent_key
+        self.program = program
+        self.display_name = display_name
+
+    def build(self, deps: DriverDeps) -> AgentProvider:
+        return CliProvider(
+            agent=self._agent,
+            program=self.program,
+            conversations=deps.conversations,
+            list_models=deps.list_models,
+            transcriber_factory=deps.transcriber_factory,
+            resolve_channel=deps.resolve_channel,
+            resolve_home_env=deps.resolve_home_env(self.agent_key),
+            is_managed=deps.is_managed(self.agent_key) if deps.is_managed else None,
+            resolve_memory=deps.resolve_memory,
+        )
+
+
+DRIVERS: tuple[ClaudeSdkDriver | CodexAppServerDriver | CliDriver, ...] = (
     ClaudeSdkDriver(),
     CodexAppServerDriver(),
+    CliDriver(CursorPrint(), program="cursor-agent", display_name="Cursor"),
+    CliDriver(OpenCodeRun(), program="opencode", display_name="OpenCode"),
+    CliDriver(DshHeadless(), program="dsh", display_name="DeepSeek Harness"),
 )
 
-__all__ = ["DRIVERS", "ClaudeSdkDriver", "CodexAppServerDriver", "DriverDeps"]
+__all__ = ["DRIVERS", "ClaudeSdkDriver", "CliDriver", "CodexAppServerDriver", "DriverDeps"]

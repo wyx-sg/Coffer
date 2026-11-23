@@ -58,7 +58,7 @@ Coffer 还提供一些不属于资源类型的能力：加密的[密钥存储](/
 ## Coffer 不是什么 {#what-coffer-is-not}
 
 - **不是云服务。** Coffer 没有托管后端，也没有账号。API 只绑定回环地址。云服务只会以你选用的模型提供商和 MCP 服务器的身份出现。如果你在几台机器之间同步保险库，走的是你自己的 git 仓库，而且每台机器都保有完整副本。
-- **不是智能体。** Coffer 不是一个陪你聊天的助手。它的消息渠道驱动的是*你的*智能体（Claude Code 或 Codex），它的对话页面则列出这些对话，并在你的终端里打开它们。Coffer 只会为转写语音消息运行自己的模型，而且要你配置了才会。
+- **不是智能体。** Coffer 不是一个陪你聊天的助手。它的消息渠道驱动的是*你的*智能体，它的对话页面则列出这些对话，并在你的终端里打开它们。Coffer 只会为转写语音消息运行自己的模型，而且要你配置了才会。
 - **不是编排器。** Coffer 不规划工作，也不在智能体之间传递任务。它是智能体下面的共享层：它们共用的工具、文件和设置。
 - **不替代智能体自己的配置。** 智能体自己的文件仍然是事实来源。Coffer 只写入它管理的、有文档说明的条目，写入是原子的，并在 Coffer 自己的文件夹里留一份备份副本；其余内容只在需要时读取。
 
@@ -69,7 +69,7 @@ Coffer 还提供一些不属于资源类型的能力：加密的[密钥存储](/
 | 智能体 | Claude Code（`claude_code`）和 Codex（`codex`） |
 | 预编译二进制和桌面应用 | Apple 芯片（arm64）的 macOS |
 | 从源码 | Python 3.12 或更高版本。发布构建和登录服务面向 macOS。 |
-| MCP 客户端 | 任何能运行 stdio MCP 服务器的客户端都能用 `coffer-mcp-shim`。只有 Claude Code、Codex、Antigravity、Cursor、OpenCode 和 DeepSeek Harness 支持一步安装和技能投递，提供商切换只支持 Claude Code 和 Codex。 |
+| MCP 客户端 | 任何能运行 stdio MCP 服务器的客户端都能用 `coffer-mcp-shim`。只有 Claude Code、Codex、Antigravity、Cursor、OpenCode 和 DeepSeek Harness 支持一步安装和技能投递，提供商切换只支持 Claude Code、Codex 和 OpenCode。 |
 
 ## 下一步 {#next-steps}
 

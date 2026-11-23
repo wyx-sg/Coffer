@@ -265,4 +265,5 @@ def test_a_type_without_facets_reports_only_what_it_has(home: pathlib.Path) -> N
             "plugins",
             "hooks",
         ]
-        assert rows["cursor"]["features"] == ["mcp", "skills"]
+        assert rows["antigravity"]["features"] == ["mcp", "skills"]
+        assert rows["cursor"]["features"] == ["mcp", "skills", "chat"]

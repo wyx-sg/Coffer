@@ -43,9 +43,9 @@ Not every type gets everything. The table says what Coffer does for each one, an
 | `claude_code` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `codex` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `antigravity` | ✓ | ✓ | not offered | terms | not offered | not yet | not yet | not offered |
-| `cursor` | ✓ | ✓ | not offered | not yet | not yet | not yet | not yet | not yet |
-| `opencode` | ✓ | ✓ | ✓ | not yet | not yet | not yet | not yet | not yet |
-| `deepseek_harness` | ✓ | ✓ | not yet | not yet | not yet | not yet | not yet | not yet |
+| `cursor` | ✓ | ✓ | not offered | ✓ | not yet | not yet | not yet | not yet |
+| `opencode` | ✓ | ✓ | ✓ | ✓ | not yet | not yet | not yet | not yet |
+| `deepseek_harness` | ✓ | ✓ | not yet | ✓ | not yet | not yet | not yet | not yet |
 
 A column maps to a page: [MCP gateway](/guides/mcp-servers), [skills](/guides/skills), [model provider](/guides/providers), [chat](/guides/chat) and [channels](/guides/channels), sessions and plugins and hooks on the agent's own page (below), and [memory](/guides/memory). Coffer leaves out what an agent lacks rather than greying it out: its page has no tab for it, and a picker, such as the agent of a chat or a scheduled task, lists only the agents that can do the thing on this Mac. See [What Antigravity gets](#what-antigravity-gets) and [Cursor, OpenCode and DeepSeek Harness](#cursor-opencode-and-deepseek-harness). The [decision record](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/what-coffer-does-for-an-agent-follows-from-its-facets.md) explains why.
 
@@ -309,7 +309,8 @@ These three types are supported for the parts that work the same way for every a
 - **OpenCode** 1.x and 2.x name the MCP table differently. Coffer writes its entry in the 1.x shape (`mcp.coffer`), which 2.x still reads, and lists entries of both shapes. A 2.x entry under `mcp.servers` can be removed and adopted like any other.
 - **DeepSeek Harness** composes its configuration from YAML patch layers that may hold `!!js` expressions, so Coffer never rewrites the whole file. Its own row lives in the marked block shown in [What gets written where](#what-gets-written-where), and connecting or disconnecting replaces only that block. The other MCP rows are listed but cannot be removed or adopted from Coffer (`MCP_ENTRY_NOT_EDITABLE`): edit `cordis.patch.yml` yourself. Coffer only adds its block to a file whose top level is a block-style list (`- …`); a flow-style file is refused with `CONFIG_FILE_FORMAT_INVALID`.
 - **OpenCode runs on a provider.** Under **Model** on its Overview, **Change…** puts it on a Coffer [model provider](/guides/providers) that has an OpenAI-compatible address, or back on its own providers. Coffer writes a `coffer` provider into `opencode.json`, which reads its key from a token file Coffer keeps; see [What gets written](/guides/providers#what-gets-written).
-- **Not yet available:** pointing DeepSeek Harness at a Coffer model provider (Cursor offers no custom model endpoint, so it never takes one), running them from [chat](/guides/chat), [channels](/guides/channels) or [scheduled tasks](/guides/scheduled-tasks), the [memory](/guides/memory) hook, the sessions list, plugins and hooks. Their agent page has no Plugins, Hooks or Sessions tab, and only OpenCode's has a Model section.
+- **Chat, channels and scheduled tasks.** Coffer runs a turn on them through each one's own one-shot command: `opencode run`, `cursor-agent -p` and `dsh --profile headless`, one process per turn, with the agent's full permissions, as for Claude Code and Codex. Their reply arrives a whole message at a time rather than as it is typed. Cursor signs in with its own account (`cursor-agent login`), and has no way to add to its system prompt, so Coffer's note for the turn (which model it is on, that it is answering a phone) leads the message. The [decision record](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/cursor-opencode-and-deepseek-harness-chat-through-their-one-shot-commands.md) explains why.
+- **Not yet available:** pointing DeepSeek Harness at a Coffer model provider (Cursor offers no custom model endpoint, so it never takes one), the [memory](/guides/memory) hook, the sessions list, plugins and hooks. Their agent page has no Plugins, Hooks or Sessions tab, and only OpenCode's has a Model section.
 
 ## Plugins
 

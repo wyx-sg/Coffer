@@ -577,9 +577,9 @@ The system MUST serve `GET /api/v1/agents/types`, one row per supported type in 
 Every agent row (`GET /api/v1/agents`, `GET /api/v1/agents/{uid}`) and every type row (`GET /api/v1/agents/types`) MUST carry `features`: the names, from `mcp`, `skills`, `provider`, `chat`, `sessions`, `plugins` and `hooks`, of what Coffer can do with that type, in that order. Each name MUST follow from the type's descriptor and its bound facets — `provider` from a provider projection, `chat` from a driver, `sessions` from a native session source, `plugins` from the plugin capability, `hooks` from hook source files — never from a separate hand-written table, so a type cannot be reported as supporting what its code does not. Surfaces MUST show a tab, tile or section for a feature only when the agent's `features` lists it, and a picker that chooses an agent to do something MUST list only the agents that can do it on this machine — for a turn (a scheduled task, a channel's agent), the agents the turn platform reports as available — never a fixed list of names. A feature an agent lacks is explained in one place, the agents guide's support table, which names for each gap whether the product offers no way, its terms do not allow it, or Coffer does not do it yet; no surface shows a disabled control for it ([What Coffer Does for an Agent Follows From Its Facets](../../../docs/decisions/what-coffer-does-for-an-agent-follows-from-its-facets.md)). The web UI names an agent type only in its agent modules (`frontend/src/lib/agents/`, `frontend/src/components/agent/`) and in the few files that hold a per-agent value the daemon does not serve, each listed with its reason in `scripts/check_frontend_agent_types.py`, which `make lint` runs.
 
 #### Scenario: a type without facets reports only what it has
-- **GIVEN** Claude Code and Cursor are both supported types
+- **GIVEN** Claude Code and Antigravity are both supported types
 - **WHEN** the user requests `GET /api/v1/agents/types`
-- **THEN** the `claude_code` row lists every feature, and the `cursor` row lists exactly `mcp` and `skills`
+- **THEN** the `claude_code` row lists every feature, and the `antigravity` row lists exactly `mcp` and `skills`
 
 #### Scenario: the agents guide's support table matches what the daemon reports
 - **GIVEN** the agents guide's support table, in English and Chinese

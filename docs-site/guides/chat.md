@@ -5,7 +5,7 @@ description: List every agent session wherever it started, resume one in your te
 
 # Conversations {#conversations}
 
-The **Conversations** page lists every session of every managed agent, Claude Code or Codex, wherever it was started: in a terminal, by an [IM channel](/guides/channels), or from **New conversation** on this page. It is a list, not a chat client: pressing a row's **Open in *terminal*** button resumes that session in your own terminal, where the agent's own interface takes over. This guide covers the list, starting a new conversation, opening a row, what a running turn means for opening, renaming and deleting, and where the conversation itself is kept.
+The **Conversations** page lists every session of every managed agent wherever it was started: in a terminal, by an [IM channel](/guides/channels), or from **New conversation** on this page. It is a list, not a chat client: pressing a row's **Open in *terminal*** button resumes that session in your own terminal, where the agent's own interface takes over. This guide covers the list, starting a new conversation, opening a row, what a running turn means for opening, renaming and deleting, and where the conversation itself is kept.
 
 ## What Conversations is for {#what-conversations-is-for}
 
@@ -127,7 +127,7 @@ When no agent has a session yet, the page is its header and one message. When fi
 
 **New conversation** in the page header, and the same button on an [agent's Sessions tab](/guides/agents), starts a fresh session in your terminal. It opens a small dialog with two fields:
 
-- **Agent**: Claude Code or Codex. The dialog remembers the one you chose last.
+- **Agent**: any managed agent that can run a conversation on this Mac: Claude Code, Codex, Cursor, OpenCode or DeepSeek Harness, when installed. The dialog remembers the one you chose last.
 - **Working directory**: Coffer's workspace, `~/.coffer/content/workspace`, unless you change it; the folder picker chooses another.
 
 The confirm button reads **Open in *terminal*** (your preferred terminal), and its **▾** lists the other terminals. Confirming runs the agent with no arguments in that directory, so the agent's own interface starts a new session. Coffer does not know the new session's id yet, so the row is not added at once: it appears in the list on the next refresh, once the agent has recorded the session, and coming back to the Coffer window triggers one.
