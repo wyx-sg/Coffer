@@ -338,7 +338,9 @@ chat channel"); see ADR ask-in-the-reply-not-in-a-card.
 - **THEN** a new turn runs with that text as its message, like any other message
 
 ### Requirement: Run Claude Code and Codex as subprocess providers on the type's one agent
-System MUST ship subprocess-backed agent providers for Claude Code and Codex.
+System MUST ship subprocess-backed agent providers for Claude Code and Codex
+(and for OpenCode, Cursor and DeepSeek Harness, see "Run a turn through the
+agent's one-shot command").
 Each runs in a working directory (its `agent_config.cwd`); when a turn supplies
 none, the provider MUST default to the Coffer-managed workspace
 `~/.coffer/content/workspace` (created on first use) rather than reject the turn — so a
@@ -422,6 +424,79 @@ proxy.
 - **THEN** the commentary message ends with `MessageEnd(commentary=true)`, the MCP
   tool arrives as a tool call named `mcp__<server>__<tool>` with its result, and
   the final answer's message ends with `MessageEnd(commentary=false)`
+
+### Requirement: Run a turn through the agent's one-shot command
+OpenCode, Cursor and DeepSeek Harness MUST each have a driver that runs a turn
+as one process of the agent's own one-shot command, in the conversation's
+working directory and under the same environment rules as Claude Code and
+Codex ("Run Claude Code and Codex as subprocess providers on the type's one
+agent": the type's one agent, its config directory variable when it is not
+the standard one, the user's PATH, the turn's token): `opencode run --format
+json`, `cursor-agent -p --output-format stream-json` and `dsh --profile
+headless --json`. The process MUST run with the agent's full permissions
+(OpenCode `--auto`; Cursor `--force --trust`; DeepSeek Harness
+`--permission-mode danger-full-access --approval-policy never`) and MUST NOT be
+left waiting on an open stdin: OpenCode 2.x MUST be told `--standalone` so the
+turn stays in the process Coffer started.
+
+The adapter MUST map the agent's JSON lines onto the platform's events: each
+finished assistant message as its text and a `MessageEnd`, each tool as a tool
+call and its result, the tokens the agent reports, and the session id the
+agent names, which is stored and passed back on the next turn (`--session`,
+`--resume`, `--session-id`). These agents print a message once it is complete,
+so their text arrives one message at a time rather than as it is typed.
+
+The turn's system context ("Compose the agent's prompt appends in one place")
+MUST reach each agent without replacing its own instructions: for OpenCode as
+an added `instructions` file through `OPENCODE_CONFIG_CONTENT`; for DeepSeek
+Harness as `system-prompt.personaSuffix` in a `--patch` overlay written for the
+turn, which also carries the chosen model as `agent-default-model`; for
+Cursor, which has no way to add one, ahead of the message inside a
+`<coffer-context>` fence. A bare model id is one of the connection's models
+(`coffer/<id>` for OpenCode, the `coffer` route for DeepSeek Harness); an id
+naming its provider is passed as given.
+
+A turn whose process ends without a terminal line MUST end with turn-done when
+it exited 0 and with a turn error quoting its stderr otherwise. A stored
+session the agent says it no longer has, before it has shown anything, MUST be
+retried once as a fresh session ("Retry a forgotten resume id once as a fresh
+session"). A stopped turn MUST end its process and keep the session id it
+learned.
+
+#### Scenario: an OpenCode turn arrives as text, tools and its tokens
+- **GIVEN** an OpenCode 1.x or 2.x turn on a connection model, with a system context
+- **WHEN** OpenCode runs a tool and answers
+- **THEN** the turn streams the tool call and its result, then the answer and a message end, then turn-done with the tokens OpenCode reported
+- **AND** OpenCode was started with `--format json --auto`, `--standalone` only for 2.x, `--model coffer/<id>`, the message after `--`, stdin closed, and the context in an added instructions file
+- **AND** the session id OpenCode named is stored for the next turn
+
+#### Scenario: a DeepSeek Harness turn takes its message on stdin and its model and context from a patch
+- **GIVEN** a DeepSeek Harness turn with a model and a system context
+- **WHEN** it runs
+- **THEN** `dsh` is started with `--profile headless --json --permission-mode danger-full-access --approval-policy never -`, the message on its stdin
+- **AND** its `--patch` overlay sets `system-prompt.personaSuffix` to the context and `agent-default-model` to the `coffer` route and the model
+- **AND** its tool, answer and tokens arrive as turn events, and its session id is stored
+
+#### Scenario: a Cursor turn reads Coffer's note ahead of the message
+- **GIVEN** a Cursor turn with a system context
+- **WHEN** it runs
+- **THEN** `cursor-agent` is started with `-p --output-format stream-json --force --trust`, and the message it gets starts with the context inside a `<coffer-context>` fence
+- **AND** its tool calls, answer and the model it reports arrive as turn events, and its session id is stored
+
+#### Scenario: a one-shot agent that fails says why
+- **GIVEN** a one-shot agent that exits non-zero without a terminal line
+- **WHEN** the turn ends
+- **THEN** it ends with a turn error whose message is the agent's stderr
+
+#### Scenario: a one-shot agent's forgotten session is retried once as a fresh one
+- **GIVEN** a conversation whose stored session the agent no longer has
+- **WHEN** the agent refuses it before showing anything
+- **THEN** the turn runs once more without a session, under the one turn-start, and the new session id replaces the old
+
+#### Scenario: a stopped one-shot turn ends its process
+- **GIVEN** a one-shot turn that is still running
+- **WHEN** the turn is stopped
+- **THEN** its process is ended and reaped, and the session id it named is kept
 
 ### Requirement: Express a turn as typed events in memory
 System MUST express a turn as a sequence of typed events covering, at minimum,

@@ -43,9 +43,9 @@ Coffer 支持六种智能体类型：
 | `claude_code` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `codex` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `antigravity` | ✓ | ✓ | 产品不支持 | 条款不允许 | 产品不支持 | 尚未支持 | 尚未支持 | 产品不支持 |
-| `cursor` | ✓ | ✓ | 产品不支持 | 尚未支持 | 尚未支持 | 尚未支持 | 尚未支持 | 尚未支持 |
-| `opencode` | ✓ | ✓ | ✓ | 尚未支持 | 尚未支持 | 尚未支持 | 尚未支持 | 尚未支持 |
-| `deepseek_harness` | ✓ | ✓ | 尚未支持 | 尚未支持 | 尚未支持 | 尚未支持 | 尚未支持 | 尚未支持 |
+| `cursor` | ✓ | ✓ | 产品不支持 | ✓ | 尚未支持 | 尚未支持 | 尚未支持 | 尚未支持 |
+| `opencode` | ✓ | ✓ | ✓ | ✓ | 尚未支持 | 尚未支持 | 尚未支持 | 尚未支持 |
+| `deepseek_harness` | ✓ | ✓ | 尚未支持 | ✓ | 尚未支持 | 尚未支持 | 尚未支持 | 尚未支持 |
 
 每一列对应一个页面：[MCP 网关](/zh/guides/mcp-servers)、[技能](/zh/guides/skills)、[模型提供商](/zh/guides/providers)、[对话](/zh/guides/chat)和[消息渠道](/zh/guides/channels)，会话、插件和 Hook 在智能体自己的页面上（见下文），以及[记忆](/zh/guides/memory)。智能体缺的功能，Coffer 直接不显示，而不是置灰：它的页面上没有对应的 tab，选择器（比如对话或定时任务的智能体）只列出在这台 Mac 上能做这件事的智能体。见 [Antigravity 能得到什么](#what-antigravity-gets)和 [Cursor、OpenCode 和 DeepSeek Harness](#cursor-opencode-and-deepseek-harness)。原因见[决策记录](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/what-coffer-does-for-an-agent-follows-from-its-facets.md)。
 
@@ -309,7 +309,8 @@ Coffer 会把它写入的每个文件的上一版内容保存在 `~/.coffer/conf
 - **OpenCode** 1.x 和 2.x 的 MCP 表名字不同。Coffer 用 1.x 形状（`mcp.coffer`）写自己的条目，2.x 仍然能读；两种形状的条目都会列出。`mcp.servers` 下的 2.x 条目可以像其他条目一样移除和纳入托管。
 - **DeepSeek Harness** 用 YAML 补丁层组合配置，里面可能有 `!!js` 表达式，所以 Coffer 从不重写整个文件。它自己的那一行放在[各写到哪里](#what-gets-written-where)里那段带标记的内容中，连接和断开只替换这一段。其他 MCP 行会列出，但不能在 Coffer 里移除或纳入托管（`MCP_ENTRY_NOT_EDITABLE`）：请自己编辑 `cordis.patch.yml`。Coffer 只往顶层是块状列表（`- …`）的文件里加这一段；流式写法的文件会被拒绝，返回 `CONFIG_FILE_FORMAT_INVALID`。
 - **OpenCode 能用提供商。** 在它总览的**模型**下点**更改…**，可以把它切到一个有 OpenAI 兼容地址的 Coffer [模型提供商](/zh/guides/providers)上，或切回它自己的提供商。Coffer 会在 `opencode.json` 里写一个 `coffer` 提供商，它从 Coffer 保管的令牌文件读取 key，见[写入了什么](/zh/guides/providers#what-gets-written)。
-- **暂不支持：** 让 DeepSeek Harness 使用 Coffer 的模型提供商（Cursor 不提供自定义模型地址，所以不会接入），从[对话](/zh/guides/chat)、[消息渠道](/zh/guides/channels)或[定时任务](/zh/guides/scheduled-tasks)运行它们，[记忆](/zh/guides/memory)钩子，会话列表，插件和 Hook。它们的智能体页面没有插件、Hook 或会话 tab，只有 OpenCode 的页面有模型部分。
+- **对话、消息渠道和定时任务。** Coffer 用它们各自的一次性命令运行一个轮次：`opencode run`、`cursor-agent -p` 和 `dsh --profile headless`，每个轮次一个进程，和 Claude Code、Codex 一样拥有智能体的全部权限。它们的回复按整条消息到达，而不是边写边显示。Cursor 用它自己的账号登录（`cursor-agent login`），而且没有办法追加系统提示，所以 Coffer 给这个轮次的说明（用的是哪个模型、正在回复手机）放在消息前面。[决策记录](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/cursor-opencode-and-deepseek-harness-chat-through-their-one-shot-commands.md)解释了原因。
+- **暂不支持：** 让 DeepSeek Harness 使用 Coffer 的模型提供商（Cursor 不提供自定义模型地址，所以不会接入），[记忆](/zh/guides/memory)钩子，会话列表，插件和 Hook。它们的智能体页面没有插件、Hook 或会话 tab，只有 OpenCode 的页面有模型部分。
 
 ## 插件 {#plugins}
 

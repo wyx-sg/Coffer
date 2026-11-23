@@ -1,6 +1,6 @@
 ---
 title: Channels
-description: Connect a Telegram bot or SeaTalk app to Coffer, pair it to your own account, and drive Claude Code or Codex from the IM app you already use.
+description: Connect a Telegram bot or SeaTalk app to Coffer, pair it to your own account, and drive your coding agents from the IM app you already use.
 ---
 
 # Channels
@@ -17,7 +17,7 @@ A channel is a registered resource of kind `channel`, held on this machine only.
 
 A message from you becomes a turn in an ordinary Coffer conversation, and the agent's reply goes back to the IM chat. The web [Conversations](/guides/chat) page lists it, with the channel it came from, so you can start a task on your phone and pick it up at your desk: opening the row resumes the agent's session in your terminal (see [Open a conversation in your terminal](/guides/chat#open-in-terminal)). The page is a list; there is no reply box, and nothing you do there is sent into the chat.
 
-One bot drives every managed agent. You switch between Claude Code and Codex from the chat with `/new <agent>`, and different threads of one group can run different agents at the same time.
+One bot drives every managed agent. You switch between agents (Claude Code, Codex, Cursor, OpenCode, DeepSeek Harness) from the chat with `/new <agent>`, and different threads of one group can run different agents at the same time.
 
 ::: info Coffer-hosted channels only
 Coffer manages the channels it hosts. An agent's own official integration — Claude Code's Telegram plugin, a vendor's Slack app, an agent-native gateway — runs on its own and is not managed or proxied by Coffer.

@@ -58,7 +58,7 @@ Every surface talks to the same daemon, so a change made in one shows up in all 
 ## What Coffer is not
 
 - **Not a cloud service.** Coffer has no hosted backend and no account. The API binds to loopback only. Cloud services appear only as the model providers and MCP servers you choose to use. If you sync a vault between your machines, it goes through a git repository you own, and each machine keeps a complete copy.
-- **Not an agent.** Coffer does not act as an assistant you chat with. Its channels drive *your* agents (Claude Code or Codex), and its Conversations page lists what they started and opens it in your terminal. Coffer runs a model of its own only to transcribe voice messages, and only if you set one up.
+- **Not an agent.** Coffer does not act as an assistant you chat with. Its channels drive *your* agents, and its Conversations page lists what they started and opens it in your terminal. Coffer runs a model of its own only to transcribe voice messages, and only if you set one up.
 - **Not an orchestrator.** Coffer does not plan work or pass tasks from one agent to another. It is the shared layer beneath your agents: the tools, files and settings they all use.
 - **Not a replacement for an agent's own configuration.** An agent's files remain the source of truth. Coffer writes only the documented entries it manages, atomically and with a backup copy in Coffer's own folder, and reads the rest when it needs them.
 
@@ -69,7 +69,7 @@ Every surface talks to the same daemon, so a change made in one shows up in all 
 | Agents | Claude Code (`claude_code`) and Codex (`codex`) |
 | Prebuilt binaries and desktop app | macOS on Apple silicon (arm64) |
 | From source | Python 3.12 or later. The release builds and the login service target macOS. |
-| MCP clients | Any client that can run a stdio MCP server can use `coffer-mcp-shim`. Only Claude Code, Codex, Antigravity, Cursor, OpenCode and DeepSeek Harness get one-step install and skill delivery, and only Claude Code and Codex get provider switching. |
+| MCP clients | Any client that can run a stdio MCP server can use `coffer-mcp-shim`. Only Claude Code, Codex, Antigravity, Cursor, OpenCode and DeepSeek Harness get one-step install and skill delivery, and only Claude Code, Codex and OpenCode get provider switching. |
 
 ## Next steps
 

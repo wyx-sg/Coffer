@@ -17,7 +17,7 @@ A task holds:
 
 - **When**: every day, every week, every hour, once, a cron expression, or only when you run it by hand. Times are this Mac's local time unless you name a **timezone** (an IANA name such as `Asia/Singapore`); a time that daylight saving skips runs once at the next valid time. A repeating task runs at most every 15 minutes. For working days, use a cron expression such as `0 9 * * 1-5`.
 - **Prompt**: what the agent is asked. To use a skill, name it in the prompt. The prompt is a Markdown file, `PROMPT.md`, in the task's own folder (see [The task's folder](#the-task-s-folder)).
-- **Agent**: one that can run a conversation on this Mac (today Claude Code or Codex). The picker lists only those that are installed; if none is, the dialog says so.
+- **Agent**: one that can run a conversation on this Mac (Claude Code, Codex, Cursor, OpenCode or DeepSeek Harness). The picker lists only those that are installed; if none is, the dialog says so.
 - **Model**: one from the agent's list, or the agent's default.
 - **Folder**: where every run works. Pick any folder on this Mac, such as a repository; leave it empty and runs work in the task's own folder.
 - **Catch up**: on by default. See [When the Mac was asleep](#when-the-mac-was-asleep).
