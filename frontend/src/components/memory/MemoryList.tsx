@@ -69,7 +69,9 @@ export function MemoryList({ project, topics, isLoading = false, onOpen }: Props
       <header className="flex min-w-0 flex-col gap-1">
         <h2 className="text-lg font-semibold">{projectName(project.folder)}</h2>
         <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-xs text-text-muted">
-          <span className="font-mono">{project.folder}</span>
+          <span className="font-mono" title={project.folder}>
+            {projectName(project.folder)}
+          </span>
           <span aria-hidden>·</span>
           <span>{t("memory.topics.files", { count: project.topics })}</span>
         </p>

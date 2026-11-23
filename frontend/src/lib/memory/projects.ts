@@ -2,10 +2,16 @@
 // project folders and topic files, shared by the Memory page's panes.
 import type { MemoryProject, MemoryTopic } from "@/lib/api/memoryTypes";
 
-/** A project folder's short name: its last `-`-separated part after the host
+/** A git host prefix as a project folder starts with it: `github.com-`,
+ *  `git.garena.com-`, `gitlab.com-`, `bitbucket.org-`. A dotted name that is
+ *  not a git host (`yuxing.wu-blackcat`) is left alone. */
+const GIT_HOST_PREFIX =
+  /^(?:(?:[a-z0-9-]+\.)*git[a-z0-9-]*\.[a-z]{2,}(?:\.[a-z]{2,})?|bitbucket\.org)-/i;
+
+/** A project folder's display name: the folder without its git host prefix
  *  (`github.com-acme-payments` → `acme-payments`), or the folder itself. */
 export function projectName(folder: string): string {
-  const host = /^[a-z0-9-]+\.[a-z]{2,}(?:\.[a-z]{2,})?-/i.exec(folder);
+  const host = GIT_HOST_PREFIX.exec(folder);
   return host ? folder.slice(host[0].length) : folder;
 }
 
