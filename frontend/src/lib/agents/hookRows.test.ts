@@ -1,7 +1,8 @@
 // src/lib/agents/hookRows.test.ts — which hooks the Hooks tab lists, and its Event filter.
 import { describe, expect, test } from "vitest";
 
-import { filterEvents, ownHooks } from "./hookRows";
+import { filterEvents, hookEntryPath, ownHooks } from "./hookRows";
+import { hooksAreFlat } from "./display";
 import type { NativeHook } from "@/lib/api/agents";
 
 function hook(over: Partial<NativeHook> = {}): NativeHook {
@@ -40,5 +41,16 @@ describe("filterEvents", () => {
       "Notification",
     ]);
     expect(events.slice(6)).toEqual(["SubagentStop"]);
+  });
+});
+
+describe("hookEntryPath", () => {
+  test("names a grouped hook by group and hook, and a Cursor hook by its place under the event", () => {
+    expect(hookEntryPath(hook({ group_index: 1, hook_index: 2 }))).toBe(
+      "hooks.PreToolUse[1].hooks[2]",
+    );
+    const cursor = hook({ event: "beforeShellExecution", group_index: 3 });
+    expect(hookEntryPath(cursor, hooksAreFlat("cursor"))).toBe("hooks.beforeShellExecution[3]");
+    expect(hooksAreFlat("codex")).toBe(false);
   });
 });

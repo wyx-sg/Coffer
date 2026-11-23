@@ -115,3 +115,9 @@ export function sessionStore(type: AgentType, configDir: string): string {
       return `${dir}/projects`;
   }
 }
+
+/** Whether the agent type lists each hook directly under its event (Cursor's
+ *  `hooks.json`) rather than in groups that hold `hooks` (Claude Code, Codex). */
+export function hooksAreFlat(type: string): boolean {
+  return type === "cursor";
+}

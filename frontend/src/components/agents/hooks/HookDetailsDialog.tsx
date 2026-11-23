@@ -16,7 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { abbreviateHomePath, agentTypeLabel } from "@/lib/agents/display";
+import { abbreviateHomePath, agentTypeLabel, hooksAreFlat } from "@/lib/agents/display";
 import { hookEntryPath } from "@/lib/agents/hookRows";
 import type { NativeHook } from "@/lib/api/agents";
 import { useFileActionItems } from "@/lib/fileActionItems";
@@ -101,7 +101,9 @@ export function HookDetailsDialog({ hook, agentType, onClose }: Props) {
                 </span>
               </Row>
               <Row label={t("agents.hooks.details.entry")}>
-                <span className="break-all font-mono text-xs">{hookEntryPath(hook)}</span>
+                <span className="break-all font-mono text-xs">
+                  {hookEntryPath(hook, hooksAreFlat(agentType))}
+                </span>
               </Row>
             </dl>
             <DialogFooter className="sm:justify-between">

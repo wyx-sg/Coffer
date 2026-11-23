@@ -8,7 +8,16 @@ Both shipped agents keep hooks in the same JSON shape — Claude Code in its
     {"hooks": {"<Event>": [{"matcher": "...", "hooks": [{"type": "command",
                                                          "command": "..."}]}]}}
 
-This module turns such a document into flat rows. It never writes, and it
+Cursor's ``hooks.json`` lists each hook directly under its event, with its
+matcher on the hook itself (cursor.com docs/hooks)::
+
+    {"version": 1, "hooks": {"<event>": [{"command": "...", "matcher": "...",
+                                           "timeout": 30}]}}
+
+A prompt hook (``"type": "prompt"``) carries its ``prompt`` where a command
+hook has its ``command``.
+
+This module turns either document into flat rows. It never writes, and it
 judges nothing: which row is Coffer's own, and whether that one is current, is
 the delivery hook's knowledge (the projection facet), asked by the caller.
 """
@@ -61,11 +70,15 @@ def _rows(event: str, groups: Any) -> list[HookRow]:
         matcher = group.get("matcher")
         leaves = group.get("hooks")
         if not isinstance(leaves, list):
-            continue
+            if "command" not in group and "prompt" not in group:
+                continue
+            leaves = [group]  # Cursor's shape: the hook itself
         for li, leaf in enumerate(leaves):
             if not isinstance(leaf, dict):
                 continue
             command = leaf.get("command")
+            if not isinstance(command, str) and leaf.get("type") == "prompt":
+                command = leaf.get("prompt")
             if not isinstance(command, str):
                 continue
             timeout = leaf.get("timeout")

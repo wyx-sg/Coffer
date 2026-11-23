@@ -43,7 +43,7 @@ Not every type gets everything. The table says what Coffer does for each one, an
 | `claude_code` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `codex` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `antigravity` | ✓ | ✓ | not offered | terms | not offered | not yet | not yet | not offered |
-| `cursor` | ✓ | ✓ | not offered | ✓ | ✓ | not yet | not yet | not yet |
+| `cursor` | ✓ | ✓ | not offered | ✓ | ✓ | not yet | ✓ | not yet |
 | `opencode` | ✓ | ✓ | ✓ | ✓ | ✓ | not yet | not yet | not yet |
 | `deepseek_harness` | ✓ | ✓ | not yet | ✓ | ✓ | not yet | not yet | not yet |
 
@@ -311,7 +311,8 @@ These three types are supported for the parts that work the same way for every a
 - **OpenCode runs on a provider.** Under **Model** on its Overview, **Change…** puts it on a Coffer [model provider](/guides/providers) that has an OpenAI-compatible address, or back on its own providers. Coffer writes a `coffer` provider into `opencode.json`, which reads its key from a token file Coffer keeps; see [What gets written](/guides/providers#what-gets-written).
 - **Chat, channels and scheduled tasks.** Coffer runs a turn on them through each one's own one-shot command: `opencode run`, `cursor-agent -p` and `dsh --profile headless`, one process per turn, with the agent's full permissions, as for Claude Code and Codex. Their reply arrives a whole message at a time rather than as it is typed. Cursor signs in with its own account (`cursor-agent login`), and has no way to add to its system prompt, so Coffer's note for the turn (which model it is on, that it is answering a phone) leads the message. The [decision record](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/cursor-opencode-and-deepseek-harness-chat-through-their-one-shot-commands.md) explains why.
 - **Sessions.** Their **Sessions** tab lists every session the agent keeps, whichever folder it ran in, read from the agent's own store; see [Sessions](#sessions).
-- **Not yet available:** pointing DeepSeek Harness at a Coffer model provider (Cursor offers no custom model endpoint, so it never takes one), the [memory](/guides/memory) hook, plugins and hooks. Their agent page has no Plugins or Hooks tab, and only OpenCode's has a Model section.
+- **Cursor's hooks.** Its **Hooks** tab lists the hooks in `~/.cursor/hooks.json`, which the editor and `cursor-agent` both run. Cursor puts each hook straight under its event, so a hook's position reads `hooks.<event>[i]`; a prompt hook shows its prompt. Project hook files are not read, as for the other agents.
+- **Not yet available:** pointing DeepSeek Harness at a Coffer model provider (Cursor offers no custom model endpoint, so it never takes one), the [memory](/guides/memory) hook, plugins, and hooks for OpenCode (its hooks are code in its plugins) and DeepSeek Harness. Their agent page has no Plugins tab, OpenCode's and DeepSeek Harness's no Hooks tab, and only OpenCode's has a Model section.
 
 ## Plugins
 

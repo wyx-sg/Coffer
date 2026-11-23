@@ -39,8 +39,10 @@ export function hookTotals(hooks: readonly NativeHook[]): { hooks: number; files
   return { hooks: hooks.length, files: new Set(hooks.map((h) => h.path)).size };
 }
 
-/** The JSON position of a hook in its file: `hooks.PreToolUse[0].hooks[1]`. */
-export function hookEntryPath(h: NativeHook): string {
+/** The JSON position of a hook in its file: `hooks.PreToolUse[0].hooks[1]`, or
+ *  `hooks.preToolUse[0]` where the file lists hooks directly under their event. */
+export function hookEntryPath(h: NativeHook, flat = false): string {
+  if (flat) return `hooks.${h.event}[${h.group_index}]`;
   return `hooks.${h.event}[${h.group_index}].hooks[${h.hook_index}]`;
 }
 
