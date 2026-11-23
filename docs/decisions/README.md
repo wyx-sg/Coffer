@@ -190,6 +190,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`cursor-opencode-and-deepseek-harness-are-supported-agents`](cursor-opencode-and-deepseek-harness-are-supported-agents.md) | Cursor, OpenCode and DeepSeek Harness Are Supported Agents, Each With Every Facet It Offers |
 | [`cursor-opencode-and-deepseek-harness-chat-through-their-one-shot-commands`](cursor-opencode-and-deepseek-harness-chat-through-their-one-shot-commands.md) | Cursor, OpenCode and DeepSeek Harness Chat Through Their One-Shot Commands |
 | [`sessions-of-cursor-opencode-and-deepseek-harness-are-read-from-their-stores`](sessions-of-cursor-opencode-and-deepseek-harness-are-read-from-their-stores.md) | Sessions of Cursor, OpenCode and DeepSeek Harness Are Read From Their Stores |
+| [`the-users-path-is-read-from-an-interactive-login-shell`](the-users-path-is-read-from-an-interactive-login-shell.md) | The User's PATH Is Read From an Interactive Login Shell |
 | [`deepseek-harness-mcp-row-lives-in-a-block-coffer-owns`](deepseek-harness-mcp-row-lives-in-a-block-coffer-owns.md) | DeepSeek Harness's MCP Row Lives in a Block Coffer Owns |
 | [`opencode-gets-its-mcp-entry-in-the-1x-shape`](opencode-gets-its-mcp-entry-in-the-1x-shape.md) | OpenCode Gets Its MCP Entry in the 1.x Shape |
 | [`opencode-reads-its-proxy-token-from-a-file`](opencode-reads-its-proxy-token-from-a-file.md) | OpenCode Reads Its Proxy Token From a File Coffer Keeps |

@@ -32,14 +32,21 @@ fn extract_marked_path(output: &str) -> Option<String> {
     }
 }
 
-/// Ask the user's login shell for its `$PATH` (`$SHELL -lc`, so Homebrew /
-/// nvm / pyenv exports in `~/.zprofile` etc. apply). Polls `try_wait` up to
-/// `timeout` and kills the child on expiry rather than blocking the caller
-/// on a hung profile. Returns `None` on any failure — callers fall back.
+/// Ask the user's shell for its `$PATH` as a terminal sees it: an interactive
+/// login shell first (`$SHELL -ilc`), which also reads `~/.zshrc` /
+/// `~/.bashrc` where nvm, fnm and most installers put their PATH lines (VS
+/// Code resolves a GUI launch's environment the same way), then a login-only
+/// one (`-lc`, `~/.zprofile`) for a profile that fails interactively. Each
+/// probe polls `try_wait` up to `timeout` and kills the child on expiry
+/// rather than blocking the caller on a hung profile. Returns `None` when
+/// both fail — callers fall back. Kept in step with the daemon's
+/// `login_shell_path` (backend/coffer/infrastructure/platform/process.py).
 #[cfg(unix)]
 fn login_shell_path(timeout: std::time::Duration) -> Option<String> {
     let shell = env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
-    login_shell_path_of(&shell, timeout)
+    ["-ilc", "-lc"]
+        .into_iter()
+        .find_map(|flags| login_shell_path_of(&shell, flags, timeout))
 }
 
 /// The probe itself, against a named shell. Taking the shell as an argument
@@ -48,7 +55,7 @@ fn login_shell_path(timeout: std::time::Duration) -> Option<String> {
 /// and one that exits non-zero. Both must degrade to `None` — the app is
 /// mid-launch, and a user's `~/.zprofile` is not allowed to hold up a window.
 #[cfg(unix)]
-fn login_shell_path_of(shell: &str, timeout: std::time::Duration) -> Option<String> {
+fn login_shell_path_of(shell: &str, flags: &str, timeout: std::time::Duration) -> Option<String> {
     use std::io::Read;
     use std::process::{Command, Stdio};
     use std::time::Instant;
@@ -58,7 +65,7 @@ fn login_shell_path_of(shell: &str, timeout: std::time::Duration) -> Option<Stri
         m = PATH_PROBE_MARKER
     );
     let mut child = Command::new(shell)
-        .args(["-lc", &probe])
+        .args([flags, &probe])
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
@@ -283,7 +290,11 @@ mod tests {
             "ok",
             "#!/bin/sh\necho 'welcome to your shell' >&2\nPATH=/opt/tool/bin:/usr/bin\nexport PATH\nshift\neval \"$1\"\n",
         );
-        let got = login_shell_path_of(sh.to_str().unwrap(), std::time::Duration::from_secs(5));
+        let got = login_shell_path_of(
+            sh.to_str().unwrap(),
+            "-lc",
+            std::time::Duration::from_secs(5),
+        );
         let _ = std::fs::remove_dir_all(&dir);
         assert_eq!(got.as_deref(), Some("/opt/tool/bin:/usr/bin"));
     }
@@ -298,7 +309,11 @@ mod tests {
     fn a_hanging_login_shell_is_killed_at_the_deadline_and_yields_nothing() {
         let (dir, sh) = fake_shell("hang", "#!/bin/sh\nexec sleep 30\n");
         let started = std::time::Instant::now();
-        let got = login_shell_path_of(sh.to_str().unwrap(), std::time::Duration::from_millis(300));
+        let got = login_shell_path_of(
+            sh.to_str().unwrap(),
+            "-lc",
+            std::time::Duration::from_millis(300),
+        );
         let waited = started.elapsed();
         let _ = std::fs::remove_dir_all(&dir);
 
@@ -313,7 +328,11 @@ mod tests {
     #[test]
     fn a_login_shell_that_fails_yields_nothing() {
         let (dir, sh) = fake_shell("fail", "#!/bin/sh\nexit 1\n");
-        let got = login_shell_path_of(sh.to_str().unwrap(), std::time::Duration::from_secs(5));
+        let got = login_shell_path_of(
+            sh.to_str().unwrap(),
+            "-lc",
+            std::time::Duration::from_secs(5),
+        );
         let _ = std::fs::remove_dir_all(&dir);
         assert_eq!(got, None);
     }
@@ -324,6 +343,7 @@ mod tests {
         assert_eq!(
             login_shell_path_of(
                 "/nonexistent/login-shell",
+                "-lc",
                 std::time::Duration::from_secs(1)
             ),
             None

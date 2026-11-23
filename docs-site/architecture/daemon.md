@@ -352,7 +352,7 @@ On macOS, turning on **Start at login** (**Settings › Daemon**) writes a per-u
 | --- | --- | --- |
 | `RunAtLoad` | `true` | Up at login, so an agent's first `coffer__*` call of the day does not pay a cold start. |
 | `KeepAlive` | `{SuccessfulExit: false}` | A crash is restarted. A clean exit (`coffer daemon stop`, the shell's restart, standing down for a successor) stays down. A plain `KeepAlive: true` would fight each of those. |
-| `EnvironmentVariables.PATH` | Your login shell's `PATH` (`$SHELL -l -c`) | A launchd agent otherwise gets a minimal `PATH`, and `npx` / `uvx` upstreams would resolve to nothing. |
+| `EnvironmentVariables.PATH` | Your shell's `PATH` as a terminal sees it (`$SHELL -ilc`, then `$SHELL -lc` if that fails) | A launchd agent otherwise gets a minimal `PATH`, and `npx` / `uvx` upstreams would resolve to nothing. |
 | Program | `~/.coffer/bin/coffer-daemon` symlink | A path pinned to a version directory stops working two upgrades later, when that directory is pruned. |
 | `StandardOutPath` / `StandardErrorPath` | `~/.coffer/logs/daemon.log` | One log for every writer. |
 

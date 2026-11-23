@@ -1233,7 +1233,9 @@ face.
 ### Requirement: Show an agent by its official mark
 Wherever the UI names an agent in a compact form, it MUST show the agent's
 official mark on a neutral tile — Claude Code as the Claude Spark, Codex as the
-OpenAI Blossom beside the word "Codex" — and never letters. An agent type Coffer
+OpenAI Blossom beside the word "Codex", Cursor, OpenCode and Antigravity as their
+vendors' marks, and DeepSeek Harness as the DeepSeek whale — and never letters;
+a monochrome mark turns light on the dark theme. An agent type Coffer
 does not support MUST get a neutral agent glyph on the same tile. Every agent
 sits on the same neutral tile, so colour outside the mark stays reserved for
 state: a healthy agent's badge is plain, and only a problem adds a status mark.
@@ -1247,9 +1249,10 @@ its display name ("Claude Code"), never by its registry key ("claude-code").
 - **WHEN** each renders as an agent badge
 - **THEN** Claude Code shows the Claude Spark mark and Codex the OpenAI Blossom mark, on the same neutral tile, and neither shows letters
 - **AND** a badge without a visible name is labelled with the agent's name and state, such as "Codex, not connected to Coffer"
+- **AND** Cursor, OpenCode, Antigravity and DeepSeek Harness each show their own mark, not the neutral glyph
 
 #### Scenario: an agent Coffer does not support gets the neutral glyph
-- **GIVEN** an agent type other than Claude Code or Codex
+- **GIVEN** an agent type that is none of the supported ones
 - **WHEN** it renders as an agent badge
 - **THEN** the badge shows the neutral agent glyph on the neutral tile, labelled with the agent's name
 
@@ -2513,7 +2516,8 @@ one-sentence help beside it. The split button sits after the state's own buttons
 Retry, View log), appears once per problem, never on a healthy, success or empty state, and never for
 a missing secret or an approval, which only the person can give. Wherever another requirement names
 Copy prompt and **Ask an agent** together — the button's former name — they are this button's menu item
-and main part. On a Needs you row the same split button sits beside the row's action, and the ⋯ menu holds Ignore.
+and main part. On a row of the Agents list the main part reads **Ask an agent**, so the button fits the
+row's Actions column; its mark and tooltip still name the hand-off agent. On a Needs you row the same split button sits beside the row's action, and the ⋯ menu holds Ignore.
 
 #### Scenario: the split button hands a prompt over or copies it
 - **GIVEN** a problem with a prompt and a managed agent installed

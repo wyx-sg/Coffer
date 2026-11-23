@@ -2,13 +2,28 @@
 //
 // Claude Code is the Claude Spark (Clay on both themes); Codex is the OpenAI
 // Blossom, Black on light and White on dark, chosen by CSS against the root's
-// `data-theme` so no JS watches the theme. Any other type gets a neutral agent
+// `data-theme` so no JS watches the theme. Cursor, OpenCode, DeepSeek Harness
+// (the DeepSeek whale) and Antigravity show their vendors' marks; the
+// monochrome ones invert on the dark theme. Any other type gets a neutral agent
 // glyph in muted ink. The marks are the files as supplied — never recoloured,
 // never letters (Foundations-AgentBadge "Official marks").
 import sparkUrl from "@/assets/brand/claude-spark-clay.svg";
 import blossomBlackUrl from "@/assets/brand/openai-blossom-black.svg";
 import blossomWhiteUrl from "@/assets/brand/openai-blossom-white.svg";
-import { agentMarkKind } from "./agentMarkKind";
+import antigravityUrl from "@/assets/brand/agents/antigravity.svg";
+import cursorUrl from "@/assets/brand/agents/cursor.svg";
+import opencodeUrl from "@/assets/brand/agents/opencode.svg";
+import deepseekUrl from "@/assets/brand/providers/deepseek.svg";
+import { cn } from "@/lib/utils";
+import { agentMarkKind, type AgentMarkKind } from "./agentMarkKind";
+
+/** The single-file marks; `invert` for a monochrome `currentColor` file. */
+const SINGLE: Partial<Record<AgentMarkKind, { src: string; invert?: boolean }>> = {
+  cursor: { src: cursorUrl, invert: true },
+  opencode: { src: opencodeUrl, invert: true },
+  deepseek: { src: deepseekUrl },
+  antigravity: { src: antigravityUrl },
+};
 
 interface Props {
   type: string;
@@ -29,6 +44,23 @@ export function AgentMark({ type, markSize, blossomSize }: Props) {
         width={markSize}
         height={markSize}
         className="block shrink-0 object-contain"
+        style={{ width: markSize, height: markSize }}
+      />
+    );
+  }
+  const single = SINGLE[kind];
+  if (single) {
+    return (
+      <img
+        src={single.src}
+        alt=""
+        aria-hidden
+        width={markSize}
+        height={markSize}
+        className={cn(
+          "block shrink-0 object-contain",
+          single.invert && "[[data-theme=dark]_&]:invert",
+        )}
         style={{ width: markSize, height: markSize }}
       />
     );

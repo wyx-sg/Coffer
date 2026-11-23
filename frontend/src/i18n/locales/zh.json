@@ -2579,7 +2579,10 @@
         "builtin": {
           "claude_code": "内置登录（Anthropic 账号）",
           "codex": "内置登录（ChatGPT 账号）",
-          "opencode": "它自己的提供商（opencode.json）"
+          "opencode": "自带配置",
+          "cursor": "内置登录（Cursor 账号）",
+          "deepseek_harness": "自带配置",
+          "antigravity": "内置登录（Google 账号）"
         }
       },
       "details": {
@@ -2715,6 +2718,7 @@
       },
       "builtinDefault": "内置默认",
       "builtinDefaultNamed": "内置默认（{{model}}）",
+      "askAgent": "交给智能体",
       "detail": {
         "mcpMissing": "缺少 MCP 条目",
         "gone": "{{dir}} 和它的程序都不在了",

@@ -71,7 +71,7 @@ Coffer 从不把智能体的配置复制进自己的存储。配置文件、MCP 
 
 ### 从检测到的智能体注册 {#from-detected-agents}
 
-Coffer 靠两个信号检测智能体：`PATH` 上的程序——用的是你登录 shell 给出的 `PATH`，所以即使守护进程是从 Dock 启动的，用 Homebrew 或 Node 版本管理器装的智能体也能被找到——以及它的配置目录。顺带会读取程序版本（`claude --version`、`codex --version`、`agy --version`）。Antigravity 常常只装了 App、没有 `agy`：`agy` 不在 `PATH` 上时，Coffer 会在 `/Applications` 和 `~/Applications` 里找 `Antigravity.app`，并从应用里读出版本。Coffer 从不自行注册任何东西，守护进程启动时也不会自动注册智能体。
+Coffer 靠两个信号检测智能体：`PATH` 上的程序——用的是你在终端里看到的 `PATH`（Coffer 以交互式登录 shell 读取，所以 `~/.zshrc` 里加的路径也算），所以即使守护进程是从 Dock 启动的，用 Homebrew 或 nvm 这类 Node 版本管理器装的智能体也能被找到——以及它的配置目录。顺带会读取程序版本（`claude --version`、`codex --version`、`agy --version`）。Antigravity 常常只装了 App、没有 `agy`：`agy` 不在 `PATH` 上时，Coffer 会在 `/Applications` 和 `~/Applications` 里找 `Antigravity.app`，并从应用里读出版本。Coffer 从不自行注册任何东西，守护进程启动时也不会自动注册智能体。
 
 Coffer 会报告每一种受支持的类型（无论是否已注册），状态是以下之一：
 

@@ -9,6 +9,7 @@ import { fakeApi } from "@/test/fakeApi";
 import type { AgentTypeOut } from "@/lib/api/agents";
 import { fakeCallFor, fakeDaemon, typeRow, type FakeDaemon } from "./fakeAgentsDaemon";
 import { renderWithDaemon } from "./renderWithDaemon";
+import { ActionsCell } from "./AgentRowCells";
 import { useAgentRowActions } from "./useAgentRowActions";
 
 const call = fakeApi();
@@ -186,6 +187,25 @@ describe("useAgentRowActions", () => {
       expect(screen.queryByRole("button", { name: "Hand off to Claude Code" })).toBeNull();
     },
   );
+
+  test("the list row's split button reads Ask an agent, so it fits the Actions column", async () => {
+    const row = typeRow({
+      type: "deepseek_harness",
+      state: "config_only",
+      addable: false,
+      version: null,
+      install_handoff: { prompt: "Please reinstall DeepSeek Harness on this machine." },
+    });
+    use(
+      fakeDaemon({
+        types: [row],
+        providers: [{ agent_key: "claude_code", display_name: "Claude Code", available: true }],
+      }),
+    );
+    renderWithDaemon(<ActionsCell row={row} />);
+    expect(await screen.findByRole("button", { name: "Ask an agent" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Hand off to/ })).toBeNull();
+  });
 
   test("with only the missing agent itself managed, the row offers Copy prompt alone", async () => {
     const row = typeRow({

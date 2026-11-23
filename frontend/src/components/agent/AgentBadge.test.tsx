@@ -40,6 +40,23 @@ describe("AgentBadge", () => {
     expect(codex.textContent).toBe("");
   });
 
+  acceptance("web-ui", "a supported agent is shown by its official mark", () => {
+    const marks: [string, string, RegExp][] = [
+      ["cursor", "cursor", /agents\/cursor/],
+      ["opencode", "opencode", /agents\/opencode/],
+      ["antigravity", "antigravity", /agents\/antigravity/],
+      ["deepseek_harness", "deepseek", /providers\/deepseek/],
+    ];
+    for (const [type, kind, file] of marks) {
+      const { container, unmount } = render(<AgentBadge type={type} />);
+      const tile = tileOf(container);
+      expect(tile).toHaveAttribute("data-agent-mark", kind);
+      expect(tile.querySelector("img")?.getAttribute("src")).toMatch(file);
+      expect(tile.querySelector("svg")).toBeNull();
+      unmount();
+    }
+  });
+
   acceptance("web-ui", "an agent Coffer does not support gets the neutral glyph", () => {
     render(<AgentBadge type="gemini_cli" name="Gemini CLI" />);
     const badge = screen.getByRole("img", { name: "Gemini CLI" });
