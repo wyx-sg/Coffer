@@ -373,7 +373,8 @@ daemon stop`, the shutdown the desktop shell's restart asks for (see
 those too would fight the user's own stop and the daemon that superseded it; nothing is lost by
 letting one stand, because every client can start a daemon.
 
-It MUST carry the user's own `PATH`, read from their login shell: a login service otherwise
+It MUST carry the user's own `PATH`, read from their shell as a terminal starts it (see agent-registry
+"Detect an agent by its program and its config directory"): a login service otherwise
 inherits a minimal one, and the `npx` / `uvx` MCP upstreams the daemon spawns then resolve to
 nothing — and the environment the install itself runs in is no better a source, since it is usually
 the daemon's, which was commonly spawned by a GUI-launched editor and has exactly that minimal

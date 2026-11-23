@@ -2579,7 +2579,10 @@
         "builtin": {
           "claude_code": "Built-in login (Anthropic account)",
           "codex": "Built-in login (ChatGPT account)",
-          "opencode": "Its own providers (opencode.json)"
+          "opencode": "Own config",
+          "cursor": "Built-in login (Cursor account)",
+          "deepseek_harness": "Own config",
+          "antigravity": "Built-in login (Google account)"
         }
       },
       "details": {
@@ -2715,6 +2718,7 @@
       },
       "builtinDefault": "Built-in default",
       "builtinDefaultNamed": "Built-in default ({{model}})",
+      "askAgent": "Ask an agent",
       "detail": {
         "mcpMissing": "MCP entry missing",
         "gone": "{{dir}} and its program are gone",

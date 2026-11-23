@@ -71,7 +71,7 @@ Coffer never copies an agent's configuration into its own store. Config files, M
 
 ### From detected agents
 
-Coffer detects an agent from two signals: its program on your `PATH` — the `PATH` your login shell gives you, so an agent installed with Homebrew or a Node version manager is found even when the daemon was started from the Dock — and its config directory. It reads the program's version (`claude --version`, `codex --version`, `agy --version`) along the way. Antigravity is often installed as the App alone, without `agy`: when `agy` is not on your `PATH`, Coffer looks for `Antigravity.app` in `/Applications` and `~/Applications` and reads the version from the app. It never registers anything on its own, and the daemon does not auto-register agents at startup.
+Coffer detects an agent from two signals: its program on your `PATH` — the `PATH` your shell gives you in a terminal (Coffer asks an interactive login shell, so lines in `~/.zshrc` count), so an agent installed with Homebrew or a Node version manager such as nvm is found even when the daemon was started from the Dock — and its config directory. It reads the program's version (`claude --version`, `codex --version`, `agy --version`) along the way. Antigravity is often installed as the App alone, without `agy`: when `agy` is not on your `PATH`, Coffer looks for `Antigravity.app` in `/Applications` and `~/Applications` and reads the version from the app. It never registers anything on its own, and the daemon does not auto-register agents at startup.
 
 Coffer reports every supported type, registered or not, in one of these states:
 

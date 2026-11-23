@@ -199,6 +199,7 @@ export function CofferCell({
 }
 
 export function ActionsCell({ row }: { row: AgentTypeOut }) {
+  const { t } = useTranslation();
   const { primary, handoff, pending, dialogs } = useAgentRowActions(row, { inList: true });
   return (
     <div className="flex items-center justify-end gap-1">
@@ -208,7 +209,9 @@ export function ActionsCell({ row }: { row: AgentTypeOut }) {
       {handoff ? (
         // A click in the split button or its menu must not open the agent under it.
         <span className="contents" onClick={(event) => event.stopPropagation()}>
-          <AgentHandoff prompt={handoff} size="sm" help={false} />
+          {/* The short label keeps the row inside its Actions column; the mark and
+              the tooltip name the agent it hands to. */}
+          <AgentHandoff prompt={handoff} size="sm" help={false} label={t("agents.list.askAgent")} />
         </span>
       ) : null}
       {/* The dialogs of the button and of the ⋯ menu (their state is shared, see

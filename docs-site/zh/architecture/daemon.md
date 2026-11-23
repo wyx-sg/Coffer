@@ -352,7 +352,7 @@ stateDiagram-v2
 | --- | --- | --- |
 | `RunAtLoad` | `true` | 登录时就启动，让智能体每天第一次 `coffer__*` 调用不用承担冷启动。 |
 | `KeepAlive` | `{SuccessfulExit: false}` | 崩溃会被重启。干净的退出（`coffer daemon stop`、壳发起的重启、为继任者退下）保持停止。简单的 `KeepAlive: true` 会和上述每种情况对着干。 |
-| `EnvironmentVariables.PATH` | 你登录 shell 的 `PATH`（`$SHELL -l -c`） | 否则 launchd agent 只拿到一个最小的 `PATH`，`npx` / `uvx` 上游会什么都解析不到。 |
+| `EnvironmentVariables.PATH` | 你在终端里看到的 `PATH`（先 `$SHELL -ilc`，失败再 `$SHELL -lc`） | 否则 launchd agent 只拿到一个最小的 `PATH`，`npx` / `uvx` 上游会什么都解析不到。 |
 | Program | `~/.coffer/bin/coffer-daemon` 符号链接 | 固定到某个版本目录的路径，在两次升级后那个目录被清理时就失效了。 |
 | `StandardOutPath` / `StandardErrorPath` | `~/.coffer/logs/daemon.log` | 所有写入者共用一个日志。 |
 
