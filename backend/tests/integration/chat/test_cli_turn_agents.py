@@ -40,7 +40,7 @@ if argv == ["--version"]:
     print(os.environ.get("FAKE_VERSION", "1.19.6"))
     sys.exit(0)
 stdin = "" if sys.stdin is None or sys.stdin.closed else sys.stdin.read()
-added = {{k: v for k, v in os.environ.items() if k.startswith(("OPENCODE_", "COFFER_"))}}
+added = {{k: v for k, v in os.environ.items() if k.startswith(("OPENCODE_", "COFFER_", "PWD"))}}
 patch = None
 if "--patch" in argv:
     patch = json.load(open(argv[argv.index("--patch") + 1]))
@@ -251,6 +251,8 @@ async def test_opencode_turn(
     assert rec["ctx"].startswith("COFFER-NOTE: phone")
     assert rec["env"]["COFFER_TURN_TOKEN"] == "tok"
     assert rec["cwd"] == str(tmp_path)
+    # OpenCode takes its project folder from PWD, not the process's directory.
+    assert rec["env"]["PWD"] == str(tmp_path)
 
 
 async def test_opencode_resumes_its_session_and_keeps_a_named_model(

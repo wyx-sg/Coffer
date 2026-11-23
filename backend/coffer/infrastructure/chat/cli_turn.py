@@ -270,7 +270,10 @@ class CliTurnAdapter:
             scratch=scratch,
         )
         # Merged with the daemon's own environment: a spawn REPLACES it.
-        env = {**os.environ, **self._env, **plan.env}
+        # ``PWD`` follows the turn's folder: OpenCode takes its project folder
+        # from ``PWD`` rather than the process's directory, and would otherwise
+        # work in the daemon's.
+        env = {**os.environ, **self._env, **plan.env, "PWD": self._cwd}
         # stderr goes to a file: read once the process has ended, and no task
         # has to drain it meanwhile.
         err_path = scratch / f"stderr-{uuid.uuid4().hex}.txt"
