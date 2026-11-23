@@ -10,7 +10,7 @@
 // (Open in <terminal>, spec chat "Open a conversation in the terminal") in the
 // preferred terminal, named on the button; the ▾ menu holds Open in <other terminal> for each
 // other terminal on this machine, then Copy command — the same shape as Hand
-// off to <Agent>. The row's actions always show. A row with no native session
+// off to <Agent>. The row's actions always show, less what its agent cannot do. A row with no native session
 // yet shows a muted "Not started" in the split button's place, with the reason
 // in a tooltip. The Source
 // column names the channel a conversation came from, and "This Mac" for a
@@ -54,6 +54,9 @@ interface Props {
   /** Saves a new title; the row keeps its editor until this settles. */
   onRename: (row: SessionRowData, title: string) => Promise<unknown>;
   onDelete: (row: SessionRowData) => void;
+  /** Whether the row's agent can rename / delete it; the menu leaves out what it cannot. Default: it can. */
+  canRename?: (row: SessionRowData) => boolean;
+  canDelete?: (row: SessionRowData) => boolean;
   /** Stops the turn running on the row (only a running row shows Stop). */
   onStop?: (row: SessionRowData) => void;
   stopping?: boolean;
@@ -73,6 +76,8 @@ export function SessionRow({
   canOpen = () => true,
   onRename,
   onDelete,
+  canRename = () => true,
+  canDelete = () => true,
   onStop,
   stopping = false,
   selected = false,
@@ -130,16 +135,23 @@ export function SessionRow({
   };
   const openable = onPrimaryAction !== undefined && canOpen(row);
 
+  const renamable = canRename(row);
   const actions: MenuAction[] = [
-    { key: "rename", label: t("sessions.row.rename"), icon: Pencil, onSelect: startRename },
-    {
-      key: "delete",
-      label: t("sessions.row.delete"),
-      icon: Trash2,
-      destructive: true,
-      separated: true,
-      onSelect: () => onDelete(row),
-    },
+    ...(renamable
+      ? [{ key: "rename", label: t("sessions.row.rename"), icon: Pencil, onSelect: startRename }]
+      : []),
+    ...(canDelete(row)
+      ? [
+          {
+            key: "delete",
+            label: t("sessions.row.delete"),
+            icon: Trash2,
+            destructive: true,
+            separated: renamable,
+            onSelect: () => onDelete(row),
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -150,9 +162,7 @@ export function SessionRow({
       className={cn(
         "group/row grid min-h-14 items-center gap-x-3 border-t border-border-subtle py-2 pl-3.5 pr-2.5 transition-colors duration-fast",
         GRID[columns],
-        selected
-          ? "bg-surface-selected"
-          : "hover:bg-surface-hover focus-within:bg-surface-hover",
+        selected ? "bg-surface-selected" : "hover:bg-surface-hover focus-within:bg-surface-hover",
       )}
     >
       <div className="flex min-w-0 items-center gap-2.5">
@@ -227,7 +237,12 @@ export function SessionRow({
             onCopyCommand={onCopyCommand}
           />
         ) : null}
-        <ActionMenu label={t("sessions.row.moreActions", { title: row.title })} actions={actions} />
+        {actions.length > 0 ? (
+          <ActionMenu
+            label={t("sessions.row.moreActions", { title: row.title })}
+            actions={actions}
+          />
+        ) : null}
       </span>
     </li>
   );

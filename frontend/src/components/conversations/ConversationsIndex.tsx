@@ -13,6 +13,7 @@ import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { MessageSquare } from "lucide-react";
 
+import { sessionActions } from "@/lib/agents/display";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { channelHeading } from "@/components/channel/channelLabels";
@@ -213,6 +214,8 @@ export function ConversationsIndex() {
               canOpen={opener.canOpen}
               onRename={onRename}
               onDelete={setDeleting}
+              canRename={(row) => !row.sessionId || sessionActions(row.agentKey).rename}
+              canDelete={(row) => !row.sessionId || sessionActions(row.agentKey).delete}
               onStop={onStop}
             />
           </div>

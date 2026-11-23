@@ -57,3 +57,61 @@ const AGENT_PROGRAMS: Record<AgentType, string> = {
   opencode: "opencode",
   deepseek_harness: "dsh",
 };
+
+/** How each agent's own terminal interface resumes a session (`{id}` is the
+ *  session id); a type without one is absent. Mirrors the daemon's
+ *  `AGENT_PROGRAMS` (backend/coffer/application/fs/terminal_command.py). */
+const TERMINAL_RESUME: Partial<Record<AgentType, string>> = {
+  claude_code: "--resume {id}",
+  codex: "resume {id}",
+  cursor: "--resume {id}",
+  opencode: "--session {id}",
+};
+
+/** Whether Coffer can open the agent type's sessions in a terminal. */
+export function opensInTerminal(type: string | null | undefined): type is AgentType {
+  return !!type && type in TERMINAL_RESUME;
+}
+
+/** `<program> <resume args>` for a session of `type`, the id as given. */
+export function terminalResume(type: AgentType, id: string): string {
+  const args = TERMINAL_RESUME[type] ?? "";
+  return `${agentProgramName(type)} ${args.replace("{id}", id)}`.trim();
+}
+
+/** What an agent's own command can do to one of its sessions. Claude Code and
+ *  Codex rename and delete; OpenCode only deletes (`opencode session delete`);
+ *  DeepSeek Harness and Cursor can do neither from their command lines. */
+const SESSION_ACTIONS: Record<AgentType, { rename: boolean; delete: boolean }> = {
+  claude_code: { rename: true, delete: true },
+  codex: { rename: true, delete: true },
+  antigravity: { rename: false, delete: false },
+  cursor: { rename: false, delete: false },
+  opencode: { rename: false, delete: true },
+  deepseek_harness: { rename: false, delete: false },
+};
+
+export function sessionActions(type: string | null | undefined): {
+  rename: boolean;
+  delete: boolean;
+} {
+  return type && type in SESSION_ACTIONS
+    ? SESSION_ACTIONS[type as AgentType]
+    : { rename: true, delete: true };
+}
+
+/** Where the agent type keeps its sessions, for the empty Sessions tab. */
+export function sessionStore(type: AgentType, configDir: string): string {
+  const dir = abbreviateHomePath(configDir);
+  switch (type) {
+    case "codex":
+    case "deepseek_harness":
+      return `${dir}/sessions`;
+    case "cursor":
+      return `${dir}/chats`;
+    case "opencode":
+      return "~/.local/share/opencode/opencode.db";
+    default:
+      return `${dir}/projects`;
+  }
+}

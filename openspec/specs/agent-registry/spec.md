@@ -786,7 +786,9 @@ A bulk action MUST send the same request the single-item action sends, once per 
 ### Requirement: List an agent's native sessions through the agent
 The system MUST expose a read-only listing of an agent's native sessions,
 `GET /api/v1/agents/{uid}/sessions`, asked of the agent's own session interface
-rather than read from its files; how each type is asked is its child spec's
+rather than read from its files where the agent has one (OpenCode, DeepSeek Harness and Cursor
+have none that lists every folder's sessions, so their stores are read: "List the sessions an
+agent keeps in its own store"); how each type is asked is its child spec's
 ([agent-registry/claude-code](claude-code/spec.md) "List Claude Code sessions through the Agent SDK",
 [agent-registry/codex](codex/spec.md) "List Codex sessions through the app-server"). Each row carries
 its `session_id`, a `title` (the title the agent itself shows for the session —
@@ -905,7 +907,10 @@ its index row — the same act as [chat](../chat/spec.md) "Rename and delete a c
 from the other list. A session id the agent does not list is `not_found` (404). An agent
 that refuses the operation has its reason returned and Coffer changes nothing of its own. The
 type-specific calls are in the child specs ([agent-registry/claude-code](claude-code/spec.md) "List Claude Code sessions through the Agent SDK",
-[agent-registry/codex](codex/spec.md) "List Codex sessions through the app-server"). The agent owns the session, so
+[agent-registry/codex](codex/spec.md) "List Codex sessions through the app-server"). An agent whose own
+command cannot rename or delete a session (OpenCode cannot rename; DeepSeek Harness and Cursor can do
+neither) is not offered that operation: its rows leave it out of their menu, and the call, reached from a
+conversation, changes only the conversation's index row. The agent owns the session, so
 neither operation is audited here.
 
 #### Scenario: rename a native session
@@ -929,6 +934,52 @@ neither operation is audited here.
 - **WHEN** the user deletes it
 - **THEN** the agent's reason is returned and the conversation's index row is still there
 
+### Requirement: List the sessions an agent keeps in its own store
+For OpenCode, DeepSeek Harness and Cursor, whose command lines list only the current folder's
+sessions, the listing of "List an agent's native sessions through the agent" MUST be read,
+read-only, from the store the agent keeps: OpenCode's SQLite database `opencode.db` in its data
+folder (`$XDG_DATA_HOME/opencode`, by default `~/.local/share/opencode`), its `session` table in
+1.x and `session_v2` in 2.x, top-level and unarchived sessions only; DeepSeek Harness's session
+folders under `$DSH_HOME/sessions/*/session-*`, titled from the projection it caches in
+`storages/session_projcache/sessions/<id>.json` (its title, else its first message), subagent
+sessions left out; and Cursor's chats, one `store.db` under `<config dir>/chats/*/<chat id>/`,
+titled from its `meta` row. Rows carry the same fields and order, search and paging as the other
+types. A missing store has no sessions. A store that cannot be read as expected MUST NOT fail the
+list: the list is then the conversations Coffer ran on that agent (the conversation index rows that
+name a session), the reason is logged, and a later page goes back to the source that issued its
+cursor. Deleting an OpenCode session runs `opencode session delete <id>` (with `--standalone` for
+2.x), whose "not found" is `not_found`. Coffer never writes these stores.
+
+#### Scenario: OpenCode's sessions are read from its database, 1.x or 2.x
+- **GIVEN** OpenCode's database holds two top-level sessions, a child session and an archived one, in its 1.x or its 2.x table
+- **WHEN** its Sessions tab lists them
+- **THEN** the two top-level sessions are listed newest first with their titles and folders, and search and paging work over them
+
+#### Scenario: DeepSeek Harness's sessions are read from its session folders
+- **GIVEN** two DeepSeek Harness sessions, one with a title and one with only its first message
+- **WHEN** its Sessions tab lists them
+- **THEN** both are listed with their folders, the first under its title and the second under its first message's first line, ordered by the session log's time
+
+#### Scenario: Cursor's chats are read from their stores
+- **GIVEN** a Cursor chat whose store's meta names it "Refactor login"
+- **WHEN** its Sessions tab lists it
+- **THEN** it is listed under that name, with its creation time
+
+#### Scenario: an unreadable store lists the conversations Coffer ran
+- **GIVEN** an agent whose store cannot be read, and conversations Coffer ran on it
+- **WHEN** its Sessions tab lists sessions
+- **THEN** the conversations are listed instead of an error, and their next page is asked of the same source
+
+#### Scenario: OpenCode deletes a session through its own command
+- **GIVEN** an OpenCode session, on 1.x or 2.x
+- **WHEN** it is deleted from its Sessions tab
+- **THEN** Coffer runs `opencode session delete` for it (with `--standalone` on 2.x), and a session OpenCode does not know is `not_found`
+
+#### Scenario: an agent without the command offers no rename or delete
+- **GIVEN** the Sessions tab of OpenCode, of DeepSeek Harness and of Cursor
+- **WHEN** a row's actions are shown
+- **THEN** OpenCode's row offers Delete… only, and DeepSeek Harness's and Cursor's rows have no ⋯ menu
+
 ### Requirement: Open an agent's sessions from its Sessions tab
 The agent detail page's **Sessions** tab MUST list the agent's native sessions
 ("List an agent's native sessions through the agent") as rows of the same kind the
@@ -939,8 +990,8 @@ box over title and working directory filters the list in the server, and the lis
 cursor as it is scrolled. The main part of a row's split button **Open in
 <terminal> ▾** MUST open the session in the preferred terminal exactly as
 [chat](../chat/spec.md) "Open a conversation in the terminal" says, asking first when the session is
-busy ("Ask before opening a session that is running"). An always-shown **⋯** menu holds **Rename** (in
-place) and **Delete…**, which asks first and says the session is deleted from the agent and cannot be recovered. A
+busy ("Ask before opening a session that is running"). A **⋯** menu holds **Rename** (in
+place) and **Delete…**, less what the agent's own command cannot do; Delete… asks first and says the session is deleted from the agent and cannot be recovered. A
 failure to load the list shows in the list's area with a Retry. The tab shows no session text.
 Beside the search box the tab carries **New conversation**, which opens the dialog of
 [chat](../chat/spec.md) "Start a new conversation in the terminal" with this agent chosen.

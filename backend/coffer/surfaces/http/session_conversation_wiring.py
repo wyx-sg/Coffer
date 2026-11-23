@@ -190,6 +190,7 @@ def wire_session_conversations(
     agents: AgentService,
 ) -> None:
     """Join the sessions service and the turn platform, both ways (after ``wire_chat``)."""
+    sessions.bind_indexed(chat)
     sessions.link_conversations(
         ChatSessionConversations(chat=chat, orchestrator=orchestrator, resources=resources)
     )

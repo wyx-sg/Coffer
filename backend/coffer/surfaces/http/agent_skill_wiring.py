@@ -64,6 +64,7 @@ from coffer.surfaces.http.agent_dependencies import (
 )
 from coffer.surfaces.http.agent_mcp_import_routes import set_mcp_import_service
 from coffer.surfaces.http.cli_wiring import wire_cli_requirements
+from coffer.surfaces.http.indexed_session_source import IndexedSessionSource
 from coffer.surfaces.http.skill_dependencies import (
     set_skill_secret_presence,
     set_skill_service,
@@ -213,7 +214,13 @@ def wire_agent_and_skill_kinds(
     # itself (Agent SDK for Claude Code, a short-lived app-server for Codex).
     # Surfaces may import both kinds, so the chat package's app-server
     # transport is handed to the agent adapter here.
-    session_sources = native_session_sources(default_app_server_session)
+    # OpenCode, DeepSeek Harness and Cursor are read from their own stores;
+    # when a store cannot be read, the list is the conversations Coffer ran on
+    # the agent (bound to the chat service once that is wired, see
+    # session_conversation_wiring).
+    session_sources = native_session_sources(
+        default_app_server_session, fallback=lambda t: IndexedSessionSource(t.value)
+    )
     auto_detect_svc = AutoDetectService(
         agent_service=agent_svc,
         catalog=agent_catalog,

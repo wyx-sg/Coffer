@@ -4,7 +4,7 @@
 // another folder is picked). Confirm is a split button named for the preferred
 // terminal; it asks the daemon for a blank session and closes once the daemon
 // has started it. A refusal shows its reason here and the dialog stays open.
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { FolderPickerField } from "@/components/FolderPickerField";
@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/select";
 import { SplitButton } from "@/components/ui/split-button";
 import { useToast } from "@/components/ui/toast";
-import { agentDisplayName } from "@/lib/agents/display";
+import { agentDisplayName, opensInTerminal } from "@/lib/agents/display";
 import type { AgentOut } from "@/lib/api/agents";
 import { translateApiError } from "@/lib/api/errors";
 import { fsApi } from "@/lib/api/fs";
@@ -68,8 +68,15 @@ interface Props {
   agentKey?: string;
 }
 
-export function NewConversationDialog({ open, onOpenChange, agents, agentKey }: Props) {
+export function NewConversationDialog({
+  open,
+  onOpenChange,
+  agents: managed,
+  agentKey,
+}: Props) {
   const { t } = useTranslation();
+  // Only the agents with a terminal interface Coffer can start.
+  const agents = useMemo(() => managed.filter((a) => opensInTerminal(a.type)), [managed]);
   const { toast } = useToast();
   const terminals = useTerminalChoices();
   const [agent, setAgent] = useState("");

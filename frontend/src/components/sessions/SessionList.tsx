@@ -21,6 +21,8 @@ type RowHandlers = Pick<
   | "canOpen"
   | "onRename"
   | "onDelete"
+  | "canRename"
+  | "canDelete"
   | "onStop"
 >;
 

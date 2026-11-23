@@ -116,6 +116,14 @@ class NativeSessionService:
         self._sources = sources
         self._conversations = conversations
 
+    def bind_indexed(self, chat: object) -> None:
+        """Hand the chat service to every source that lists from the
+        conversation index (one with a ``bind`` method)."""
+        for source in self._sources.values():
+            bind = getattr(source, "bind", None)
+            if callable(bind):
+                bind(chat)
+
     def link_conversations(self, conversations: SessionConversations | None) -> None:
         """Called by the composition root once the turn platform is wired."""
         self._conversations = conversations

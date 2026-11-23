@@ -18,9 +18,10 @@ from datetime import datetime
 from coffer.domain.error_base import CofferError
 from coffer.domain.pagination import Page
 
-#: What a session id may look like on the wire (both agents use UUIDs). Checked
-#: before the id reaches an agent's API or a command line.
-SESSION_ID_PATTERN = r"^[A-Za-z0-9-]{1,128}$"
+#: What a session id may look like on the wire (UUIDs, OpenCode's ``ses_…``,
+#: DeepSeek Harness's ``session-…``). Checked before the id reaches an agent's
+#: API or a command line; none of these characters means anything to a shell.
+SESSION_ID_PATTERN = r"^[A-Za-z0-9_-]{1,128}$"
 _SESSION_ID = re.compile(SESSION_ID_PATTERN)
 
 

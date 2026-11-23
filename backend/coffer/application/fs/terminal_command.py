@@ -14,14 +14,18 @@ from pathlib import Path
 
 from coffer.domain.fs_terminal_errors import FsTerminalInvalid
 
-#: Agent type key -> the program a terminal runs, and the arguments that resume
-#: a session (``{id}`` is the session id).
-AGENT_PROGRAMS: dict[str, tuple[str, str]] = {
-    "claude_code": ("claude", "--resume {id}"),
-    "codex": ("codex", "resume {id}"),
+#: Agent type key -> the program a terminal runs, the arguments that resume a
+#: session (``{id}`` is the session id), and the flag a first message follows
+#: (``""``: it is the first argument). DeepSeek Harness ships no terminal
+#: interface, so it is not here.
+AGENT_PROGRAMS: dict[str, tuple[str, str, str]] = {
+    "claude_code": ("claude", "--resume {id}", ""),
+    "codex": ("codex", "resume {id}", ""),
+    "cursor": ("cursor-agent", "--resume {id}", ""),
+    "opencode": ("opencode", "--session {id}", "--prompt"),
 }
 
-_SESSION_ID = re.compile(r"^[A-Za-z0-9-]{1,128}$")
+_SESSION_ID = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 
 
 def quote(value: str) -> str:
@@ -38,7 +42,7 @@ def program_for(agent: str) -> str:
 
 def check_session_id(session_id: str) -> str:
     if not _SESSION_ID.fullmatch(session_id):
-        raise FsTerminalInvalid("not a session id (letters, digits and dashes only)")
+        raise FsTerminalInvalid("not a session id (letters, digits, dashes and underscores only)")
     return session_id
 
 
@@ -58,8 +62,10 @@ def prompt_command(agent: str, prompt_file: Path, cwd: str) -> str:
     """Start a new session whose first message the command reads from, and
     removes, ``prompt_file`` — the text never appears on a command line."""
     program = program_for(agent)
+    flag = AGENT_PROGRAMS[agent][2]
     f = quote(str(prompt_file))
-    return f'cd {quote(cwd)} && {program} "$(cat {f}; rm -f {f})"'
+    lead = f"{program} {flag}" if flag else program
+    return f'cd {quote(cwd)} && {lead} "$(cat {f}; rm -f {f})"'
 
 
 def prompt_file_text(prompt: str) -> str:
