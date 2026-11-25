@@ -177,6 +177,8 @@ def test_the_short_version_asked_for_fits_inside_the_bound() -> None:
     assert f"at most {REWRITE_MAX_LINES} lines" in prompt
     assert f"{MAX_REPLY_CHARS} characters" in prompt
     assert REWRITE_MAX_LINES < MAX_REPLY_LINES
+    assert "first line is the conclusion" in prompt
+    assert "blank line between groups" in prompt
     assert "at most 5 lines" not in prompt
 
 

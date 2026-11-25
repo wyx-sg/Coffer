@@ -45,8 +45,8 @@ link or file.
 
 ### Option B — Raise the rewrite target to 20 lines and 1,500 characters, keep the 25-line bound (chosen)
 
-The short version is asked to fit 20 lines and 1,500 characters, with a few
-headings or a short list allowed. A reply past 25 lines or 1,500 characters is
+The short version is asked to fit 20 lines and 1,500 characters, with a fixed
+shape: conclusion first, then labelled groups of one-line points. A reply past 25 lines or 1,500 characters is
 still rewritten, so the rewrite always lands inside the bound it was triggered by.
 
 - Pros: a 20-line budget carries a conclusion, a few grouped facts and the next
@@ -87,8 +87,13 @@ Each channel gets its own line and character budget, editable by the owner.
 Option B. The bound stays 25 lines and 1,500 characters
 (`application/channel/reply_rewrite.py`, `MAX_REPLY_LINES`, `MAX_REPLY_CHARS`), and
 the short version is asked for at most `REWRITE_MAX_LINES` = 20 lines and 1,500
-characters, keeping a few headings or a short list where they help. The rewrite
-still ends with one line offering the full report as a file. It is a constant,
+characters with a structure spelled out in the prompt, because the owner's point
+on 2026-11-25 was that a condensed answer must still be clearly structured: the
+conclusion on the first line; then a few short groups in the reply's own order,
+each a label line followed by one-line `- ` items; a blank line between groups;
+no long paragraphs; only formatting the chat renders (the channel note says
+which, so a label line rather than a Markdown heading works on every chat). The
+rewrite still ends with one line offering the full report as a file. It is a constant,
 not a setting, as in the ADR it amends.
 
 ## Consequences

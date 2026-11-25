@@ -33,7 +33,7 @@ __all__ = [
 MAX_REPLY_LINES = 25
 MAX_REPLY_CHARS = 1500
 #: The short version asked for after a too-long reply stays inside the same
-#: bounds, with room for a few headings or a short list so its structure survives.
+#: bounds, with room for a few labelled groups so its structure survives.
 REWRITE_MAX_LINES = 20
 
 _MEDIA_LINE = re.compile(r"^\s*MEDIA:.*$", re.MULTILINE)
@@ -70,11 +70,14 @@ def rewrite_prompt(lines: int) -> str:
     and anyone reading the session later — can tell it from the owner."""
     return (
         f"[Coffer] Your last reply ({lines} lines) was too long for a chat, so it "
-        "was not sent. Write it again for the chat: only the conclusion and what "
-        f"the reader needs to act on, in at most {REWRITE_MAX_LINES} lines and "
-        f"{MAX_REPLY_CHARS} characters, keeping a few headings or a short list "
-        "where they make it easier to scan, in the same language, ending with one "
-        "short line that offers the full report as a file if the reader wants it. "
-        "Files you attached with MEDIA: lines are sent with it, so do not repeat "
-        "them. Do not call tools and do not mention this note."
+        "was not sent. Write it again for the chat, in at most "
+        f"{REWRITE_MAX_LINES} lines and {MAX_REPLY_CHARS} characters, in the same "
+        "language. Shorten it, but keep its structure clear: the first line is the "
+        "conclusion; then a few short groups in the same order as your reply, each "
+        "a short label line followed by '- ' items of one line each, with a blank "
+        "line between groups; keep what the reader needs to act on and drop the "
+        "rest. No long paragraphs, and only formatting this chat renders. End with "
+        "one short line that offers the full report as a file if the reader wants "
+        "it. Files you attached with MEDIA: lines are sent with it, so do not "
+        "repeat them. Do not call tools and do not mention this note."
     )
