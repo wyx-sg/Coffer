@@ -2891,9 +2891,12 @@ A reply that finished cleanly but is too long to read as a chat message — more
 than 20 lines with text, or more than 1,500 characters, not counting `MEDIA:`
 lines or a `## Details` section the transport collapses — MUST NOT be sent.
 Instead Coffer asks the same conversation, in a follow-up turn of its own, to say
-it again short: only the conclusion and what the reader needs to act on, in at
-most 5 lines and the same language, ending with one short line that offers the
-full report as a file. The follow-up's text opens with `[Coffer]`, never names the
+it again short, in at most 12 lines with text and the same language,
+with its structure kept clear: the conclusion on the first line, then a few short
+groups in the reply's own order, each a label line followed by one-line `- `
+items, a blank line between groups, no long paragraphs, only formatting the chat
+renders, and only what the reader needs to act on; it ends with one short line
+that offers the full report as a file. The follow-up's text opens with `[Coffer]`, never names the
 conversation, and runs through the conversation's ordinary queue; its reply is
 rendered into the same chat and thread, and is never held back again however
 long it is. Cutting the long reply would leave half a message, and Coffer keeps
