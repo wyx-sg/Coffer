@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-11-10 (first taken 2026-10-20)
 **Deciders**: Yuxing Wu
-**Amended**: 2026-11-25, the short version is asked for at most 20 lines and 1,500 characters (not 5) and the bound is 25 lines; see [The Short Version of a Long Channel Reply Gets 20 Lines, and the Bound Is 25](long-channel-reply-budget-is-25-lines.md).
+**Amended**: 2026-11-25, the short version is asked for at most 12 lines (not 5) in a fixed structure; see [The Short Version of a Long Channel Reply Keeps Its Structure in 12 Lines](short-channel-reply-keeps-its-structure.md).
 **Related**: [A Channel's System Prompt Is a Fixed Channel Note Plus a Reply Style the Owner Can Rewrite](channel-prompt-fixed-note-and-editable-style.md), [A Channel Turn Posts Nothing Until It Is Done, and the Reply Is the Answer Alone](channel-live-surface-strategy.md), [A Channel Reply Is Plain Text, With No Card or Button](a-channel-reply-is-plain-text.md), spec channels "Ask for the short version of a reply too long for a chat"
 
 ## Context
@@ -44,10 +44,10 @@ behind a link or a page the reader opens on demand.
 
 ### Option A — Ask the agent for the short version, which offers the full one (chosen)
 
-A cleanly finished reply past the bound (25 lines with text or 1,500
+A cleanly finished reply past the bound (20 lines with text or 1,500
 characters, not counting `MEDIA:` lines or a collapsed `## Details`) is not
 sent. Coffer queues a follow-up turn in the same conversation, opening with
-`[Coffer]`: say it again in at most 20 lines (1,500 characters), end with one short line offering
+`[Coffer]`: say it again in at most 12 lines in a fixed structure, end with one short line offering
 the full report as a file, no tools. That reply is plain text like every reply;
 the owner who wants the file says so in a message. The follow-up's reply is
 never held back again.

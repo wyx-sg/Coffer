@@ -30,11 +30,11 @@ __all__ = [
 #: Past either bound a reply is too long to read as a chat message: about two
 #: phone screens. Lines count only those with text; characters count every one,
 #: so a dense paragraph of CJK text trips the bound as surely as many lines do.
-MAX_REPLY_LINES = 25
+MAX_REPLY_LINES = 20
 MAX_REPLY_CHARS = 1500
-#: The short version asked for after a too-long reply stays inside the same
-#: bounds, with room for a few labelled groups so its structure survives.
-REWRITE_MAX_LINES = 20
+#: The short version asked for after a too-long reply: about one phone screen,
+#: room for a conclusion and three labelled groups of points.
+REWRITE_MAX_LINES = 12
 
 _MEDIA_LINE = re.compile(r"^\s*MEDIA:.*$", re.MULTILINE)
 _DETAILS = re.compile(r"^#{1,3}[ \t]+details[ \t]*:?[ \t]*$", re.IGNORECASE | re.MULTILINE)
@@ -71,8 +71,8 @@ def rewrite_prompt(lines: int) -> str:
     return (
         f"[Coffer] Your last reply ({lines} lines) was too long for a chat, so it "
         "was not sent. Write it again for the chat, in at most "
-        f"{REWRITE_MAX_LINES} lines and {MAX_REPLY_CHARS} characters, in the same "
-        "language. Shorten it, but keep its structure clear: the first line is the "
+        f"{REWRITE_MAX_LINES} lines (blank lines not counted) and {MAX_REPLY_CHARS} "
+        "characters, in the same language. Shorten it, but keep its structure clear: the first line is the "
         "conclusion; then a few short groups in the same order as your reply, each "
         "a short label line followed by '- ' items of one line each, with a blank "
         "line between groups; keep what the reader needs to act on and drop the "
