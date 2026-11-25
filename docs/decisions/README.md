@@ -231,6 +231,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`channel-attachments`](channel-attachments.md) | Channel Attachments Are Saved Files, Handed to Every Agent by Path |
 | [`channel-prompt-fixed-note-and-editable-style`](channel-prompt-fixed-note-and-editable-style.md) | A Channel's System Prompt Is a Fixed Channel Note Plus a Reply Style the Owner Can Rewrite |
 | [`long-channel-reply-is-rewritten-short`](long-channel-reply-is-rewritten-short.md) | A Long Channel Reply Is Rewritten Short by the Agent |
+| [`long-channel-reply-budget-is-25-lines`](long-channel-reply-budget-is-25-lines.md) | The Short Version of a Long Channel Reply Gets 20 Lines, and the Bound Is 25 |
 | [`a-channel-reply-is-plain-text`](a-channel-reply-is-plain-text.md) | A Channel Reply Is Plain Text, With No Card or Button |
 | [`a-channel-reply-goes-out-as-the-agent-wrote-it`](a-channel-reply-goes-out-as-the-agent-wrote-it.md) | A Channel Reply Goes Out as the Agent Wrote It; Coffer Does Not Reshape Tables or Code |
 | [`channel-help-is-a-list-and-cards-carry-only-their-own-actions`](channel-help-is-a-list-and-cards-carry-only-their-own-actions.md) | Channel `/help` Is a List to Read, and a Card Carries Only the Buttons That Act on It |

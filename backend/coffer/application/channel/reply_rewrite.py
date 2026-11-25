@@ -20,6 +20,7 @@ import re
 __all__ = [
     "MAX_REPLY_CHARS",
     "MAX_REPLY_LINES",
+    "REWRITE_MAX_LINES",
     "measure",
     "media_lines",
     "rewrite_prompt",
@@ -29,8 +30,11 @@ __all__ = [
 #: Past either bound a reply is too long to read as a chat message: about two
 #: phone screens. Lines count only those with text; characters count every one,
 #: so a dense paragraph of CJK text trips the bound as surely as many lines do.
-MAX_REPLY_LINES = 20
+MAX_REPLY_LINES = 25
 MAX_REPLY_CHARS = 1500
+#: The short version asked for after a too-long reply stays inside the same
+#: bounds, with room for a few headings or a short list so its structure survives.
+REWRITE_MAX_LINES = 20
 
 _MEDIA_LINE = re.compile(r"^\s*MEDIA:.*$", re.MULTILINE)
 _DETAILS = re.compile(r"^#{1,3}[ \t]+details[ \t]*:?[ \t]*$", re.IGNORECASE | re.MULTILINE)
@@ -67,9 +71,10 @@ def rewrite_prompt(lines: int) -> str:
     return (
         f"[Coffer] Your last reply ({lines} lines) was too long for a chat, so it "
         "was not sent. Write it again for the chat: only the conclusion and what "
-        "the reader needs to act on, in at most 5 lines, in the same language, "
-        "ending with one short line that offers the full report as a file if the "
-        "reader wants it. Files you "
-        "attached with MEDIA: lines are sent with it, so do not repeat them. Do "
-        "not call tools and do not mention this note."
+        f"the reader needs to act on, in at most {REWRITE_MAX_LINES} lines and "
+        f"{MAX_REPLY_CHARS} characters, keeping a few headings or a short list "
+        "where they make it easier to scan, in the same language, ending with one "
+        "short line that offers the full report as a file if the reader wants it. "
+        "Files you attached with MEDIA: lines are sent with it, so do not repeat "
+        "them. Do not call tools and do not mention this note."
     )

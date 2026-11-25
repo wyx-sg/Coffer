@@ -11,7 +11,10 @@ from typing import Any
 import pytest
 
 from coffer.application.channel.reply_rewrite import (
+    MAX_REPLY_CHARS,
     MAX_REPLY_LINES,
+    REWRITE_MAX_LINES,
+    rewrite_prompt,
     too_long,
 )
 from coffer.domain.chat.events import (
@@ -167,6 +170,14 @@ async def test_a_reply_that_fits_goes_out_without_a_follow_up(env: ChannelEnv) -
 
     assert len(agent.prompts) == 1
     assert adapter.sent_buttons[adapter.texts().index("Done: the IA is created.")] == []
+
+
+def test_the_short_version_asked_for_fits_inside_the_bound() -> None:
+    prompt = rewrite_prompt(60)
+    assert f"at most {REWRITE_MAX_LINES} lines" in prompt
+    assert f"{MAX_REPLY_CHARS} characters" in prompt
+    assert REWRITE_MAX_LINES < MAX_REPLY_LINES
+    assert "at most 5 lines" not in prompt
 
 
 def test_the_bound_counts_lines_and_characters_but_not_files_or_collapsed_details() -> None:

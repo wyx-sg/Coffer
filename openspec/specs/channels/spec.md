@@ -2888,12 +2888,13 @@ the channel's status settings.
 
 ### Requirement: Ask for the short version of a reply too long for a chat
 A reply that finished cleanly but is too long to read as a chat message — more
-than 20 lines with text, or more than 1,500 characters, not counting `MEDIA:`
+than 25 lines with text, or more than 1,500 characters, not counting `MEDIA:`
 lines or a `## Details` section the transport collapses — MUST NOT be sent.
 Instead Coffer asks the same conversation, in a follow-up turn of its own, to say
 it again short: only the conclusion and what the reader needs to act on, in at
-most 5 lines and the same language, ending with one short line that offers the
-full report as a file. The follow-up's text opens with `[Coffer]`, never names the
+most 20 lines and 1,500 characters, keeping a few headings or a short list where
+they make it easier to scan, in the same language, ending with one short line
+that offers the full report as a file. The follow-up's text opens with `[Coffer]`, never names the
 conversation, and runs through the conversation's ordinary queue; its reply is
 rendered into the same chat and thread, and is never held back again however
 long it is. Cutting the long reply would leave half a message, and Coffer keeps
